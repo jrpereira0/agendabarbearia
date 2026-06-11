@@ -39,6 +39,13 @@ export function formatDuration(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h${String(m).padStart(2, "0")}`;
 }
 
+// Lista de serviços pra exibir na agenda: "Corte, Barba" ou "Corte +2"
+export function formatServiceNames(names: string[]): string {
+  if (names.length === 0) return "";
+  if (names.length <= 2) return names.join(", ");
+  return `${names[0]} +${names.length - 1}`;
+}
+
 // Formata "11999998888" como "(11) 99999-8888" para exibição.
 export function formatWhatsapp(digits: string): string {
   const d = digits.replace(/\D/g, "").slice(0, 11);

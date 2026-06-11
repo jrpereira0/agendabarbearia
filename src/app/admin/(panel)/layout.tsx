@@ -40,13 +40,13 @@ export default async function AdminLayout({
           userName={profile?.full_name || "Usuário"}
           userEmail={user.email ?? ""}
         />
-        <SidebarInset>
+        <SidebarInset className="flex min-h-svh flex-col">
           <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
             <SidebarTrigger className="-ml-1" />
             <Separator orientation="vertical" className="mr-2 h-4" />
             <span className="text-sm font-medium">Painel</span>
           </header>
-          <div className="flex flex-1 flex-col gap-6 p-4 md:p-8">
+          <div className="flex-1 overflow-y-auto p-4 md:p-8">
             {children}
           </div>
         </SidebarInset>

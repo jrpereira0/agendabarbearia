@@ -1,0 +1,514 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { getAvailability } from "@/lib/get-availability";
+import { requireAdmin, type AdminSession } from "@/lib/require-admin";
+import type { ActionResult } from "@/lib/require-owner";
+
+const createSchema = z.object({
+  professionalId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
+  firstName: z.string().trim().min(1, "Informe o nome."),
+  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  whatsapp: z
+    .string()
+    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+});
+
+async function assertCanManageAppointment(
+  appointmentId: string,
+  session: Awaited<ReturnType<typeof requireAdmin>>
+): Promise<ActionResult | { professionalId: string }> {
+  if (!("userId" in session)) return session;
+
+  const admin = createAdminClient();
+  const { data: appointment } = await admin
+    .from("appointments")
+    .select("professional_id, status")
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!appointment) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  if (
+    !session.isOwner &&
+    appointment.professional_id !== session.professionalId
+  ) {
+    return { ok: false, error: "Você não pode alterar este agendamento." };
+  }
+
+  if (appointment.status !== "confirmed") {
+    return { ok: false, error: "Só dá pra alterar agendamentos confirmados." };
+  }
+
+  return { professionalId: appointment.professional_id };
+}
+
+async function insertAppointment(
+  data: z.infer<typeof createSchema>,
+  durationMinutes: number,
+  isSqueezeIn: boolean
+): Promise<ActionResult> {
+  const admin = createAdminClient();
+  const startMinutes = timeToMinutes(data.startTime);
+  const endMinutes = startMinutes + durationMinutes;
+
+  if (endMinutes > 24 * 60) {
+    return {
+      ok: false,
+      error: "O horário de término passa da meia-noite. Escolha um início mais cedo.",
+    };
+  }
+
+  const endTime = minutesToTime(endMinutes);
+
+  const { data: appointment, error } = await admin
+    .from("appointments")
+    .insert({
+      professional_id: data.professionalId,
+      customer_first_name: data.firstName,
+      customer_last_name: data.lastName,
+      customer_whatsapp: data.whatsapp,
+      date: data.date,
+      start_time: data.startTime,
+      end_time: endTime,
+      status: "confirmed",
+      is_squeeze_in: isSqueezeIn,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    if (error.code === "23P01") {
+      return {
+        ok: false,
+        error: "Esse horário já está ocupado.",
+      };
+    }
+    return { ok: false, error: "Não foi possível criar o agendamento." };
+  }
+
+  const { error: linkError } = await admin.from("appointment_services").insert(
+    data.serviceIds.map((serviceId) => ({
+      appointment_id: appointment.id,
+      service_id: serviceId,
+    }))
+  );
+
+  if (linkError) {
+    await admin.from("appointments").delete().eq("id", appointment.id);
+    return { ok: false, error: "Não foi possível salvar os serviços." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+async function validateCreateInput(
+  input: z.infer<typeof createSchema>,
+  session: AdminSession
+): Promise<ActionResult | { durationMinutes: number }> {
+  if (
+    !session.isOwner &&
+    input.professionalId !== session.professionalId
+  ) {
+    return { ok: false, error: "Você só pode agendar na sua própria agenda." };
+  }
+
+  const admin = createAdminClient();
+
+  const [{ data: professional }, { data: foundServices }, { data: links }] =
+    await Promise.all([
+      admin
+        .from("professionals")
+        .select("id, active")
+        .eq("id", input.professionalId)
+        .maybeSingle(),
+      admin
+        .from("services")
+        .select("id, active, duration_minutes")
+        .in("id", input.serviceIds),
+      admin
+        .from("professional_services")
+        .select("service_id")
+        .eq("professional_id", input.professionalId)
+        .in("service_id", input.serviceIds),
+    ]);
+
+  if (!professional?.active) {
+    return { ok: false, error: "Profissional não encontrado." };
+  }
+
+  if (!foundServices || foundServices.length !== input.serviceIds.length) {
+    return { ok: false, error: "Serviço não encontrado." };
+  }
+
+  if (foundServices.some((s) => !s.active)) {
+    return { ok: false, error: "Serviço não encontrado." };
+  }
+
+  const linkedIds = new Set((links ?? []).map((l) => l.service_id));
+  if (!input.serviceIds.every((id) => linkedIds.has(id))) {
+    return {
+      ok: false,
+      error: "Esse profissional não faz um dos serviços escolhidos.",
+    };
+  }
+
+  const durationMinutes = foundServices.reduce(
+    (sum, s) => sum + s.duration_minutes,
+    0
+  );
+
+  return { durationMinutes };
+}
+
+export async function createNormalAppointment(input: {
+  professionalId: string;
+  date: string;
+  startTime: string;
+  serviceIds: string[];
+  firstName: string;
+  lastName: string;
+  whatsapp: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const parsed = createSchema.safeParse({
+    ...input,
+    whatsapp: input.whatsapp.replace(/\D/g, ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const validated = await validateCreateInput(parsed.data, session);
+  if (!("durationMinutes" in validated)) return validated;
+
+  const availability = await getAvailability(
+    parsed.data.professionalId,
+    parsed.data.date,
+    parsed.data.serviceIds
+  );
+
+  if (!availability.ok) {
+    return { ok: false, error: availability.error };
+  }
+
+  if (!availability.slots.includes(parsed.data.startTime)) {
+    return { ok: false, error: "Esse horário não está mais disponível." };
+  }
+
+  return insertAppointment(
+    parsed.data,
+    validated.durationMinutes,
+    false
+  );
+}
+
+// Encaixe manual: ignora horários livres e pode sobrepor outros agendamentos.
+export async function createSqueezeInAppointment(input: {
+  professionalId: string;
+  date: string;
+  startTime: string;
+  serviceIds: string[];
+  firstName: string;
+  lastName: string;
+  whatsapp: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const parsed = createSchema.safeParse({
+    ...input,
+    whatsapp: input.whatsapp.replace(/\D/g, ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const validated = await validateCreateInput(parsed.data, session);
+  if (!("durationMinutes" in validated)) return validated;
+
+  return insertAppointment(parsed.data, validated.durationMinutes, true);
+}
+
+export async function markAppointmentDone(
+  appointmentId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const check = await assertCanManageAppointment(appointmentId, session);
+  if (!("professionalId" in check)) return check;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("appointments")
+    .update({ status: "done" })
+    .eq("id", appointmentId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível marcar como atendido." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+const updateSchema = z.object({
+  appointmentId: z.uuid(),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
+  firstName: z.string().trim().min(1, "Informe o nome."),
+  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  whatsapp: z
+    .string()
+    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+});
+
+export async function updateAppointment(input: {
+  appointmentId: string;
+  startTime: string;
+  serviceIds: string[];
+  firstName: string;
+  lastName: string;
+  whatsapp: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const parsed = updateSchema.safeParse({
+    ...input,
+    whatsapp: input.whatsapp.replace(/\D/g, ""),
+  });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const check = await assertCanManageAppointment(
+    parsed.data.appointmentId,
+    session
+  );
+  if (!("professionalId" in check)) return check;
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("appointments")
+    .select("date, is_squeeze_in")
+    .eq("id", parsed.data.appointmentId)
+    .maybeSingle();
+
+  if (!existing) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  const createInput = {
+    professionalId: check.professionalId,
+    date: existing.date,
+    startTime: parsed.data.startTime,
+    serviceIds: parsed.data.serviceIds,
+    firstName: parsed.data.firstName,
+    lastName: parsed.data.lastName,
+    whatsapp: parsed.data.whatsapp,
+  };
+
+  const validated = await validateCreateInput(createInput, session);
+  if (!("durationMinutes" in validated)) return validated;
+
+  if (!existing.is_squeeze_in) {
+    const availability = await getAvailability(
+      check.professionalId,
+      existing.date,
+      parsed.data.serviceIds,
+      parsed.data.appointmentId
+    );
+
+    if (!availability.ok) {
+      return { ok: false, error: availability.error };
+    }
+
+    if (!availability.slots.includes(parsed.data.startTime)) {
+      return { ok: false, error: "Esse horário não está mais disponível." };
+    }
+  }
+
+  const startMinutes = timeToMinutes(parsed.data.startTime);
+  const endMinutes = startMinutes + validated.durationMinutes;
+
+  if (endMinutes > 24 * 60) {
+    return {
+      ok: false,
+      error: "O horário de término passa da meia-noite. Escolha um início mais cedo.",
+    };
+  }
+
+  const endTime = minutesToTime(endMinutes);
+
+  const { error } = await admin
+    .from("appointments")
+    .update({
+      customer_first_name: parsed.data.firstName,
+      customer_last_name: parsed.data.lastName,
+      customer_whatsapp: parsed.data.whatsapp,
+      start_time: parsed.data.startTime,
+      end_time: endTime,
+    })
+    .eq("id", parsed.data.appointmentId);
+
+  if (error) {
+    if (error.code === "23P01") {
+      return { ok: false, error: "Esse horário já está ocupado." };
+    }
+    return { ok: false, error: "Não foi possível atualizar o agendamento." };
+  }
+
+  const { error: deleteError } = await admin
+    .from("appointment_services")
+    .delete()
+    .eq("appointment_id", parsed.data.appointmentId);
+
+  if (deleteError) {
+    return { ok: false, error: "Não foi possível atualizar os serviços." };
+  }
+
+  const { error: linkError } = await admin.from("appointment_services").insert(
+    parsed.data.serviceIds.map((serviceId) => ({
+      appointment_id: parsed.data.appointmentId,
+      service_id: serviceId,
+    }))
+  );
+
+  if (linkError) {
+    return { ok: false, error: "Não foi possível salvar os serviços." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+const blockSchema = z.object({
+  professionalId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  endTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  note: z.string().max(200).optional(),
+});
+
+export async function createScheduleBlock(input: {
+  professionalId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  note?: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const parsed = blockSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  if (
+    !session.isOwner &&
+    parsed.data.professionalId !== session.professionalId
+  ) {
+    return { ok: false, error: "Você só pode bloquear a sua própria agenda." };
+  }
+
+  if (timeToMinutes(parsed.data.startTime) >= timeToMinutes(parsed.data.endTime)) {
+    return {
+      ok: false,
+      error: "O horário de fim precisa ser depois do início.",
+    };
+  }
+
+  const admin = createAdminClient();
+  const { data: professional } = await admin
+    .from("professionals")
+    .select("id, active")
+    .eq("id", parsed.data.professionalId)
+    .maybeSingle();
+
+  if (!professional?.active) {
+    return { ok: false, error: "Profissional não encontrado." };
+  }
+
+  const { error } = await admin.from("schedule_blocks").insert({
+    professional_id: parsed.data.professionalId,
+    date: parsed.data.date,
+    start_time: parsed.data.startTime,
+    end_time: parsed.data.endTime,
+    note: parsed.data.note?.trim() ?? "",
+  });
+
+  if (error) {
+    return { ok: false, error: "Não foi possível bloquear o horário." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function deleteScheduleBlock(
+  blockId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const admin = createAdminClient();
+  const { data: block } = await admin
+    .from("schedule_blocks")
+    .select("professional_id")
+    .eq("id", blockId)
+    .maybeSingle();
+
+  if (!block) {
+    return { ok: false, error: "Bloqueio não encontrado." };
+  }
+
+  if (!session.isOwner && block.professional_id !== session.professionalId) {
+    return { ok: false, error: "Você não pode remover este bloqueio." };
+  }
+
+  const { error } = await admin.from("schedule_blocks").delete().eq("id", blockId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível remover o bloqueio." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
+export async function cancelAppointment(
+  appointmentId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const check = await assertCanManageAppointment(appointmentId, session);
+  if (!("professionalId" in check)) return check;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("appointments")
+    .update({ status: "cancelled" })
+    .eq("id", appointmentId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível cancelar o agendamento." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}

@@ -93,7 +93,9 @@ export default async function SchedulePage() {
     startTime: e.start_time,
     endTime: e.end_time,
     note: e.note,
-    professionalNickname: e.professionals?.nickname ?? null,
+    professionalNickname:
+      (e.professionals as { nickname: string }[] | null)?.[0]?.nickname ??
+      null,
   }));
 
   return (

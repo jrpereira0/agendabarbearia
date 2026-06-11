@@ -51,7 +51,8 @@ function toDayException(e: {
 export async function getAvailability(
   professionalId: string,
   date: string,
-  serviceIds: string[]
+  serviceIds: string[],
+  excludeAppointmentId?: string
 ): Promise<AvailabilityResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { ok: false, error: "Data inválida. Use o formato AAAA-MM-DD.", status: 400 };
@@ -86,6 +87,7 @@ export async function getAvailability(
     { data: workingHours },
     { data: exceptions },
     { data: appointments },
+    { data: scheduleBlocks },
     { data: settings },
   ] = await Promise.all([
     admin
@@ -118,10 +120,16 @@ export async function getAvailability(
       .eq("date", date),
     admin
       .from("appointments")
-      .select("start_time, end_time")
+      .select("id, start_time, end_time")
       .eq("professional_id", professionalId)
       .eq("date", date)
-      .eq("status", "confirmed"),
+      .eq("status", "confirmed")
+      .eq("is_squeeze_in", false),
+    admin
+      .from("schedule_blocks")
+      .select("start_time, end_time")
+      .eq("professional_id", professionalId)
+      .eq("date", date),
     admin.from("shop_settings").select("slot_step_minutes").single(),
   ]);
 
@@ -181,10 +189,18 @@ export async function getAvailability(
       : null,
   });
 
-  const busy: MinuteRange[] = (appointments ?? []).map((a) => ({
-    start: timeToMinutes(a.start_time),
-    end: timeToMinutes(a.end_time),
-  }));
+  const busy: MinuteRange[] = [
+    ...(appointments ?? [])
+      .filter((a) => a.id !== excludeAppointmentId)
+      .map((a) => ({
+        start: timeToMinutes(a.start_time),
+        end: timeToMinutes(a.end_time),
+      })),
+    ...(scheduleBlocks ?? []).map((b) => ({
+      start: timeToMinutes(b.start_time),
+      end: timeToMinutes(b.end_time),
+    })),
+  ];
 
   const stepMinutes = settings?.slot_step_minutes ?? SLOT_STEP_MINUTES;
 

@@ -58,7 +58,10 @@ export default async function ProfessionalsPage() {
             photoUrl: p.photo_url,
             active: p.active,
             serviceNames: (p.professional_services ?? [])
-              .map((ps) => ps.services?.name)
+              .map((ps) => {
+                const svc = ps.services as { name: string } | { name: string }[] | null;
+                return Array.isArray(svc) ? svc[0]?.name : svc?.name;
+              })
               .filter((n): n is string => Boolean(n)),
           }))}
         />

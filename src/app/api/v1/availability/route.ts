@@ -10,6 +10,7 @@ const querySchema = z.object({
     .min(1, "Informe serviceIds separados por vírgula.")
     .transform((v) => v.split(",").map((s) => s.trim()))
     .pipe(z.array(z.uuid("serviceIds contém um id inválido.")).min(1)),
+  excludeAppointmentId: z.uuid("excludeAppointmentId inválido.").optional(),
 });
 
 // GET /api/v1/availability?professionalId=...&date=2026-06-15&serviceIds=id1,id2
@@ -24,8 +25,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { professionalId, date, serviceIds } = parsed.data;
-  const result = await getAvailability(professionalId, date, serviceIds);
+  const { professionalId, date, serviceIds, excludeAppointmentId } =
+    parsed.data;
+  const result = await getAvailability(
+    professionalId,
+    date,
+    serviceIds,
+    excludeAppointmentId
+  );
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status });

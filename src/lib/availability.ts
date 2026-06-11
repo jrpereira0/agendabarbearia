@@ -30,6 +30,14 @@ export function intersectRanges(
   return start < end ? { start, end } : null;
 }
 
+export function minuteRangeOverlaps(
+  start: number,
+  end: number,
+  ranges: MinuteRange[]
+): boolean {
+  return ranges.some((r) => start < r.end && end > r.start);
+}
+
 export type DayException = {
   kind: "closed" | "custom";
   range: MinuteRange | null; // preenchido quando kind = custom
