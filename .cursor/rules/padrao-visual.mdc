@@ -1,0 +1,38 @@
+---
+description: Padrão visual e de UX das telas do sistema
+alwaysApply: true
+---
+
+# Padrão visual do Agenda Barbearia
+
+Tema preto e branco, profissional, sem cara de template de IA: nada de gradientes coloridos, emojis na interface ou textos exagerados. Mobile-first em tudo.
+
+## Fluxo para mudanças visuais
+
+Quando o usuário pedir uma mudança visual:
+
+1. Aplicar PRIMEIRO apenas na tela que ele pediu e mostrar o resultado (screenshot)
+2. Pedir confirmação de que ele gostou
+3. Só depois da confirmação, replicar o padrão nas demais telas
+
+Exceção: se a mudança for em um componente compartilhado (`PageHeader`, `EmptyState`, `FormSectionTitle`, etc.), ela já se propaga sozinha — avisar o usuário de que todas as telas mudaram juntas. Sempre que um padrão visual se repetir em 2+ telas, promover a componente compartilhado em `src/components/admin/`.
+
+## Painel admin — componentes obrigatórios
+
+Toda tela nova do painel DEVE reutilizar os componentes de `src/components/admin/`:
+
+- `PageHeader` — título, descrição, botão de voltar (`backHref`) e ação principal (`action`)
+- `EmptyState` — listas vazias: ícone + título + descrição + botão de ação
+- `FormSectionTitle` — seções de formulário: ícone em quadrado + título + descrição
+
+Se algum desses padrões mudar, alterar o componente compartilhado (nunca copiar/colar variações por tela).
+
+## Convenções de tela
+
+- **Listagens**: grid de Cards (`sm:grid-cols-2 xl:grid-cols-3`), ações agrupadas em DropdownMenu (três pontinhos), exclusão sempre com Dialog de confirmação, status como bolinha colorida discreta
+- **Busca em listagens**: usar `SearchInput` + `matchesSearch` de `src/lib/text.ts` (filtro instantâneo no cliente, ignorando acentos), com mensagem de "nenhum resultado" quando a busca não achar nada
+- **Formulários**: um único Card com seções separadas por `Separator`, largura `max-w-2xl` centralizada, barra de ações fixa no rodapé (sticky bottom), botão principal à direita
+- **Campos**: WhatsApp com máscara via `formatWhatsapp` de `src/lib/format.ts`, senha com botão mostrar/esconder, ícones dentro do campo quando fizer sentido (ex: @ do Instagram)
+- **Feedback**: toasts via `sonner` (`toast.success` / `toast.error`) após cada ação
+- **Upload de fotos**: SEMPRE comprimir no navegador antes de enviar, usando `compressImage` de `src/lib/compress-image.ts`
+- **Textos**: português informal-profissional, falando com dono de barbearia (não com programador)

@@ -1,0 +1,215 @@
+// Busca os dados no banco e calcula os horários livres de um
+// profissional numa data, pra um conjunto de serviços.
+// Usado pela API pública, pelo site do cliente e pela agenda do admin.
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  BOOKING_LEAD_MINUTES,
+  SLOT_STEP_MINUTES,
+  computeSlots,
+  minutesToTime,
+  nowMinutesInTimezone,
+  resolveDayRanges,
+  timeToMinutes,
+  todayInTimezone,
+  weekdayOf,
+  type DayException,
+  type MinuteRange,
+} from "@/lib/availability";
+
+export type AvailabilityOk = {
+  ok: true;
+  professionalId: string;
+  date: string;
+  durationMinutes: number;
+  totalPriceCents: number;
+  slots: string[]; // horários de início: ["09:00", "09:15", ...]
+};
+
+export type AvailabilityError = { ok: false; error: string; status: number };
+
+export type AvailabilityResult = AvailabilityOk | AvailabilityError;
+
+const MAX_DAYS_AHEAD = 60;
+
+function toDayException(e: {
+  kind: string;
+  start_time: string | null;
+  end_time: string | null;
+}): DayException {
+  return {
+    kind: e.kind as "closed" | "custom",
+    range:
+      e.kind === "custom" && e.start_time && e.end_time
+        ? {
+            start: timeToMinutes(e.start_time),
+            end: timeToMinutes(e.end_time),
+          }
+        : null,
+  };
+}
+
+export async function getAvailability(
+  professionalId: string,
+  date: string,
+  serviceIds: string[]
+): Promise<AvailabilityResult> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, error: "Data inválida. Use o formato AAAA-MM-DD.", status: 400 };
+  }
+  if (serviceIds.length === 0) {
+    return { ok: false, error: "Escolha pelo menos um serviço.", status: 400 };
+  }
+
+  const today = todayInTimezone();
+  if (date < today) {
+    return { ok: false, error: "Essa data já passou.", status: 400 };
+  }
+
+  const maxDate = new Date(`${today}T00:00:00Z`);
+  maxDate.setUTCDate(maxDate.getUTCDate() + MAX_DAYS_AHEAD);
+  if (date > maxDate.toISOString().slice(0, 10)) {
+    return {
+      ok: false,
+      error: `Só é possível agendar até ${MAX_DAYS_AHEAD} dias pra frente.`,
+      status: 400,
+    };
+  }
+
+  const weekday = weekdayOf(date);
+  const admin = createAdminClient();
+
+  const [
+    { data: professional },
+    { data: services },
+    { data: links },
+    { data: businessDay },
+    { data: workingHours },
+    { data: exceptions },
+    { data: appointments },
+    { data: settings },
+  ] = await Promise.all([
+    admin
+      .from("professionals")
+      .select("id, active")
+      .eq("id", professionalId)
+      .maybeSingle(),
+    admin
+      .from("services")
+      .select("id, active, duration_minutes, price_cents")
+      .in("id", serviceIds),
+    admin
+      .from("professional_services")
+      .select("service_id")
+      .eq("professional_id", professionalId)
+      .in("service_id", serviceIds),
+    admin
+      .from("business_hours")
+      .select("active, open_time, close_time")
+      .eq("weekday", weekday)
+      .maybeSingle(),
+    admin
+      .from("working_hours")
+      .select("start_time, end_time")
+      .eq("professional_id", professionalId)
+      .eq("weekday", weekday),
+    admin
+      .from("schedule_exceptions")
+      .select("professional_id, kind, start_time, end_time")
+      .eq("date", date),
+    admin
+      .from("appointments")
+      .select("start_time, end_time")
+      .eq("professional_id", professionalId)
+      .eq("date", date)
+      .eq("status", "confirmed"),
+    admin.from("shop_settings").select("slot_step_minutes").single(),
+  ]);
+
+  if (!professional || !professional.active) {
+    return { ok: false, error: "Profissional não encontrado.", status: 404 };
+  }
+
+  const foundServices = services ?? [];
+  if (
+    foundServices.length !== serviceIds.length ||
+    foundServices.some((s) => !s.active)
+  ) {
+    return { ok: false, error: "Serviço não encontrado.", status: 404 };
+  }
+
+  const linkedIds = new Set((links ?? []).map((l) => l.service_id));
+  if (!serviceIds.every((id) => linkedIds.has(id))) {
+    return {
+      ok: false,
+      error: "Esse profissional não faz um dos serviços escolhidos.",
+      status: 400,
+    };
+  }
+
+  const durationMinutes = foundServices.reduce(
+    (sum, s) => sum + s.duration_minutes,
+    0
+  );
+  const totalPriceCents = foundServices.reduce(
+    (sum, s) => sum + s.price_cents,
+    0
+  );
+
+  const shopException =
+    (exceptions ?? []).find((e) => e.professional_id === null) ?? null;
+  const professionalException =
+    (exceptions ?? []).find((e) => e.professional_id === professionalId) ??
+    null;
+
+  const ranges = resolveDayRanges({
+    businessDay: businessDay
+      ? {
+          active: businessDay.active,
+          range: {
+            start: timeToMinutes(businessDay.open_time),
+            end: timeToMinutes(businessDay.close_time),
+          },
+        }
+      : null,
+    shopException: shopException ? toDayException(shopException) : null,
+    weeklyRanges: (workingHours ?? []).map((w) => ({
+      start: timeToMinutes(w.start_time),
+      end: timeToMinutes(w.end_time),
+    })),
+    professionalException: professionalException
+      ? toDayException(professionalException)
+      : null,
+  });
+
+  const busy: MinuteRange[] = (appointments ?? []).map((a) => ({
+    start: timeToMinutes(a.start_time),
+    end: timeToMinutes(a.end_time),
+  }));
+
+  const stepMinutes = settings?.slot_step_minutes ?? SLOT_STEP_MINUTES;
+
+  // Hoje: só oferece horários a partir de agora + antecedência mínima,
+  // arredondado pro próximo passo da grade
+  let minStart: number | null = null;
+  if (date === today) {
+    const earliest = nowMinutesInTimezone() + BOOKING_LEAD_MINUTES;
+    minStart = Math.ceil(earliest / stepMinutes) * stepMinutes;
+  }
+
+  const slots = computeSlots({
+    ranges,
+    busy,
+    durationMinutes,
+    stepMinutes,
+    minStart,
+  });
+
+  return {
+    ok: true,
+    professionalId,
+    date,
+    durationMinutes,
+    totalPriceCents,
+    slots: slots.map(minutesToTime),
+  };
+}

@@ -1,0 +1,14 @@
+---
+description: Forma de trabalho combinada com o dono do projeto
+alwaysApply: true
+---
+
+# Forma de trabalho
+
+O usuário é o dono do projeto e não é programador. Sempre responder em português, de forma clara e sem jargão desnecessário.
+
+- **Refutar e questionar**: quando o usuário pedir algo com desvantagens ou alternativas melhores, apontar isso antes de executar. Não concordar automaticamente.
+- **Transparência total**: ao final de cada tarefa, listar o que foi criado, alterado e excluído, em linguagem simples.
+- **Código limpo**: excluir imediatamente código, arquivos e dependências que deixarem de ser usados. Não deixar código morto.
+- **Documentar**: manter o `README.md` e os documentos do projeto atualizados conforme as funcionalidades forem criadas.
+- **Dar opções**: ao apresentar próximos passos ou decisões, oferecer opções com prós e contras e uma recomendação.
