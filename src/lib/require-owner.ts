@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -22,4 +23,10 @@ export async function requireOwner(): Promise<ActionResult | null> {
     return { ok: false, error: "Apenas o dono pode fazer isso." };
   }
   return null;
+}
+
+// Redireciona barbeiros e visitantes que tentarem abrir páginas só do dono.
+export async function assertOwnerPage(): Promise<void> {
+  const denied = await requireOwner();
+  if (denied) redirect("/admin");
 }

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BOOKING_PATH } from "@/lib/booking-path";
 
 export default function Home() {
   return (
@@ -27,7 +28,7 @@ export default function Home() {
             </p>
             <div className="mt-10">
               <Button asChild size="lg" className="h-12 px-8 text-base">
-                <Link href="/agendar">Agendar horário</Link>
+                <Link href={BOOKING_PATH}>Agendar horário</Link>
               </Button>
             </div>
           </div>

@@ -11,7 +11,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { AppointmentItem } from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { agendaAppointmentClass } from "@/lib/agenda-colors";
 
 type AppointmentGridBlockProps = {

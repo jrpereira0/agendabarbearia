@@ -4,9 +4,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
-import { getAvailability } from "@/lib/get-availability";
+import { formatTime } from "@/lib/format";
+import {
+  getAvailability,
+  validateAdminAppointmentSlot,
+} from "@/lib/get-availability";
 import { requireAdmin, type AdminSession } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
+import { upsertCustomer } from "@/lib/upsert-customer";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -22,7 +27,8 @@ const createSchema = z.object({
 
 async function assertCanManageAppointment(
   appointmentId: string,
-  session: Awaited<ReturnType<typeof requireAdmin>>
+  session: Awaited<ReturnType<typeof requireAdmin>>,
+  allowedStatuses: Array<"confirmed" | "done"> = ["confirmed"]
 ): Promise<ActionResult | { professionalId: string }> {
   if (!("userId" in session)) return session;
 
@@ -44,7 +50,17 @@ async function assertCanManageAppointment(
     return { ok: false, error: "Você não pode alterar este agendamento." };
   }
 
-  if (appointment.status !== "confirmed") {
+  if (
+    !allowedStatuses.includes(
+      appointment.status as (typeof allowedStatuses)[number]
+    )
+  ) {
+    if (appointment.status === "done") {
+      return { ok: false, error: "Este agendamento já foi atendido." };
+    }
+    if (appointment.status === "cancelled") {
+      return { ok: false, error: "Agendamento cancelado não pode ser alterado." };
+    }
     return { ok: false, error: "Só dá pra alterar agendamentos confirmados." };
   }
 
@@ -69,10 +85,21 @@ async function insertAppointment(
 
   const endTime = minutesToTime(endMinutes);
 
+  const customer = await upsertCustomer({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    whatsapp: data.whatsapp,
+  });
+
+  if (!customer.ok) {
+    return { ok: false, error: customer.error };
+  }
+
   const { data: appointment, error } = await admin
     .from("appointments")
     .insert({
       professional_id: data.professionalId,
+      customer_id: customer.customerId,
       customer_first_name: data.firstName,
       customer_last_name: data.lastName,
       customer_whatsapp: data.whatsapp,
@@ -264,8 +291,81 @@ export async function markAppointmentDone(
   return { ok: true };
 }
 
+export async function reopenAppointment(
+  appointmentId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const check = await assertCanManageAppointment(appointmentId, session, [
+    "done",
+  ]);
+  if (!("professionalId" in check)) return check;
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("appointments")
+    .select(
+      `
+      date,
+      start_time,
+      is_squeeze_in,
+      appointment_services ( service_id )
+    `
+    )
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!existing) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  const serviceIds = (existing.appointment_services ?? []).map(
+    (row) => row.service_id
+  );
+
+  if (!existing.is_squeeze_in && serviceIds.length > 0) {
+    const availability = await getAvailability(
+      check.professionalId,
+      existing.date,
+      serviceIds,
+      undefined,
+      { adminEdit: true }
+    );
+
+    if (!availability.ok) {
+      return { ok: false, error: availability.error };
+    }
+
+    const slotCheck = await validateAdminAppointmentSlot(
+      check.professionalId,
+      existing.date,
+      formatTime(existing.start_time),
+      availability.durationMinutes,
+      appointmentId
+    );
+
+    if (!slotCheck.ok) {
+      return { ok: false, error: slotCheck.error };
+    }
+  }
+
+  const { error } = await admin
+    .from("appointments")
+    .update({ status: "confirmed" })
+    .eq("id", appointmentId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível reabrir o atendimento." };
+  }
+
+  revalidatePath("/admin");
+  return { ok: true };
+}
+
 const updateSchema = z.object({
   appointmentId: z.uuid(),
+  professionalId: z.uuid(),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
@@ -277,6 +377,7 @@ const updateSchema = z.object({
 
 export async function updateAppointment(input: {
   appointmentId: string;
+  professionalId: string;
   startTime: string;
   serviceIds: string[];
   firstName: string;
@@ -296,7 +397,8 @@ export async function updateAppointment(input: {
 
   const check = await assertCanManageAppointment(
     parsed.data.appointmentId,
-    session
+    session,
+    ["confirmed", "done"]
   );
   if (!("professionalId" in check)) return check;
 
@@ -312,7 +414,7 @@ export async function updateAppointment(input: {
   }
 
   const createInput = {
-    professionalId: check.professionalId,
+    professionalId: parsed.data.professionalId,
     date: existing.date,
     startTime: parsed.data.startTime,
     serviceIds: parsed.data.serviceIds,
@@ -325,19 +427,16 @@ export async function updateAppointment(input: {
   if (!("durationMinutes" in validated)) return validated;
 
   if (!existing.is_squeeze_in) {
-    const availability = await getAvailability(
-      check.professionalId,
+    const slotCheck = await validateAdminAppointmentSlot(
+      parsed.data.professionalId,
       existing.date,
-      parsed.data.serviceIds,
+      parsed.data.startTime,
+      validated.durationMinutes,
       parsed.data.appointmentId
     );
 
-    if (!availability.ok) {
-      return { ok: false, error: availability.error };
-    }
-
-    if (!availability.slots.includes(parsed.data.startTime)) {
-      return { ok: false, error: "Esse horário não está mais disponível." };
+    if (!slotCheck.ok) {
+      return { ok: false, error: slotCheck.error };
     }
   }
 
@@ -353,9 +452,21 @@ export async function updateAppointment(input: {
 
   const endTime = minutesToTime(endMinutes);
 
+  const customer = await upsertCustomer({
+    firstName: parsed.data.firstName,
+    lastName: parsed.data.lastName,
+    whatsapp: parsed.data.whatsapp,
+  });
+
+  if (!customer.ok) {
+    return { ok: false, error: customer.error };
+  }
+
   const { error } = await admin
     .from("appointments")
     .update({
+      professional_id: parsed.data.professionalId,
+      customer_id: customer.customerId,
       customer_first_name: parsed.data.firstName,
       customer_last_name: parsed.data.lastName,
       customer_whatsapp: parsed.data.whatsapp,
@@ -496,7 +607,10 @@ export async function cancelAppointment(
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
-  const check = await assertCanManageAppointment(appointmentId, session);
+  const check = await assertCanManageAppointment(appointmentId, session, [
+    "confirmed",
+    "done",
+  ]);
   if (!("professionalId" in check)) return check;
 
   const admin = createAdminClient();
@@ -511,4 +625,42 @@ export async function cancelAppointment(
 
   revalidatePath("/admin");
   return { ok: true };
+}
+
+export async function getEditAvailabilitySlots(input: {
+  professionalId: string;
+  date: string;
+  serviceIds: string[];
+  excludeAppointmentId: string;
+}): Promise<{ ok: true; slots: string[] } | { ok: false; error: string }> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return session.ok === false
+      ? { ok: false, error: session.error }
+      : { ok: false, error: "Sessão inválida." };
+  }
+
+  if (
+    !session.isOwner &&
+    input.professionalId !== session.professionalId
+  ) {
+    return {
+      ok: false,
+      error: "Você só pode editar agendamentos na sua própria agenda.",
+    };
+  }
+
+  const result = await getAvailability(
+    input.professionalId,
+    input.date,
+    input.serviceIds,
+    input.excludeAppointmentId,
+    { adminEdit: true }
+  );
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  return { ok: true, slots: result.slots };
 }

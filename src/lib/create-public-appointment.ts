@@ -1,0 +1,135 @@
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { getAvailability } from "@/lib/get-availability";
+import { upsertCustomer } from "@/lib/upsert-customer";
+
+const createSchema = z.object({
+  professionalId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+  serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
+  firstName: z.string().trim().min(1, "Informe o nome."),
+  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  whatsapp: z
+    .string()
+    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+});
+
+export type CreatePublicAppointmentInput = z.infer<typeof createSchema>;
+
+export type CreatePublicAppointmentResult =
+  | { ok: true; appointmentId: string }
+  | { ok: false; error: string; status: number };
+
+export async function createPublicAppointment(
+  input: CreatePublicAppointmentInput
+): Promise<CreatePublicAppointmentResult> {
+  const parsed = createSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0].message,
+      status: 400,
+    };
+  }
+
+  const data = parsed.data;
+
+  const availability = await getAvailability(
+    data.professionalId,
+    data.date,
+    data.serviceIds
+  );
+
+  if (!availability.ok) {
+    return {
+      ok: false,
+      error: availability.error,
+      status: availability.status,
+    };
+  }
+
+  if (!availability.slots.includes(data.startTime)) {
+    return {
+      ok: false,
+      error: "Esse horário não está mais disponível. Escolha outro.",
+      status: 409,
+    };
+  }
+
+  const startMinutes = timeToMinutes(data.startTime);
+  const endMinutes = startMinutes + availability.durationMinutes;
+
+  if (endMinutes > 24 * 60) {
+    return {
+      ok: false,
+      error:
+        "O horário de término passa da meia-noite. Escolha um início mais cedo.",
+      status: 400,
+    };
+  }
+
+  const customer = await upsertCustomer({
+    firstName: data.firstName,
+    lastName: data.lastName,
+    whatsapp: data.whatsapp,
+  });
+
+  if (!customer.ok) {
+    return { ok: false, error: customer.error, status: 500 };
+  }
+
+  const admin = createAdminClient();
+  const endTime = minutesToTime(endMinutes);
+
+  const { data: appointment, error } = await admin
+    .from("appointments")
+    .insert({
+      professional_id: data.professionalId,
+      customer_id: customer.customerId,
+      customer_first_name: data.firstName,
+      customer_last_name: data.lastName,
+      customer_whatsapp: data.whatsapp,
+      date: data.date,
+      start_time: data.startTime,
+      end_time: endTime,
+      status: "confirmed",
+      is_squeeze_in: false,
+    })
+    .select("id")
+    .single();
+
+  if (error) {
+    if (error.code === "23P01") {
+      return {
+        ok: false,
+        error: "Esse horário acabou de ser ocupado. Escolha outro.",
+        status: 409,
+      };
+    }
+    return {
+      ok: false,
+      error: "Não foi possível confirmar o agendamento.",
+      status: 500,
+    };
+  }
+
+  const { error: linkError } = await admin.from("appointment_services").insert(
+    data.serviceIds.map((serviceId) => ({
+      appointment_id: appointment.id,
+      service_id: serviceId,
+    }))
+  );
+
+  if (linkError) {
+    await admin.from("appointments").delete().eq("id", appointment.id);
+    return {
+      ok: false,
+      error: "Não foi possível salvar os serviços.",
+      status: 500,
+    };
+  }
+
+  return { ok: true, appointmentId: appointment.id };
+}

@@ -54,3 +54,33 @@ export function formatWhatsapp(digits: string): string {
   if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
+
+// Formata CEP: 01310100 -> "01310-100"
+export function formatCep(digits: string): string {
+  const d = digits.replace(/\D/g, "").slice(0, 8);
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
+}
+
+export type ShopAddressParts = {
+  street: string;
+  addressNumber: string;
+  addressComplement?: string;
+  neighborhood: string;
+  city: string;
+  state: string;
+};
+
+// Monta endereço legível a partir dos campos do cadastro.
+export function formatShopAddress(parts: ShopAddressParts): string {
+  const streetLine = [parts.street, parts.addressNumber]
+    .filter(Boolean)
+    .join(", ");
+  const cityLine = [parts.neighborhood, parts.city, parts.state]
+    .filter(Boolean)
+    .join(" – ");
+
+  return [streetLine, parts.addressComplement?.trim(), cityLine]
+    .filter(Boolean)
+    .join(" · ");
+}

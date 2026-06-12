@@ -29,7 +29,7 @@ import { formatDateBR, formatTime } from "@/lib/format";
 import {
   createException,
   deleteException,
-} from "@/app/admin/(panel)/horarios/actions";
+} from "@/app/admin/(panel)/configuracoes/actions";
 
 export type ExceptionItem = {
   id: string;

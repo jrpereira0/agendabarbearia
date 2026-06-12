@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
-import type { AppointmentItem } from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
   formatDateBR,
   formatDuration,
@@ -254,6 +254,7 @@ export function NewAppointmentDialog({
 
   useEffect(() => {
     if (!open) return;
+    setSaving(false);
     const proId =
       defaultProfessionalId ??
       (isOwner ? "" : professionals[0]?.id ?? "");
@@ -445,6 +446,7 @@ export function NewAppointmentDialog({
 
     if (result.ok) {
       toast.success(isEncaixe ? "Encaixe criado." : "Agendamento criado.");
+      setSaving(false);
       onOpenChange(false);
       router.refresh();
     } else {

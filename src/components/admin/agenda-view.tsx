@@ -6,10 +6,7 @@ import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgendaGrid } from "@/components/admin/agenda-grid";
 import { AgendaSidebar } from "@/components/admin/agenda-sidebar";
-import {
-  AppointmentCard,
-  type AppointmentItem,
-} from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { AppointmentDetailDialog } from "@/components/admin/appointment-detail-dialog";
 import { EditAppointmentDialog } from "@/components/admin/edit-appointment-dialog";
 import {
@@ -20,8 +17,6 @@ import {
 } from "@/components/admin/new-appointment-dialog";
 import { formatAgendaHeaderDate } from "@/lib/agenda-grid-utils";
 import type { AgendaDayContext } from "@/lib/get-agenda-day";
-
-type ViewMode = "grid" | "list";
 
 type AgendaViewProps = {
   date: string;
@@ -115,23 +110,15 @@ function AgendaToolbar({
 }
 
 function AgendaMainContent({
-  viewMode,
   dayContext,
   appointments,
-  sortedAppointments,
-  isOwner,
   onSlotClick,
   onAppointmentClick,
-  onEditAppointment,
 }: {
-  viewMode: ViewMode;
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
-  sortedAppointments: AppointmentItem[];
-  isOwner: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
   onAppointmentClick: (apt: AppointmentItem) => void;
-  onEditAppointment: (apt: AppointmentItem) => void;
 }) {
   return (
     <>
@@ -141,32 +128,15 @@ function AgendaMainContent({
         </div>
       ) : null}
 
-      {viewMode === "grid" ? (
-        <AgendaGrid
-          gridStart={dayContext.gridStart}
-          gridEnd={dayContext.gridEnd}
-          slotStepMinutes={dayContext.slotStepMinutes}
-          professionals={dayContext.professionals}
-          appointments={appointments}
-          onSlotClick={onSlotClick}
-          onAppointmentClick={onAppointmentClick}
-        />
-      ) : sortedAppointments.length === 0 ? (
-        <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
-          Nenhum agendamento neste dia.
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {sortedAppointments.map((appointment) => (
-                <AppointmentCard
-                  key={appointment.id}
-                  appointment={appointment}
-                  showProfessional={isOwner}
-                  onEdit={() => onEditAppointment(appointment)}
-                />
-          ))}
-        </div>
-      )}
+      <AgendaGrid
+        gridStart={dayContext.gridStart}
+        gridEnd={dayContext.gridEnd}
+        slotStepMinutes={dayContext.slotStepMinutes}
+        professionals={dayContext.professionals}
+        appointments={appointments}
+        onSlotClick={onSlotClick}
+        onAppointmentClick={onAppointmentClick}
+      />
     </>
   );
 }
@@ -181,7 +151,6 @@ export function AgendaView({
   services,
 }: AgendaViewProps) {
   const router = useRouter();
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [newOpen, setNewOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentItem | null>(null);
@@ -206,12 +175,6 @@ export function AgendaView({
         serviceIds: p.serviceIds,
       })),
     [dayContext.professionals]
-  );
-
-  const sortedAppointments = useMemo(
-    () =>
-      [...appointments].sort((a, b) => a.startTime.localeCompare(b.startTime)),
-    [appointments]
   );
 
   const canBook =
@@ -253,7 +216,6 @@ export function AgendaView({
   const sidebarProps = {
     date,
     today,
-    viewMode,
     canBook,
     isOwner,
     professionalId,
@@ -264,7 +226,6 @@ export function AgendaView({
       nickname: p.nickname,
     })),
     onDateChange: goToDate,
-    onViewModeChange: setViewMode,
     onNewAppointment: () => openBooking("normal"),
     onEncaixe: () => openBooking("encaixe"),
   };
@@ -282,23 +243,11 @@ export function AgendaView({
   };
 
   const mainContentProps = {
-    viewMode,
     dayContext,
     appointments,
-    sortedAppointments,
-    isOwner,
     onSlotClick: handleSlotClick,
     onAppointmentClick: handleAppointmentClick,
-    onEditAppointment: handleEditAppointment,
   };
-
-  const editProfessionalServiceIds = useMemo(() => {
-    if (!selectedAppointment) return [];
-    return (
-      professionals.find((p) => p.id === selectedAppointment.professionalId)
-        ?.serviceIds ?? []
-    );
-  }, [selectedAppointment, professionals]);
 
   return (
     <div className="-m-4 md:-m-8">
@@ -352,6 +301,13 @@ export function AgendaView({
         open={detailOpen}
         onOpenChange={setDetailOpen}
         showProfessional={isOwner}
+        professionalPhotoUrl={
+          selectedAppointment
+            ? professionals.find(
+                (p) => p.id === selectedAppointment.professionalId
+              )?.photoUrl ?? null
+            : null
+        }
         onEdit={() => handleEditAppointment(selectedAppointment!)}
       />
 
@@ -359,15 +315,15 @@ export function AgendaView({
         appointment={selectedAppointment}
         open={editOpen}
         onOpenChange={setEditOpen}
+        professionals={professionals}
         services={services}
-        professionalServiceIds={editProfessionalServiceIds}
+        isOwner={isOwner}
         slotStepMinutes={dayContext.slotStepMinutes}
         appointments={appointments}
         professionalSchedules={dayContext.professionals.map((p) => ({
           id: p.id,
           availableRanges: p.availableRanges,
         }))}
-        showProfessional={isOwner}
       />
     </div>
   );

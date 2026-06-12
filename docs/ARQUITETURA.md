@@ -13,11 +13,15 @@ Atualizado por fase, conforme o sistema evolui.
 | Pasta | O que tem |
 | --- | --- |
 | `src/app/page.tsx` | Página inicial pública |
+| `src/app/agenda` | Página do cliente: perfil da barbearia e agendamento |
 | `src/app/admin/login` | Tela de login do painel |
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
+| `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
+| `src/app/admin/(panel)/configuracoes` | Perfil, endereço, horários e dias especiais |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
+| `src/components/booking` | Página pública de agendamento do cliente |
 | `src/lib/supabase` | Conexões com o Supabase (browser, server, admin) |
 | `src/proxy.ts` | Protege as rotas `/admin` (redireciona pro login) |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
@@ -32,7 +36,8 @@ Atualizado por fase, conforme o sistema evolui.
 | `services` | Serviços: nome, foto, preço (centavos), duração (minutos) |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
-| `appointments` | Agendamentos dos clientes (nome, sobrenome, WhatsApp, status) |
+| `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único) |
+| `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp) |
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
 
@@ -64,36 +69,69 @@ Regras importantes no banco:
 
 Três camadas, da mais geral pra mais específica:
 
-1. **Horário da barbearia** (`business_hours`): por dia da semana, abre/fecha ou fechado. É o teto — ninguém atende fora dele. Editado na tela **Horários**
+1. **Horário da barbearia** (`business_hours`): por dia da semana, abre/fecha ou fechado. É o teto — ninguém atende fora dele. Editado em **Configurações**
 2. **Grade do profissional** (`working_hours`): faixas de horário por dia da semana (várias faixas = pausa de almoço; nenhuma faixa = folga). Editada **no cadastro do profissional** (Profissionais > editar)
-3. **Dias especiais** (`schedule_exceptions`): valem pra uma data específica e vencem as camadas acima. Pode ser da barbearia toda ou de um barbeiro só; fechado ou com horário diferente. Editados na tela **Horários**
+3. **Dias especiais** (`schedule_exceptions`): valem pra uma data específica e vencem as camadas acima. Pode ser da barbearia toda ou de um barbeiro só; fechado ou com horário diferente. Editados em **Configurações**
 
-Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leitura na tela Horários.
+Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leitura em Configurações.
 
 ## Agenda do painel
 
 - Tela inicial (`/admin`): **grade do dia** com horários na vertical e um barbeiro por coluna (como agenda de salão)
 - Contraste na grade (tons de cinza): branco = livre; cinza médio = fora do expediente; listrado = bloqueado; cinza claro = célula ocupada; preto = agendado; branco tracejado = encaixe; cinza escuro = atendido; sobreposições aparecem lado a lado na coluna
-- O intervalo das linhas segue `shop_settings.slot_step_minutes` (o mesmo de Horários e da API)
+- O intervalo das linhas segue `shop_settings.slot_step_minutes` (o mesmo de Configurações e da API)
 - Barra superior: navegar dias, botão **Hoje**, **+ Encaixe** e data no centro
-- Sidebar: mini-calendário, **bloqueios do dia** (pausa, almoço etc.), alternar **grade** / **lista**, legenda
+- Sidebar: mini-calendário, **bloqueios do dia** (pausa, almoço etc.), legenda recolhível
 - **Dono** vê todos os barbeiros; **barbeiro** vê só a própria coluna
 - Cabeçalho da grade mostra **foto e nome** de cada barbeiro
 - **Agendamento normal** (`+ Agendar` ou clique em horário livre): só mostra horários disponíveis (mesma regra da API pública); grava com `is_squeeze_in = false`
 - A grade do dia cobre **24 horas** (00:00 às 24:00); fora do expediente aparece em cinza
 - **Bloqueio de horário** (`schedule_blocks`): na sidebar, bloqueia uma faixa do dia para um barbeiro; agendamento normal e API pública não oferecem esse horário; **encaixe manual** ainda pode usar
 - **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`)
-- Ações: **editar** (cliente, serviços e horário), marcar **atendido** ou **cancelar** (clique no bloco ou na lista)
+- Ações: **editar** (cliente, serviços e horário), marcar **atendido**, **reabrir atendimento** (volta pra confirmado se marcou errado), ou **cancelar** (clique no bloco da grade)
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres
 
 - **Lógica pura** em `src/lib/availability.ts` (cálculo, sem banco) e **busca de dados** em `src/lib/get-availability.ts`
 - Cruza: horário da barbearia ∩ grade do barbeiro, aplica exceções do dia, soma a duração dos serviços escolhidos e remove conflitos com agendamentos confirmados e **bloqueios do dia**
-- O **intervalo da agenda** (de quantos em quantos minutos os horários aparecem) é configurável na tela Horários: 5, 10, 15, 20, 30, 45 ou 60 min (`shop_settings.slot_step_minutes`, padrão 15)
+- O **intervalo da agenda** (de quantos em quantos minutos os horários aparecem) é configurável em **Configurações**: 5, 10, 15, 20, 30, 45 ou 60 min (`shop_settings.slot_step_minutes`, padrão 15)
 - Pra hoje, só oferece horários com 10 min de antecedência; agenda aberta até **60 dias** à frente
 - Fuso fixo da barbearia: `America/Sao_Paulo`
 - Exposto em `GET /api/v1/availability?professionalId=...&date=AAAA-MM-DD&serviceIds=id1,id2` (público, mesmo endpoint que o site e as automações de WhatsApp usam)
+
+## Página do cliente (`/agenda`)
+
+- URLs antigas `/agendar` e `/reservar` redirecionam automaticamente para `/agenda`
+
+- Mostra o **perfil da barbearia** (nome, bio, endereço, horários, WhatsApp, Instagram, logo) e o fluxo de agendamento
+- Passos: barbeiro → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
+- Aba **Meus horários**: cliente digita WhatsApp, vê agendamentos futuros, pode **remarcar** (data, horário, serviços) ou **cancelar**
+- Se o número já existir e não for a pessoa, o cliente troca o WhatsApp (não edita o nome de outro cadastro)
+- Usa a mesma regra de horários livres da API (`GET /api/v1/availability`)
+- Confirmação via `POST /api/v1/appointments` (servidor valida de novo antes de gravar)
+- O dono edita o perfil público em **Configurações** (`/admin/configuracoes`)
+- Campos do perfil em `shop_settings`: `shop_name`, `bio`, `cep`, `street`, `address_number`, `address_complement`, `neighborhood`, `city`, `state`, `address` (texto montado automaticamente), `whatsapp`, `instagram`, `logo_url`
+- Endereço: digite o CEP e o sistema preenche rua, bairro e cidade (ViaCEP); você informa número e complemento
+
+## API pública
+
+| Método | Rota | Função |
+| --- | --- | --- |
+| GET | `/api/v1/availability` | Horários livres de um barbeiro num dia |
+| GET | `/api/v1/customers/lookup` | Buscar cliente pelo WhatsApp (agendamento online) |
+| GET | `/api/v1/appointments?whatsapp=` | Listar agendamentos futuros do cliente |
+| POST | `/api/v1/appointments` | Criar agendamento online (cliente) |
+| PATCH | `/api/v1/appointments/:id` | Remarcar agendamento (cliente) |
+| DELETE | `/api/v1/appointments/:id?whatsapp=` | Cancelar agendamento (cliente) |
+
+## Clientes
+
+- Cadastro automático na primeira reserva (página ou painel); um WhatsApp = um cliente
+- Somente o **dono** vê **Clientes** (`/admin/clientes`): barbeiros não têm acesso ao menu nem aos dados
+- Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
+- Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
+- Exclusão só é permitida se o cliente não tiver agendamentos no histórico
 
 ## Fotos (profissionais e serviços)
 

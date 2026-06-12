@@ -5,7 +5,7 @@ import { getAgendaDayContext } from "@/lib/get-agenda-day";
 import { formatTime } from "@/lib/format";
 import { getAdminSession } from "@/lib/require-admin";
 import { AgendaView } from "@/components/admin/agenda-view";
-import type { AppointmentItem } from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 
 type PageProps = {
   searchParams: Promise<{ date?: string }>;

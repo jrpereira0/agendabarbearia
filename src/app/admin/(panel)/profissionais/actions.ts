@@ -212,7 +212,8 @@ export async function createProfessional(
   await syncSchedule(professional.id, schedule);
 
   revalidatePath("/admin/profissionais");
-  revalidatePath("/admin/horarios");
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -295,7 +296,8 @@ export async function updateProfessional(
   await syncSchedule(id, schedule);
 
   revalidatePath("/admin/profissionais");
-  revalidatePath("/admin/horarios");
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -315,6 +317,7 @@ export async function setProfessionalActive(
   if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/profissionais");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -351,5 +354,6 @@ export async function deleteProfessional(id: string): Promise<ActionResult> {
   }
 
   revalidatePath("/admin/profissionais");
+  revalidatePath("/agenda");
   return { ok: true };
 }

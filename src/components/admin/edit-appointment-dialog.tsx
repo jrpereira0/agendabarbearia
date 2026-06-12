@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Clock, Scissors, User } from "lucide-react";
+import { Clock, Scissors, User, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,9 +17,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import type { AppointmentItem } from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { SearchInput } from "@/components/admin/search-input";
-import type { ServiceOption } from "@/components/admin/new-appointment-dialog";
+import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-appointment-dialog";
+import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
   formatDateBR,
   formatDuration,
@@ -35,32 +36,33 @@ import {
 } from "@/lib/encaixe";
 import { matchesSearch } from "@/lib/text";
 import { cn } from "@/lib/utils";
-import { updateAppointment } from "@/app/admin/(panel)/agenda/actions";
+import { updateAppointment, getEditAvailabilitySlots } from "@/app/admin/(panel)/agenda/actions";
 
 type EditAppointmentDialogProps = {
   appointment: AppointmentItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  professionals: ProfessionalOption[];
   services: ServiceOption[];
-  professionalServiceIds: string[];
+  isOwner: boolean;
   slotStepMinutes: number;
   appointments: AppointmentItem[];
   professionalSchedules: { id: string; availableRanges: MinuteRange[] }[];
-  showProfessional: boolean;
 };
 
 export function EditAppointmentDialog({
   appointment,
   open,
   onOpenChange,
+  professionals,
   services,
-  professionalServiceIds,
+  isOwner,
   slotStepMinutes,
   appointments,
   professionalSchedules,
-  showProfessional,
 }: EditAppointmentDialogProps) {
   const router = useRouter();
+  const [professionalId, setProfessionalId] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -73,13 +75,14 @@ export function EditAppointmentDialog({
   const [saving, setSaving] = useState(false);
 
   const isEncaixe = appointment?.isSqueezeIn ?? false;
+  const selectedProfessional = professionals.find((p) => p.id === professionalId);
 
   const availableServices = useMemo(() => {
-    const allowed = new Set(professionalServiceIds);
+    const allowed = new Set(selectedProfessional?.serviceIds ?? []);
     return services
       .filter((s) => allowed.has(s.id))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  }, [services, professionalServiceIds]);
+  }, [services, selectedProfessional]);
 
   const filteredServices = useMemo(() => {
     if (!serviceSearch.trim()) return availableServices;
@@ -113,15 +116,17 @@ export function EditAppointmentDialog({
 
   const selectedRanges = useMemo(
     () =>
-      professionalSchedules.find((p) => p.id === appointment?.professionalId)
+      professionalSchedules.find((p) => p.id === professionalId)
         ?.availableRanges ?? [],
-    [professionalSchedules, appointment?.professionalId]
+    [professionalSchedules, professionalId]
   );
 
   const selectedConflicts = useMemo(() => {
-    if (!appointment || !startTime || totalMinutes === 0) return [];
+    if (!appointment || !startTime || totalMinutes === 0 || !professionalId) {
+      return [];
+    }
     return findAppointmentConflicts(
-      appointment.professionalId,
+      professionalId,
       startTime,
       totalMinutes,
       appointments.map((a) => ({
@@ -135,7 +140,7 @@ export function EditAppointmentDialog({
       })),
       appointment.id
     );
-  }, [appointment, startTime, totalMinutes, appointments]);
+  }, [appointment, professionalId, startTime, totalMinutes, appointments]);
 
   const selectedOutsideSchedule = useMemo(() => {
     if (!startTime || totalMinutes === 0) return false;
@@ -149,6 +154,8 @@ export function EditAppointmentDialog({
   useEffect(() => {
     if (!open || !appointment) return;
 
+    setSaving(false);
+    setProfessionalId(appointment.professionalId);
     setFirstName(appointment.customerFirstName);
     setLastName(appointment.customerLastName);
     setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
@@ -160,31 +167,39 @@ export function EditAppointmentDialog({
   }, [open, appointment]);
 
   useEffect(() => {
-    if (!open || !appointment || isEncaixe || serviceIds.length === 0) return;
+    if (!open || !professionalId) return;
+    const allowed = new Set(
+      professionals.find((p) => p.id === professionalId)?.serviceIds ?? []
+    );
+    setServiceIds((prev) => prev.filter((id) => allowed.has(id)));
+  }, [open, professionalId, professionals]);
+
+  useEffect(() => {
+    if (!open || !appointment || isEncaixe || serviceIds.length === 0 || !professionalId) {
+      return;
+    }
 
     let cancelled = false;
     setLoadingSlots(true);
     setSlotsError(null);
 
-    const params = new URLSearchParams({
-      professionalId: appointment.professionalId,
+    getEditAvailabilitySlots({
+      professionalId,
       date: appointment.date,
-      serviceIds: serviceIds.join(","),
+      serviceIds,
       excludeAppointmentId: appointment.id,
-    });
-
-    fetch(`/api/v1/availability?${params}`)
-      .then(async (res) => {
-        const body = await res.json();
+    })
+      .then((result) => {
         if (cancelled) return;
-        if (!res.ok) {
+        if (!result.ok) {
           setAvailableSlots([]);
-          setSlotsError(body.error ?? "Não foi possível carregar os horários.");
+          setSlotsError(result.error);
           return;
         }
-        const loaded: string[] = body.slots ?? [];
-        setAvailableSlots(loaded);
-        if (loaded.length === 0) {
+        setAvailableSlots(result.slots);
+        if (result.slots.length === 0 && appointment.startTime) {
+          setSlotsError(null);
+        } else if (result.slots.length === 0) {
           setSlotsError("Nenhum horário livre neste dia para esses serviços.");
         }
       })
@@ -201,7 +216,7 @@ export function EditAppointmentDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, appointment, isEncaixe, serviceIds]);
+  }, [open, appointment, isEncaixe, serviceIds, professionalId]);
 
   function toggleService(id: string, checked: boolean) {
     setServiceIds((prev) =>
@@ -228,9 +243,15 @@ export function EditAppointmentDialog({
       return;
     }
 
+    if (!professionalId) {
+      toast.error("Escolha o profissional.");
+      return;
+    }
+
     setSaving(true);
     const result = await updateAppointment({
       appointmentId: appointment.id,
+      professionalId,
       startTime,
       serviceIds,
       firstName: firstName.trim(),
@@ -240,6 +261,7 @@ export function EditAppointmentDialog({
 
     if (result.ok) {
       toast.success("Agendamento atualizado.");
+      setSaving(false);
       onOpenChange(false);
       router.refresh();
     } else {
@@ -257,7 +279,6 @@ export function EditAppointmentDialog({
           <DialogTitle>Editar agendamento</DialogTitle>
           <DialogDescription>
             {formatDateBR(appointment.date)}
-            {showProfessional && ` · ${appointment.professionalNickname}`}
             {isEncaixe && " · Encaixe"}
           </DialogDescription>
         </DialogHeader>
@@ -267,6 +288,59 @@ export function EditAppointmentDialog({
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
           <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-6">
+            <section className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <User className="size-4" />
+                Barbeiro
+              </div>
+              {isOwner ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {professionals.map((pro) => {
+                    const selected = professionalId === pro.id;
+                    return (
+                      <button
+                        key={pro.id}
+                        type="button"
+                        onClick={() => setProfessionalId(pro.id)}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50",
+                          selected && "border-primary bg-muted/50"
+                        )}
+                      >
+                        <ProfessionalAvatar
+                          photoUrl={pro.photoUrl}
+                          name={pro.nickname}
+                          size="md"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                          {pro.nickname}
+                        </span>
+                        {selected && (
+                          <Check className="size-4 shrink-0 text-foreground" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : selectedProfessional ? (
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4">
+                  <ProfessionalAvatar
+                    photoUrl={selectedProfessional.photoUrl}
+                    name={selectedProfessional.nickname}
+                    size="lg"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {selectedProfessional.nickname}
+                    </p>
+                    <p className="text-sm text-muted-foreground">Barbeiro</p>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <Separator />
+
             <section className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <User className="size-4" />
@@ -379,7 +453,8 @@ export function EditAppointmentDialog({
                 </p>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Só horários livres neste dia.
+                  Horários livres no expediente. Na edição, o horário atual
+                  sempre pode ser mantido para corrigir barbeiro ou dados.
                 </p>
               )}
 
@@ -392,19 +467,28 @@ export function EditAppointmentDialog({
                   {slotsError}
                 </p>
               ) : (
-                <div className="grid max-h-48 grid-cols-3 gap-2 sm:grid-cols-4">
-                  {timeSlots.map((slot) => (
-                    <Button
-                      key={slot}
-                      type="button"
-                      variant={startTime === slot ? "default" : "outline"}
-                      className="h-9 tabular-nums"
-                      onClick={() => setStartTime(slot)}
-                    >
-                      {slot}
-                    </Button>
-                  ))}
-                </div>
+                <>
+                  {availableSlots.length === 0 && startTime && (
+                    <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                      Só o horário atual está disponível — o painel permite
+                      corrigir agendamentos mesmo fora do horário de reserva
+                      online.
+                    </p>
+                  )}
+                  <div className="grid max-h-48 grid-cols-3 gap-2 sm:grid-cols-4">
+                    {timeSlots.map((slot) => (
+                      <Button
+                        key={slot}
+                        type="button"
+                        variant={startTime === slot ? "default" : "outline"}
+                        className="h-9 tabular-nums"
+                        onClick={() => setStartTime(slot)}
+                      >
+                        {slot}
+                      </Button>
+                    ))}
+                  </div>
+                </>
               )}
 
               {isEncaixe && selectedOutsideSchedule && startTime && (

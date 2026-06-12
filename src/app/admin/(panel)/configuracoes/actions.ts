@@ -1,0 +1,248 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { formatShopAddress } from "@/lib/format";
+import { requireOwner, type ActionResult } from "@/lib/require-owner";
+
+import { BOOKING_PATH } from "@/lib/booking-path";
+
+const SETTINGS_PATH = "/admin/configuracoes";
+
+const timeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido.");
+
+// ------------------------------------------------------------
+// Horário da barbearia
+// ------------------------------------------------------------
+const businessDaySchema = z
+  .object({
+    weekday: z.number().int().min(0).max(6),
+    active: z.boolean(),
+    openTime: timeSchema,
+    closeTime: timeSchema,
+  })
+  .refine((d) => !d.active || d.openTime < d.closeTime, {
+    message: "O horário de abrir precisa ser antes do de fechar.",
+  });
+
+const SLOT_STEPS = [5, 10, 15, 20, 30, 45, 60] as const;
+
+export async function saveBusinessHours(
+  days: z.infer<typeof businessDaySchema>[],
+  slotStepMinutes: number
+): Promise<ActionResult> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const parsed = z.array(businessDaySchema).length(7).safeParse(days);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  if (!SLOT_STEPS.includes(slotStepMinutes as (typeof SLOT_STEPS)[number])) {
+    return { ok: false, error: "Intervalo da agenda inválido." };
+  }
+
+  const admin = createAdminClient();
+
+  const { error: settingsError } = await admin
+    .from("shop_settings")
+    .update({ slot_step_minutes: slotStepMinutes })
+    .eq("id", 1);
+
+  if (settingsError) {
+    return { ok: false, error: `Erro ao salvar: ${settingsError.message}` };
+  }
+
+  for (const day of parsed.data) {
+    const { error } = await admin
+      .from("business_hours")
+      .update({
+        active: day.active,
+        open_time: day.openTime,
+        close_time: day.closeTime,
+      })
+      .eq("weekday", day.weekday);
+
+    if (error) return { ok: false, error: `Erro ao salvar: ${error.message}` };
+  }
+
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath(BOOKING_PATH);
+  return { ok: true };
+}
+
+// ------------------------------------------------------------
+// Exceções por data
+// ------------------------------------------------------------
+const exceptionSchema = z
+  .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe a data."),
+    professionalId: z.uuid().nullable(),
+    kind: z.enum(["closed", "custom"]),
+    startTime: timeSchema.nullable(),
+    endTime: timeSchema.nullable(),
+    note: z.string().trim().max(200),
+  })
+  .refine(
+    (e) =>
+      e.kind === "closed" ||
+      (e.startTime && e.endTime && e.startTime < e.endTime),
+    { message: "Informe um horário válido pro dia especial." }
+  );
+
+export async function createException(
+  input: z.infer<typeof exceptionSchema>
+): Promise<ActionResult> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const parsed = exceptionSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("schedule_exceptions").insert({
+    date: parsed.data.date,
+    professional_id: parsed.data.professionalId,
+    kind: parsed.data.kind,
+    start_time: parsed.data.kind === "custom" ? parsed.data.startTime : null,
+    end_time: parsed.data.kind === "custom" ? parsed.data.endTime : null,
+    note: parsed.data.note,
+  });
+
+  if (error) return { ok: false, error: `Erro ao salvar: ${error.message}` };
+
+  revalidatePath(SETTINGS_PATH);
+  return { ok: true };
+}
+
+export async function deleteException(id: string): Promise<ActionResult> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("schedule_exceptions")
+    .delete()
+    .eq("id", id);
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(SETTINGS_PATH);
+  return { ok: true };
+}
+
+// ------------------------------------------------------------
+// Perfil publico da barbearia
+// ------------------------------------------------------------
+async function uploadLogo(photo: File): Promise<string | null> {
+  const admin = createAdminClient();
+  const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `shop/logo-${Date.now()}.${ext}`;
+
+  const { error } = await admin.storage
+    .from("photos")
+    .upload(path, await photo.arrayBuffer(), {
+      contentType: photo.type || "image/jpeg",
+      upsert: true,
+    });
+
+  if (error) return null;
+  return admin.storage.from("photos").getPublicUrl(path).data.publicUrl;
+}
+
+const shopProfileSchema = z.object({
+  shopName: z.string().trim().min(1, "Informe o nome da barbearia."),
+  bio: z.string().trim().max(500, "A bio pode ter no máximo 500 caracteres."),
+  cep: z
+    .string()
+    .regex(/^(\d{8})?$/, "CEP deve ter 8 dígitos."),
+  street: z.string().trim(),
+  addressNumber: z.string().trim(),
+  addressComplement: z.string().trim(),
+  neighborhood: z.string().trim(),
+  city: z.string().trim(),
+  state: z
+    .string()
+    .trim()
+    .regex(/^([A-Za-z]{2})?$/, "UF inválida."),
+  whatsapp: z
+    .string()
+    .regex(/^(\d{10,13})?$/, "WhatsApp deve ter de 10 a 13 números."),
+  instagram: z.string().trim(),
+});
+
+export async function saveShopProfile(formData: FormData): Promise<ActionResult> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const parsed = shopProfileSchema.safeParse({
+    shopName: formData.get("shopName"),
+    bio: String(formData.get("bio") ?? ""),
+    cep: String(formData.get("cep") ?? "").replace(/\D/g, ""),
+    street: String(formData.get("street") ?? ""),
+    addressNumber: String(formData.get("addressNumber") ?? ""),
+    addressComplement: String(formData.get("addressComplement") ?? ""),
+    neighborhood: String(formData.get("neighborhood") ?? ""),
+    city: String(formData.get("city") ?? ""),
+    state: String(formData.get("state") ?? "").toUpperCase(),
+    whatsapp: String(formData.get("whatsapp") ?? "").replace(/\D/g, ""),
+    instagram: String(formData.get("instagram") ?? "").replace(/^@/, ""),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const address = formatShopAddress({
+    street: parsed.data.street,
+    addressNumber: parsed.data.addressNumber,
+    addressComplement: parsed.data.addressComplement,
+    neighborhood: parsed.data.neighborhood,
+    city: parsed.data.city,
+    state: parsed.data.state,
+  });
+
+  const admin = createAdminClient();
+  const update: Record<string, string | null> = {
+    shop_name: parsed.data.shopName,
+    bio: parsed.data.bio,
+    cep: parsed.data.cep,
+    street: parsed.data.street,
+    address_number: parsed.data.addressNumber,
+    address_complement: parsed.data.addressComplement,
+    neighborhood: parsed.data.neighborhood,
+    city: parsed.data.city,
+    state: parsed.data.state,
+    address,
+    whatsapp: parsed.data.whatsapp,
+    instagram: parsed.data.instagram || null,
+  };
+
+  const logo = formData.get("logo");
+  if (logo instanceof File && logo.size > 0) {
+    const logoUrl = await uploadLogo(logo);
+    if (!logoUrl) {
+      return { ok: false, error: "Não foi possível enviar a logo." };
+    }
+    update.logo_url = logoUrl;
+  }
+
+  const { error } = await admin
+    .from("shop_settings")
+    .update(update)
+    .eq("id", 1);
+
+  if (error) {
+    return { ok: false, error: `Erro ao salvar: ${error.message}` };
+  }
+
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath(BOOKING_PATH);
+  return { ok: true };
+}

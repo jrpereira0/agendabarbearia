@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
-  Clock,
+  Contact,
   ExternalLink,
   LogOut,
   Scissors,
+  Settings,
   Users,
 } from "lucide-react";
 import {
@@ -33,15 +34,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/app/admin/(panel)/actions";
+import { BOOKING_PATH } from "@/lib/booking-path";
 
-const mainItems = [
+const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
-  { title: "Horários", url: "/admin/horarios", icon: Clock },
 ];
 
 const managementItems = [
   { title: "Profissionais", url: "/admin/profissionais", icon: Users },
   { title: "Serviços", url: "/admin/servicos", icon: Scissors },
+  { title: "Clientes", url: "/admin/clientes", icon: Contact },
 ];
 
 type AppSidebarProps = {
@@ -62,7 +64,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
     .join("")
     .toUpperCase();
 
-  function renderItems(items: typeof mainItems) {
+  function renderItems(items: typeof dayToDayItems) {
     return items.map((item) => (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton
@@ -108,7 +110,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>Dia a dia</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(mainItems)}</SidebarMenu>
+            <SidebarMenu>{renderItems(dayToDayItems)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -126,10 +128,10 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Ver site do cliente">
-                  <a href="/" target="_blank" rel="noopener noreferrer">
+                <SidebarMenuButton asChild tooltip="Página de agendamento">
+                  <a href={BOOKING_PATH} target="_blank" rel="noopener noreferrer">
                     <ExternalLink />
-                    <span>Ver site do cliente</span>
+                    <span>Página de agendamento</span>
                   </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -143,7 +145,13 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <SidebarMenuButton size="lg">
+                <SidebarMenuButton
+                  size="lg"
+                  isActive={
+                    pathname === "/admin/configuracoes" ||
+                    pathname === "/admin/horarios"
+                  }
+                >
                   <Avatar className="size-8 rounded-md">
                     <AvatarFallback className="rounded-md text-xs font-medium">
                       {initials || "AB"}
@@ -174,6 +182,16 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                     </span>
                   </div>
                 </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/admin/configuracoes"
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <Settings />
+                    Configurações da barbearia
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => signOut()}>
                   <LogOut />

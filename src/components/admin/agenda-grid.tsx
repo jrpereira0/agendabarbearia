@@ -14,7 +14,7 @@ import {
 import { minuteRangeOverlaps, timeToMinutes } from "@/lib/availability";
 import { AppointmentGridBlock } from "@/components/admin/appointment-grid-block";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
-import type { AppointmentItem } from "@/components/admin/appointment-card";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
   agendaCellClass,
   agendaCellHoverFree,
