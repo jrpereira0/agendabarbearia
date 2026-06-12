@@ -8,6 +8,7 @@ export async function lookupCustomerByWhatsapp(
   whatsapp: string
 ): Promise<CustomerLookupResult> {
   const admin = createAdminClient();
+  if (!admin) return { found: false };
 
   const { data, error } = await admin
     .from("customers")

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const serviceSchema = z.object({
@@ -32,6 +32,7 @@ function parseForm(formData: FormData) {
 
 async function syncProfessionals(serviceId: string, professionalIds: string[]) {
   const admin = createAdminClient();
+  if (!admin) return;
   await admin
     .from("professional_services")
     .delete()
@@ -49,6 +50,7 @@ async function syncProfessionals(serviceId: string, professionalIds: string[]) {
 
 async function uploadPhoto(serviceId: string, photo: File): Promise<string | null> {
   const admin = createAdminClient();
+  if (!admin) return null;
   const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
   const path = `services/${serviceId}-${Date.now()}.${ext}`;
 
@@ -73,6 +75,7 @@ export async function createService(formData: FormData): Promise<ActionResult> {
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: service, error } = await admin
     .from("services")
     .insert({
@@ -113,6 +116,7 @@ export async function updateService(
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const updates: Record<string, unknown> = {
     name: parsed.data.name,
@@ -144,6 +148,7 @@ export async function setServiceActive(
   if (denied) return denied;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin.from("services").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
 
@@ -156,6 +161,7 @@ export async function deleteService(id: string): Promise<ActionResult> {
   if (denied) return denied;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { count } = await admin
     .from("appointment_services")

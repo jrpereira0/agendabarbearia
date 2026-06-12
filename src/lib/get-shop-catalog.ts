@@ -67,6 +67,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
 
   try {
     const supabase = await createClient();
+    if (!supabase) return emptyShopCatalog();
 
     const [
       { data: settings },

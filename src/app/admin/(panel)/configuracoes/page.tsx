@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/admin/page-header";
 import {
   BusinessHoursForm,
@@ -17,7 +17,7 @@ export const metadata = { title: "Configurações" };
 export default async function SettingsPage() {
   await assertOwnerSettingsPage();
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
   const today = new Date().toISOString().slice(0, 10);
 
   const [{ data: businessHours }, { data: professionals }, { data: exceptions }, { data: settings }] =

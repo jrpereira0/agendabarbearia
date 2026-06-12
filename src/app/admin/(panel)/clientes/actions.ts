@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const customerSchema = z.object({
@@ -29,6 +29,7 @@ export async function createCustomer(formData: FormData): Promise<ActionResult> 
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { error } = await admin.from("customers").insert({
     first_name: parsed.data.firstName,
@@ -68,6 +69,7 @@ export async function updateCustomer(
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { data: existing } = await admin
     .from("customers")
@@ -119,6 +121,7 @@ export async function deleteCustomer(customerId: string): Promise<ActionResult> 
   if (auth) return auth;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { count } = await admin
     .from("appointments")

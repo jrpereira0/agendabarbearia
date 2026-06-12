@@ -18,6 +18,9 @@ export async function upsertCustomer(
   input: UpsertCustomerInput
 ): Promise<UpsertCustomerResult> {
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento." };
+  }
 
   const { data: existing, error: lookupError } = await admin
     .from("customers")

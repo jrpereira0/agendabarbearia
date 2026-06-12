@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { CustomerForm } from "@/components/admin/customer-form";
@@ -16,7 +16,7 @@ export default async function CustomerDetailPage({
   await assertOwnerPage();
 
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
 
   const { data: customer } = await supabase
     .from("customers")
@@ -43,8 +43,10 @@ export default async function CustomerDetailPage({
 
   if (!customer) notFound();
 
+  type CustomerAppointmentRow = NonNullable<typeof customer.appointments>[number];
+
   const appointments = (customer.appointments ?? [])
-    .map((a) => {
+    .map((a: CustomerAppointmentRow) => {
       const pro = a.professionals as
         | { nickname: string }
         | { nickname: string }[]
@@ -54,14 +56,14 @@ export default async function CustomerDetailPage({
         : (pro?.nickname ?? "—");
 
       const serviceNames = (a.appointment_services ?? [])
-        .map((link) => {
+        .map((link: NonNullable<typeof a.appointment_services>[number]) => {
           const svc = link.services as
             | { name: string }
             | { name: string }[]
             | null;
           return Array.isArray(svc) ? svc[0]?.name : svc?.name;
         })
-        .filter((name): name is string => Boolean(name));
+        .filter((name: string | undefined): name is string => Boolean(name));
 
       return {
         id: a.id,
@@ -72,7 +74,11 @@ export default async function CustomerDetailPage({
         serviceNames,
       };
     })
-    .sort((a, b) => {
+    .sort(
+      (
+        a: { date: string; startTime: string },
+        b: { date: string; startTime: string }
+      ) => {
       const dateCompare = b.date.localeCompare(a.date);
       if (dateCompare !== 0) return dateCompare;
       return b.startTime.localeCompare(a.startTime);

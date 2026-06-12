@@ -12,6 +12,13 @@ export async function requireOwner(): Promise<ActionResult | null> {
   }
 
   const supabase = await createClient();
+  if (!supabase) {
+    return {
+      ok: false,
+      error: "Sistema indisponível no momento. Tente de novo em instantes.",
+    };
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -41,6 +48,8 @@ export async function assertOwnerSettingsPage(): Promise<void> {
   if (!isSupabaseConfigured()) redirect("/admin/login");
 
   const supabase = await createClient();
+  if (!supabase) redirect("/admin/login?erro=config");
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

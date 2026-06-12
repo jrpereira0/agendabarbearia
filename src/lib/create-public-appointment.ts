@@ -81,6 +81,10 @@ export async function createPublicAppointment(
   }
 
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
+
   const endTime = minutesToTime(endMinutes);
 
   const { data: appointment, error } = await admin

@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ServiceForm } from "@/components/admin/service-form";
@@ -9,7 +9,7 @@ export const metadata = { title: "Novo serviço" };
 export default async function NewServicePage() {
   await assertOwnerPage();
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
   const { data: professionals } = await supabase
     .from("professionals")
     .select("id, nickname")

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const professionalSchema = z.object({
@@ -69,6 +69,7 @@ function parseSchedule(formData: FormData): Schedule | { error: string } {
 
 async function syncSchedule(professionalId: string, schedule: Schedule) {
   const admin = createAdminClient();
+  if (!admin) return;
   await admin
     .from("working_hours")
     .delete()
@@ -105,6 +106,7 @@ async function uploadPhoto(
   photo: File
 ): Promise<string | null> {
   const admin = createAdminClient();
+  if (!admin) return null;
   const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
   const path = `professionals/${professionalId}-${Date.now()}.${ext}`;
 
@@ -121,6 +123,7 @@ async function uploadPhoto(
 
 async function syncServices(professionalId: string, serviceIds: string[]) {
   const admin = createAdminClient();
+  if (!admin) return;
   await admin
     .from("professional_services")
     .delete()
@@ -157,6 +160,7 @@ export async function createProfessional(
 
   const data = parsed.data;
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   // Cria o login do barbeiro (já confirmado, sem e-mail de verificação)
   const { data: created, error: userError } =
@@ -234,6 +238,7 @@ export async function updateProfessional(
 
   const data = parsed.data;
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { data: current } = await admin
     .from("professionals")
@@ -309,6 +314,7 @@ export async function setProfessionalActive(
   if (denied) return denied;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin
     .from("professionals")
     .update({ active })
@@ -326,6 +332,7 @@ export async function deleteProfessional(id: string): Promise<ActionResult> {
   if (denied) return denied;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { count } = await admin
     .from("appointments")

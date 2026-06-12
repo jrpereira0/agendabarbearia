@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { redirectIfSupabaseMissing } from "@/lib/supabase/require-configured";
+import { requireServerClient } from "@/lib/supabase/server";
 import {
   SidebarInset,
   SidebarProvider,
@@ -18,9 +17,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  redirectIfSupabaseMissing();
-
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
 
   const {
     data: { user },

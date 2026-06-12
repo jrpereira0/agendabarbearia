@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { Clock, Store, User } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { getAdminSession } from "@/lib/require-admin";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/page-header";
@@ -22,16 +22,18 @@ export default async function MyAccountPage() {
   if (!session) redirect("/admin/login");
   if (session.isOwner) redirect("/admin/configuracoes");
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) redirect("/admin/login");
 
   const [{ data: professional }, { data: businessHours }] = await Promise.all([
     supabase
       .from("professionals")
       .select("nickname, working_hours(weekday, start_time, end_time)")
-      .eq("profile_id", user!.id)
+      .eq("profile_id", user.id)
       .maybeSingle(),
     supabase.from("business_hours").select("*").order("weekday"),
   ]);

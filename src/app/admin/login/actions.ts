@@ -17,6 +17,8 @@ export async function login(formData: FormData) {
   }
 
   const supabase = await createClient();
+  if (!supabase) redirect("/admin/login?erro=config");
+
   const { error } = await supabase.auth.signInWithPassword({
     email,
     password,

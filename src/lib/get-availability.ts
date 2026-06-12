@@ -87,6 +87,9 @@ export async function getAvailability(
 
   const weekday = weekdayOf(date);
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
 
   const [
     { data: professional },
@@ -258,6 +261,9 @@ export async function validateAdminAppointmentSlot(
   }
 
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Horário indisponível no momento." };
+  }
 
   const [{ data: appointments }, { data: scheduleBlocks }] = await Promise.all([
     admin

@@ -67,6 +67,17 @@ export async function getAgendaDayContext(
   professionalIds: string[]
 ): Promise<AgendaDayContext> {
   const admin = createAdminClient();
+  if (!admin) {
+    return {
+      gridStart: ENCAIXE_DAY_START,
+      gridEnd: ENCAIXE_DAY_END,
+      slotStepMinutes: SLOT_STEP_MINUTES,
+      shopClosed: false,
+      scheduleBlocks: [],
+      professionals: [],
+    };
+  }
+
   const { data: settings } = await admin
     .from("shop_settings")
     .select("slot_step_minutes")

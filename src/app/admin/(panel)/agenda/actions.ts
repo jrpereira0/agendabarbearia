@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
@@ -33,6 +33,7 @@ async function assertCanManageAppointment(
   if (!("userId" in session)) return session;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: appointment } = await admin
     .from("appointments")
     .select("professional_id, status")
@@ -73,6 +74,7 @@ async function insertAppointment(
   isSqueezeIn: boolean
 ): Promise<ActionResult> {
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const startMinutes = timeToMinutes(data.startTime);
   const endMinutes = startMinutes + durationMinutes;
 
@@ -150,6 +152,7 @@ async function validateCreateInput(
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const [{ data: professional }, { data: foundServices }, { data: links }] =
     await Promise.all([
@@ -278,6 +281,7 @@ export async function markAppointmentDone(
   if (!("professionalId" in check)) return check;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin
     .from("appointments")
     .update({ status: "done" })
@@ -303,6 +307,7 @@ export async function reopenAppointment(
   if (!("professionalId" in check)) return check;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: existing } = await admin
     .from("appointments")
     .select(
@@ -403,6 +408,7 @@ export async function updateAppointment(input: {
   if (!("professionalId" in check)) return check;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: existing } = await admin
     .from("appointments")
     .select("date, is_squeeze_in")
@@ -544,6 +550,7 @@ export async function createScheduleBlock(input: {
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: professional } = await admin
     .from("professionals")
     .select("id, active")
@@ -577,6 +584,7 @@ export async function deleteScheduleBlock(
   if (!("userId" in session)) return session;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { data: block } = await admin
     .from("schedule_blocks")
     .select("professional_id")
@@ -614,6 +622,7 @@ export async function cancelAppointment(
   if (!("professionalId" in check)) return check;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin
     .from("appointments")
     .update({ status: "cancelled" })

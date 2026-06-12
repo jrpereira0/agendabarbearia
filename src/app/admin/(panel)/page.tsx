@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { todayInTimezone } from "@/lib/availability";
 import { getAgendaDayContext } from "@/lib/get-agenda-day";
 import { formatTime } from "@/lib/format";
@@ -20,7 +20,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const date =
     dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
 
   const { data: allProfessionals } = await supabase
     .from("professionals")

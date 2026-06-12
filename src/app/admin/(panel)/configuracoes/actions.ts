@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { formatShopAddress } from "@/lib/format";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
@@ -47,6 +47,7 @@ export async function saveBusinessHours(
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
 
   const { error: settingsError } = await admin
     .from("shop_settings")
@@ -106,6 +107,7 @@ export async function createException(
   }
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin.from("schedule_exceptions").insert({
     date: parsed.data.date,
     professional_id: parsed.data.professionalId,
@@ -126,6 +128,7 @@ export async function deleteException(id: string): Promise<ActionResult> {
   if (denied) return denied;
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const { error } = await admin
     .from("schedule_exceptions")
     .delete()
@@ -142,6 +145,7 @@ export async function deleteException(id: string): Promise<ActionResult> {
 // ------------------------------------------------------------
 async function uploadLogo(photo: File): Promise<string | null> {
   const admin = createAdminClient();
+  if (!admin) return null;
   const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
   const path = `shop/logo-${Date.now()}.${ext}`;
 
@@ -209,6 +213,7 @@ export async function saveShopProfile(formData: FormData): Promise<ActionResult>
   });
 
   const admin = createAdminClient();
+  if (!admin) return systemUnavailable();
   const update: Record<string, string | null> = {
     shop_name: parsed.data.shopName,
     bio: parsed.data.bio,

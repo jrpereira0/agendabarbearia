@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ServiceForm } from "@/components/admin/service-form";
@@ -15,7 +15,7 @@ export default async function EditServicePage({
   await assertOwnerPage();
 
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
 
   const [{ data: service }, { data: professionals }] = await Promise.all([
     supabase

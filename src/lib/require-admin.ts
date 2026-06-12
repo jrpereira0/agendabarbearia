@@ -12,6 +12,8 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   if (!isSupabaseConfigured()) return null;
 
   const supabase = await createClient();
+  if (!supabase) return null;
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

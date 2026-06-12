@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Contact, Plus } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
@@ -49,7 +49,7 @@ function mapCustomer(c: {
 export default async function CustomersPage() {
   await assertOwnerPage();
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
 
   const { data: customers } = await supabase
     .from("customers")

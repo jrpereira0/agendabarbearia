@@ -13,6 +13,8 @@ export async function getShopSeo() {
 
   try {
     const supabase = await createClient();
+    if (!supabase) return DEFAULT_SEO;
+
     const { data } = await supabase
       .from("shop_settings")
       .select("shop_name, bio")

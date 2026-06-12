@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { requireServerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
 
@@ -22,7 +22,7 @@ export async function changeMyPassword(formData: FormData): Promise<ActionResult
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const supabase = await createClient();
+  const supabase = await requireServerClient();
   const { error } = await supabase.auth.updateUser({
     password: parsed.data,
   });

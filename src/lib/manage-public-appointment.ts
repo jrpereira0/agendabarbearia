@@ -61,6 +61,8 @@ async function loadOwnedAppointment(
   | null
 > {
   const admin = createAdminClient();
+  if (!admin) return null;
+
   const { data } = await admin
     .from("appointments")
     .select(
@@ -86,6 +88,10 @@ export async function listPublicAppointmentsByWhatsapp(
   }
 
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
+
   const today = todayInTimezone();
 
   const { data: rows, error } = await admin
@@ -195,6 +201,10 @@ export async function cancelPublicAppointment(
   }
 
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
+
   const { error } = await admin
     .from("appointments")
     .update({ status: "cancelled" })
@@ -267,6 +277,10 @@ export async function updatePublicAppointment(
   }
 
   const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
+
   const endTime = minutesToTime(endMinutes);
 
   const { error } = await admin
