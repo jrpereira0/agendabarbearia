@@ -1,6 +1,6 @@
 # Agenda Barbearia
 
-Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes e horários por um painel administrativo. Toda a funcionalidade também é exposta por uma API REST para automações (ex: agendamento via WhatsApp com IA).
+Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes e horários por um painel administrativo. Toda a funcionalidade também é exposta por uma API REST para automações (ex: agendamento via WhatsApp com IA), começando por `GET /api/v1/catalog` para listar barbeiros e serviços.
 
 ## Tecnologias
 

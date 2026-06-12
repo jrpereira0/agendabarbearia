@@ -19,7 +19,10 @@ import {
   agendaCellClass,
   agendaCellHoverFree,
 } from "@/lib/agenda-colors";
-import { blocksAgendaSlot } from "@/lib/appointment-status";
+import {
+  blocksAgendaSlot,
+  sharesAgendaColumnLayout,
+} from "@/lib/appointment-status";
 import type { AgendaProfessionalColumn } from "@/lib/get-agenda-day";
 
 type AgendaGridProps = {
@@ -72,11 +75,15 @@ export function AgendaGrid({
 
   const overlapLayoutsByPro = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeOverlapLayouts>>();
-    for (const [proId, apts] of appointmentsByPro) {
-      map.set(proId, computeOverlapLayouts(apts));
+    for (const pro of professionals) {
+      const apts = appointments.filter(
+        (apt) =>
+          apt.professionalId === pro.id && sharesAgendaColumnLayout(apt)
+      );
+      map.set(pro.id, computeOverlapLayouts(apts));
     }
     return map;
-  }, [appointmentsByPro]);
+  }, [appointments, professionals]);
 
   const proColumnIndex = useMemo(() => {
     const map = new Map<string, number>();

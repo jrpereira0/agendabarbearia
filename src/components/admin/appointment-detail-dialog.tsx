@@ -9,6 +9,7 @@ import {
   Pencil,
   RotateCcw,
   Scissors,
+  Trash2,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +37,7 @@ import {
 } from "@/lib/appointment-status";
 import {
   cancelAppointment,
+  deleteAppointment,
   markAppointmentDone,
   reopenAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
@@ -89,6 +91,7 @@ export function AppointmentDetailDialog({
 }: AppointmentDetailDialogProps) {
   const router = useRouter();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
 
   if (!appointment) return null;
@@ -149,9 +152,26 @@ export function AppointmentDetailDialog({
     setBusy(false);
   }
 
+  async function handleDelete() {
+    setBusy(true);
+    const result = await deleteAppointment(appointment!.id);
+    if (result.ok) {
+      toast.success("Agendamento excluído.");
+      setConfirmDelete(false);
+      onOpenChange(false);
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+    setBusy(false);
+  }
+
   return (
     <>
-      <Dialog open={open && !confirmCancel} onOpenChange={onOpenChange}>
+      <Dialog
+        open={open && !confirmCancel && !confirmDelete}
+        onOpenChange={onOpenChange}
+      >
         <DialogContent className="flex max-h-[min(90dvh,640px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="sr-only">
             <DialogTitle>{customerName}</DialogTitle>
@@ -259,8 +279,8 @@ export function AppointmentDetailDialog({
             </div>
           </div>
 
-          {canAct && (
-            <div className="shrink-0 border-t bg-muted/20 px-5 pt-4 pb-5 sm:pb-6">
+          <div className="shrink-0 border-t bg-muted/20 px-5 pt-4 pb-5 sm:pb-6">
+            {canAct && (
               <div className="flex flex-col gap-3">
                 <Button
                   type="button"
@@ -306,8 +326,67 @@ export function AppointmentDetailDialog({
                   )}
                 </div>
               </div>
+            )}
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmDelete(true)}
+              disabled={busy}
+              className={cn(
+                "w-full border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive",
+                canAct && "mt-3"
+              )}
+            >
+              <Trash2 />
+              Excluir agendamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-sm">
+          <div className="px-5 pt-5 pb-4">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle>Excluir agendamento?</DialogTitle>
+              <DialogDescription>
+                O registro será removido de vez. Essa ação não pode ser desfeita.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-4 rounded-lg border bg-muted/25 px-3.5 py-3">
+              <p className="text-sm font-medium tabular-nums">
+                {formatTime(appointment.startTime)}
+                <span className="mx-1.5 font-normal text-muted-foreground">
+                  ·
+                </span>
+                {formatDateBR(appointment.date)}
+              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {customerName}
+              </p>
             </div>
-          )}
+          </div>
+
+          <div className="flex flex-col gap-3 border-t bg-muted/20 px-5 pt-4 pb-5 sm:flex-row sm:justify-end sm:pb-6">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDelete(false)}
+              disabled={busy}
+              className="w-full sm:w-auto"
+            >
+              Voltar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={busy}
+              className="w-full sm:w-auto"
+            >
+              {busy ? "Excluindo..." : "Excluir"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

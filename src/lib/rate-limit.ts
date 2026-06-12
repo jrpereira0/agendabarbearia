@@ -56,6 +56,7 @@ export function checkRateLimit(
 }
 
 export const PUBLIC_API_RATE_LIMITS = {
+  catalog: { limit: 60, windowMs: 15 * 60 * 1000 },
   availability: { limit: 60, windowMs: 15 * 60 * 1000 },
   whatsappSensitive: { limit: 10, windowMs: 15 * 60 * 1000 },
   appointmentCreateIp: { limit: 5, windowMs: 60 * 60 * 1000 },

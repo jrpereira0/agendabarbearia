@@ -688,6 +688,29 @@ export async function cancelAppointment(
   return { ok: true };
 }
 
+export async function deleteAppointment(
+  appointmentId: string
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const check = await assertOwnsAppointment(appointmentId, session);
+  if (!("professionalId" in check)) return check;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { error } = await admin.from("appointments").delete().eq("id", appointmentId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível excluir o agendamento." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/agenda");
+  return { ok: true };
+}
+
 const workflowStatusSchema = z.enum([
   "scheduled",
   "confirmed",
