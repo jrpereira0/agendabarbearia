@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { SearchX } from "lucide-react";
+import Link from "next/link";
+import { Plus, SearchX } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/admin/search-input";
 import { CustomerCard } from "@/components/admin/customer-card";
 import { matchesSearch } from "@/lib/text";
@@ -12,6 +14,8 @@ type Customer = {
   lastName: string;
   whatsapp: string;
   appointmentCount: number;
+  lastVisitDate: string | null;
+  memberSince: string;
 };
 
 export function CustomersList({ items }: { items: Customer[] }) {
@@ -28,11 +32,19 @@ export function CustomersList({ items }: { items: Customer[] }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <SearchInput
-        value={query}
-        onChange={setQuery}
-        placeholder="Buscar cliente por nome ou WhatsApp..."
-      />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Buscar cliente por nome ou WhatsApp..."
+        />
+        <Button asChild className="h-10 shrink-0">
+          <Link href="/admin/clientes/novo">
+            <Plus />
+            Novo cliente
+          </Link>
+        </Button>
+      </div>
 
       {query && (
         <p className="text-sm text-muted-foreground">

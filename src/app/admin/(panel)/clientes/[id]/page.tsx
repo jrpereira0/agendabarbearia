@@ -97,6 +97,8 @@ export default async function CustomerDetailPage({
         }}
         appointments={appointments}
         onSubmit={updateWithId}
+        submitLabel="Salvar alterações"
+        isEdit
       />
     </div>
   );

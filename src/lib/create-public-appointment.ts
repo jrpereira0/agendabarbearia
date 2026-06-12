@@ -88,8 +88,8 @@ export async function createPublicAppointment(
     .insert({
       professional_id: data.professionalId,
       customer_id: customer.customerId,
-      customer_first_name: data.firstName,
-      customer_last_name: data.lastName,
+      customer_first_name: customer.firstName,
+      customer_last_name: customer.lastName,
       customer_whatsapp: data.whatsapp,
       date: data.date,
       start_time: data.startTime,

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
@@ -23,7 +24,6 @@ import {
   formatDuration,
   formatPriceBRL,
   formatTime,
-  formatWhatsapp,
 } from "@/lib/format";
 import type { MinuteRange } from "@/lib/availability";
 import {
@@ -684,37 +684,16 @@ export function NewAppointmentDialog({
                 )}
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="customerFirstName">Nome</Label>
-                  <Input
-                    id="customerFirstName"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    autoComplete="given-name"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="customerLastName">Sobrenome</Label>
-                  <Input
-                    id="customerLastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="customerWhatsapp">WhatsApp</Label>
-                <Input
-                  id="customerWhatsapp"
-                  inputMode="numeric"
-                  placeholder="(11) 99999-9999"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
-                />
-              </div>
+              <AdminCustomerFields
+                firstName={firstName}
+                lastName={lastName}
+                whatsapp={whatsapp}
+                onFirstNameChange={setFirstName}
+                onLastNameChange={setLastName}
+                onWhatsappChange={setWhatsapp}
+                enabled={open && step === "client"}
+                idPrefix="newCustomer"
+              />
             </form>
           )}
         </div>

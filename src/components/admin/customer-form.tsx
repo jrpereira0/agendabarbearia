@@ -23,13 +23,15 @@ export type CustomerAppointment = {
 };
 
 type CustomerFormProps = {
-  initialValues: {
+  initialValues?: {
     firstName: string;
     lastName: string;
     whatsapp: string;
   };
-  appointments: CustomerAppointment[];
+  appointments?: CustomerAppointment[];
   onSubmit: (formData: FormData) => Promise<ActionResult>;
+  submitLabel: string;
+  isEdit?: boolean;
 };
 
 const statusLabel: Record<CustomerAppointment["status"], string> = {
@@ -40,12 +42,14 @@ const statusLabel: Record<CustomerAppointment["status"], string> = {
 
 export function CustomerForm({
   initialValues,
-  appointments,
+  appointments = [],
   onSubmit,
+  submitLabel,
+  isEdit = false,
 }: CustomerFormProps) {
   const router = useRouter();
   const [whatsapp, setWhatsapp] = useState(
-    formatWhatsapp(initialValues.whatsapp)
+    initialValues?.whatsapp ? formatWhatsapp(initialValues.whatsapp) : ""
   );
   const [saving, setSaving] = useState(false);
 
@@ -59,8 +63,12 @@ export function CustomerForm({
     const result = await onSubmit(formData);
 
     if (result.ok) {
-      toast.success("Cliente atualizado.");
-      router.refresh();
+      toast.success(isEdit ? "Cliente atualizado." : "Cliente cadastrado.");
+      if (isEdit) {
+        router.refresh();
+      } else {
+        router.push("/admin/clientes");
+      }
     } else {
       toast.error(result.error);
     }
@@ -75,7 +83,11 @@ export function CustomerForm({
           <FormSectionTitle
             icon={Contact}
             title="Dados do cliente"
-            description="Alterações aqui também atualizam os agendamentos vinculados."
+            description={
+              isEdit
+                ? "Alterações aqui também atualizam os agendamentos vinculados."
+                : "Nome e WhatsApp identificam o cliente nos agendamentos."
+            }
           />
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -84,7 +96,7 @@ export function CustomerForm({
               <Input
                 id="firstName"
                 name="firstName"
-                defaultValue={initialValues.firstName}
+                defaultValue={initialValues?.firstName ?? ""}
                 required
               />
             </div>
@@ -93,7 +105,7 @@ export function CustomerForm({
               <Input
                 id="lastName"
                 name="lastName"
-                defaultValue={initialValues.lastName}
+                defaultValue={initialValues?.lastName ?? ""}
                 required
               />
             </div>
@@ -107,6 +119,7 @@ export function CustomerForm({
                 id="whatsapp"
                 inputMode="numeric"
                 className="pl-9"
+                placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
                 required
@@ -116,62 +129,64 @@ export function CustomerForm({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <FormSectionTitle
-            icon={CalendarDays}
-            title="Histórico de agendamentos"
-            description={
-              appointments.length === 0
-                ? "Esse cliente ainda não tem visitas registradas."
-                : `${appointments.length} agendamento${appointments.length === 1 ? "" : "s"} no total`
-            }
-          />
+      {isEdit && (
+        <Card>
+          <CardContent className="flex flex-col gap-4 pt-6">
+            <FormSectionTitle
+              icon={CalendarDays}
+              title="Histórico de agendamentos"
+              description={
+                appointments.length === 0
+                  ? "Esse cliente ainda não tem visitas registradas."
+                  : `${appointments.length} agendamento${appointments.length === 1 ? "" : "s"} no total`
+              }
+            />
 
-          {appointments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Quando ele agendar de novo, as visitas aparecem aqui.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-3">
-              {appointments.map((a) => (
-                <li
-                  key={a.id}
-                  className="rounded-xl border bg-muted/20 px-4 py-3 text-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="font-medium">
-                      {formatDateBR(a.date)} às {formatTime(a.startTime)}
+            {appointments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Quando ele agendar de novo, as visitas aparecem aqui.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-3">
+                {appointments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="rounded-xl border bg-muted/20 px-4 py-3 text-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">
+                        {formatDateBR(a.date)} às {formatTime(a.startTime)}
+                      </p>
+                      <Badge
+                        variant={
+                          a.status === "done"
+                            ? "secondary"
+                            : a.status === "cancelled"
+                              ? "outline"
+                              : "default"
+                        }
+                        className="font-normal"
+                      >
+                        {statusLabel[a.status]}
+                      </Badge>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">
+                      {a.professionalName}
                     </p>
-                    <Badge
-                      variant={
-                        a.status === "done"
-                          ? "secondary"
-                          : a.status === "cancelled"
-                            ? "outline"
-                            : "default"
-                      }
-                      className="font-normal"
-                    >
-                      {statusLabel[a.status]}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">
-                    {a.professionalName}
-                  </p>
-                  <p className="mt-1">{a.serviceNames.join(", ")}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+                    <p className="mt-1">{a.serviceNames.join(", ")}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
         <div className="flex justify-end">
           <Button type="submit" disabled={saving}>
             <User />
-            {saving ? "Salvando..." : "Salvar alterações"}
+            {saving ? "Salvando..." : submitLabel}
           </Button>
         </div>
       </div>

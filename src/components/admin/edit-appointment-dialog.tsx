@@ -10,7 +10,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +19,7 @@ import { Separator } from "@/components/ui/separator";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { SearchInput } from "@/components/admin/search-input";
 import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-appointment-dialog";
+import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
   formatDateBR,
@@ -346,36 +346,16 @@ export function EditAppointmentDialog({
                 <User className="size-4" />
                 Cliente
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="editFirstName">Nome</Label>
-                  <Input
-                    id="editFirstName"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    autoComplete="given-name"
-                  />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="editLastName">Sobrenome</Label>
-                  <Input
-                    id="editLastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="editWhatsapp">WhatsApp</Label>
-                <Input
-                  id="editWhatsapp"
-                  inputMode="numeric"
-                  placeholder="(11) 99999-9999"
-                  value={whatsapp}
-                  onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
-                />
-              </div>
+              <AdminCustomerFields
+                firstName={firstName}
+                lastName={lastName}
+                whatsapp={whatsapp}
+                onFirstNameChange={setFirstName}
+                onLastNameChange={setLastName}
+                onWhatsappChange={setWhatsapp}
+                enabled={open}
+                idPrefix="editCustomer"
+              />
             </section>
 
             <Separator />
@@ -516,19 +496,26 @@ export function EditAppointmentDialog({
             </section>
           </div>
 
-          <DialogFooter className="shrink-0 gap-2 border-t bg-muted/30 px-4 py-4 sm:px-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={saving}
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={saving}>
-              {saving ? "Salvando..." : "Salvar alterações"}
-            </Button>
-          </DialogFooter>
+          <div className="min-w-0 shrink-0 overflow-hidden rounded-b-xl border-t bg-muted/30 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 w-full sm:h-9 sm:w-auto"
+                onClick={() => onOpenChange(false)}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="h-10 w-full sm:h-9 sm:w-auto"
+                disabled={saving}
+              >
+                {saving ? "Salvando..." : "Salvar alterações"}
+              </Button>
+            </div>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

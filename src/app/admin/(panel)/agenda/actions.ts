@@ -100,8 +100,8 @@ async function insertAppointment(
     .insert({
       professional_id: data.professionalId,
       customer_id: customer.customerId,
-      customer_first_name: data.firstName,
-      customer_last_name: data.lastName,
+      customer_first_name: customer.firstName,
+      customer_last_name: customer.lastName,
       customer_whatsapp: data.whatsapp,
       date: data.date,
       start_time: data.startTime,
@@ -467,8 +467,8 @@ export async function updateAppointment(input: {
     .update({
       professional_id: parsed.data.professionalId,
       customer_id: customer.customerId,
-      customer_first_name: parsed.data.firstName,
-      customer_last_name: parsed.data.lastName,
+      customer_first_name: customer.firstName,
+      customer_last_name: customer.lastName,
       customer_whatsapp: parsed.data.whatsapp,
       start_time: parsed.data.startTime,
       end_time: endTime,

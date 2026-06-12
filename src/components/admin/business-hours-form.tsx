@@ -21,7 +21,7 @@ import { FormSectionTitle } from "@/components/admin/form-section";
 import { WEEKDAYS } from "@/lib/format";
 import { saveBusinessHours } from "@/app/admin/(panel)/configuracoes/actions";
 
-const SLOT_STEPS = [5, 10, 15, 20, 30, 45, 60];
+const SLOT_STEPS = [15, 30, 45, 60];
 
 export type BusinessDay = {
   weekday: number;

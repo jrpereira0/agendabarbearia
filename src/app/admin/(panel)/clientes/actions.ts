@@ -14,6 +14,42 @@ const customerSchema = z.object({
     .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
 });
 
+export async function createCustomer(formData: FormData): Promise<ActionResult> {
+  const auth = await requireOwner();
+  if (auth) return auth;
+
+  const parsed = customerSchema.safeParse({
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
+    whatsapp: String(formData.get("whatsapp") ?? "").replace(/\D/g, ""),
+  });
+
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const admin = createAdminClient();
+
+  const { error } = await admin.from("customers").insert({
+    first_name: parsed.data.firstName,
+    last_name: parsed.data.lastName,
+    whatsapp: parsed.data.whatsapp,
+  });
+
+  if (error) {
+    if (error.code === "23505") {
+      return {
+        ok: false,
+        error: "Já existe um cliente com esse WhatsApp.",
+      };
+    }
+    return { ok: false, error: "Não foi possível cadastrar o cliente." };
+  }
+
+  revalidatePath("/admin/clientes");
+  return { ok: true };
+}
+
 export async function updateCustomer(
   customerId: string,
   formData: FormData

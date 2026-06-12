@@ -95,7 +95,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 - **Lógica pura** em `src/lib/availability.ts` (cálculo, sem banco) e **busca de dados** em `src/lib/get-availability.ts`
 - Cruza: horário da barbearia ∩ grade do barbeiro, aplica exceções do dia, soma a duração dos serviços escolhidos e remove conflitos com agendamentos confirmados e **bloqueios do dia**
-- O **intervalo da agenda** (de quantos em quantos minutos os horários aparecem) é configurável em **Configurações**: 5, 10, 15, 20, 30, 45 ou 60 min (`shop_settings.slot_step_minutes`, padrão 15)
+- O **intervalo da agenda** (de quantos em quantos minutos os horários aparecem) é configurável em **Configurações**: 15, 30, 45 ou 60 min (`shop_settings.slot_step_minutes`, padrão 15)
 - Pra hoje, só oferece horários com 10 min de antecedência; agenda aberta até **60 dias** à frente
 - Fuso fixo da barbearia: `America/Sao_Paulo`
 - Exposto em `GET /api/v1/availability?professionalId=...&date=AAAA-MM-DD&serviceIds=id1,id2` (público, mesmo endpoint que o site e as automações de WhatsApp usam)
@@ -128,7 +128,8 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 ## Clientes
 
 - Cadastro automático na primeira reserva (página ou painel); um WhatsApp = um cliente
-- Somente o **dono** vê **Clientes** (`/admin/clientes`): barbeiros não têm acesso ao menu nem aos dados
+- No painel, ao agendar: o WhatsApp busca o cadastro existente e **não altera o nome**; para corrigir dados, use **Clientes**
+- Somente o **dono** vê **Clientes** (`/admin/clientes`): busca, cadastro manual em **Novo cliente**, ficha com histórico
 - Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
 - Exclusão só é permitida se o cliente não tiver agendamentos no histórico

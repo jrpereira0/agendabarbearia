@@ -28,7 +28,7 @@ const businessDaySchema = z
     message: "O horário de abrir precisa ser antes do de fechar.",
   });
 
-const SLOT_STEPS = [5, 10, 15, 20, 30, 45, 60] as const;
+const SLOT_STEPS = [15, 30, 45, 60] as const;
 
 export async function saveBusinessHours(
   days: z.infer<typeof businessDaySchema>[],

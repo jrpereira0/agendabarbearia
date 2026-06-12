@@ -7,8 +7,12 @@ export type UpsertCustomerInput = {
 };
 
 export type UpsertCustomerResult =
-  | { ok: true; customerId: string }
+  | { ok: true; customerId: string; firstName: string; lastName: string }
   | { ok: false; error: string };
+
+function normalizeName(value: string): string {
+  return value.trim().toLocaleLowerCase("pt-BR");
+}
 
 export async function upsertCustomer(
   input: UpsertCustomerInput
@@ -17,7 +21,7 @@ export async function upsertCustomer(
 
   const { data: existing, error: lookupError } = await admin
     .from("customers")
-    .select("id")
+    .select("id, first_name, last_name")
     .eq("whatsapp", input.whatsapp)
     .maybeSingle();
 
@@ -26,22 +30,23 @@ export async function upsertCustomer(
   }
 
   if (existing) {
-    const { data: updated, error } = await admin
-      .from("customers")
-      .update({
-        first_name: input.firstName,
-        last_name: input.lastName,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existing.id)
-      .select("id")
-      .single();
+    const nameDiffers =
+      normalizeName(input.firstName) !== normalizeName(existing.first_name) ||
+      normalizeName(input.lastName) !== normalizeName(existing.last_name);
 
-    if (error || !updated) {
-      return { ok: false, error: "Não foi possível atualizar o cliente." };
+    if (nameDiffers) {
+      return {
+        ok: false,
+        error: `Este WhatsApp já pertence a ${existing.first_name} ${existing.last_name}. Verifique o número ou edite o cadastro em Clientes.`,
+      };
     }
 
-    return { ok: true, customerId: updated.id };
+    return {
+      ok: true,
+      customerId: existing.id,
+      firstName: existing.first_name,
+      lastName: existing.last_name,
+    };
   }
 
   const { data: created, error } = await admin
@@ -68,5 +73,10 @@ export async function upsertCustomer(
     return { ok: false, error: "Não foi possível cadastrar o cliente." };
   }
 
-  return { ok: true, customerId: created.id };
+  return {
+    ok: true,
+    customerId: created.id,
+    firstName: input.firstName,
+    lastName: input.lastName,
+  };
 }
