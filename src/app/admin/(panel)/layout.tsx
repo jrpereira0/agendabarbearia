@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+
+// Painel exige sessão e banco: não pré-renderiza no build da Vercel.
+export const dynamic = "force-dynamic";
 import {
   SidebarInset,
   SidebarProvider,
