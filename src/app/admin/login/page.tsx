@@ -16,6 +16,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+const supabaseConfigured = Boolean(
+  process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+);
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -61,6 +66,12 @@ export default function LoginPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {!supabaseConfigured && (
+              <p className="mb-4 text-sm text-muted-foreground" role="status">
+                O painel ainda não está ligado ao banco de dados. Na Vercel,
+                cadastre as variáveis do Supabase e faça um novo deploy.
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">E-mail</Label>

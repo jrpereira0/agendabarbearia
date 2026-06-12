@@ -1,11 +1,16 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 // Garante que quem chama a action é o dono. Retorna null se estiver
 // tudo certo, ou um ActionResult de erro pra devolver direto.
 export async function requireOwner(): Promise<ActionResult | null> {
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Sistema indisponível. Tente de novo em instantes." };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -33,6 +38,8 @@ export async function assertOwnerPage(): Promise<void> {
 
 // Configurações da barbearia: dono entra; barbeiro vai para Minha conta.
 export async function assertOwnerSettingsPage(): Promise<void> {
+  if (!isSupabaseConfigured()) redirect("/admin/login");
+
   const supabase = await createClient();
   const {
     data: { user },

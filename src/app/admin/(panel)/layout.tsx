@@ -1,8 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-
-// Painel exige sessão e banco: não pré-renderiza no build da Vercel.
-export const dynamic = "force-dynamic";
+import { redirectIfSupabaseMissing } from "@/lib/supabase/require-configured";
 import {
   SidebarInset,
   SidebarProvider,
@@ -12,11 +10,16 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/admin/app-sidebar";
 
+// Painel exige sessão e banco: não pré-renderiza no build da Vercel.
+export const dynamic = "force-dynamic";
+
 export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  redirectIfSupabaseMissing();
+
   const supabase = await createClient();
 
   const {

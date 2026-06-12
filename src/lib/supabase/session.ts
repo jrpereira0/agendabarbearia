@@ -5,7 +5,16 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 // Mantém a sessão do Supabase atualizada e protege as rotas /admin.
 export async function updateSession(request: NextRequest) {
   const env = getSupabasePublicEnv();
+  const { pathname } = request.nextUrl;
+  const isAdminRoute = pathname.startsWith("/admin");
+  const isLoginPage = pathname === "/admin/login";
+
   if (!env) {
+    if (isAdminRoute && !isLoginPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
+    }
     return NextResponse.next({ request });
   }
 
@@ -36,10 +45,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
-  const isAdminRoute = pathname.startsWith("/admin");
-  const isLoginPage = pathname === "/admin/login";
 
   if (isAdminRoute && !isLoginPage && !user) {
     const url = request.nextUrl.clone();

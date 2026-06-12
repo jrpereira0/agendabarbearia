@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { ActionResult } from "@/lib/require-owner";
 
 export type AdminSession = {
@@ -8,6 +9,8 @@ export type AdminSession = {
 };
 
 export async function getAdminSession(): Promise<AdminSession | null> {
+  if (!isSupabaseConfigured()) return null;
+
   const supabase = await createClient();
   const {
     data: { user },

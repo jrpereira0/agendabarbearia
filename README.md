@@ -41,9 +41,9 @@ No painel da Vercel, abra **Settings → Environment Variables** e cadastre as m
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sim |
 | `SUPABASE_SERVICE_ROLE_KEY` | Sim (API e painel) |
 
-Marque **Production**, **Preview** e **Development**. Depois de salvar, faça um novo deploy (**Deployments → Redeploy**).
+Marque **Production**, **Preview** e **Development**. Depois de salvar, faça um novo deploy (**Deployments → Redeploy**) — sem isso o painel continua sem acesso ao banco.
 
-Sem essas variáveis o site abre com erro de servidor ou sem dados da barbearia.
+Sem essas variáveis o site abre sem dados da barbearia e o login do painel não funciona.
 
 ## Comandos úteis
 
