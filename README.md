@@ -33,17 +33,21 @@ Acesse [http://localhost:3000](http://localhost:3000). A página de agendamento 
 
 ## Publicar na Vercel
 
-No painel da Vercel, abra **Settings → Environment Variables** e cadastre as mesmas chaves do `.env.local`:
+No painel da Vercel, abra **Settings → Environment Variables** e cadastre **as 5 chaves** abaixo (copie os mesmos valores do `.env.local`):
 
-| Variável | Obrigatória no site |
+| Variável | Para quê |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Sim |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sim |
-| `SUPABASE_SERVICE_ROLE_KEY` | Sim (API e painel) |
+| `SUPABASE_URL` | Servidor (mesmo valor da URL do projeto) |
+| `SUPABASE_ANON_KEY` | Servidor (chave publishable/anon) |
+| `SUPABASE_SERVICE_ROLE_KEY` | API e ações do painel |
+| `NEXT_PUBLIC_SUPABASE_URL` | Login no navegador (mesmo valor de `SUPABASE_URL`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Login no navegador (mesmo valor de `SUPABASE_ANON_KEY`) |
 
-Marque **Production**, **Preview** e **Development**. Depois de salvar, faça um novo deploy (**Deployments → Redeploy**) — sem isso o painel continua sem acesso ao banco.
+Marque **Production**, **Preview** e **Development**.
 
-Sem essas variáveis o site abre sem dados da barbearia e o login do painel não funciona.
+Depois de salvar, faça **Deployments → Redeploy** e desmarque **Use existing Build Cache** para forçar um build novo com as chaves.
+
+Sem isso o site abre sem dados da barbearia e o painel mostra erro de Supabase não configurado.
 
 ## Comandos úteis
 

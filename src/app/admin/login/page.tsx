@@ -16,10 +16,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-const supabaseConfigured = Boolean(
-  process.env.NEXT_PUBLIC_SUPABASE_URL &&
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
+import { isSupabaseBrowserConfigured } from "@/lib/supabase/env";
+
+const supabaseConfigured = isSupabaseBrowserConfigured();
 
 export default function LoginPage() {
   const router = useRouter();
