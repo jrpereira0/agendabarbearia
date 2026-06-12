@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ProfessionalForm } from "@/components/admin/professional-form";
 import type { DayRanges } from "@/components/admin/week-grid-editor";
@@ -13,6 +14,8 @@ export default async function EditProfessionalPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await assertOwnerPage();
+
   const { id } = await params;
   const supabase = await createClient();
 

@@ -34,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/app/admin/(panel)/actions";
+import { BrandLogo } from "@/components/brand-logo";
 import { BOOKING_PATH } from "@/lib/booking-path";
 
 const dayToDayItems = [
@@ -88,18 +89,12 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/admin">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
-                  <Scissors className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left leading-tight">
-                  <span className="truncate font-semibold">
-                    Agenda Barbearia
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    Painel administrativo
-                  </span>
-                </div>
+              <Link href="/admin" className="min-w-0">
+                <BrandLogo
+                  size="sm"
+                  subtitle="Painel administrativo"
+                  className="min-w-0"
+                />
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -149,6 +144,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                   size="lg"
                   isActive={
                     pathname === "/admin/configuracoes" ||
+                    pathname === "/admin/minha-conta" ||
                     pathname === "/admin/horarios"
                   }
                 >
@@ -185,11 +181,11 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link
-                    href="/admin/configuracoes"
+                    href={isOwner ? "/admin/configuracoes" : "/admin/minha-conta"}
                     onClick={() => setOpenMobile(false)}
                   >
                     <Settings />
-                    Configurações da barbearia
+                    {isOwner ? "Configurações da barbearia" : "Minha conta"}
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

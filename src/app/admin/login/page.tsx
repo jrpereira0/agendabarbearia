@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,9 +48,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center px-6">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            Agenda Barbearia
-          </Link>
+          <BrandLogo href="/" size="md" />
         </div>
       </header>
 

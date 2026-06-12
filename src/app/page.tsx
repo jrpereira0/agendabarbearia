@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand-logo";
 import { Button } from "@/components/ui/button";
 import { BOOKING_PATH } from "@/lib/booking-path";
 
@@ -7,9 +8,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col bg-background">
       <header className="border-b">
         <div className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
-          <span className="text-lg font-semibold tracking-tight">
-            Agenda Barbearia
-          </span>
+          <BrandLogo href="/" size="md" />
           <Button asChild variant="outline" size="sm">
             <Link href="/admin">Área do barbeiro</Link>
           </Button>

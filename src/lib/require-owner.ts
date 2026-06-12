@@ -30,3 +30,21 @@ export async function assertOwnerPage(): Promise<void> {
   const denied = await requireOwner();
   if (denied) redirect("/admin");
 }
+
+// Configurações da barbearia: dono entra; barbeiro vai para Minha conta.
+export async function assertOwnerSettingsPage(): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/admin/login");
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "owner") redirect("/admin/minha-conta");
+}

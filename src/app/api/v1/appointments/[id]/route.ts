@@ -5,6 +5,7 @@ import {
   cancelPublicAppointment,
   updatePublicAppointment,
 } from "@/lib/manage-public-appointment";
+import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 
 const whatsappQuerySchema = z.object({
   whatsapp: z
@@ -26,6 +27,9 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 // PATCH /api/v1/appointments/:id — remarcar agendamento do cliente
 export async function PATCH(request: NextRequest, context: RouteContext) {
+  const limited = enforcePublicApiRateLimit(request, "appointmentMutate");
+  if (limited) return limited;
+
   const { id } = await context.params;
 
   let json: unknown;
@@ -56,6 +60,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 // DELETE /api/v1/appointments/:id?whatsapp=... — cancelar agendamento do cliente
 export async function DELETE(request: NextRequest, context: RouteContext) {
+  const limited = enforcePublicApiRateLimit(request, "appointmentMutate");
+  if (limited) return limited;
+
   const { id } = await context.params;
   const whatsapp = request.nextUrl.searchParams.get("whatsapp") ?? "";
 

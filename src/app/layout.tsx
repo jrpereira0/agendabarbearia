@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { getShopSeo } from "@/lib/get-shop-seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,13 +14,17 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "Agenda Barbearia",
-    template: "%s | Agenda Barbearia",
-  },
-  description: "Agende seu horário na barbearia de forma rápida e simples.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { description } = await getShopSeo();
+
+  return {
+    title: {
+      default: "Agenda Barbearia",
+      template: "%s | Agenda Barbearia",
+    },
+    description,
+  };
+}
 
 export default function RootLayout({
   children,

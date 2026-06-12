@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowDown, AtSign, Clock, MapPin, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BrandMark } from "@/components/brand-logo";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { formatTime, formatWhatsapp } from "@/lib/format";
 import type { BusinessHourRow, ShopProfile } from "@/lib/get-shop-catalog";
@@ -113,9 +114,7 @@ export function ShopHero({
               />
             </div>
           ) : (
-            <div className="flex size-24 items-center justify-center rounded-2xl border border-background/15 bg-background/5 text-3xl font-semibold sm:size-28">
-              {shop.name.charAt(0).toUpperCase()}
-            </div>
+            <BrandMark className="size-24 sm:size-28" />
           )}
 
           <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.24em] text-background/40">

@@ -50,7 +50,8 @@ Regras importantes no banco:
 ## Papéis e permissões
 
 - **Dono (`owner`)**: vê e gerencia tudo (profissionais, serviços, horários, agendamentos)
-- **Barbeiro (`barber`)**: entra com e-mail/senha criados pelo dono; vê a própria agenda e os próprios horários
+- **Barbeiro (`barber`)**: entra com e-mail/senha criados pelo dono; vê a própria agenda. Em **Minha conta** (`/admin/minha-conta`) consulta a grade e altera a senha. Páginas só do dono redirecionam para a agenda ou para Minha conta (`/admin/configuracoes` → Minha conta)
+- O painel admin (`/admin`) usa `noindex` para não aparecer em buscadores
 
 ## Profissionais
 
@@ -124,6 +125,15 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 | POST | `/api/v1/appointments` | Criar agendamento online (cliente) |
 | PATCH | `/api/v1/appointments/:id` | Remarcar agendamento (cliente) |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | Cancelar agendamento (cliente) |
+
+Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limit.ts`):
+
+| Rotas | Limite |
+| --- | --- |
+| `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
+| `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
+| `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
+| `availability` | 60 a cada 15 min |
 
 ## Clientes
 

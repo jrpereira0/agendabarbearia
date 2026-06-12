@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import { listPublicAppointmentsByWhatsapp } from "@/lib/manage-public-appointment";
+import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 
 const whatsappQuerySchema = z.object({
   whatsapp: z
@@ -28,6 +29,9 @@ const bodySchema = z.object({
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
 export async function GET(request: NextRequest) {
+  const limited = enforcePublicApiRateLimit(request, "whatsappSensitive");
+  if (limited) return limited;
+
   const whatsapp = request.nextUrl.searchParams.get("whatsapp") ?? "";
 
   const parsed = whatsappQuerySchema.safeParse({ whatsapp });
@@ -49,6 +53,9 @@ export async function GET(request: NextRequest) {
 
 // POST /api/v1/appointments — agendamento online pelo cliente
 export async function POST(request: NextRequest) {
+  const limitedIp = enforcePublicApiRateLimit(request, "appointmentCreateIp");
+  if (limitedIp) return limitedIp;
+
   let json: unknown;
   try {
     json = await request.json();
@@ -63,6 +70,13 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
+
+  const limitedWhatsapp = enforcePublicApiRateLimit(
+    request,
+    "appointmentCreateWhatsapp",
+    parsed.data.whatsapp
+  );
+  if (limitedWhatsapp) return limitedWhatsapp;
 
   const result = await createPublicAppointment(parsed.data);
 

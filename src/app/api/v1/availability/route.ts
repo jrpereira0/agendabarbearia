@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAvailability } from "@/lib/get-availability";
+import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 
 const querySchema = z.object({
   professionalId: z.uuid("professionalId inválido."),
@@ -15,6 +16,9 @@ const querySchema = z.object({
 
 // GET /api/v1/availability?professionalId=...&date=2026-06-15&serviceIds=id1,id2
 export async function GET(request: NextRequest) {
+  const limited = enforcePublicApiRateLimit(request, "availability");
+  if (limited) return limited;
+
   const params = Object.fromEntries(request.nextUrl.searchParams);
   const parsed = querySchema.safeParse(params);
 

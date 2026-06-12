@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus, Scissors } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { assertOwnerPage } from "@/lib/require-owner";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -9,6 +10,8 @@ import { ServicesList } from "@/components/admin/services-list";
 export const metadata = { title: "Serviços" };
 
 export default async function ServicesPage() {
+  await assertOwnerPage();
+
   const supabase = await createClient();
 
   const { data: services } = await supabase
