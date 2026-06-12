@@ -266,7 +266,7 @@ export function AgendaView({
 
       {/* Desktop: grade fixa à esquerda com scroll próprio; calendário à direita rola com a página */}
       <div className="hidden lg:flex lg:items-start lg:gap-6 lg:p-6">
-        <section className="sticky top-0 flex h-[calc(100dvh-3.5rem)] min-w-0 flex-1 flex-col overflow-hidden">
+        <section className="sticky top-0 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
           <AgendaToolbar {...toolbarProps} />
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-4">
             <AgendaMainContent {...mainContentProps} />

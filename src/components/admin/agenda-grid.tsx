@@ -19,6 +19,7 @@ import {
   agendaCellClass,
   agendaCellHoverFree,
 } from "@/lib/agenda-colors";
+import { blocksAgendaSlot } from "@/lib/appointment-status";
 import type { AgendaProfessionalColumn } from "@/lib/get-agenda-day";
 
 type AgendaGridProps = {
@@ -31,10 +32,15 @@ type AgendaGridProps = {
   onAppointmentClick: (appointment: AppointmentItem) => void;
 };
 
+const gridLineHour = "border-neutral-400 dark:border-neutral-500";
+const gridLineSlot = "border-neutral-300 dark:border-neutral-600";
+const gridLineColumn = "border-neutral-300 dark:border-neutral-600";
+const gridLineOuter = "border-neutral-400 dark:border-neutral-500";
+
 function slotLineClass(minute: number): string {
   return minute % 60 === 0
-    ? "border-t border-solid border-border"
-    : "border-t border-dashed border-border/45";
+    ? `border-t border-solid ${gridLineHour}`
+    : `border-t border-dashed ${gridLineSlot}`;
 }
 
 export function AgendaGrid({
@@ -57,8 +63,9 @@ export function AgendaGrid({
     const map = new Map<string, AppointmentItem[]>();
     for (const pro of professionals) map.set(pro.id, []);
     for (const apt of appointments) {
-      if (apt.status === "cancelled") continue;
-      map.get(apt.professionalId)?.push(apt);
+      if (blocksAgendaSlot(apt)) {
+        map.get(apt.professionalId)?.push(apt);
+      }
     }
     return map;
   }, [appointments, professionals]);
@@ -92,22 +99,32 @@ export function AgendaGrid({
     gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 
-  const visibleAppointments = appointments.filter(
-    (a) => a.status !== "cancelled"
-  );
+  const visibleAppointments = appointments;
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-950">
+    <div
+      className={cn(
+        "overflow-x-auto rounded-lg border bg-white dark:bg-neutral-950",
+        gridLineOuter
+      )}
+    >
       <div className="grid min-w-max" style={gridStyle}>
         {/* Cabeçalho — posição explícita pra não quebrar com agendamentos */}
         <div
-          className="sticky top-0 left-0 z-40 border-b border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900"
+          className={cn(
+            "sticky top-0 left-0 z-40 border-b bg-neutral-100 dark:bg-neutral-900",
+            gridLineHour
+          )}
           style={{ gridRow: 1, gridColumn: 1 }}
         />
         {professionals.map((pro, i) => (
           <div
             key={pro.id}
-            className="sticky top-0 z-40 flex flex-col items-center gap-2 border-b border-l border-neutral-200 bg-neutral-100 px-2 py-2.5 dark:border-neutral-700 dark:bg-neutral-900"
+            className={cn(
+              "sticky top-0 z-40 flex flex-col items-center gap-2 border-b border-l bg-neutral-100 px-2 py-2.5 dark:bg-neutral-900",
+              gridLineHour,
+              gridLineColumn
+            )}
             style={{ gridRow: 1, gridColumn: i + 2 }}
           >
             <ProfessionalAvatar
@@ -149,7 +166,10 @@ export function AgendaGrid({
         {professionals.map((pro, i) => (
           <div
             key={`foot-${pro.id}`}
-            className="flex flex-col items-center gap-1.5 border-l bg-muted/30 px-2 py-2"
+            className={cn(
+              "flex flex-col items-center gap-1.5 border-l bg-muted/30 px-2 py-2",
+              gridLineColumn
+            )}
             style={{ gridRow: footerRow, gridColumn: i + 2 }}
           >
             <ProfessionalAvatar
@@ -226,7 +246,7 @@ function TimeSlotCells({
         className={cn(
           "relative sticky left-0 z-20 overflow-visible bg-white dark:bg-neutral-950",
           slotLineClass(minute),
-          isLast && "border-b border-solid border-border"
+          isLast && `border-b border-solid ${gridLineHour}`
         )}
         style={{ gridRow: row, gridColumn: 1 }}
       >
@@ -277,9 +297,9 @@ function TimeSlotCells({
           <div
             key={`${pro.id}-${minute}`}
             className={cn(
-              "relative border-l border-neutral-200 dark:border-neutral-700",
+              `relative border-l ${gridLineColumn}`,
               slotLineClass(minute),
-              isLast && "border-b border-solid border-neutral-300 dark:border-neutral-600",
+              isLast && `border-b border-solid ${gridLineHour}`,
               agendaCellClass({ inSchedule, occupied, blocked })
             )}
             style={{ gridRow: row, gridColumn: i + 2 }}

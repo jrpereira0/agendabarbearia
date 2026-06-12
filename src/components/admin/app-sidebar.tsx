@@ -84,8 +84,12 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
   }
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader>
+    <Sidebar
+      collapsible="icon"
+      mobileSide="right"
+      className="border-sidebar-border"
+    >
+      <SidebarHeader className="border-b border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
@@ -93,7 +97,9 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                 <BrandLogo
                   size="sm"
                   subtitle="Painel administrativo"
-                  className="min-w-0"
+                  className="min-w-0 text-sidebar-foreground"
+                  nameClassName="text-sidebar-foreground"
+                  subtitleClassName="text-sidebar-foreground/55"
                 />
               </Link>
             </SidebarMenuButton>
@@ -135,7 +141,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
             <DropdownMenu>
@@ -147,8 +153,8 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                     pathname === "/admin/minha-conta"
                   }
                 >
-                  <Avatar className="size-8 rounded-md">
-                    <AvatarFallback className="rounded-md text-xs font-medium">
+                  <Avatar className="size-8 rounded-md ring-1 ring-sidebar-border">
+                    <AvatarFallback className="rounded-md bg-sidebar-accent text-xs font-medium text-sidebar-foreground">
                       {initials || "AB"}
                     </AvatarFallback>
                   </Avatar>
@@ -156,7 +162,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                     <span className="truncate text-sm font-medium">
                       {userName}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-xs text-sidebar-foreground/55">
                       {isOwner ? "Dono" : "Barbeiro"}
                     </span>
                   </div>

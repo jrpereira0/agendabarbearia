@@ -1,4 +1,5 @@
 import { buildTimeSlots } from "@/lib/agenda-grid-utils";
+import { isActiveAppointmentStatus } from "@/lib/appointment-status";
 import { timeToMinutes, type MinuteRange } from "@/lib/availability";
 
 export const ENCAIXE_DAY_START = 0; // 00:00
@@ -36,7 +37,10 @@ export function findAppointmentConflicts(
 
   return appointments.filter((a) => {
     if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
-    if (a.professionalId !== professionalId || a.status !== "confirmed") {
+    if (
+      a.professionalId !== professionalId ||
+      !isActiveAppointmentStatus(a.status)
+    ) {
       return false;
     }
     const aStart = timeToMinutes(a.startTime);

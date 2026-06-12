@@ -1,9 +1,6 @@
 import { Lock } from "lucide-react";
 import { BrandLogo, BrandMark } from "@/components/brand-logo";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { login } from "@/lib/actions/login";
+import { AdminLoginForm } from "@/components/admin/admin-login-form";
 
 type AdminLoginScreenProps = {
   configured: boolean;
@@ -84,51 +81,10 @@ export function AdminLoginScreen({
               </div>
             )}
 
-            {errorMessage && (
-              <div
-                className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
-                role="alert"
-              >
-                {errorMessage}
-              </div>
-            )}
-
-            <form action={login} className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  disabled={!configured}
-                  placeholder="seu@email.com"
-                  className="h-11"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="password">Senha</Label>
-                <Input
-                  id="password"
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                  disabled={!configured}
-                  placeholder="••••••••"
-                  className="h-11"
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={!configured}
-                size="lg"
-                className="mt-1 h-11 w-full text-base"
-              >
-                Entrar no painel
-              </Button>
-            </form>
+            <AdminLoginForm
+              configured={configured}
+              errorMessage={errorMessage}
+            />
 
             <p className="mt-8 text-center text-xs text-muted-foreground lg:text-left">
               Problemas para entrar? Fale com o dono da barbearia.

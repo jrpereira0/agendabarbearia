@@ -16,6 +16,7 @@ type BrandLogoProps = {
   size?: keyof typeof iconSizes;
   className?: string;
   nameClassName?: string;
+  subtitleClassName?: string;
   href?: string;
 };
 
@@ -25,6 +26,7 @@ export function BrandLogo({
   size = "md",
   className,
   nameClassName,
+  subtitleClassName,
   href,
 }: BrandLogoProps) {
   const iconPx = iconSizes[size];
@@ -50,7 +52,12 @@ export function BrandLogo({
             {BRAND_NAME}
           </span>
           {subtitle && (
-            <span className="truncate text-xs text-muted-foreground">
+            <span
+              className={cn(
+                "truncate text-xs text-muted-foreground",
+                subtitleClassName
+              )}
+            >
               {subtitle}
             </span>
           )}

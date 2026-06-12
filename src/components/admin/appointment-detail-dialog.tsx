@@ -29,6 +29,11 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { agendaAppointmentClass } from "@/lib/agenda-colors";
+import {
+  ACTIVE_APPOINTMENT_STATUSES,
+  STATUS_LABELS,
+} from "@/lib/appointment-status";
 import {
   cancelAppointment,
   markAppointmentDone,
@@ -45,26 +50,28 @@ type AppointmentDetailDialogProps = {
   onEdit?: () => void;
 };
 
-const STATUS_LABEL: Record<AppointmentItem["status"], string> = {
-  confirmed: "Confirmado",
-  done: "Atendido",
-  cancelled: "Cancelado",
-};
-
 function StatusBadge({ appointment }: { appointment: AppointmentItem }) {
+  const colorClass =
+    appointment.status === "cancelled"
+      ? "bg-muted text-muted-foreground"
+      : agendaAppointmentClass(appointment);
+
   return (
     <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
       <Badge
         variant="secondary"
-        className={cn(
-          "font-normal",
-          appointment.status === "done" && "bg-muted-foreground/15 text-foreground"
-        )}
+        className={cn("border-0 font-normal", colorClass)}
       >
-        {STATUS_LABEL[appointment.status]}
+        {STATUS_LABELS[appointment.status]}
       </Badge>
-      {appointment.isSqueezeIn && appointment.status === "confirmed" && (
-        <Badge variant="outline" className="border-dashed font-normal">
+      {appointment.isSqueezeIn &&
+        (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(
+          appointment.status
+        ) && (
+        <Badge
+          variant="outline"
+          className="border-dashed border-[#c41e3a] bg-white font-normal text-[#9f1239]"
+        >
           Encaixe
         </Badge>
       )}
@@ -95,9 +102,11 @@ export function AppointmentDetailDialog({
     0
   );
   const whatsappLink = `https://wa.me/55${appointment.customerWhatsapp}`;
-  const isConfirmed = appointment.status === "confirmed";
+  const isActive = (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(
+    appointment.status
+  );
   const isDone = appointment.status === "done";
-  const canAct = isConfirmed || isDone;
+  const canAct = isActive || isDone;
   const customerName = `${appointment.customerFirstName} ${appointment.customerLastName}`;
 
   async function handleDone() {
@@ -276,7 +285,7 @@ export function AppointmentDetailDialog({
                     <X />
                     Cancelar
                   </Button>
-                  {isConfirmed ? (
+                  {isActive ? (
                     <Button
                       onClick={handleDone}
                       disabled={busy}

@@ -8,6 +8,7 @@ import {
 } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import { getAvailability } from "@/lib/get-availability";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 
 const whatsappSchema = z
   .string()
@@ -73,7 +74,9 @@ async function loadOwnedAppointment(
 
   if (!data) return null;
   if (data.customer_whatsapp !== whatsapp) return null;
-  if (data.status !== "confirmed") return null;
+  if (!(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(data.status)) {
+    return null;
+  }
   if (data.is_squeeze_in) return null;
 
   return data;
@@ -112,7 +115,7 @@ export async function listPublicAppointmentsByWhatsapp(
     `
     )
     .eq("customer_whatsapp", parsed.data)
-    .eq("status", "confirmed")
+    .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
     .eq("is_squeeze_in", false)
     .gte("date", today)
     .order("date")

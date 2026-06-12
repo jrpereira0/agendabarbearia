@@ -13,6 +13,10 @@ import {
 import { requireAdmin, type AdminSession } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
 import { upsertCustomer } from "@/lib/upsert-customer";
+import {
+  ACTIVE_APPOINTMENT_STATUSES,
+  type AppointmentStatus,
+} from "@/lib/appointment-status";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -29,7 +33,7 @@ const createSchema = z.object({
 async function assertCanManageAppointment(
   appointmentId: string,
   session: Awaited<ReturnType<typeof requireAdmin>>,
-  allowedStatuses: Array<"confirmed" | "done"> = ["confirmed"]
+  allowedStatuses: AppointmentStatus[] = [...ACTIVE_APPOINTMENT_STATUSES]
 ): Promise<ActionResult | { professionalId: string }> {
   if (!("userId" in session)) return session;
 
@@ -63,10 +67,57 @@ async function assertCanManageAppointment(
     if (appointment.status === "cancelled") {
       return { ok: false, error: "Agendamento cancelado não pode ser alterado." };
     }
-    return { ok: false, error: "Só dá pra alterar agendamentos confirmados." };
+    return { ok: false, error: "Este agendamento não pode ser alterado agora." };
   }
 
   return { professionalId: appointment.professional_id };
+}
+
+async function assertOwnsAppointment(
+  appointmentId: string,
+  session: Awaited<ReturnType<typeof requireAdmin>>
+): Promise<ActionResult | { professionalId: string; status: string; isSqueezeIn: boolean; date: string; startTime: string; serviceIds: string[] }> {
+  if (!("userId" in session)) return session;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { data: appointment } = await admin
+    .from("appointments")
+    .select(
+      `
+      professional_id,
+      status,
+      is_squeeze_in,
+      date,
+      start_time,
+      appointment_services ( service_id )
+    `
+    )
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!appointment) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  if (
+    !session.isOwner &&
+    appointment.professional_id !== session.professionalId
+  ) {
+    return { ok: false, error: "Você não pode alterar este agendamento." };
+  }
+
+  return {
+    professionalId: appointment.professional_id,
+    status: appointment.status,
+    isSqueezeIn: appointment.is_squeeze_in,
+    date: appointment.date,
+    startTime: formatTime(appointment.start_time),
+    serviceIds: (appointment.appointment_services ?? []).map(
+      (row) => row.service_id
+    ),
+  };
 }
 
 async function insertAppointment(
@@ -109,7 +160,7 @@ async function insertAppointment(
       date: data.date,
       start_time: data.startTime,
       end_time: endTime,
-      status: "confirmed",
+      status: "scheduled",
       is_squeeze_in: isSqueezeIn,
     })
     .select("id")
@@ -358,7 +409,7 @@ export async function reopenAppointment(
 
   const { error } = await admin
     .from("appointments")
-    .update({ status: "confirmed" })
+    .update({ status: "scheduled" })
     .eq("id", appointmentId);
 
   if (error) {
@@ -404,7 +455,7 @@ export async function updateAppointment(input: {
   const check = await assertCanManageAppointment(
     parsed.data.appointmentId,
     session,
-    ["confirmed", "done"]
+    [...ACTIVE_APPOINTMENT_STATUSES, "done"]
   );
   if (!("professionalId" in check)) return check;
 
@@ -617,7 +668,7 @@ export async function cancelAppointment(
   if (!("userId" in session)) return session;
 
   const check = await assertCanManageAppointment(appointmentId, session, [
-    "confirmed",
+    ...ACTIVE_APPOINTMENT_STATUSES,
     "done",
   ]);
   if (!("professionalId" in check)) return check;
@@ -634,6 +685,115 @@ export async function cancelAppointment(
   }
 
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+const workflowStatusSchema = z.enum([
+  "scheduled",
+  "confirmed",
+  "on_site",
+  "cancelled",
+  "done",
+]);
+
+async function ensureSlotForActiveStatus(
+  check: {
+    professionalId: string;
+    date: string;
+    startTime: string;
+    serviceIds: string[];
+    isSqueezeIn: boolean;
+  },
+  appointmentId: string
+): Promise<ActionResult | null> {
+  if (check.isSqueezeIn || check.serviceIds.length === 0) {
+    return null;
+  }
+
+  const availability = await getAvailability(
+    check.professionalId,
+    check.date,
+    check.serviceIds,
+    undefined,
+    { adminEdit: true }
+  );
+
+  if (!availability.ok) {
+    return { ok: false, error: availability.error };
+  }
+
+  const slotCheck = await validateAdminAppointmentSlot(
+    check.professionalId,
+    check.date,
+    check.startTime,
+    availability.durationMinutes,
+    appointmentId
+  );
+
+  if (!slotCheck.ok) {
+    return { ok: false, error: slotCheck.error };
+  }
+
+  return null;
+}
+
+export async function updateAppointmentStatus(
+  appointmentId: string,
+  status: z.infer<typeof workflowStatusSchema>
+): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const parsed = workflowStatusSchema.safeParse(status);
+  if (!parsed.success) {
+    return { ok: false, error: "Status inválido." };
+  }
+
+  const check = await assertOwnsAppointment(appointmentId, session);
+  if (!("professionalId" in check)) return check;
+
+  if (parsed.data === check.status) {
+    return { ok: true };
+  }
+
+  const becomingActive = (
+    ACTIVE_APPOINTMENT_STATUSES as readonly string[]
+  ).includes(parsed.data);
+
+  const wasInactive =
+    check.status === "cancelled" || check.status === "done";
+
+  if (becomingActive && wasInactive) {
+    const slotError = await ensureSlotForActiveStatus(check, appointmentId);
+    if (slotError) return slotError;
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+  const { error } = await admin
+    .from("appointments")
+    .update({ status: parsed.data })
+    .eq("id", appointmentId);
+
+  if (error) {
+    if (error.code === "23P01") {
+      return { ok: false, error: "Esse horário já está ocupado." };
+    }
+    if (error.code === "23514") {
+      return {
+        ok: false,
+        error:
+          "O banco ainda não foi atualizado. Rode npm run db:migrate e tente de novo.",
+      };
+    }
+    return {
+      ok: false,
+      error: error.message || "Não foi possível atualizar o status.",
+    };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 

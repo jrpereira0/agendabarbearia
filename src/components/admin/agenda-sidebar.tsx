@@ -55,7 +55,7 @@ export function AgendaSidebar({
   onNewAppointment,
   onEncaixe,
 }: AgendaSidebarProps) {
-  const [legendOpen, setLegendOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(true);
 
   return (
     <aside className="flex w-full flex-col gap-4 lg:w-56 lg:shrink-0">
@@ -128,11 +128,16 @@ export function AgendaSidebar({
               label="Fora do expediente"
             />
             <LegendItem swatchClass={agendaLegend.blocked} label="Bloqueado" />
+            <LegendItem swatchClass={agendaLegend.scheduled} label="Agendado" />
             <LegendItem
-              swatchClass={agendaLegend.occupied}
-              label="Horário ocupado"
+              swatchClass={agendaLegend.confirmed}
+              label="Confirmado"
             />
-            <LegendItem swatchClass={agendaLegend.confirmed} label="Agendado" />
+            <LegendItem swatchClass={agendaLegend.onSite} label="No local" />
+            <LegendItem
+              swatchClass={agendaLegend.cancelled}
+              label="Cancelado"
+            />
             <LegendItem swatchClass={agendaLegend.squeezeIn} label="Encaixe" />
             <LegendItem swatchClass={agendaLegend.done} label="Atendido" />
           </ul>

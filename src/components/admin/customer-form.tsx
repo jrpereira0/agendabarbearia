@@ -12,12 +12,18 @@ import { Badge } from "@/components/ui/badge";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { formatDateBR, formatTime, formatWhatsapp } from "@/lib/format";
 import type { ActionResult } from "@/lib/require-owner";
+import { STATUS_LABELS } from "@/lib/appointment-status";
 
 export type CustomerAppointment = {
   id: string;
   date: string;
   startTime: string;
-  status: "confirmed" | "cancelled" | "done";
+  status:
+    | "scheduled"
+    | "confirmed"
+    | "on_site"
+    | "cancelled"
+    | "done";
   professionalName: string;
   serviceNames: string[];
 };
@@ -32,12 +38,6 @@ type CustomerFormProps = {
   onSubmit: (formData: FormData) => Promise<ActionResult>;
   submitLabel: string;
   isEdit?: boolean;
-};
-
-const statusLabel: Record<CustomerAppointment["status"], string> = {
-  confirmed: "Confirmado",
-  cancelled: "Cancelado",
-  done: "Atendido",
 };
 
 export function CustomerForm({
@@ -167,7 +167,7 @@ export function CustomerForm({
                         }
                         className="font-normal"
                       >
-                        {statusLabel[a.status]}
+                        {STATUS_LABELS[a.status]}
                       </Badge>
                     </div>
                     <p className="mt-1 text-muted-foreground">

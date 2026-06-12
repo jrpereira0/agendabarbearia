@@ -15,6 +15,7 @@ import {
   type DayException,
   type MinuteRange,
 } from "@/lib/availability";
+import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 
 export type AvailabilityOk = {
   ok: true;
@@ -135,7 +136,7 @@ export async function getAvailability(
       .select("id, start_time, end_time")
       .eq("professional_id", professionalId)
       .eq("date", date)
-      .eq("status", "confirmed")
+      .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
       .eq("is_squeeze_in", false),
     admin
       .from("schedule_blocks")
@@ -271,7 +272,7 @@ export async function validateAdminAppointmentSlot(
       .select("id, start_time, end_time")
       .eq("professional_id", professionalId)
       .eq("date", date)
-      .eq("status", "confirmed")
+      .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
       .eq("is_squeeze_in", false),
     admin
       .from("schedule_blocks")

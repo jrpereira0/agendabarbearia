@@ -8,7 +8,12 @@ export type AppointmentItem = {
   customerWhatsapp: string;
   startTime: string;
   endTime: string;
-  status: "confirmed" | "cancelled" | "done";
+  status:
+    | "scheduled"
+    | "confirmed"
+    | "on_site"
+    | "cancelled"
+    | "done";
   isSqueezeIn?: boolean;
   services: {
     id: string;

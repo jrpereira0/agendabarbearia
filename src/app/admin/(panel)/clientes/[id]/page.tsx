@@ -2,7 +2,10 @@ import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
-import { CustomerForm } from "@/components/admin/customer-form";
+import {
+  CustomerForm,
+  type CustomerAppointment,
+} from "@/components/admin/customer-form";
 import { formatTime } from "@/lib/format";
 import { updateCustomer } from "../actions";
 
@@ -69,7 +72,7 @@ export default async function CustomerDetailPage({
         id: a.id,
         date: a.date,
         startTime: formatTime(a.start_time),
-        status: a.status as "confirmed" | "cancelled" | "done",
+        status: a.status as CustomerAppointment["status"],
         professionalName,
         serviceNames,
       };

@@ -98,7 +98,7 @@ export async function createPublicAppointment(
       date: data.date,
       start_time: data.startTime,
       end_time: endTime,
-      status: "confirmed",
+      status: "scheduled",
       is_squeeze_in: false,
     })
     .select("id")
