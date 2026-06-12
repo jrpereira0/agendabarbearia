@@ -31,6 +31,20 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000). A página de agendamento do cliente fica em `/agenda`.
 
+## Publicar na Vercel
+
+No painel da Vercel, abra **Settings → Environment Variables** e cadastre as mesmas chaves do `.env.local`:
+
+| Variável | Obrigatória no site |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Sim |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sim |
+| `SUPABASE_SERVICE_ROLE_KEY` | Sim (API e painel) |
+
+Marque **Production**, **Preview** e **Development**. Depois de salvar, faça um novo deploy (**Deployments → Redeploy**).
+
+Sem essas variáveis o site abre com erro de servidor ou sem dados da barbearia.
+
 ## Comandos úteis
 
 ```bash
