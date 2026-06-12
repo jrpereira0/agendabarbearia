@@ -6,12 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/page-header";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { ChangePasswordForm } from "@/components/admin/change-password-form";
-import {
-  WeekGridEditor,
-  fillWeek,
-  type DayRanges,
-} from "@/components/admin/week-grid-editor";
+import { WeekGridEditor } from "@/components/admin/week-grid-editor";
 import type { BusinessDay } from "@/components/admin/business-hours-form";
+import { fillWeek, type DayRanges } from "@/lib/week-schedule";
 import { formatTime, WEEKDAYS } from "@/lib/format";
 import { changeMyPassword } from "./actions";
 

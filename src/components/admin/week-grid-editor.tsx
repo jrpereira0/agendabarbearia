@@ -6,20 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { WEEKDAYS } from "@/lib/format";
 import type { BusinessDay } from "@/components/admin/business-hours-form";
+import type { DayRanges, TimeRange } from "@/lib/week-schedule";
 
-export type TimeRange = { startTime: string; endTime: string };
-export type DayRanges = { weekday: number; ranges: TimeRange[] };
-
-export function emptyWeek(): DayRanges[] {
-  return Array.from({ length: 7 }, (_, weekday) => ({ weekday, ranges: [] }));
-}
-
-// Garante os 7 dias na ordem, preenchendo os que não vieram do banco.
-export function fillWeek(days: DayRanges[]): DayRanges[] {
-  return emptyWeek().map(
-    (empty) => days.find((d) => d.weekday === empty.weekday) ?? empty
-  );
-}
+export type { DayRanges, TimeRange } from "@/lib/week-schedule";
+export { emptyWeek, fillWeek } from "@/lib/week-schedule";
 
 type WeekGridEditorProps = {
   days: DayRanges[];

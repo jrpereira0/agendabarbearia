@@ -3,7 +3,7 @@ import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ProfessionalForm } from "@/components/admin/professional-form";
-import type { DayRanges } from "@/components/admin/week-grid-editor";
+import type { DayRanges } from "@/lib/week-schedule";
 import { formatTime } from "@/lib/format";
 import { updateProfessional } from "../actions";
 
