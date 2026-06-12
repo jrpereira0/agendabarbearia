@@ -1,21 +1,24 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { LOGIN_PATH } from "@/lib/login-path";
+
+function isLoginPage(pathname: string): boolean {
+  return pathname === LOGIN_PATH;
+}
 
 // Mantém a sessão do Supabase atualizada e protege as rotas /admin.
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isAdminRoute = pathname.startsWith("/admin");
-  const isLoginPage = pathname === "/admin/login";
+  const loginPage = isLoginPage(pathname);
 
   try {
     const env = getSupabasePublicEnv();
 
     if (!env) {
-      if (isAdminRoute && !isLoginPage) {
-        const url = request.nextUrl.clone();
-        url.pathname = "/admin/login";
-        return NextResponse.redirect(url);
+      if (isAdminRoute && !loginPage) {
+        return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
       }
       return NextResponse.next({ request });
     }
@@ -44,24 +47,18 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (isAdminRoute && !isLoginPage && !user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+    if (isAdminRoute && !loginPage && !user) {
+      return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
     }
 
-    if (isLoginPage && user) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin";
-      return NextResponse.redirect(url);
+    if (loginPage && user) {
+      return NextResponse.redirect(new URL("/admin", request.url));
     }
 
     return supabaseResponse;
   } catch {
-    if (isAdminRoute && !isLoginPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+    if (isAdminRoute && !loginPage) {
+      return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
     }
     return NextResponse.next({ request });
   }

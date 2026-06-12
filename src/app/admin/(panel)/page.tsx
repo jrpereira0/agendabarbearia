@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
+import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getAgendaDayContext } from "@/lib/get-agenda-day";
 import { formatTime } from "@/lib/format";
@@ -13,7 +14,7 @@ type PageProps = {
 
 export default async function AdminDashboardPage({ searchParams }: PageProps) {
   const session = await getAdminSession();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect(LOGIN_PATH);
 
   const { date: dateParam } = await searchParams;
   const today = todayInTimezone();

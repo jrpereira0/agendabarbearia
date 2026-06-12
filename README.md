@@ -29,7 +29,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Acesse [http://localhost:3000](http://localhost:3000). A página de agendamento do cliente fica em `/agenda`.
+Acesse [http://localhost:3000](http://localhost:3000) para entrar no painel. O link de agendamento para clientes fica em `/agenda`.
 
 ## Publicar na Vercel
 

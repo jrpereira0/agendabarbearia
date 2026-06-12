@@ -30,7 +30,7 @@ export async function createClient(): Promise<SupabaseClient | null> {
 }
 
 export async function requireServerClient(
-  loginPath = "/admin/login?erro=config"
+  loginPath = "/?erro=config"
 ): Promise<SupabaseClient> {
   if (!isSupabaseConfigured()) {
     redirect(loginPath);

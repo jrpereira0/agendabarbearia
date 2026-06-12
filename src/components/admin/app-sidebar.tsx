@@ -144,8 +144,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                   size="lg"
                   isActive={
                     pathname === "/admin/configuracoes" ||
-                    pathname === "/admin/minha-conta" ||
-                    pathname === "/admin/horarios"
+                    pathname === "/admin/minha-conta"
                   }
                 >
                   <Avatar className="size-8 rounded-md">

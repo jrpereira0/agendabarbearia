@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { LOGIN_PATH } from "@/lib/login-path";
 import { Clock, Store, User } from "lucide-react";
 import { requireServerClient } from "@/lib/supabase/server";
 import { getAdminSession } from "@/lib/require-admin";
@@ -16,7 +17,7 @@ export const metadata = { title: "Minha conta" };
 
 export default async function MyAccountPage() {
   const session = await getAdminSession();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect(LOGIN_PATH);
   if (session.isOwner) redirect("/admin/configuracoes");
 
   const supabase = await requireServerClient();
@@ -24,7 +25,7 @@ export default async function MyAccountPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/admin/login");
+  if (!user) redirect(LOGIN_PATH);
 
   const [{ data: professional }, { data: businessHours }] = await Promise.all([
     supabase

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BOOKING_PATH } from "@/lib/booking-path";
 
 export function BookingUnavailable() {
   return (
@@ -10,7 +11,7 @@ export function BookingUnavailable() {
         ou fale com a barbearia pelo WhatsApp.
       </p>
       <Button asChild variant="outline">
-        <Link href="/">Voltar ao início</Link>
+        <Link href={BOOKING_PATH}>Tentar de novo</Link>
       </Button>
     </div>
   );

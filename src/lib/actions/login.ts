@@ -3,21 +3,22 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { loginUrl } from "@/lib/login-path";
 
 export async function login(formData: FormData) {
   if (!isSupabaseConfigured()) {
-    redirect("/admin/login?erro=config");
+    redirect(loginUrl("config"));
   }
 
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
   if (!email || !password) {
-    redirect("/admin/login?erro=campos");
+    redirect(loginUrl("campos"));
   }
 
   const supabase = await createClient();
-  if (!supabase) redirect("/admin/login?erro=config");
+  if (!supabase) redirect(loginUrl("config"));
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -25,7 +26,7 @@ export async function login(formData: FormData) {
   });
 
   if (error) {
-    redirect("/admin/login?erro=credenciais");
+    redirect(loginUrl("credenciais"));
   }
 
   redirect("/admin");

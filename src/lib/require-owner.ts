@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { LOGIN_PATH, loginUrl } from "@/lib/login-path";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -45,16 +46,16 @@ export async function assertOwnerPage(): Promise<void> {
 
 // Configurações da barbearia: dono entra; barbeiro vai para Minha conta.
 export async function assertOwnerSettingsPage(): Promise<void> {
-  if (!isSupabaseConfigured()) redirect("/admin/login");
+  if (!isSupabaseConfigured()) redirect(LOGIN_PATH);
 
   const supabase = await createClient();
-  if (!supabase) redirect("/admin/login?erro=config");
+  if (!supabase) redirect(loginUrl("config"));
 
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/admin/login");
+  if (!user) redirect(LOGIN_PATH);
 
   const { data: profile } = await supabase
     .from("profiles")

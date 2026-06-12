@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
+import { LOGIN_PATH, loginUrl } from "@/lib/login-path";
 import {
   SidebarInset,
   SidebarProvider,
@@ -24,7 +25,7 @@ export default async function AdminLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/admin/login");
+    redirect(LOGIN_PATH);
   }
 
   const { data: profile } = await supabase
@@ -37,7 +38,7 @@ export default async function AdminLayout({
     !profile ||
     (profile.role !== "owner" && profile.role !== "barber")
   ) {
-    redirect("/admin/login?erro=perfil");
+    redirect(loginUrl("perfil"));
   }
 
   const isOwner = profile.role === "owner";

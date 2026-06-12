@@ -4,7 +4,7 @@ Atualizado por fase, conforme o sistema evolui.
 
 ## Visão geral
 
-- **Next.js (App Router)**: site público, painel admin e API no mesmo projeto
+- **Next.js (App Router)**: login na raiz, painel admin, agendamento do cliente e API no mesmo projeto
 - **Supabase**: banco PostgreSQL, login (Auth) e fotos (Storage)
 - **Vercel** (fase final): hospedagem
 
@@ -12,10 +12,10 @@ Atualizado por fase, conforme o sistema evolui.
 
 | Pasta | O que tem |
 | --- | --- |
-| `src/app/page.tsx` | Página inicial pública |
+| `src/app/page.tsx` | Login do painel (página inicial) |
 | `src/app/agenda` | Página do cliente: perfil da barbearia e agendamento |
-| `src/app/admin/login` | Tela de login do painel |
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
+| `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
 | `src/app/admin/(panel)/configuracoes` | Perfil, endereço, horários e dias especiais |
@@ -23,7 +23,8 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
 | `src/components/booking` | Página pública de agendamento do cliente |
 | `src/lib/supabase` | Conexões com o Supabase (browser, server, admin) |
-| `src/proxy.ts` | Protege as rotas `/admin` (redireciona pro login) |
+| `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login) |
+| `src/lib/login-path.ts` | Caminho do login (`/`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
 | `scripts` | Ferramentas: `db:migrate` e `create-admin` |
 
@@ -102,8 +103,6 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Exposto em `GET /api/v1/availability?professionalId=...&date=AAAA-MM-DD&serviceIds=id1,id2` (público, mesmo endpoint que o site e as automações de WhatsApp usam)
 
 ## Página do cliente (`/agenda`)
-
-- URLs antigas `/agendar` e `/reservar` redirecionam automaticamente para `/agenda`
 
 - Mostra o **perfil da barbearia** (nome, bio, endereço, horários, WhatsApp, Instagram, logo) e o fluxo de agendamento
 - Passos: barbeiro → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome

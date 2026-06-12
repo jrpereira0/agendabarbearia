@@ -27,7 +27,7 @@ export default function AdminError({
           Tentar de novo
         </Button>
         <Button type="button" variant="outline" asChild>
-          <Link href="/admin/login">Ir para o login</Link>
+          <Link href="/">Ir para o login</Link>
         </Button>
       </div>
     </div>

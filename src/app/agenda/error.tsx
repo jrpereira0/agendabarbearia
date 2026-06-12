@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { BOOKING_PATH } from "@/lib/booking-path";
 
 export default function AgendaError({
   reset,
@@ -21,7 +22,7 @@ export default function AgendaError({
           Tentar de novo
         </Button>
         <Button type="button" variant="outline" asChild>
-          <Link href="/">Voltar ao início</Link>
+          <Link href={BOOKING_PATH}>Tentar de novo</Link>
         </Button>
       </div>
     </div>
