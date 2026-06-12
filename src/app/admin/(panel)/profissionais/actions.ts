@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const professionalSchema = z.object({
@@ -159,8 +160,8 @@ export async function createProfessional(
   }
 
   const data = parsed.data;
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   // Cria o login do barbeiro (já confirmado, sem e-mail de verificação)
   const { data: created, error: userError } =
@@ -237,8 +238,8 @@ export async function updateProfessional(
   if ("error" in schedule) return { ok: false, error: schedule.error };
 
   const data = parsed.data;
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { data: current } = await admin
     .from("professionals")
@@ -313,8 +314,8 @@ export async function setProfessionalActive(
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin
     .from("professionals")
     .update({ active })
@@ -331,8 +332,8 @@ export async function deleteProfessional(id: string): Promise<ActionResult> {
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { count } = await admin
     .from("appointments")

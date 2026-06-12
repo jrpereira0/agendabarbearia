@@ -33,7 +33,14 @@ export default async function AdminLayout({
     .eq("id", user.id)
     .single();
 
-  const isOwner = profile?.role === "owner";
+  if (
+    !profile ||
+    (profile.role !== "owner" && profile.role !== "barber")
+  ) {
+    redirect("/admin/login?erro=perfil");
+  }
+
+  const isOwner = profile.role === "owner";
 
   return (
     <TooltipProvider>

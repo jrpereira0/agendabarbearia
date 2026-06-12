@@ -17,6 +17,8 @@ export const dynamic = "force-dynamic";
 const ERROR_MESSAGES: Record<string, string> = {
   credenciais: "E-mail ou senha incorretos.",
   campos: "Preencha e-mail e senha.",
+  perfil:
+    "Seu login não tem permissão para o painel. Fale com o dono da barbearia.",
   config:
     "O painel ainda não está ligado ao banco. Cadastre as variáveis do Supabase na Vercel e faça um novo deploy.",
 };

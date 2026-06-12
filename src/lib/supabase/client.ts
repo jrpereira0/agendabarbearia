@@ -1,13 +1,10 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseBrowserEnv } from "@/lib/supabase/env";
 
-export function createClient() {
+export function createClient(): SupabaseClient | null {
   const env = getSupabaseBrowserEnv();
-  if (!env) {
-    throw new Error(
-      "Supabase não configurado no navegador. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY e faça um novo deploy."
-    );
-  }
+  if (!env) return null;
 
   return createBrowserClient(env.url, env.anonKey);
 }

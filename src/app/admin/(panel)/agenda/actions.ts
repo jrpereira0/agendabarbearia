@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
@@ -32,8 +33,8 @@ async function assertCanManageAppointment(
 ): Promise<ActionResult | { professionalId: string }> {
   if (!("userId" in session)) return session;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: appointment } = await admin
     .from("appointments")
     .select("professional_id, status")
@@ -73,8 +74,8 @@ async function insertAppointment(
   durationMinutes: number,
   isSqueezeIn: boolean
 ): Promise<ActionResult> {
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const startMinutes = timeToMinutes(data.startTime);
   const endMinutes = startMinutes + durationMinutes;
 
@@ -151,8 +152,8 @@ async function validateCreateInput(
     return { ok: false, error: "Você só pode agendar na sua própria agenda." };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const [{ data: professional }, { data: foundServices }, { data: links }] =
     await Promise.all([
@@ -280,8 +281,8 @@ export async function markAppointmentDone(
   const check = await assertCanManageAppointment(appointmentId, session);
   if (!("professionalId" in check)) return check;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin
     .from("appointments")
     .update({ status: "done" })
@@ -306,8 +307,8 @@ export async function reopenAppointment(
   ]);
   if (!("professionalId" in check)) return check;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: existing } = await admin
     .from("appointments")
     .select(
@@ -407,8 +408,8 @@ export async function updateAppointment(input: {
   );
   if (!("professionalId" in check)) return check;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: existing } = await admin
     .from("appointments")
     .select("date, is_squeeze_in")
@@ -549,8 +550,8 @@ export async function createScheduleBlock(input: {
     };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: professional } = await admin
     .from("professionals")
     .select("id, active")
@@ -583,8 +584,8 @@ export async function deleteScheduleBlock(
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: block } = await admin
     .from("schedule_blocks")
     .select("professional_id")
@@ -621,8 +622,8 @@ export async function cancelAppointment(
   ]);
   if (!("professionalId" in check)) return check;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin
     .from("appointments")
     .update({ status: "cancelled" })

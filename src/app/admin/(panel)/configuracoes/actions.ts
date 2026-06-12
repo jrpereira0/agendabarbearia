@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { formatShopAddress } from "@/lib/format";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
@@ -46,8 +47,8 @@ export async function saveBusinessHours(
     return { ok: false, error: "Intervalo da agenda inválido." };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { error: settingsError } = await admin
     .from("shop_settings")
@@ -106,8 +107,8 @@ export async function createException(
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin.from("schedule_exceptions").insert({
     date: parsed.data.date,
     professional_id: parsed.data.professionalId,
@@ -127,8 +128,8 @@ export async function deleteException(id: string): Promise<ActionResult> {
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin
     .from("schedule_exceptions")
     .delete()
@@ -212,8 +213,8 @@ export async function saveShopProfile(formData: FormData): Promise<ActionResult>
     state: parsed.data.state,
   });
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const update: Record<string, string | null> = {
     shop_name: parsed.data.shopName,
     bio: parsed.data.bio,

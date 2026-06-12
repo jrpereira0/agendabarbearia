@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { safeApiRoute } from "@/lib/api/safe-route";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import { listPublicAppointmentsByWhatsapp } from "@/lib/manage-public-appointment";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
@@ -29,62 +30,69 @@ const bodySchema = z.object({
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
 export async function GET(request: NextRequest) {
-  const limited = enforcePublicApiRateLimit(request, "whatsappSensitive");
-  if (limited) return limited;
+  return safeApiRoute(async () => {
+    const limited = enforcePublicApiRateLimit(request, "whatsappSensitive");
+    if (limited) return limited;
 
-  const whatsapp = request.nextUrl.searchParams.get("whatsapp") ?? "";
+    const whatsapp = request.nextUrl.searchParams.get("whatsapp") ?? "";
 
-  const parsed = whatsappQuerySchema.safeParse({ whatsapp });
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0].message },
-      { status: 400 }
-    );
-  }
+    const parsed = whatsappQuerySchema.safeParse({ whatsapp });
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0].message },
+        { status: 400 }
+      );
+    }
 
-  const result = await listPublicAppointmentsByWhatsapp(parsed.data.whatsapp);
+    const result = await listPublicAppointmentsByWhatsapp(parsed.data.whatsapp);
 
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
 
-  return NextResponse.json({ appointments: result.data });
+    return NextResponse.json({ appointments: result.data });
+  });
 }
 
 // POST /api/v1/appointments — agendamento online pelo cliente
 export async function POST(request: NextRequest) {
-  const limitedIp = enforcePublicApiRateLimit(request, "appointmentCreateIp");
-  if (limitedIp) return limitedIp;
+  return safeApiRoute(async () => {
+    const limitedIp = enforcePublicApiRateLimit(request, "appointmentCreateIp");
+    if (limitedIp) return limitedIp;
 
-  let json: unknown;
-  try {
-    json = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Corpo da requisição inválido." }, { status: 400 });
-  }
+    let json: unknown;
+    try {
+      json = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Corpo da requisição inválido." },
+        { status: 400 }
+      );
+    }
 
-  const parsed = bodySchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: parsed.error.issues[0].message },
-      { status: 400 }
+    const parsed = bodySchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0].message },
+        { status: 400 }
+      );
+    }
+
+    const limitedWhatsapp = enforcePublicApiRateLimit(
+      request,
+      "appointmentCreateWhatsapp",
+      parsed.data.whatsapp
     );
-  }
+    if (limitedWhatsapp) return limitedWhatsapp;
 
-  const limitedWhatsapp = enforcePublicApiRateLimit(
-    request,
-    "appointmentCreateWhatsapp",
-    parsed.data.whatsapp
-  );
-  if (limitedWhatsapp) return limitedWhatsapp;
+    const result = await createPublicAppointment(parsed.data);
 
-  const result = await createPublicAppointment(parsed.data);
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
 
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status });
-  }
-
-  revalidatePath("/admin");
-  revalidatePath("/agenda");
-  return NextResponse.json({ ok: true, appointmentId: result.appointmentId });
+    revalidatePath("/admin");
+    revalidatePath("/agenda");
+    return NextResponse.json({ ok: true, appointmentId: result.appointmentId });
+  });
 }

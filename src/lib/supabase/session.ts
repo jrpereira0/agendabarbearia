@@ -4,26 +4,25 @@ import { getSupabasePublicEnv } from "@/lib/supabase/env";
 
 // Mantém a sessão do Supabase atualizada e protege as rotas /admin.
 export async function updateSession(request: NextRequest) {
-  const env = getSupabasePublicEnv();
   const { pathname } = request.nextUrl;
   const isAdminRoute = pathname.startsWith("/admin");
   const isLoginPage = pathname === "/admin/login";
 
-  if (!env) {
-    if (isAdminRoute && !isLoginPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/admin/login";
-      return NextResponse.redirect(url);
+  try {
+    const env = getSupabasePublicEnv();
+
+    if (!env) {
+      if (isAdminRoute && !isLoginPage) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/admin/login";
+        return NextResponse.redirect(url);
+      }
+      return NextResponse.next({ request });
     }
-    return NextResponse.next({ request });
-  }
 
-  let supabaseResponse = NextResponse.next({ request });
+    let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    env.url,
-    env.anonKey,
-    {
+    const supabase = createServerClient(env.url, env.anonKey, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -38,25 +37,32 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+    });
+
+    // Importante: não remover. Renova o token da sessão quando expira.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (isAdminRoute && !isLoginPage && !user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
     }
-  );
 
-  // Importante: não remover. Renova o token da sessão quando expira.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    if (isLoginPage && user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
 
-  if (isAdminRoute && !isLoginPage && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    return NextResponse.redirect(url);
+    return supabaseResponse;
+  } catch {
+    if (isAdminRoute && !isLoginPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/login";
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next({ request });
   }
-
-  if (isLoginPage && user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin";
-    return NextResponse.redirect(url);
-  }
-
-  return supabaseResponse;
 }

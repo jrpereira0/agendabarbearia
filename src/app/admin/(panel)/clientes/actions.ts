@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const customerSchema = z.object({
@@ -28,8 +29,8 @@ export async function createCustomer(formData: FormData): Promise<ActionResult> 
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { error } = await admin.from("customers").insert({
     first_name: parsed.data.firstName,
@@ -68,8 +69,8 @@ export async function updateCustomer(
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { data: existing } = await admin
     .from("customers")
@@ -120,8 +121,8 @@ export async function deleteCustomer(customerId: string): Promise<ActionResult> 
   const auth = await requireOwner();
   if (auth) return auth;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { count } = await admin
     .from("appointments")

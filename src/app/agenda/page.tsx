@@ -3,6 +3,7 @@ import { todayInTimezone } from "@/lib/availability";
 import { getShopCatalog } from "@/lib/get-shop-catalog";
 import { getShopSeo } from "@/lib/get-shop-seo";
 import { BookingPage } from "@/components/booking/booking-page";
+import { BookingUnavailable } from "@/components/booking/booking-unavailable";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function AgendaPublicPage() {
-  const catalog = await getShopCatalog();
-
-  return <BookingPage catalog={catalog} today={todayInTimezone()} />;
+  try {
+    const catalog = await getShopCatalog();
+    return <BookingPage catalog={catalog} today={todayInTimezone()} />;
+  } catch {
+    return <BookingUnavailable />;
+  }
 }

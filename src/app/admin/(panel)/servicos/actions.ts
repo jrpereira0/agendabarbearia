@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const serviceSchema = z.object({
@@ -74,8 +75,8 @@ export async function createService(formData: FormData): Promise<ActionResult> {
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { data: service, error } = await admin
     .from("services")
     .insert({
@@ -115,8 +116,8 @@ export async function updateService(
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const updates: Record<string, unknown> = {
     name: parsed.data.name,
@@ -147,8 +148,8 @@ export async function setServiceActive(
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
   const { error } = await admin.from("services").update({ active }).eq("id", id);
   if (error) return { ok: false, error: error.message };
 
@@ -160,8 +161,8 @@ export async function deleteService(id: string): Promise<ActionResult> {
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const admin = createAdminClient();
-  if (!admin) return systemUnavailable();
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
 
   const { count } = await admin
     .from("appointment_services")
