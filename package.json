@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
-    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs"
+    "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
+    "test:api:customer-by-whatsapp": "node scripts/test-customer-by-whatsapp.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

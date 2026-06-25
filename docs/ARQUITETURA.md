@@ -120,18 +120,21 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 | --- | --- | --- |
 | GET | `/api/v1/catalog` | Barbearia, barbeiros ativos, serviços e horário de funcionamento |
 | GET | `/api/v1/availability` | Horários livres de um barbeiro num dia |
-| GET | `/api/v1/customers/lookup` | Buscar cliente pelo WhatsApp (agendamento online) |
+| GET | `/api/v1/customers/by-whatsapp` | Buscar cliente pelo WhatsApp (normaliza +55; retorna `id`) |
+| GET | `/api/v1/customers/lookup` | Buscar cliente pelo WhatsApp (site `/agenda`, resposta simples) |
 | GET | `/api/v1/appointments?whatsapp=` | Listar agendamentos futuros do cliente |
 | POST | `/api/v1/appointments` | Criar agendamento online (cliente) |
 | PATCH | `/api/v1/appointments/:id` | Remarcar agendamento (cliente) |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | Cancelar agendamento (cliente) |
+
+Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [API-N8N.md](./API-N8N.md).
 
 Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limit.ts`):
 
 | Rotas | Limite |
 | --- | --- |
 | `catalog` e `availability` | 60 a cada 15 min |
-| `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
+| `customers/by-whatsapp`, `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
 
