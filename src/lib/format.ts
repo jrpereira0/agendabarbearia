@@ -46,9 +46,16 @@ export function formatServiceNames(names: string[]): string {
   return `${names[0]} +${names.length - 1}`;
 }
 
-// Formata "11999998888" como "(11) 99999-8888" para exibição.
+// Formata "11999998888" ou "5511999998888" como "(11) 99999-8888" para exibição.
 export function formatWhatsapp(digits: string): string {
-  const d = digits.replace(/\D/g, "").slice(0, 11);
+  let d = digits.replace(/\D/g, "");
+
+  // No Brasil, esconde o +55 na tela (pode continuar salvo assim no banco).
+  if (d.startsWith("55") && (d.length === 12 || d.length === 13)) {
+    d = d.slice(2);
+  }
+
+  d = d.slice(0, 11);
   if (d.length <= 2) return d;
   if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
   if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;

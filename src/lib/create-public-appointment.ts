@@ -3,6 +3,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { getAvailability } from "@/lib/get-availability";
 import { upsertCustomer } from "@/lib/upsert-customer";
+import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+} from "@/lib/whatsapp";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -11,9 +15,7 @@ const createSchema = z.object({
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: z
-    .string()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
 });
 
 export type CreatePublicAppointmentInput = z.infer<typeof createSchema>;
@@ -25,7 +27,16 @@ export type CreatePublicAppointmentResult =
 export async function createPublicAppointment(
   input: CreatePublicAppointmentInput
 ): Promise<CreatePublicAppointmentResult> {
-  const parsed = createSchema.safeParse(input);
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return {
+      ok: false,
+      error: WHATSAPP_INVALID_MESSAGE,
+      status: 400,
+    };
+  }
+
+  const parsed = createSchema.safeParse({ ...input, whatsapp });
   if (!parsed.success) {
     return {
       ok: false,

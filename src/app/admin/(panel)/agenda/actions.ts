@@ -14,6 +14,10 @@ import { requireAdmin, type AdminSession } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
 import { upsertCustomer } from "@/lib/upsert-customer";
 import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+} from "@/lib/whatsapp";
+import {
   ACTIVE_APPOINTMENT_STATUSES,
   type AppointmentStatus,
 } from "@/lib/appointment-status";
@@ -27,7 +31,7 @@ const createSchema = z.object({
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
   whatsapp: z
     .string()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+    .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
 });
 
 async function assertCanManageAppointment(
@@ -264,9 +268,14 @@ export async function createNormalAppointment(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const parsed = createSchema.safeParse({
     ...input,
-    whatsapp: input.whatsapp.replace(/\D/g, ""),
+    whatsapp,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -309,9 +318,14 @@ export async function createSqueezeInAppointment(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const parsed = createSchema.safeParse({
     ...input,
-    whatsapp: input.whatsapp.replace(/\D/g, ""),
+    whatsapp,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -429,7 +443,7 @@ const updateSchema = z.object({
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
   whatsapp: z
     .string()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+    .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
 });
 
 export async function updateAppointment(input: {
@@ -444,9 +458,14 @@ export async function updateAppointment(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const parsed = updateSchema.safeParse({
     ...input,
-    whatsapp: input.whatsapp.replace(/\D/g, ""),
+    whatsapp,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };

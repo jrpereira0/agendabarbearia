@@ -18,6 +18,7 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
+import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
 import { cn } from "@/lib/utils";
 import type {
   PublicProfessional,
@@ -270,7 +271,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   function goBack() {
     if (step === "confirm") {
       if (customerSubstep === "identity") {
-        lastLookupDigitsRef.current = whatsapp.replace(/\D/g, "");
+        lastLookupDigitsRef.current = normalizeWhatsapp(whatsapp) ?? "";
         setCustomerSubstep("whatsapp");
         setCustomerFound(false);
         setFirstName("");
@@ -317,19 +318,17 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   useEffect(() => {
     if (step !== "confirm" || customerSubstep !== "whatsapp") return;
 
-    const digits = whatsapp.replace(/\D/g, "");
-    if (digits.length < 10) {
+    const delay = whatsappLookupDelayMs(whatsapp);
+    if (delay === null) {
       lastLookupDigitsRef.current = "";
       return;
     }
 
-    const delay = digits.length >= 11 ? 0 : 500;
     let cancelled = false;
 
     const timer = setTimeout(() => {
-      const current = whatsapp.replace(/\D/g, "");
-      if (cancelled) return;
-      if (current.length < 10 || current.length > 11) return;
+      const current = normalizeWhatsapp(whatsapp);
+      if (cancelled || !current) return;
       if (current === lastLookupDigitsRef.current) return;
 
       lastLookupDigitsRef.current = current;
@@ -380,7 +379,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    const digits = whatsapp.replace(/\D/g, "");
+    const digits = normalizeWhatsapp(whatsapp);
     if (!firstName.trim() || !lastName.trim() || !digits) {
       toast.error("Preencha nome e WhatsApp.");
       return;

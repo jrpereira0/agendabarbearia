@@ -1,3 +1,6 @@
+export const WHATSAPP_INVALID_MESSAGE =
+  "WhatsApp deve ter DDD + número (10 ou 11 dígitos).";
+
 /** Remove tudo que não é dígito. */
 export function digitsOnlyWhatsapp(input: string): string {
   return input.replace(/\D/g, "");
@@ -31,4 +34,28 @@ export function whatsappLookupKeys(canonical: string): string[] {
     keys.push(canonical.slice(2));
   }
   return [...new Set(keys)];
+}
+
+/** Valida e normaliza entrada (máscara, com ou sem 55). */
+export function parseWhatsapp(raw: string): string | null {
+  return normalizeWhatsapp(raw);
+}
+
+/** Número completo o bastante para buscar cadastro automaticamente. */
+export function isWhatsappLookupReady(input: string): boolean {
+  return normalizeWhatsapp(input) !== null;
+}
+
+/** Dois números são o mesmo WhatsApp (com ou sem 55 no banco). */
+export function whatsappMatches(a: string, b: string): boolean {
+  const left = normalizeWhatsapp(a);
+  const right = normalizeWhatsapp(b);
+  return left !== null && right !== null && left === right;
+}
+
+/** Debounce da busca automática: celular completo dispara na hora. */
+export function whatsappLookupDelayMs(input: string): number | null {
+  const normalized = normalizeWhatsapp(input);
+  if (!normalized) return null;
+  return normalized.length - 2 >= 11 ? 0 : 500;
 }

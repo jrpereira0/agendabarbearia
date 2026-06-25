@@ -5,24 +5,30 @@ import { z } from "zod";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
+import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+} from "@/lib/whatsapp";
 
 const customerSchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: z
-    .string()
-    .trim()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números (DDD + número)."),
+  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
 });
 
 export async function createCustomer(formData: FormData): Promise<ActionResult> {
   const auth = await requireOwner();
   if (auth) return auth;
 
+  const whatsapp = normalizeWhatsapp(String(formData.get("whatsapp") ?? ""));
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const parsed = customerSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    whatsapp: String(formData.get("whatsapp") ?? "").replace(/\D/g, ""),
+    whatsapp,
   });
 
   if (!parsed.success) {
@@ -59,10 +65,15 @@ export async function updateCustomer(
   const auth = await requireOwner();
   if (auth) return auth;
 
+  const whatsapp = normalizeWhatsapp(String(formData.get("whatsapp") ?? ""));
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const parsed = customerSchema.safeParse({
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
-    whatsapp: String(formData.get("whatsapp") ?? "").replace(/\D/g, ""),
+    whatsapp,
   });
 
   if (!parsed.success) {

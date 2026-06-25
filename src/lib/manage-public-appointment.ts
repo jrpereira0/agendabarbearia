@@ -9,13 +9,15 @@ import {
 import { formatTime } from "@/lib/format";
 import { getAvailability } from "@/lib/get-availability";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
-
-const whatsappSchema = z
-  .string()
-  .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números.");
+import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+  whatsappLookupKeys,
+  whatsappMatches,
+} from "@/lib/whatsapp";
 
 const updateSchema = z.object({
-  whatsapp: whatsappSchema,
+  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
   professionalId: z.uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -73,7 +75,7 @@ async function loadOwnedAppointment(
     .maybeSingle();
 
   if (!data) return null;
-  if (data.customer_whatsapp !== whatsapp) return null;
+  if (!whatsappMatches(data.customer_whatsapp, whatsapp)) return null;
   if (!(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(data.status)) {
     return null;
   }
@@ -83,11 +85,11 @@ async function loadOwnedAppointment(
 }
 
 export async function listPublicAppointmentsByWhatsapp(
-  whatsapp: string
+  rawWhatsapp: string
 ): Promise<Result<PublicAppointmentItem[]>> {
-  const parsed = whatsappSchema.safeParse(whatsapp);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0].message, status: 400 };
+  const whatsapp = normalizeWhatsapp(rawWhatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE, status: 400 };
   }
 
   const admin = createAdminClient();
@@ -114,7 +116,7 @@ export async function listPublicAppointmentsByWhatsapp(
       )
     `
     )
-    .eq("customer_whatsapp", parsed.data)
+    .in("customer_whatsapp", whatsappLookupKeys(whatsapp))
     .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
     .eq("is_squeeze_in", false)
     .gte("date", today)
@@ -179,14 +181,14 @@ export async function listPublicAppointmentsByWhatsapp(
 
 export async function cancelPublicAppointment(
   appointmentId: string,
-  whatsapp: string
+  rawWhatsapp: string
 ): Promise<Result<{ id: string }>> {
-  const parsed = whatsappSchema.safeParse(whatsapp);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0].message, status: 400 };
+  const whatsapp = normalizeWhatsapp(rawWhatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE, status: 400 };
   }
 
-  const existing = await loadOwnedAppointment(appointmentId, parsed.data);
+  const existing = await loadOwnedAppointment(appointmentId, whatsapp);
   if (!existing) {
     return {
       ok: false,
@@ -230,7 +232,12 @@ export async function updatePublicAppointment(
   appointmentId: string,
   input: UpdatePublicAppointmentInput
 ): Promise<Result<{ id: string }>> {
-  const parsed = updateSchema.safeParse(input);
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE, status: 400 };
+  }
+
+  const parsed = updateSchema.safeParse({ ...input, whatsapp });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message, status: 400 };
   }

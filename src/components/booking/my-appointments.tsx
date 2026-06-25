@@ -30,6 +30,7 @@ import {
   formatPriceBRL,
   formatWhatsapp,
 } from "@/lib/format";
+import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
 import type { PublicAppointmentItem } from "@/lib/manage-public-appointment";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
 import { cn } from "@/lib/utils";
@@ -102,11 +103,11 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     0
   );
 
-  const fetchAppointments = useCallback(async (digits: string) => {
+  const fetchAppointments = useCallback(async (canonical: string) => {
     setLoadingList(true);
     try {
       const res = await fetch(
-        `/api/v1/appointments?whatsapp=${encodeURIComponent(digits)}`
+        `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}`
       );
       const body = await res.json();
       if (!res.ok) {
@@ -114,7 +115,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         return false;
       }
       setAppointments(body.appointments ?? []);
-      setWhatsappDigits(digits);
+      setWhatsappDigits(canonical);
       setStep("list");
       return true;
     } catch {
@@ -128,19 +129,17 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   useEffect(() => {
     if (step !== "phone") return;
 
-    const digits = whatsapp.replace(/\D/g, "");
-    if (digits.length < 10) {
+    const delay = whatsappLookupDelayMs(whatsapp);
+    if (delay === null) {
       lastLookupDigitsRef.current = "";
       return;
     }
 
-    const delay = digits.length >= 11 ? 0 : 500;
     let cancelled = false;
 
     const timer = setTimeout(() => {
-      const current = whatsapp.replace(/\D/g, "");
-      if (cancelled) return;
-      if (current.length < 10 || current.length > 11) return;
+      const current = normalizeWhatsapp(whatsapp);
+      if (cancelled || !current) return;
       if (current === lastLookupDigitsRef.current) return;
 
       lastLookupDigitsRef.current = current;

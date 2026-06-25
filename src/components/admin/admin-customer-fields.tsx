@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatWhatsapp } from "@/lib/format";
+import {
+  normalizeWhatsapp,
+  whatsappLookupDelayMs,
+} from "@/lib/whatsapp";
 
 type CustomerLookupResponse =
   | { found: true; firstName: string; lastName: string }
@@ -45,11 +49,11 @@ export function AdminCustomerFields({
   function handleWhatsappChange(raw: string) {
     const formatted = formatWhatsapp(raw);
     onWhatsappChange(formatted);
-    const digits = formatted.replace(/\D/g, "");
-    if (digits !== lastLookupDigitsRef.current) {
+    const key = normalizeWhatsapp(formatted);
+    if (key !== lastLookupDigitsRef.current) {
       setCustomerFound(null);
     }
-    if (digits.length < 10) {
+    if (!key) {
       lastLookupDigitsRef.current = "";
     }
   }
@@ -69,18 +73,17 @@ export function AdminCustomerFields({
       return;
     }
 
-    const digits = whatsapp.replace(/\D/g, "");
-    if (digits.length < 10) {
+    const delay = whatsappLookupDelayMs(whatsapp);
+    if (delay === null) {
+      lastLookupDigitsRef.current = "";
       return;
     }
 
-    const delay = digits.length >= 11 ? 0 : 500;
     let cancelled = false;
 
     const timer = setTimeout(() => {
-      const current = whatsapp.replace(/\D/g, "");
-      if (cancelled) return;
-      if (current.length < 10 || current.length > 11) return;
+      const current = normalizeWhatsapp(whatsapp);
+      if (cancelled || !current) return;
       if (current === lastLookupDigitsRef.current) return;
 
       lastLookupDigitsRef.current = current;

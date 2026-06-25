@@ -1,4 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+  whatsappLookupKeys,
+} from "@/lib/whatsapp";
 
 export type UpsertCustomerInput = {
   firstName: string;
@@ -17,6 +22,11 @@ function normalizeName(value: string): string {
 export async function upsertCustomer(
   input: UpsertCustomerInput
 ): Promise<UpsertCustomerResult> {
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+  }
+
   const admin = createAdminClient();
   if (!admin) {
     return { ok: false, error: "Sistema indisponível no momento." };
@@ -25,7 +35,8 @@ export async function upsertCustomer(
   const { data: existing, error: lookupError } = await admin
     .from("customers")
     .select("id, first_name, last_name")
-    .eq("whatsapp", input.whatsapp)
+    .in("whatsapp", whatsappLookupKeys(whatsapp))
+    .limit(1)
     .maybeSingle();
 
   if (lookupError) {
@@ -57,7 +68,7 @@ export async function upsertCustomer(
     .insert({
       first_name: input.firstName,
       last_name: input.lastName,
-      whatsapp: input.whatsapp,
+      whatsapp,
     })
     .select("id")
     .single();
