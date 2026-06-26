@@ -11,38 +11,74 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
 - **Painel admin:** `https://agendabarbearia-seven.vercel.app/` (login do dono/barbeiro).
 - **API base (produção):** `https://agendabarbearia-seven.vercel.app/api/v1`
 - **Fuso horário:** `America/Sao_Paulo`
-- **Autenticação:** nenhuma chave obrigatória hoje. A API é pública com limite de requisições por IP.
-- **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` com HTTP 400, 409, 429, 503 etc.
+- **Autenticação:** nenhuma chave obrigatória hoje. A API é pública com limite de requisições por IP (e por WhatsApp em algumas rotas).
+- **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` (ou `{ "ok": false, "error": "..." }` em `/customers/by-whatsapp`).
 
-O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, horários livres, criar/cancelar/remarcar agendamentos — as mesmas regras do site `/agenda`.
+O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, horários livres, buscar cliente, criar/cancelar/remarcar agendamentos — as mesmas regras do site `/agenda`.
+
+---
+
+## Índice de rotas (todas as disponíveis)
+
+| # | Método | Rota | Função |
+| --- | --- | --- | --- |
+| 1 | `GET` | `/catalog` | Catálogo da barbearia (loja, barbeiros, serviços, horários) |
+| 2 | `GET` | `/availability` | Horários livres de um barbeiro num dia |
+| 3 | `GET` | `/customers/by-whatsapp` | Buscar cliente pelo WhatsApp (**recomendado para n8n**; retorna `id`) |
+| 4 | `GET` | `/customers/lookup` | Buscar cliente pelo WhatsApp (resposta simples; usado pelo site) |
+| 5 | `GET` | `/appointments?whatsapp=` | Listar agendamentos futuros do cliente |
+| 6 | `POST` | `/appointments` | Criar agendamento |
+| 7 | `PATCH` | `/appointments/:id` | Remarcar agendamento |
+| 8 | `DELETE` | `/appointments/:id?whatsapp=` | Cancelar agendamento |
+
+**Não existem outras rotas públicas em `/api/v1`.** Tudo que o painel admin faz (encaixe, status, exclusão definitiva, cadastro de profissionais etc.) é só pelo painel — não pela API.
 
 ---
 
 ## Regras de negócio importantes
 
-1. **WhatsApp** nos requests: apenas dígitos, **10 a 13 caracteres** (DDD + número). Exemplos válidos: `11981008852`, `5511981008852`. Sem `+`, espaços ou parênteses.
+1. **WhatsApp:** aceita **DDD + número** (10 ou 11 dígitos), com ou sem o prefixo `55`, com ou sem máscara (`(11) 98100-8852`) ou `+55`. O sistema normaliza e grava como `5511981008852`. Nos exemplos abaixo pode usar `11981008852` ou `5511981008852`.
 2. **Datas:** formato `AAAA-MM-DD` (ex.: `2026-06-15`). Não aceita datas no passado para agendar.
 3. **Horários:** formato `HH:MM` em 24h (ex.: `14:30`).
-4. **IDs:** barbeiros e serviços usam **UUID** (código longo). Nunca usar texto placeholder como `ID_DO_JUNIOR`.
+4. **IDs:** barbeiros e serviços usam **UUID**. Nunca usar texto placeholder como `ID_DO_JUNIOR`.
 5. **Agenda aberta:** até **60 dias** à frente.
 6. **Hoje:** só horários com pelo menos **10 minutos** de antecedência.
-7. **Intervalo dos slots:** configurável na barbearia (`slotStepMinutes` no catálogo; atualmente **30 min**).
-8. **Domingo:** barbearia **fechada** (`businessHours` com `active: false`).
-9. **Encaixe manual** e alteração de status pelo painel **não existem na API** — só agendamento normal de cliente.
-10. **Cancelar pela API** marca status `cancelled` (não apaga o registro). Exclusão definitiva é só no painel admin.
+7. **Intervalo dos slots:** configurável na barbearia (`slotStepMinutes` no catálogo; ex.: **30 min**).
+8. **Encaixe manual** e alteração de status pelo painel **não existem na API** — só agendamento normal de cliente.
+9. **Cancelar pela API** marca status `cancelled` (não apaga o registro). Exclusão definitiva é só no painel admin.
+10. **Cliente já cadastrado:** ao criar agendamento, se o WhatsApp existir com outro nome, a API recusa (mesma regra do site).
+
+---
+
+## Códigos HTTP
+
+| Código | Quando |
+| --- | --- |
+| **200** | Sucesso |
+| **400** | Parâmetro ou body inválido (data, UUID, WhatsApp, nome vazio…) |
+| **404** | Profissional/serviço/agendamento não encontrado |
+| **409** | Conflito (horário ocupado, data passada, agendamento não pode mais ser alterado) |
+| **429** | Muitas requisições (rate limit) — header `Retry-After` em segundos |
+| **503** | Sistema indisponível (Supabase não configurado ou erro interno) |
 
 ---
 
 ## Limites de uso (rate limit)
 
-Se exceder, a API responde **429** com mensagem de “muitas tentativas”.
+Se exceder, a API responde **429** com:
+
+```json
+{
+  "error": "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo."
+}
+```
 
 | Rotas | Limite |
 | --- | --- |
 | `GET /catalog`, `GET /availability` | 60 requisições / 15 min por IP |
-| `GET /customers/lookup`, `GET /appointments?whatsapp=` | 10 / 15 min por IP |
+| `GET /customers/by-whatsapp`, `GET /customers/lookup`, `GET /appointments?whatsapp=` | 10 / 15 min por IP |
 | `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp |
-| `PATCH` e `DELETE /appointments/:id` | 10 / 15 min por IP |
+| `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP |
 
 **Dica para n8n:** chamar `/catalog` no início da conversa ou em cache; não repetir a cada mensagem “oi”.
 
@@ -86,11 +122,16 @@ Cada profissional tem `serviceIds`: lista de serviços que ele realiza (no catá
 
 ---
 
-## Endpoints
+## Endpoints (detalhado)
 
 ### 1. Catálogo
 
-**`GET /catalog`**
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/catalog` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 60 / 15 min por IP |
 
 Retorna loja, profissionais ativos, serviços ativos e horários da barbearia.
 
@@ -100,7 +141,7 @@ Retorna loja, profissionais ativos, serviços ativos e horários da barbearia.
 GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 ```
 
-**Resposta (estrutura):**
+**Resposta 200:**
 
 ```json
 {
@@ -144,7 +185,12 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 
 ### 2. Horários livres
 
-**`GET /availability`**
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/availability` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 60 / 15 min por IP |
 
 **Query params:**
 
@@ -153,7 +199,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 | `professionalId` | Sim | UUID do barbeiro |
 | `date` | Sim | `AAAA-MM-DD` |
 | `serviceIds` | Sim | Um ou mais UUIDs separados por **vírgula** (sem espaço) |
-| `excludeAppointmentId` | Não | UUID ao remarcar (ignora o próprio agendamento) |
+| `excludeAppointmentId` | Não | UUID ao remarcar (ignora o próprio agendamento no cálculo) |
 
 **Exemplo — Junior + Corte e Barba em 15/06/2026:**
 
@@ -161,7 +207,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=054a545a-75c8-4807-b72d-5c460bb3539f&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
 ```
 
-**Resposta de sucesso:**
+**Resposta 200:**
 
 ```json
 {
@@ -174,13 +220,15 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=
 }
 ```
 
-**Erros comuns:**
+**Erros comuns (400/404):**
 
 | Mensagem | Causa |
 | --- | --- |
 | `professionalId inválido.` | UUID errado ou placeholder |
 | `Essa data já passou.` | Data no passado |
 | `Escolha pelo menos um serviço.` | `serviceIds` vazio |
+| `Profissional não encontrado.` | UUID inexistente ou inativo |
+| `Serviço não encontrado.` | UUID de serviço inválido |
 
 **Uso no bot:** mostrar `slots` numerados; `totalPriceCents / 100` = valor em reais.
 
@@ -188,19 +236,30 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=
 
 ### 3. Buscar cliente pelo WhatsApp (recomendado para n8n)
 
-**`GET /customers/by-whatsapp?whatsapp=`**
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/customers/by-whatsapp` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 10 / 15 min por IP |
 
-Normaliza o número (remove máscara, aceita `+55`, padroniza com código do Brasil) e retorna o cadastro com `id`.
+**Query params:**
 
-**Exemplo:**
+| Parâmetro | Obrigatório | Descrição |
+| --- | --- | --- |
+| `whatsapp` | Sim | Número do cliente (aceita máscara, `+55`, com ou sem `55`) |
+
+Normaliza o número e retorna o cadastro com `id`.
+
+**Exemplos válidos:**
 
 ```
-GET https://agendabarbearia-seven.vercel.app/api/v1/customers/by-whatsapp?whatsapp=5511981008852
+GET .../customers/by-whatsapp?whatsapp=11981008852
+GET .../customers/by-whatsapp?whatsapp=5511981008852
+GET .../customers/by-whatsapp?whatsapp=%2B55%20(11)%2098100-8852
 ```
 
-Também aceita máscara: `?whatsapp=%2B55%20(11)%2098100-8852`
-
-**Cliente encontrado:**
+**Cliente encontrado (200):**
 
 ```json
 {
@@ -215,7 +274,7 @@ Também aceita máscara: `?whatsapp=%2B55%20(11)%2098100-8852`
 }
 ```
 
-**Cliente não encontrado:**
+**Cliente não encontrado (200):**
 
 ```json
 {
@@ -225,7 +284,7 @@ Também aceita máscara: `?whatsapp=%2B55%20(11)%2098100-8852`
 }
 ```
 
-**WhatsApp inválido (HTTP 400):**
+**WhatsApp inválido (400):**
 
 ```json
 {
@@ -245,19 +304,26 @@ API_BASE_URL=https://agendabarbearia-seven.vercel.app npm run test:api:customer-
 
 ---
 
-### 3b. Buscar cliente (legado — site `/agenda`)
+### 4. Buscar cliente (lookup — site `/agenda`)
 
-**`GET /customers/lookup?whatsapp=`**
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/customers/lookup` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 10 / 15 min por IP |
 
-Mesma busca, resposta mais simples (sem `id`, sem `ok`). Mantido para o site público.
+Mesma busca do endpoint anterior, mas resposta mais simples (sem `id`, sem campo `ok`). Usado pelo site público e pelo painel admin ao digitar WhatsApp.
+
+**Query params:** `whatsapp` (obrigatório; mesma normalização do item 3).
 
 **Exemplo:**
 
 ```
-GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=5511981008852
+GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=11981008852
 ```
 
-**Resposta se encontrou:**
+**Encontrou (200):**
 
 ```json
 {
@@ -267,7 +333,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=55
 }
 ```
 
-**Resposta se não encontrou:**
+**Não encontrou (200):**
 
 ```json
 {
@@ -275,19 +341,40 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=55
 }
 ```
 
+**WhatsApp inválido (400):**
+
+```json
+{
+  "error": "WhatsApp deve ter DDD + número (10 ou 11 dígitos)."
+}
+```
+
+**Para n8n:** prefira o endpoint **3** (`/by-whatsapp`), que retorna o `id` do cliente.
+
 ---
 
-### 4. Listar agendamentos futuros do cliente
+### 5. Listar agendamentos futuros do cliente
 
-**`GET /appointments?whatsapp=`**
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/appointments` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 10 / 15 min por IP |
+
+**Query params:**
+
+| Parâmetro | Obrigatório | Descrição |
+| --- | --- | --- |
+| `whatsapp` | Sim | WhatsApp do cliente (normalizado automaticamente) |
 
 **Exemplo:**
 
 ```
-GET https://agendabarbearia-seven.vercel.app/api/v1/appointments?whatsapp=5511981008852
+GET https://agendabarbearia-seven.vercel.app/api/v1/appointments?whatsapp=11981008852
 ```
 
-**Resposta:**
+**Resposta 200:**
 
 ```json
 {
@@ -308,17 +395,33 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/appointments?whatsapp=551198
 }
 ```
 
-Lista só agendamentos **futuros**, status ativo, **sem encaixe**.
+Lista só agendamentos **futuros**, status ativo (`scheduled`, `confirmed`, `on_site`), **sem encaixe**. Array vazio se não houver nenhum.
 
 ---
 
-### 5. Criar agendamento
+### 6. Criar agendamento
 
-**`POST /appointments`**
+| | |
+| --- | --- |
+| **Método** | `POST` |
+| **Rota** | `/appointments` |
+| **Auth** | Nenhuma |
+| **Rate limit** | 5 / hora por IP e 3 / hora por WhatsApp |
+| **Headers** | `Content-Type: application/json` |
 
-**Headers:** `Content-Type: application/json`
+**Body (JSON):**
 
-**Body:**
+| Campo | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `professionalId` | UUID | Sim | Barbeiro |
+| `date` | string | Sim | `AAAA-MM-DD` |
+| `startTime` | string | Sim | `HH:MM` |
+| `serviceIds` | UUID[] | Sim | Pelo menos um serviço |
+| `firstName` | string | Sim | Nome do cliente |
+| `lastName` | string | Sim | Sobrenome |
+| `whatsapp` | string | Sim | WhatsApp (normalizado automaticamente) |
+
+**Exemplo:**
 
 ```json
 {
@@ -328,11 +431,11 @@ Lista só agendamentos **futuros**, status ativo, **sem encaixe**.
   "serviceIds": ["da8126ca-730d-49e9-a429-2dd0d6965409"],
   "firstName": "Maria",
   "lastName": "Santos",
-  "whatsapp": "5511981008852"
+  "whatsapp": "11981008852"
 }
 ```
 
-**Resposta de sucesso:**
+**Sucesso (200):**
 
 ```json
 {
@@ -346,22 +449,42 @@ Lista só agendamentos **futuros**, status ativo, **sem encaixe**.
 | HTTP | Mensagem típica |
 | --- | --- |
 | 409 | `Esse horário não está mais disponível. Escolha outro.` |
-| 400 | Validação (nome vazio, WhatsApp inválido, etc.) |
+| 409 | `Esse horário acabou de ser ocupado. Escolha outro.` |
+| 400 | Validação (nome vazio, WhatsApp inválido, UUID inválido…) |
 | 429 | Muitas tentativas |
+| 500 | `Este WhatsApp já pertence a [nome]. Verifique o número…` (nome diferente do cadastro) |
 
-O servidor **valida de novo** se o horário está livre antes de gravar. Status inicial: `scheduled`.
+O servidor **valida de novo** se o horário está livre antes de gravar. Status inicial: `scheduled`. Se o cliente já existir com o mesmo nome, reutiliza o cadastro; se existir com outro nome, recusa.
 
 ---
 
-### 6. Remarcar agendamento
+### 7. Remarcar agendamento
 
-**`PATCH /appointments/:id`**
+| | |
+| --- | --- |
+| **Método** | `PATCH` |
+| **Rota** | `/appointments/:id` |
+| **Auth** | Nenhuma (validação pelo WhatsApp no body) |
+| **Rate limit** | 10 / 15 min por IP |
+| **Headers** | `Content-Type: application/json` |
 
-**Body:**
+**Path:** `id` = UUID do agendamento.
+
+**Body (JSON):**
+
+| Campo | Tipo | Obrigatório | Descrição |
+| --- | --- | --- | --- |
+| `whatsapp` | string | Sim | WhatsApp do dono do agendamento |
+| `professionalId` | UUID | Sim | Barbeiro (pode ser o mesmo ou outro) |
+| `date` | string | Sim | Nova data `AAAA-MM-DD` |
+| `startTime` | string | Sim | Novo horário `HH:MM` |
+| `serviceIds` | UUID[] | Sim | Serviços (pode alterar a combinação) |
+
+**Exemplo:**
 
 ```json
 {
-  "whatsapp": "5511981008852",
+  "whatsapp": "11981008852",
   "professionalId": "054a545a-75c8-4807-b72d-5c460bb3539f",
   "date": "2026-06-16",
   "startTime": "10:00",
@@ -369,9 +492,7 @@ O servidor **valida de novo** se o horário está livre antes de gravar. Status 
 }
 ```
 
-O `whatsapp` deve ser **do dono** do agendamento. Só funciona para agendamentos futuros ativos (não encaixe).
-
-**Resposta:**
+**Sucesso (200):**
 
 ```json
 {
@@ -380,21 +501,38 @@ O `whatsapp` deve ser **do dono** do agendamento. Só funciona para agendamentos
 }
 ```
 
-Para remarcar, pode usar `GET /availability` com `excludeAppointmentId` igual ao `id` do agendamento.
+Só funciona para agendamentos **futuros**, status ativo, **sem encaixe**. O `whatsapp` deve ser do dono do agendamento.
+
+**Dica:** use `GET /availability` com `excludeAppointmentId` igual ao `id` do agendamento para listar horários na remarcação.
+
+**Erros comuns:** 404 (`Agendamento não encontrado ou não pode ser alterado.`), 409 (horário indisponível ou data passada).
 
 ---
 
-### 7. Cancelar agendamento
+### 8. Cancelar agendamento
 
-**`DELETE /appointments/:id?whatsapp=`**
+| | |
+| --- | --- |
+| **Método** | `DELETE` |
+| **Rota** | `/appointments/:id` |
+| **Auth** | Nenhuma (validação pelo WhatsApp na query) |
+| **Rate limit** | 10 / 15 min por IP |
+
+**Path:** `id` = UUID do agendamento.
+
+**Query params:**
+
+| Parâmetro | Obrigatório | Descrição |
+| --- | --- | --- |
+| `whatsapp` | Sim | WhatsApp do dono do agendamento |
 
 **Exemplo:**
 
 ```
-DELETE https://agendabarbearia-seven.vercel.app/api/v1/appointments/UUID-DO-AGENDAMENTO?whatsapp=5511981008852
+DELETE https://agendabarbearia-seven.vercel.app/api/v1/appointments/UUID-DO-AGENDAMENTO?whatsapp=11981008852
 ```
 
-**Resposta:**
+**Sucesso (200):**
 
 ```json
 {
@@ -403,7 +541,9 @@ DELETE https://agendabarbearia-seven.vercel.app/api/v1/appointments/UUID-DO-AGEN
 }
 ```
 
-Cancela (status `cancelled`); libera o horário na agenda.
+Cancela (status `cancelled`); libera o horário na agenda. Não apaga o registro do banco.
+
+**Erros comuns:** 404 (agendamento não encontrado ou WhatsApp não confere), 409 (`Esse horário já passou e não pode mais ser cancelado.`).
 
 ---
 
@@ -438,6 +578,11 @@ FLUXO MEUS HORÁRIOS:
 FLUXO CANCELAR:
 - GET /appointments?whatsapp= → cliente escolhe qual
 - DELETE /appointments/:id?whatsapp=
+
+FLUXO REMARCAR (opcional):
+- GET /appointments?whatsapp= → cliente escolhe qual
+- GET /availability?excludeAppointmentId=... → novos horários
+- PATCH /appointments/:id
 ```
 
 ---
@@ -448,8 +593,9 @@ FLUXO CANCELAR:
 | --- | --- | --- |
 | Catálogo | GET | `{{baseUrl}}/catalog` |
 | Disponibilidade | GET | `{{baseUrl}}/availability?professionalId=...&date=...&serviceIds=...` |
+| Disponibilidade (remarcar) | GET | `{{baseUrl}}/availability?...&excludeAppointmentId=...` |
 | Lookup cliente | GET | `{{baseUrl}}/customers/by-whatsapp?whatsapp=...` |
-| Listar | GET | `{{baseUrl}}/appointments?whatsapp=...` |
+| Listar agendamentos | GET | `{{baseUrl}}/appointments?whatsapp=...` |
 | Criar | POST | `{{baseUrl}}/appointments` + JSON body |
 | Remarcar | PATCH | `{{baseUrl}}/appointments/{{id}}` + JSON body |
 | Cancelar | DELETE | `{{baseUrl}}/appointments/{{id}}?whatsapp=...` |

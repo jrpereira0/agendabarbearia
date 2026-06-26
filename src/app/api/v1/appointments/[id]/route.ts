@@ -7,17 +7,13 @@ import {
   updatePublicAppointment,
 } from "@/lib/manage-public-appointment";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
-
-const whatsappQuerySchema = z.object({
-  whatsapp: z
-    .string()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números."),
-});
+import {
+  normalizeWhatsapp,
+  WHATSAPP_INVALID_MESSAGE,
+} from "@/lib/whatsapp";
 
 const updateBodySchema = z.object({
-  whatsapp: z
-    .string()
-    .regex(/^\d{10,13}$/, "WhatsApp deve ter de 10 a 13 números."),
+  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
   professionalId: z.uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
@@ -44,7 +40,26 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const parsed = updateBodySchema.safeParse(json);
+    if (typeof json !== "object" || json === null) {
+      return NextResponse.json(
+        { error: "Corpo da requisição inválido." },
+        { status: 400 }
+      );
+    }
+
+    const raw = json as Record<string, unknown>;
+    const whatsapp =
+      typeof raw.whatsapp === "string"
+        ? normalizeWhatsapp(raw.whatsapp)
+        : null;
+    if (!whatsapp) {
+      return NextResponse.json(
+        { error: WHATSAPP_INVALID_MESSAGE },
+        { status: 400 }
+      );
+    }
+
+    const parsed = updateBodySchema.safeParse({ ...raw, whatsapp });
     if (!parsed.success) {
       return NextResponse.json(
         { error: parsed.error.issues[0].message },
@@ -71,17 +86,16 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     if (limited) return limited;
 
     const { id } = await context.params;
-    const whatsapp = request.nextUrl.searchParams.get("whatsapp") ?? "";
-
-    const parsed = whatsappQuerySchema.safeParse({ whatsapp });
-    if (!parsed.success) {
+    const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
+    const whatsapp = normalizeWhatsapp(raw);
+    if (!whatsapp) {
       return NextResponse.json(
-        { error: parsed.error.issues[0].message },
+        { error: WHATSAPP_INVALID_MESSAGE },
         { status: 400 }
       );
     }
 
-    const result = await cancelPublicAppointment(id, parsed.data.whatsapp);
+    const result = await cancelPublicAppointment(id, whatsapp);
 
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status });
