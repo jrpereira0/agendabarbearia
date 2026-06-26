@@ -1,6 +1,6 @@
 # Agenda Barbearia
 
-Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes e horários por um painel administrativo. Toda a funcionalidade também é exposta por uma API REST em `/api/v1` (rotas públicas para agendar e rotas privadas com chave de API para consultas sensíveis) para automações como agendamento via WhatsApp com IA. Guia completo: [docs/API-N8N.md](docs/API-N8N.md).
+Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes, **comandas** (fechamento com pagamento misto e comissão por barbeiro) e **caixa do dia** por um painel administrativo. Toda a funcionalidade também é exposta por uma API REST em `/api/v1` (rotas públicas para agendar e rotas privadas com chave de API para consultas sensíveis e financeiro) para automações como agendamento via WhatsApp com IA. Guias: [docs/API-N8N.md](docs/API-N8N.md) (agenda) e [docs/API-FINANCE.md](docs/API-FINANCE.md) (comandas e caixa).
 
 ## Tecnologias
 
@@ -61,3 +61,4 @@ npm run create-admin  # cria usuário do painel: -- email senha "Nome"
 
 - [docs/ARQUITETURA.md](docs/ARQUITETURA.md) — como o sistema é organizado, tabelas do banco e permissões
 - [docs/API-N8N.md](docs/API-N8N.md) — API para automação no WhatsApp (n8n): endpoints, chaves de API, exemplos e fluxo de conversa
+- [docs/API-FINANCE.md](docs/API-FINANCE.md) — comandas, caixa do dia, comissões e rotas financeiras da API

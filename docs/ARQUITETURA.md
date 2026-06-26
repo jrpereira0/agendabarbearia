@@ -18,7 +18,8 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
-| `src/app/admin/(panel)/configuracoes` | Perfil, endereço, horários e dias especiais |
+| `src/app/admin/(panel)/financeiro` | Caixa do dia e comissões (somente dono) |
+| `src/app/admin/(panel)/comandas` | Server actions da comanda na agenda |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
 | `src/components/booking` | Página pública de agendamento do cliente |
@@ -33,7 +34,7 @@ Atualizado por fase, conforme o sistema evolui.
 | Tabela | Função |
 | --- | --- |
 | `profiles` | Usuários do painel (papel: `owner` ou `barber`) |
-| `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto |
+| `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, **% comissão** |
 | `services` | Serviços: nome, foto, preço (centavos), duração (minutos) |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
@@ -41,6 +42,9 @@ Atualizado por fase, conforme o sistema evolui.
 | `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp) |
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
+| `comandas` | Comanda financeira por agendamento (`open` ou `closed`) |
+| `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot) |
+| `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 
 Regras importantes no banco:
 
@@ -90,7 +94,10 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - A grade do dia cobre **24 horas** (00:00 às 24:00); fora do expediente aparece em cinza
 - **Bloqueio de horário** (`schedule_blocks`): na sidebar, bloqueia uma faixa do dia para um barbeiro; agendamento normal e API pública não oferecem esse horário; **encaixe manual** ainda pode usar
 - **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`)
-- Ações: **editar** (cliente, serviços e horário), marcar **atendido**, **reabrir atendimento** (volta pra confirmado se marcou errado), ou **cancelar** (clique no bloco da grade)
+- Ações no horário: **comanda** (serviços, preços, pagamento misto, fechar/reabrir), **editar** horário e cliente, ou **cancelar** (bloqueado se comanda fechada)
+- Fechar comanda marca o atendimento como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
+- Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)
+- Tela **Financeiro** (`/admin/financeiro`): caixa do dia, formas de pagamento e comissões do mês
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres
@@ -116,7 +123,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## API REST (`/api/v1`)
 
-Rotas disponíveis (8 operações):
+Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das comandas: [API-FINANCE.md](./API-FINANCE.md).
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
@@ -128,6 +135,12 @@ Rotas disponíveis (8 operações):
 | POST | `/api/v1/appointments` | Pública | Criar agendamento online |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
+| GET | `/api/v1/comandas` | **Privada** | Listar comandas ou abrir por agendamento |
+| GET/PATCH | `/api/v1/comandas/:id` | **Privada** | Ver ou editar itens da comanda |
+| POST | `/api/v1/comandas/:id/close` | **Privada** | Fechar comanda |
+| POST | `/api/v1/comandas/:id/reopen` | **Privada** | Reabrir comanda |
+| GET | `/api/v1/finance/cash-register` | **Privada** | Caixa do dia |
+| GET | `/api/v1/finance/commissions` | **Privada** | Comissões no período |
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 

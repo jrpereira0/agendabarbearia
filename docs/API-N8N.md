@@ -30,8 +30,16 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | 6 | `POST` | `/appointments` | Pública | Criar agendamento (site e bot sem chave) |
 | 7 | `PATCH` | `/appointments/:id` | **Privada** | Remarcar agendamento |
 | 8 | `DELETE` | `/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
+| 9 | `GET` | `/comandas` | **Privada** | Listar comandas ou abrir por `appointmentId` |
+| 10 | `GET/PATCH` | `/comandas/:id` | **Privada** | Ver ou editar itens da comanda |
+| 11 | `POST` | `/comandas/:id/close` | **Privada** | Fechar comanda e registrar pagamento |
+| 12 | `POST` | `/comandas/:id/reopen` | **Privada** | Reabrir comanda fechada |
+| 13 | `GET` | `/finance/cash-register` | **Privada** | Caixa do dia |
+| 14 | `GET` | `/finance/commissions` | **Privada** | Comissões por barbeiro no período |
 
-**Resumo:** 4 rotas públicas (1, 2, 4, 6) e 4 privadas (3, 5, 7, 8). Não há outras rotas em `/api/v1`. Tudo que o painel admin faz (encaixe, status, exclusão definitiva, cadastro de profissionais etc.) é só pelo painel — não pela API.
+**Resumo:** 4 rotas públicas (1, 2, 4, 6) e 10 privadas de agenda/cliente (3, 5, 7, 8) + **6 rotas financeiras** (9–14, todas privadas). Encaixe, status manual e cadastros continuam só pelo painel — exceto comandas/caixa via API com chave.
+
+**Financeiro:** guia detalhado com exemplos de corpo JSON em [API-FINANCE.md](./API-FINANCE.md).
 
 **Regra do header `Authorization`:** em rotas **públicas**, se você **não** enviar o header, a requisição passa. Se **enviar** `Bearer ...`, a chave será validada — chave inválida retorna **401** (não ignora o header).
 
@@ -80,6 +88,9 @@ Authorization: Bearer <sua-chave-do-painel>
 | `appointments:create` | `POST /appointments` |
 | `appointments:update` | `PATCH /appointments/:id` |
 | `appointments:cancel` | `DELETE /appointments/:id` |
+| `comandas:read` | `GET /comandas`, `GET /comandas/:id` |
+| `comandas:write` | `PATCH /comandas/:id`, `POST /comandas/:id/close`, `POST /comandas/:id/reopen` |
+| `finance:read` | `GET /finance/cash-register`, `GET /finance/commissions` |
 
 Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personalizada**.
 

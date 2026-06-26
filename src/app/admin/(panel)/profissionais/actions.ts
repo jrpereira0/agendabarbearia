@@ -17,6 +17,7 @@ const professionalSchema = z.object({
   email: z.email("E-mail inválido."),
   instagram: z.string().trim().optional().or(z.literal("")),
   serviceIds: z.array(z.uuid()).default([]),
+  commissionPercent: z.coerce.number().int().min(0).max(100),
 });
 
 const passwordSchema = z
@@ -99,6 +100,7 @@ function parseForm(formData: FormData) {
     email: formData.get("email"),
     instagram: String(formData.get("instagram") ?? "").replace(/^@/, ""),
     serviceIds: formData.getAll("serviceIds").map(String),
+    commissionPercent: formData.get("commissionPercent"),
   });
 }
 
@@ -191,6 +193,7 @@ export async function createProfessional(
       whatsapp: data.whatsapp,
       email: data.email,
       instagram: data.instagram || null,
+      commission_percent: data.commissionPercent,
       profile_id: created.user.id,
     })
     .select("id")
@@ -281,6 +284,7 @@ export async function updateProfessional(
     whatsapp: data.whatsapp,
     email: data.email,
     instagram: data.instagram || null,
+    commission_percent: data.commissionPercent,
   };
 
   const photo = formData.get("photo");

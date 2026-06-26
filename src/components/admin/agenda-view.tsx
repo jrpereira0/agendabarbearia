@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { AgendaGrid } from "@/components/admin/agenda-grid";
 import { AgendaSidebar } from "@/components/admin/agenda-sidebar";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
-import { AppointmentDetailDialog } from "@/components/admin/appointment-detail-dialog";
+import { ComandaDialog } from "@/components/admin/comanda-dialog";
 import { EditAppointmentDialog } from "@/components/admin/edit-appointment-dialog";
 import {
   NewAppointmentDialog,
@@ -296,19 +296,34 @@ export function AgendaView({
         }))}
       />
 
-      <AppointmentDetailDialog
+      <ComandaDialog
         appointment={selectedAppointment}
         open={detailOpen}
         onOpenChange={setDetailOpen}
         showProfessional={isOwner}
         professionalPhotoUrl={
           selectedAppointment
-            ? professionals.find(
+            ? dayContext.professionals.find(
                 (p) => p.id === selectedAppointment.professionalId
               )?.photoUrl ?? null
             : null
         }
-        onEdit={() => handleEditAppointment(selectedAppointment!)}
+        servicesCatalog={services}
+        commissionPercent={
+          selectedAppointment
+            ? (dayContext.professionals.find(
+                (p) => p.id === selectedAppointment.professionalId
+              )?.commissionPercent ?? 50)
+            : 50
+        }
+        onEditSchedule={
+          isOwner && selectedAppointment
+            ? () => {
+                setDetailOpen(false);
+                handleEditAppointment(selectedAppointment);
+              }
+            : undefined
+        }
       />
 
       <EditAppointmentDialog

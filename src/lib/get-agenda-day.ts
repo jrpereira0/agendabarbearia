@@ -14,6 +14,7 @@ export type AgendaProfessionalColumn = {
   id: string;
   nickname: string;
   photoUrl: string | null;
+  commissionPercent: number;
   serviceIds: string[];
   availableRanges: MinuteRange[];
   blockRanges: MinuteRange[];
@@ -120,7 +121,9 @@ export async function getAgendaDayContext(
       .eq("weekday", weekday),
     admin
       .from("professionals")
-      .select("id, nickname, photo_url, professional_services(service_id)")
+      .select(
+        "id, nickname, photo_url, commission_percent, professional_services(service_id)"
+      )
       .in("id", professionalIds)
       .order("nickname"),
     admin
@@ -213,6 +216,7 @@ export async function getAgendaDayContext(
       id: pro.id,
       nickname: pro.nickname,
       photoUrl: pro.photo_url,
+      commissionPercent: pro.commission_percent ?? 50,
       serviceIds: (pro.professional_services ?? []).map((ps) => ps.service_id),
       availableRanges,
       blockRanges: blocksByProfessional.get(pro.id) ?? [],

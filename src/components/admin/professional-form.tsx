@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   KeyRound,
+  Percent,
   Phone,
   Scissors,
   User,
@@ -43,6 +44,7 @@ export type ProfessionalFormValues = {
   email: string;
   instagram: string;
   photoUrl: string | null;
+  commissionPercent: number;
   serviceIds: string[];
   schedule: DayRanges[];
 };
@@ -208,6 +210,33 @@ export function ProfessionalForm({
               />
               <span className="text-xs text-muted-foreground">
                 É assim que o cliente vai ver esse profissional na agenda.
+              </span>
+            </div>
+          </section>
+
+          <Separator />
+
+          <section className="flex flex-col gap-5">
+            <FormSectionTitle
+              icon={Percent}
+              title="Comissão"
+              description="Percentual sobre o valor cobrado de cada serviço na comanda."
+            />
+            <div className="flex flex-col gap-2 sm:max-w-xs">
+              <Label htmlFor="commissionPercent">% de comissão</Label>
+              <Input
+                id="commissionPercent"
+                name="commissionPercent"
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                inputMode="numeric"
+                defaultValue={initialValues?.commissionPercent ?? 50}
+                required
+              />
+              <span className="text-xs text-muted-foreground">
+                Usado ao fechar a comanda. Ex.: 50% de R$ 40 = R$ 20 para o barbeiro.
               </span>
             </div>
           </section>

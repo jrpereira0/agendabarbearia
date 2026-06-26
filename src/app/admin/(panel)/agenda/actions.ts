@@ -337,103 +337,6 @@ export async function createSqueezeInAppointment(input: {
   return insertAppointment(parsed.data, validated.durationMinutes, true);
 }
 
-export async function markAppointmentDone(
-  appointmentId: string
-): Promise<ActionResult> {
-  const session = await requireAdmin();
-  if (!("userId" in session)) return session;
-
-  const check = await assertCanManageAppointment(appointmentId, session);
-  if (!("professionalId" in check)) return check;
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) return admin;
-  const { error } = await admin
-    .from("appointments")
-    .update({ status: "done" })
-    .eq("id", appointmentId);
-
-  if (error) {
-    return { ok: false, error: "Não foi possível marcar como atendido." };
-  }
-
-  revalidatePath("/admin");
-  return { ok: true };
-}
-
-export async function reopenAppointment(
-  appointmentId: string
-): Promise<ActionResult> {
-  const session = await requireAdmin();
-  if (!("userId" in session)) return session;
-
-  const check = await assertCanManageAppointment(appointmentId, session, [
-    "done",
-  ]);
-  if (!("professionalId" in check)) return check;
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) return admin;
-  const { data: existing } = await admin
-    .from("appointments")
-    .select(
-      `
-      date,
-      start_time,
-      is_squeeze_in,
-      appointment_services ( service_id )
-    `
-    )
-    .eq("id", appointmentId)
-    .maybeSingle();
-
-  if (!existing) {
-    return { ok: false, error: "Agendamento não encontrado." };
-  }
-
-  const serviceIds = (existing.appointment_services ?? []).map(
-    (row) => row.service_id
-  );
-
-  if (!existing.is_squeeze_in && serviceIds.length > 0) {
-    const availability = await getAvailability(
-      check.professionalId,
-      existing.date,
-      serviceIds,
-      undefined,
-      { adminEdit: true }
-    );
-
-    if (!availability.ok) {
-      return { ok: false, error: availability.error };
-    }
-
-    const slotCheck = await validateAdminAppointmentSlot(
-      check.professionalId,
-      existing.date,
-      formatTime(existing.start_time),
-      availability.durationMinutes,
-      appointmentId
-    );
-
-    if (!slotCheck.ok) {
-      return { ok: false, error: slotCheck.error };
-    }
-  }
-
-  const { error } = await admin
-    .from("appointments")
-    .update({ status: "scheduled" })
-    .eq("id", appointmentId);
-
-  if (error) {
-    return { ok: false, error: "Não foi possível reabrir o atendimento." };
-  }
-
-  revalidatePath("/admin");
-  return { ok: true };
-}
-
 const updateSchema = z.object({
   appointmentId: z.uuid(),
   professionalId: z.uuid(),
@@ -694,6 +597,21 @@ export async function cancelAppointment(
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
+
+  const { data: comanda } = await admin
+    .from("comandas")
+    .select("status")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  if (comanda?.status === "closed") {
+    return {
+      ok: false,
+      error:
+        "Esta comanda está fechada. Reabra a comanda antes de cancelar o horário.",
+    };
+  }
+
   const { error } = await admin
     .from("appointments")
     .update({ status: "cancelled" })

@@ -10,6 +10,7 @@ import {
   Scissors,
   Settings,
   Users,
+  Wallet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,6 +40,7 @@ import { BOOKING_PATH } from "@/lib/booking-path";
 
 const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
+  { title: "Financeiro", url: "/admin/financeiro", icon: Wallet, ownerOnly: true },
 ];
 
 const managementItems = [
@@ -65,8 +67,12 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
     .join("")
     .toUpperCase();
 
-  function renderItems(items: typeof dayToDayItems) {
-    return items.map((item) => (
+  function renderItems(
+    items: { title: string; url: string; icon: typeof CalendarDays; ownerOnly?: boolean }[]
+  ) {
+    return items
+      .filter((item) => !item.ownerOnly || isOwner)
+      .map((item) => (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton
           asChild
