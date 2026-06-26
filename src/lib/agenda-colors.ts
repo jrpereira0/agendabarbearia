@@ -65,6 +65,12 @@ export function agendaAppointmentClass(appointment: {
     return statusCardClass.cancelled;
   }
   if (appointment.status === "done") {
+    if (appointment.isComandaExtra) {
+      return "border-2 border-dashed border-neutral-900 bg-[#15803d] text-white";
+    }
+    if (appointment.isSqueezeIn) {
+      return "border-2 border-dashed border-[#c41e3a] bg-[#15803d] text-white";
+    }
     return statusCardClass.done;
   }
   if (appointment.isComandaExtra) {

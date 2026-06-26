@@ -59,16 +59,14 @@ function AppointmentTooltipContent({
           {STATUS_LABELS[apt.status]}
         </span>
         {apt.isComandaExtra &&
-          apt.status !== "cancelled" &&
-          apt.status !== "done" && (
+          apt.status !== "cancelled" && (
           <span className="rounded-sm border border-dashed border-background/50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
             Serviço extra
           </span>
         )}
         {apt.isSqueezeIn &&
           !apt.isComandaExtra &&
-          apt.status !== "cancelled" &&
-          apt.status !== "done" && (
+          apt.status !== "cancelled" && (
           <span className="rounded-sm border border-dashed border-background/50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
             Encaixe
           </span>

@@ -139,6 +139,7 @@ function mapComandaRow(
 
   const items: ComandaItem[] = [...(row.comanda_items ?? [])]
     .filter((item) => {
+      if (row.status === "closed") return true;
       if (item.squeeze_appointment_id) {
         return validSqueezeAppointmentIds.has(item.squeeze_appointment_id);
       }
@@ -208,8 +209,13 @@ function mapComandaRow(
 async function loadCustomerDayEncaixes(
   admin: SupabaseClient,
   customerWhatsapp: string,
-  serviceDate: string
+  serviceDate: string,
+  options: { includeDone?: boolean } = {}
 ): Promise<ComandaLinkedAppointment[]> {
+  const statuses = options.includeDone
+    ? [...ACTIVE_APPOINTMENT_STATUSES, "done"]
+    : [...ACTIVE_APPOINTMENT_STATUSES];
+
   const { data } = await admin
     .from("appointments")
     .select(
@@ -228,7 +234,7 @@ async function loadCustomerDayEncaixes(
     .eq("customer_whatsapp", customerWhatsapp)
     .eq("date", serviceDate)
     .eq("is_squeeze_in", true)
-    .in("status", [...ACTIVE_APPOINTMENT_STATUSES]);
+    .in("status", statuses);
 
   return (data ?? [])
     .map((apt) => {
@@ -245,6 +251,103 @@ async function loadCustomerDayEncaixes(
       };
     })
     .sort((a, b) => a.startTime.localeCompare(b.startTime, "pt-BR"));
+}
+
+async function findComandaIdForAppointment(
+  admin: SupabaseClient,
+  appointmentId: string,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<string | null> {
+  const { data: bySqueezeItem } = await admin
+    .from("comanda_items")
+    .select("comanda_id")
+    .eq("squeeze_appointment_id", appointmentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (bySqueezeItem?.comanda_id) return bySqueezeItem.comanda_id;
+
+  const { data: byAptItem } = await admin
+    .from("comanda_items")
+    .select("comanda_id")
+    .eq("appointment_id", appointmentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (byAptItem?.comanda_id) return byAptItem.comanda_id;
+
+  const { data: byLink } = await admin
+    .from("comanda_appointments")
+    .select("comanda_id")
+    .eq("appointment_id", appointmentId)
+    .limit(1)
+    .maybeSingle();
+
+  if (byLink?.comanda_id) return byLink.comanda_id;
+
+  const { data: byCustomerDay } = await admin
+    .from("comandas")
+    .select("id")
+    .eq("customer_whatsapp", customerWhatsapp)
+    .eq("service_date", serviceDate)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return byCustomerDay?.id ?? null;
+}
+
+export async function getComandaForAppointment(
+  admin: SupabaseClient,
+  appointmentId: string
+): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
+  const { data: trigger } = await admin
+    .from("appointments")
+    .select(
+      "id, professional_id, status, customer_whatsapp, date, customer_first_name, customer_last_name"
+    )
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!trigger) {
+    return { ok: false, error: "Agendamento não encontrado.", status: 404 };
+  }
+
+  if (trigger.status === "cancelled") {
+    return {
+      ok: false,
+      error: "Agendamento cancelado não possui comanda.",
+      status: 400,
+    };
+  }
+
+  const comandaId = await findComandaIdForAppointment(
+    admin,
+    appointmentId,
+    trigger.customer_whatsapp,
+    trigger.date
+  );
+
+  if (!comandaId) {
+    if (trigger.status === "done") {
+      return {
+        ok: false,
+        error: "Comanda não encontrada para este atendimento.",
+        status: 404,
+      };
+    }
+    return getOrCreateComandaForAppointment(admin, appointmentId);
+  }
+
+  const existing = await getComandaById(admin, comandaId);
+  if (!existing.ok) return existing;
+
+  if (existing.comanda.status === "closed") {
+    return existing;
+  }
+
+  return getOrCreateComandaForAppointment(admin, appointmentId);
 }
 
 async function pruneStaleEncaixeComandaItems(
@@ -496,10 +599,12 @@ async function resolveComandaDetail(
     row.id,
     row.service_date
   );
+  const includeDone = row.status === "closed";
   const dayEncaixes = await loadCustomerDayEncaixes(
     admin,
     row.customer_whatsapp,
-    row.service_date
+    row.service_date,
+    { includeDone }
   );
 
   const linkedById = new Map(
@@ -1992,6 +2097,42 @@ export async function closeComanda(
   return getComandaById(admin, comandaId);
 }
 
+/** Remove comandas abertas duplicadas do mesmo cliente/dia antes de reabrir. */
+async function absorbConflictingOpenComandas(
+  admin: SupabaseClient,
+  targetComandaId: string,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<void> {
+  const { data: conflicts } = await admin
+    .from("comandas")
+    .select("id")
+    .eq("customer_whatsapp", customerWhatsapp)
+    .eq("service_date", serviceDate)
+    .eq("status", "open")
+    .neq("id", targetComandaId);
+
+  for (const { id: otherId } of conflicts ?? []) {
+    const { data: dupLinks } = await admin
+      .from("comanda_appointments")
+      .select("appointment_id")
+      .eq("comanda_id", otherId);
+
+    for (const link of dupLinks ?? []) {
+      await linkAppointmentToComanda(admin, targetComandaId, link.appointment_id);
+    }
+
+    await admin
+      .from("comanda_items")
+      .update({ comanda_id: targetComandaId })
+      .eq("comanda_id", otherId);
+
+    await admin.from("comanda_payments").delete().eq("comanda_id", otherId);
+    await admin.from("comanda_appointments").delete().eq("comanda_id", otherId);
+    await admin.from("comandas").delete().eq("id", otherId);
+  }
+}
+
 export async function reopenComanda(
   admin: SupabaseClient,
   comandaId: string
@@ -2007,6 +2148,49 @@ export async function reopenComanda(
       status: 409,
     };
   }
+
+  const { validateAdminAppointmentSlot } = await import("@/lib/get-availability");
+
+  for (const linked of comanda.linkedAppointments) {
+    if (linked.status !== "done" || linked.isSqueezeIn) continue;
+
+    const { data: appointment } = await admin
+      .from("appointments")
+      .select("date, start_time, end_time, professional_id")
+      .eq("id", linked.id)
+      .maybeSingle();
+
+    if (!appointment) continue;
+
+    const durationMinutes =
+      timeToMinutes(formatTime(appointment.end_time)) -
+      timeToMinutes(formatTime(appointment.start_time));
+
+    const slotCheck = await validateAdminAppointmentSlot(
+      appointment.professional_id,
+      appointment.date,
+      formatTime(appointment.start_time),
+      durationMinutes,
+      linked.id,
+      { skipScheduleBlocks: true }
+    );
+
+    if (!slotCheck.ok) {
+      return {
+        ok: false,
+        error:
+          "Outro agendamento ocupou esse horário enquanto a comanda estava fechada. Ajuste a agenda antes de reabrir.",
+        status: 409,
+      };
+    }
+  }
+
+  await absorbConflictingOpenComandas(
+    admin,
+    comandaId,
+    comanda.customerWhatsapp,
+    comanda.serviceDate
+  );
 
   await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
 
@@ -2027,64 +2211,20 @@ export async function reopenComanda(
     .eq("id", comandaId);
 
   if (error) {
+    const isDuplicateOpen =
+      error.code === "23505" ||
+      error.message?.includes("comandas_open_customer_day_idx");
     return {
       ok: false,
-      error: "Não foi possível reabrir a comanda.",
+      error: isDuplicateOpen
+        ? "Ainda existe outra comanda aberta para este cliente hoje. Recarregue a página e tente de novo."
+        : "Não foi possível reabrir a comanda.",
       status: 500,
     };
   }
 
   for (const linked of comanda.linkedAppointments) {
     if (linked.status !== "done") continue;
-
-    const { data: appointment } = await admin
-      .from("appointments")
-      .select(
-        "status, date, start_time, is_squeeze_in, professional_id, appointment_services ( service_id )"
-      )
-      .eq("id", linked.id)
-      .maybeSingle();
-
-    if (!appointment) continue;
-
-    const serviceIds = (appointment.appointment_services ?? []).map(
-      (r) => r.service_id
-    );
-
-    if (!appointment.is_squeeze_in && serviceIds.length > 0) {
-      const { getAvailability } = await import("@/lib/get-availability");
-      const availability = await getAvailability(
-        appointment.professional_id,
-        appointment.date,
-        serviceIds,
-        undefined,
-        { adminEdit: true }
-      );
-      if (!availability.ok) {
-        await admin
-          .from("comandas")
-          .update({
-            status: "closed",
-            closed_at: comanda.closedAt,
-            closed_by: null,
-          })
-          .eq("id", comandaId);
-        return {
-          ok: false,
-          error: availability.error,
-          status: 409,
-        };
-      }
-      const startTime = formatTime(appointment.start_time);
-      if (!availability.slots.includes(startTime)) {
-        return {
-          ok: false,
-          error:
-            "O horário não está mais disponível para reabrir. Ajuste a agenda antes.",
-          status: 409,
-        };
-      }
-    }
 
     await admin
       .from("appointments")

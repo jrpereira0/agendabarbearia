@@ -75,20 +75,30 @@ type NewAppointmentDialogProps = {
 
 function initialStep(
   isOwner: boolean,
-  defaultProfessionalId: string | null
+  defaultProfessionalId: string | null,
+  presetFromGrid: boolean
 ): Step {
+  if (presetFromGrid) return "services";
   if (isOwner && !defaultProfessionalId) return "professional";
   return "services";
 }
 
-function stepNumber(step: Step, isOwner: boolean): number {
+function stepNumber(
+  step: Step,
+  isOwner: boolean,
+  presetFromGrid: boolean
+): number {
+  if (presetFromGrid) {
+    return step === "client" ? 2 : 1;
+  }
   const order: Step[] = isOwner
     ? ["professional", "services", "time", "client"]
     : ["services", "time", "client"];
   return order.indexOf(step) + 1;
 }
 
-function totalSteps(isOwner: boolean): number {
+function totalSteps(isOwner: boolean, presetFromGrid: boolean): number {
+  if (presetFromGrid) return 2;
   return isOwner ? 4 : 3;
 }
 
@@ -211,6 +221,9 @@ export function NewAppointmentDialog({
   professionalSchedules,
 }: NewAppointmentDialogProps) {
   const isEncaixe = mode === "encaixe";
+  const presetFromGrid = Boolean(
+    !isEncaixe && defaultProfessionalId && defaultStartTime
+  );
   const router = useRouter();
   const [step, setStep] = useState<Step>("services");
   const [professionalId, setProfessionalId] = useState("");
@@ -227,8 +240,8 @@ export function NewAppointmentDialog({
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const selectedProfessional = professionals.find((p) => p.id === professionalId);
-  const stepsTotal = totalSteps(isOwner);
-  const currentStep = stepNumber(step, isOwner);
+  const stepsTotal = totalSteps(isOwner, presetFromGrid);
+  const currentStep = stepNumber(step, isOwner, presetFromGrid);
 
   const availableServices = useMemo(() => {
     const allowed = new Set(selectedProfessional?.serviceIds ?? []);
@@ -260,7 +273,7 @@ export function NewAppointmentDialog({
     const proId =
       defaultProfessionalId ??
       (isOwner ? "" : professionals[0]?.id ?? "");
-    setStep(initialStep(isOwner, defaultProfessionalId));
+    setStep(initialStep(isOwner, defaultProfessionalId, presetFromGrid));
     setProfessionalId(proId);
     setServiceIds([]);
     setServiceSearch("");
@@ -271,7 +284,7 @@ export function NewAppointmentDialog({
     setWhatsapp("");
     setAvailableSlots([]);
     setSlotsError(null);
-  }, [open, defaultProfessionalId, defaultStartTime, isOwner, professionals, mode]);
+  }, [open, defaultProfessionalId, defaultStartTime, isOwner, professionals, mode, isEncaixe]);
 
   const encaixeSlots = useMemo(
     () => encaixeTimeSlots(slotStepMinutes),
@@ -429,18 +442,57 @@ export function NewAppointmentDialog({
     }
   }, [open, step, isEncaixe, pendingStartTime, encaixeSlots]);
 
+  function validatePresetTimeForServices(): boolean {
+    if (!presetFromGrid || !startTime || !professionalId || totalMinutes === 0) {
+      return true;
+    }
+
+    if (ownerFreeMode && blockedSlots.has(startTime)) {
+      toast.error(
+        "Esse horário não comporta a duração dos serviços escolhidos. Escolha outros serviços ou agende pelo botão + Agendar."
+      );
+      return false;
+    }
+
+    if (!ownerFreeMode && !isEncaixe) {
+      const conflicts = findAppointmentConflicts(
+        professionalId,
+        startTime,
+        totalMinutes,
+        conflictAppointments,
+        undefined,
+        { ignoreSqueezeIn: false }
+      );
+      if (conflicts.length > 0) {
+        toast.error(
+          "Esse horário não cabe com os serviços escolhidos. Reduza a duração ou escolha outro horário."
+        );
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   function toggleService(id: string, checked: boolean) {
     setServiceIds((prev) =>
       checked ? [...prev, id] : prev.filter((v) => v !== id)
     );
-    setStartTime(null);
-    setPendingStartTime(null);
+    if (!presetFromGrid) {
+      setStartTime(null);
+      setPendingStartTime(null);
+    }
   }
 
   function goBack() {
-    if (step === "client") setStep("time");
-    else if (step === "time") setStep("services");
-    else if (step === "services" && isOwner) setStep("professional");
+    if (step === "client") {
+      setStep(presetFromGrid ? "services" : "time");
+      return;
+    }
+    if (step === "time") setStep("services");
+    else if (step === "services" && isOwner && !presetFromGrid) {
+      setStep("professional");
+    }
   }
 
   function goNext() {
@@ -456,6 +508,11 @@ export function NewAppointmentDialog({
     if (step === "services") {
       if (serviceIds.length === 0) {
         toast.error("Escolha pelo menos um serviço.");
+        return;
+      }
+      if (presetFromGrid && startTime) {
+        if (!validatePresetTimeForServices()) return;
+        setStep("client");
         return;
       }
       setStep("time");
@@ -518,7 +575,9 @@ export function NewAppointmentDialog({
   };
 
   const showBack =
-    step === "time" || step === "client" || (step === "services" && isOwner);
+    step === "time" ||
+    step === "client" ||
+    (step === "services" && isOwner && !presetFromGrid);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -575,6 +634,15 @@ export function NewAppointmentDialog({
           {step === "services" && selectedProfessional && (
             <div className="flex flex-col gap-5">
               <ProfessionalBanner professional={selectedProfessional} />
+
+              {presetFromGrid && startTime && (
+                <p className="rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+                  <span className="text-muted-foreground">Horário: </span>
+                  <span className="font-medium tabular-nums">
+                    {formatTime(startTime)}
+                  </span>
+                </p>
+              )}
 
               {availableServices.length === 0 ? (
                 <p className="text-sm text-muted-foreground">

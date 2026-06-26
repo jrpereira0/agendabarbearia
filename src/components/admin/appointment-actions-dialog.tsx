@@ -7,6 +7,7 @@ import {
   MessageCircle,
   Pencil,
   Receipt,
+  RotateCcw,
   Scissors,
   UserRound,
   X,
@@ -34,6 +35,10 @@ import {
   cancelAppointment,
   updateAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
+import {
+  loadComandaForAppointment,
+  reopenComandaAction,
+} from "@/app/admin/(panel)/comandas/actions";
 import {
   formatDateBR,
   formatDuration,
@@ -97,6 +102,8 @@ export function AppointmentActionsDialog({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [comandaClosed, setComandaClosed] = useState(false);
+  const [loadingComanda, setLoadingComanda] = useState(false);
 
   useEffect(() => {
     if (!open || !appointment) return;
@@ -106,6 +113,16 @@ export function AppointmentActionsDialog({
     setFirstName(appointment.customerFirstName);
     setLastName(appointment.customerLastName);
     setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
+    setComandaClosed(false);
+    setLoadingComanda(true);
+
+    void loadComandaForAppointment(appointment.id)
+      .then((result) => {
+        if (result.ok) {
+          setComandaClosed(result.comanda.status === "closed");
+        }
+      })
+      .finally(() => setLoadingComanda(false));
   }, [open, appointment?.id, appointment]);
 
   if (!appointment) return null;
@@ -151,6 +168,28 @@ export function AppointmentActionsDialog({
 
     if (result.ok) {
       toast.success("Agendamento cancelado.");
+      onOpenChange(false);
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleReopenComanda() {
+    setBusy(true);
+    const loaded = await loadComandaForAppointment(appointment!.id);
+    if (!loaded.ok) {
+      toast.error(loaded.error);
+      setBusy(false);
+      return;
+    }
+
+    const result = await reopenComandaAction(loaded.comanda.id);
+    setBusy(false);
+
+    if (result.ok) {
+      toast.success("Comanda reaberta.");
+      setComandaClosed(false);
       onOpenChange(false);
       router.refresh();
     } else {
@@ -291,16 +330,31 @@ export function AppointmentActionsDialog({
                   type="button"
                   size="sm"
                   className="h-9"
+                  disabled={loadingComanda}
                   onClick={() => {
                     onOpenChange(false);
                     onOpenComanda();
                   }}
                 >
                   <Receipt className="size-4" />
-                  {isActive ? "Abrir comanda" : "Ver comanda"}
+                  {comandaClosed ? "Ver comanda fechada" : isActive ? "Abrir comanda" : "Ver comanda"}
                 </Button>
 
-                {canEdit && (
+                {isOwner && comandaClosed && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    disabled={busy || loadingComanda}
+                    onClick={() => void handleReopenComanda()}
+                  >
+                    <RotateCcw className="size-4" />
+                    Reabrir comanda
+                  </Button>
+                )}
+
+                {canEdit && isActive && (
                   <Button
                     type="button"
                     variant="outline"

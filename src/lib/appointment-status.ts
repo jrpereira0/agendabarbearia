@@ -48,9 +48,12 @@ export function blocksAgendaSlot(appointment: {
   return isActiveAppointmentStatus(appointment.status) && !appointment.isSqueezeIn;
 }
 
-/** Inclui encaixe na divisão lado a lado com agendamentos no mesmo horário. */
+/** Inclui encaixe e atendido na divisão lado a lado quando horários se sobrepõem. */
 export function sharesAgendaColumnLayout(appointment: {
   status: string;
 }): boolean {
-  return isActiveAppointmentStatus(appointment.status);
+  return (
+    isActiveAppointmentStatus(appointment.status) ||
+    appointment.status === "done"
+  );
 }

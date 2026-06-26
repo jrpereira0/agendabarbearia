@@ -11,7 +11,7 @@ import {
 } from "@/lib/comanda-types";
 import {
   closeComanda,
-  getOrCreateComandaForAppointment,
+  getComandaForAppointment,
   reopenComanda,
   updateComandaItems,
 } from "@/lib/comanda-service";
@@ -56,7 +56,7 @@ export async function loadComandaForAppointment(
     return { ok: false, error: admin.error };
   }
 
-  const result = await getOrCreateComandaForAppointment(admin, appointmentId);
+  const result = await getComandaForAppointment(admin, appointmentId);
   if (!result.ok) return { ok: false, error: result.error };
 
   if (!session.isOwner) {
