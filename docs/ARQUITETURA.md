@@ -43,7 +43,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
 | `comandas` | Comanda financeira por cliente/dia (`open` ou `closed`); uma comanda aberta por WhatsApp + data |
-| `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia |
+| `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia (RLS ativo) |
 | `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
