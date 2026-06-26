@@ -29,6 +29,13 @@ try {
     )
   `);
 
+  await client.query(`
+    alter table public._migrations enable row level security
+  `);
+  await client.query(`
+    revoke all on table public._migrations from anon, authenticated
+  `);
+
   const { rows } = await client.query("select name from public._migrations");
   const applied = new Set(rows.map((r) => r.name));
 
