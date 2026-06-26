@@ -21,6 +21,10 @@ function revalidateFinance() {
   revalidatePath("/admin/financeiro/caixas");
 }
 
+const serviceDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.");
+
 const openCashRegisterSchema = z.object({
   responsibleName: z.string().trim().min(1, "Informe o responsável pelo caixa."),
   openingBalanceCents: z
@@ -55,6 +59,16 @@ export async function loadCashRegisterHistory(
   return { ok: true, sessions };
 }
 
+function parseServiceDate(
+  serviceDate: string
+): { ok: true; date: string } | { ok: false; error: string } {
+  const parsed = serviceDateSchema.safeParse(serviceDate);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+  return { ok: true, date: parsed.data };
+}
+
 export async function openCashRegisterAction(
   serviceDate: string,
   input: { responsibleName: string; openingBalanceCents: number }
@@ -67,6 +81,9 @@ export async function openCashRegisterAction(
       ? { ok: false, error: session.error }
       : { ok: false, error: "Sem permissão." };
   }
+
+  const dateParsed = parseServiceDate(serviceDate);
+  if (!dateParsed.ok) return { ok: false, error: dateParsed.error };
 
   const parsed = openCashRegisterSchema.safeParse(input);
   if (!parsed.success) {
@@ -107,6 +124,9 @@ export async function closeCashRegisterAction(
       : { ok: false, error: "Sem permissão." };
   }
 
+  const dateParsed = parseServiceDate(serviceDate);
+  if (!dateParsed.ok) return { ok: false, error: dateParsed.error };
+
   const auth = await getAdminSession();
   if (!auth) {
     return { ok: false, error: "Você precisa estar logado." };
@@ -136,6 +156,9 @@ export async function reopenCashRegisterAction(
       ? { ok: false, error: session.error }
       : { ok: false, error: "Sem permissão." };
   }
+
+  const dateParsed = parseServiceDate(serviceDate);
+  if (!dateParsed.ok) return { ok: false, error: dateParsed.error };
 
   const parsed = openCashRegisterSchema.safeParse(input);
   if (!parsed.success) {
@@ -175,6 +198,9 @@ export async function loadCashRegisterForDate(
       ? { ok: false, error: denied.error }
       : { ok: false, error: "Sem permissão." };
   }
+
+  const dateParsed = parseServiceDate(serviceDate);
+  if (!dateParsed.ok) return { ok: false, error: dateParsed.error };
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {

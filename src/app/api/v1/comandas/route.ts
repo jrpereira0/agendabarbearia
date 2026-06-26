@@ -7,6 +7,7 @@ import {
   getOrCreateComandaForAppointment,
   listComandasByDate,
 } from "@/lib/comanda-service";
+import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
 import { apiErrorResponse, apiSuccessResponse } from "@/lib/finance-api-auth";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -48,7 +49,10 @@ export async function GET(request: NextRequest) {
               .select("id")
               .eq("profile_id", auth.userId)
               .maybeSingle();
-            if (!pro || pro.id !== result.comanda.professionalId) {
+            if (
+              !pro ||
+              !barberCanAccessComanda(result.comanda, pro.id)
+            ) {
               return apiErrorResponse("Sem permissão.", 403);
             }
           }

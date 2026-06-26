@@ -59,8 +59,7 @@ async function enrichSessions(
   return Promise.all(
     rows.map(async (row) => {
       const summary = await getCashRegisterSummary(admin, row.service_date, {
-        cashRegisterSessionId:
-          row.status === "open" ? row.id : undefined,
+        cashRegisterSessionId: row.id,
       });
       return {
         id: row.id,

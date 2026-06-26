@@ -4,6 +4,8 @@ import { safeApiRoute } from "@/lib/api/safe-route";
 import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getComandaById, updateComandaItems } from "@/lib/comanda-service";
+import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
+import type { ComandaDetail } from "@/lib/comanda-types";
 import {
   apiErrorResponse,
   apiSuccessResponse,
@@ -25,7 +27,7 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 async function assertBarberCanReadComanda(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  comandaProfessionalId: string,
+  comanda: ComandaDetail,
   auth: { type: string; role?: string; userId?: string }
 ): Promise<NextResponse | null> {
   if (auth.type !== "admin" || auth.role !== "barber") return null;
@@ -34,7 +36,7 @@ async function assertBarberCanReadComanda(
     .select("id")
     .eq("profile_id", auth.userId as string)
     .maybeSingle();
-  if (!pro || pro.id !== comandaProfessionalId) {
+  if (!pro || !barberCanAccessComanda(comanda, pro.id)) {
     return apiErrorResponse("Sem permissão.", 403);
   }
   return null;
@@ -61,7 +63,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
         const denied = await assertBarberCanReadComanda(
           admin,
-          result.comanda.professionalId,
+          result.comanda,
           auth
         );
         if (denied) return denied;

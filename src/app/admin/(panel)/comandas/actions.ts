@@ -15,6 +15,7 @@ import {
   reopenComanda,
   updateComandaItems,
 } from "@/lib/comanda-service";
+import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
 import {
   canCloseComandaInOpenCashRegister,
   getOpenCashRegisterSession,
@@ -70,16 +71,10 @@ export async function loadComandaForAppointment(
   if (!result.ok) return { ok: false, error: result.error };
 
   if (!session.isOwner) {
-    const canAccess =
-      result.comanda.linkedAppointments.some(
-        (apt) => apt.professionalId === session.professionalId
-      ) ||
-      result.comanda.items.some(
-        (item) => item.professionalId === session.professionalId
-      ) ||
-      result.comanda.professionalId === session.professionalId;
-
-    if (!canAccess) {
+    if (
+      !session.professionalId ||
+      !barberCanAccessComanda(result.comanda, session.professionalId)
+    ) {
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
   }
