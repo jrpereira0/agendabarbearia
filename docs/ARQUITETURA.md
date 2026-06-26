@@ -114,24 +114,24 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Campos do perfil em `shop_settings`: `shop_name`, `bio`, `cep`, `street`, `address_number`, `address_complement`, `neighborhood`, `city`, `state`, `address` (texto montado automaticamente), `whatsapp`, `instagram`, `logo_url`
 - Endereço: digite o CEP e o sistema preenche rua, bairro e cidade (ViaCEP); você informa número e complemento
 
-## API pública (`/api/v1`)
+## API REST (`/api/v1`)
 
-Todas as rotas disponíveis (8 operações em 6 paths):
+Rotas disponíveis (8 operações):
 
-| Método | Rota | Função |
-| --- | --- | --- |
-| GET | `/api/v1/catalog` | Barbearia, barbeiros ativos, serviços e horário de funcionamento |
-| GET | `/api/v1/availability` | Horários livres de um barbeiro num dia |
-| GET | `/api/v1/customers/by-whatsapp` | Buscar cliente pelo WhatsApp (normaliza +55; retorna `id`) — **recomendado para n8n** |
-| GET | `/api/v1/customers/lookup` | Buscar cliente pelo WhatsApp (site `/agenda`, resposta simples) |
-| GET | `/api/v1/appointments?whatsapp=` | Listar agendamentos futuros do cliente |
-| POST | `/api/v1/appointments` | Criar agendamento online (cliente) |
-| PATCH | `/api/v1/appointments/:id` | Remarcar agendamento (cliente) |
-| DELETE | `/api/v1/appointments/:id?whatsapp=` | Cancelar agendamento (cliente) |
+| Método | Rota | Auth | Função |
+| --- | --- | --- | --- |
+| GET | `/api/v1/catalog` | Pública | Barbearia, barbeiros ativos, serviços e horário de funcionamento |
+| GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro num dia |
+| GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
+| GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
+| GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
+| POST | `/api/v1/appointments` | Pública | Criar agendamento online |
+| PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
+| DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
-**Chaves de API:** geradas no painel em Configurações > Integrações > Chaves de API. Integrações (n8n) autenticam com `Authorization: Bearer dbc_live_...`. O site público continua sem chave.
+**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin ou cookie de cliente (`POST /api/agenda/session` no site). Rotas **públicas** funcionam sem header; se enviar `Bearer`, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API.
 
 Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [API-N8N.md](./API-N8N.md).
 

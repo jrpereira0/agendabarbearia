@@ -33,7 +33,7 @@ const s1 = await request("1. Sem chave", {});
 if (s1 !== 401) process.exitCode = 1;
 
 const s2 = await request("2. Chave errada", {
-  headers: { Authorization: "Bearer dbc_live_deadbeef0000_invalidsecretxxxxxxxxxxxxxxx" },
+  headers: { Authorization: "Bearer chave-invalida-apenas-para-teste" },
 });
 if (s2 !== 401) process.exitCode = 1;
 
