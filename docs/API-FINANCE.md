@@ -363,8 +363,18 @@ Resposta (`200`):
 
 ---
 
-## Painel admin
+## Painel admin (financeiro)
+
+Somente o **dono** vê as rotas abaixo (menu **Dia a dia** na sidebar).
+
+| Rota | Função |
+| --- | --- |
+| `/admin` (aba **CAIXA**) | Operar o caixa do dia na agenda: abrir/fechar, comandas fechadas, entradas, comissões e barbearia |
+| `/admin/financeiro` | Dashboard de métricas por período: KPIs, evolução diária, pagamentos e barbeiros (comparação com período anterior) |
+| `/admin/financeiro/caixas` | Histórico de sessões de caixa: filtro por período, busca, abrir/fechar/reabrir, links para agenda e comissões |
+| `/admin/financeiro/comissoes` | Comissões por barbeiro no período (`service_date`), com detalhamento por profissional |
 
 - **Agenda:** clique no horário → modal de comanda (fechar, reabrir, pagamento misto)
-- **Financeiro** (`/admin/financeiro`): caixa do dia e comissões do mês (somente dono)
 - **Profissionais:** campo **% de comissão** no cadastro de cada barbeiro
+
+Relatórios do painel e da API filtram comandas fechadas por **`service_date`** (dia do atendimento / dia do caixa), não por `closed_at`.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -111,8 +111,20 @@ export function AgendaCashRegisterSheet({
   const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
   const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();
+  const wasOpenRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  const isCashOpen = cashSession?.status === "open";
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (wasOpenRef.current && !open) setSearch("");
+    wasOpenRef.current = open;
+  }, [open]);
   const otherDayOpen =
     openCashRegister && openCashRegister.serviceDate !== date
       ? openCashRegister
@@ -138,21 +150,25 @@ export function AgendaCashRegisterSheet({
 
   const cashInDrawer = cash.byPaymentMethod.cash;
 
-  useEffect(() => {
-    if (!open) setSearch("");
-  }, [open]);
+  const isCashOpen = cashSession?.status === "open";
 
   function startOpenCash(mode: "open" | "reopen") {
     setOpenMode(mode);
     setOpenDialog(true);
   }
 
+  function refreshSoon() {
+    if (!mountedRef.current) return;
+    startTransition(() => router.refresh());
+  }
+
   async function handleCloseCash() {
     const result = await closeCashRegisterAction(date);
+    if (!mountedRef.current) return;
     if (result.ok) {
       toast.success("Caixa encerrado.");
       setConfirmClose(false);
-      startTransition(() => router.refresh());
+      window.setTimeout(() => refreshSoon(), 0);
     } else {
       toast.error(result.error);
     }
@@ -164,7 +180,7 @@ export function AgendaCashRegisterSheet({
   }
 
   function handleRefresh() {
-    startTransition(() => router.refresh());
+    refreshSoon();
   }
 
   return (
@@ -310,18 +326,18 @@ export function AgendaCashRegisterSheet({
               }
             />
             <MetricCard
-              label="Dinheiro"
-              value={formatPriceBRL(cashInDrawer)}
-              hint={
-                cashSession
-                  ? `Inicial ${formatPriceBRL(cashSession.openingBalanceCents)}`
-                  : undefined
-              }
-            />
-            <MetricCard
               label="Comissões"
               value={formatPriceBRL(cash.commissionCents)}
-              hint={`Barbearia ${formatPriceBRL(cash.shopCents)}`}
+              hint="Repasse aos barbeiros"
+            />
+            <MetricCard
+              label="Barbearia"
+              value={formatPriceBRL(cash.shopCents)}
+              hint={
+                cashInDrawer > 0
+                  ? `Dinheiro ${formatPriceBRL(cashInDrawer)}`
+                  : "Líquido do dia"
+              }
             />
           </div>
 
@@ -452,8 +468,8 @@ export function AgendaCashRegisterSheet({
             <Separator className="my-3" />
 
             <Button variant="outline" size="sm" className="w-full" asChild>
-              <Link href={`/admin/financeiro?date=${date}`}>
-                Ver financeiro completo
+              <Link href={`/admin/financeiro?from=${date}&to=${date}`}>
+                Ver métricas do dia
                 <ArrowRight className="size-4" />
               </Link>
             </Button>
@@ -500,11 +516,14 @@ export function AgendaCashRegisterSheet({
         defaultResponsibleId={defaultResponsibleId}
         defaultOpeningBalanceCents={cashSession?.openingBalanceCents ?? 0}
         onSuccess={(openedDate) => {
-          if (openedDate !== date) {
-            router.push(`/admin?date=${openedDate}`);
-          } else {
-            startTransition(() => router.refresh());
-          }
+          window.setTimeout(() => {
+            if (!mountedRef.current) return;
+            if (openedDate !== date) {
+              router.push(`/admin?date=${openedDate}`);
+            } else {
+              refreshSoon();
+            }
+          }, 0);
         }}
       />
     </>

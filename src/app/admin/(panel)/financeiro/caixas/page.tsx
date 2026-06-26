@@ -9,7 +9,7 @@ import { getAdminSession } from "@/lib/require-admin";
 import { CashRegisterHistoryView } from "@/components/admin/cash-register-history-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
-export const metadata = { title: "Histórico de caixas" };
+export const metadata = { title: "Caixas" };
 
 type PageProps = {
   searchParams: Promise<{ from?: string; to?: string }>;
@@ -27,10 +27,12 @@ export default async function CaixasPage({ searchParams }: PageProps) {
   const { from: fromParam, to: toParam } = await searchParams;
   const today = todayInTimezone();
   const defaultFrom = shiftDate(today, -7);
-  const from =
+  let from =
     fromParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) ? fromParam : defaultFrom;
-  const to =
+  let to =
     toParam && /^\d{4}-\d{2}-\d{2}$/.test(toParam) ? toParam : today;
+
+  if (from > to) [from, to] = [to, from];
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {

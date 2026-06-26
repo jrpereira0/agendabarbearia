@@ -18,7 +18,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
-| `src/app/admin/(panel)/financeiro` | Caixa do dia e comissões (somente dono) |
+| `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
 | `src/app/admin/(panel)/comandas` | Server actions da comanda na agenda |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
@@ -46,6 +46,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia |
 | `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
+| `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 
 Regras importantes no banco:
 
@@ -103,7 +104,10 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
 - Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
 - Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)
-- Tela **Financeiro** (`/admin/financeiro`): caixa do dia, formas de pagamento e comissões do mês
+- **Caixa lateral na agenda** (aba **CAIXA** à direita): abrir/fechar o caixa do dia, ver comandas fechadas, entradas, comissões e repasse da barbearia; link para métricas do dia
+- **Financeiro** (`/admin/financeiro`): painel de **análise** por período (`from` / `to`) — faturamento, comissões, evolução diária, formas de pagamento e ranking por barbeiro; não é onde se abre/fecha caixa
+- **Caixas** (`/admin/financeiro/caixas`): histórico de sessões de caixa no período — abrir, fechar, reabrir, KPIs e atalhos para agenda/comissões do dia
+- **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres

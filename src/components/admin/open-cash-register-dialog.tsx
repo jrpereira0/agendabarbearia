@@ -113,7 +113,8 @@ export function OpenCashRegisterDialog({
     if (result.ok) {
       toast.success(mode === "reopen" ? "Caixa reaberto." : "Caixa aberto.");
       onOpenChange(false);
-      onSuccess(serviceDateInput);
+      const openedDate = serviceDateInput;
+      window.setTimeout(() => onSuccess(openedDate), 0);
     } else {
       toast.error(result.error);
     }

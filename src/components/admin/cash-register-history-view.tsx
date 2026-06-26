@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Eye,
+  CalendarDays,
   Lock,
+  Percent,
   Plus,
   RotateCcw,
   Wallet,
@@ -16,11 +17,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
-import {
-  closeCashRegisterAction,
-} from "@/app/admin/(panel)/financeiro/actions";
+import { SearchInput } from "@/components/admin/search-input";
+import { closeCashRegisterAction } from "@/app/admin/(panel)/financeiro/actions";
 import {
   OpenCashRegisterDialog,
   type CashRegisterResponsibleOption,
@@ -28,6 +36,7 @@ import {
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import { formatDateBR, formatDateTimeBR, formatPriceBRL } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
+import { cn } from "@/lib/utils";
 
 type CashRegisterHistoryViewProps = {
   from: string;
@@ -44,6 +53,37 @@ function shiftDate(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function monthStart(isoDate: string): string {
+  return `${isoDate.slice(0, 7)}-01`;
+}
+
+function formatPeriodLabel(from: string, to: string): string {
+  if (from === to) return formatDateBR(from);
+  return `${formatDateBR(from)} a ${formatDateBR(to)}`;
+}
+
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border px-5 py-4">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight">
+        {value}
+      </p>
+      {hint && (
+        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+      )}
+    </div>
+  );
+}
+
 export function CashRegisterHistoryView({
   from,
   to,
@@ -54,7 +94,20 @@ export function CashRegisterHistoryView({
 }: CashRegisterHistoryViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const mountedRef = useRef(true);
   const [fromDate, setFromDate] = useState(from);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setFromDate(from);
+    setToDate(to);
+  }, [from, to]);
   const [toDate, setToDate] = useState(to);
   const [search, setSearch] = useState("");
   const [busyDate, setBusyDate] = useState<string | null>(null);
@@ -64,6 +117,7 @@ export function CashRegisterHistoryView({
   const [dialogSession, setDialogSession] = useState<CashRegisterSession | null>(
     null
   );
+  const [confirmCloseDate, setConfirmCloseDate] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sessions;
@@ -86,21 +140,51 @@ export function CashRegisterHistoryView({
     [filtered]
   );
 
+  const openCount = useMemo(
+    () => filtered.filter((s) => s.status === "open").length,
+    [filtered]
+  );
+
+  const closedCount = filtered.length - openCount;
+
+  const avgPerSession = useMemo(
+    () =>
+      filtered.length > 0 ? Math.round(periodTotalCents / filtered.length) : 0,
+    [filtered.length, periodTotalCents]
+  );
+
+  const defaultResponsibleId = dialogSession
+    ? responsibleOptions.find(
+        (option) => option.label === dialogSession.responsibleName
+      )?.id
+    : undefined;
+
+  function refreshSoon() {
+    if (!mountedRef.current) return;
+    startTransition(() => router.refresh());
+  }
+
   function applyFilter(e: React.FormEvent) {
     e.preventDefault();
-    router.push(
-      `/admin/financeiro/caixas?from=${fromDate}&to=${toDate}`
-    );
+    router.push(`/admin/financeiro/caixas?from=${fromDate}&to=${toDate}`);
+  }
+
+  function applyPreset(presetFrom: string, presetTo: string) {
+    setFromDate(presetFrom);
+    setToDate(presetTo);
+    router.push(`/admin/financeiro/caixas?from=${presetFrom}&to=${presetTo}`);
   }
 
   async function runClose(serviceDate: string) {
     setBusyDate(serviceDate);
     const result = await closeCashRegisterAction(serviceDate);
     setBusyDate(null);
+    if (!mountedRef.current) return;
 
     if (result.ok) {
-      toast.success("Caixa fechado.");
-      startTransition(() => router.refresh());
+      toast.success("Caixa encerrado.");
+      setConfirmCloseDate(null);
+      window.setTimeout(() => refreshSoon(), 0);
     } else {
       toast.error(result.error);
     }
@@ -117,17 +201,11 @@ export function CashRegisterHistoryView({
     setOpenDialog(true);
   }
 
-  const defaultResponsibleId = dialogSession
-    ? responsibleOptions.find(
-        (option) => option.label === dialogSession.responsibleName
-      )?.id
-    : undefined;
-
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <PageHeader
-        title="Histórico de caixas"
-        description="Abra e feche o caixa por dia. Só é possível finalizar comandas com o caixa aberto."
+        title="Caixas"
+        description="Histórico de abertura e fechamento por dia."
         action={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -140,83 +218,133 @@ export function CashRegisterHistoryView({
               Abrir caixa
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <Link href="/admin/financeiro">Caixa do dia</Link>
+              <Link href={`/admin/financeiro?from=${from}&to=${to}`}>
+                <Wallet className="size-4" />
+                Financeiro
+              </Link>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin?date=${today}`}>
+                <CalendarDays className="size-4" />
+                Agenda
+              </Link>
             </Button>
           </div>
         }
       />
 
       {openCashRegister && (
-        <div className="rounded-lg border border-dashed px-4 py-3 text-sm">
-          Caixa aberto:{" "}
+        <div className="rounded-lg border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          Caixa aberto em{" "}
           <Link
-            href={`/admin/financeiro?date=${openCashRegister.serviceDate}`}
-            className="font-medium underline-offset-4 hover:underline"
+            href={`/admin?date=${openCashRegister.serviceDate}`}
+            className="font-medium text-foreground underline-offset-4 hover:underline"
           >
             {formatDateBR(openCashRegister.serviceDate)}
           </Link>
           {openCashRegister.responsibleName && (
             <> · {openCashRegister.responsibleName}</>
           )}
-          . Feche este caixa antes de abrir outro.
+          . Feche este caixa antes de abrir outro dia.
         </div>
       )}
 
       <Card>
         <CardContent className="pt-6">
-          <form
-            onSubmit={applyFilter}
-            className="grid gap-4 sm:grid-cols-[1fr_1fr_auto]"
-          >
-            <div className="space-y-2">
-              <Label htmlFor="from-date">Data inicial</Label>
-              <Input
-                id="from-date"
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
+          <form onSubmit={applyFilter} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-lg font-semibold tracking-tight">
+                  {formatPeriodLabel(from, to)}
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Sessões de caixa no período
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => applyPreset(shiftDate(today, -6), today)}
+                >
+                  7 dias
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => applyPreset(monthStart(today), today)}
+                >
+                  Este mês
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="to-date">Data final</Label>
-              <Input
-                id="to-date"
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </div>
-            <div className="flex items-end">
-              <Button type="submit" className="w-full sm:w-auto">
-                Pesquisar
-              </Button>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
+              <div className="space-y-2">
+                <Label htmlFor="from-date">Data inicial</Label>
+                <Input
+                  id="from-date"
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="to-date">Data final</Label>
+                <Input
+                  id="to-date"
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end">
+                <Button type="submit" className="w-full sm:w-auto">
+                  Pesquisar
+                </Button>
+              </div>
             </div>
           </form>
         </CardContent>
       </Card>
 
+      {filtered.length > 0 && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <MetricCard
+            label="Faturamento"
+            value={formatPriceBRL(periodTotalCents)}
+            hint={`${filtered.length} caixa${filtered.length === 1 ? "" : "s"}`}
+          />
+          <MetricCard
+            label="Média por caixa"
+            value={formatPriceBRL(avgPerSession)}
+            hint="Entradas por dia fechado"
+          />
+          <MetricCard
+            label="Status"
+            value={`${openCount} aberto${openCount === 1 ? "" : "s"}`}
+            hint={`${closedCount} fechado${closedCount === 1 ? "" : "s"}`}
+          />
+        </div>
+      )}
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Input
-          placeholder="Buscar por data ou responsável…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
-        />
-        <Card className="w-full sm:w-auto">
-          <CardContent className="flex items-center justify-between gap-6 py-3">
-            <span className="text-sm text-muted-foreground">Total no período</span>
-            <span className="text-lg font-semibold tabular-nums">
-              {formatPriceBRL(periodTotalCents)}
-            </span>
-          </CardContent>
-        </Card>
+        <div className="w-full sm:max-w-sm">
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar por data ou responsável…"
+          />
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <EmptyState
           icon={Wallet}
           title="Nenhum caixa neste período"
-          description="Abra o caixa do dia em Financeiro ou ajuste o intervalo de datas."
+          description="Abra o caixa na agenda ou ajuste o intervalo de datas."
           action={
             <Button
               type="button"
@@ -225,119 +353,147 @@ export function CashRegisterHistoryView({
               onClick={() => startOpenCash(today, "open")}
             >
               <Plus className="size-4" />
-              Abrir caixa
+              Abrir caixa de hoje
             </Button>
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left">
-                <th className="px-3 py-2.5 font-medium">Dia do caixa</th>
-                <th className="px-3 py-2.5 font-medium">Status</th>
-                <th className="px-3 py-2.5 font-medium text-right">Saldo</th>
-                <th className="px-3 py-2.5 font-medium text-right">Inicial</th>
-                <th className="px-3 py-2.5 font-medium">Aberto em</th>
-                <th className="px-3 py-2.5 font-medium">Fechado em</th>
-                <th className="px-3 py-2.5 font-medium">Responsável</th>
-                <th className="px-3 py-2.5 font-medium text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((session) => {
-                const isOpen = session.status === "open";
-                const busy = busyDate === session.serviceDate || pending;
-                const operator =
-                  session.responsibleName ??
-                  session.openedByName ??
-                  session.closedByName ??
-                  "—";
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Dia</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Responsável</th>
+                  <th className="px-4 py-3 font-medium text-right">Entradas</th>
+                  <th className="hidden px-4 py-3 font-medium md:table-cell">
+                    Aberto
+                  </th>
+                  <th className="hidden px-4 py-3 font-medium lg:table-cell">
+                    Fechado
+                  </th>
+                  <th className="px-4 py-3 font-medium text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((session) => {
+                  const isOpen = session.status === "open";
+                  const busy = busyDate === session.serviceDate || pending;
+                  const operator =
+                    session.responsibleName ??
+                    session.openedByName ??
+                    "—";
 
-                return (
-                  <tr key={session.id} className="border-b last:border-b-0">
-                    <td className="px-3 py-3 whitespace-nowrap">
-                      {formatDateBR(session.serviceDate)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={isOpen ? "default" : "secondary"}>
-                        {isOpen ? "Aberto" : "Fechado"}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3 text-right font-medium tabular-nums">
-                      {formatPriceBRL(session.totalCents)}
-                    </td>
-                    <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
-                      {formatPriceBRL(session.openingBalanceCents)}
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
-                      {session.openedAt
-                        ? formatDateTimeBR(session.openedAt)
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
-                      {session.closedAt
-                        ? formatDateTimeBR(session.closedAt)
-                        : "—"}
-                    </td>
-                    <td className="px-3 py-3">{operator}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          asChild
-                        >
-                          <Link
-                            href={`/admin/financeiro?date=${session.serviceDate}`}
+                  return (
+                    <tr key={session.id} className="border-b last:border-b-0">
+                      <td className="px-4 py-3.5 whitespace-nowrap font-medium">
+                        {formatDateBR(session.serviceDate)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              isOpen
+                                ? "bg-emerald-500"
+                                : "bg-muted-foreground/40"
+                            )}
+                            aria-hidden
+                          />
+                          <Badge
+                            variant={isOpen ? "default" : "secondary"}
+                            className="h-5 px-1.5 text-[10px]"
                           >
-                            <Eye className="size-3.5" />
-                            Ver dia
-                          </Link>
-                        </Button>
-                        {isOpen ? (
+                            {isOpen ? "Aberto" : "Fechado"}
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 text-muted-foreground">
+                        {operator}
+                      </td>
+                      <td className="px-4 py-3.5 text-right font-semibold tabular-nums">
+                        {formatPriceBRL(session.totalCents)}
+                      </td>
+                      <td className="hidden px-4 py-3.5 whitespace-nowrap text-xs text-muted-foreground md:table-cell">
+                        {session.openedAt
+                          ? formatDateTimeBR(session.openedAt)
+                          : "—"}
+                      </td>
+                      <td className="hidden px-4 py-3.5 whitespace-nowrap text-xs text-muted-foreground lg:table-cell">
+                        {session.closedAt
+                          ? formatDateTimeBR(session.closedAt)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex flex-wrap justify-end gap-1">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="h-8"
-                            disabled={busy}
-                            onClick={() => void runClose(session.serviceDate)}
+                            className="h-8 px-2"
+                            asChild
                           >
-                            <Lock className="size-3.5" />
-                            Fechar
+                            <Link href={`/admin?date=${session.serviceDate}`}>
+                              Agenda
+                            </Link>
                           </Button>
-                        ) : (
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="ghost"
                             size="sm"
-                            className="h-8"
-                            disabled={busy || Boolean(openCashRegister)}
-                            onClick={() =>
-                              startOpenCash(session.serviceDate, "reopen", session)
-                            }
+                            className="h-8 px-2"
+                            asChild
                           >
-                            <RotateCcw className="size-3.5" />
-                            Reabrir
+                            <Link
+                              href={`/admin/financeiro/comissoes?from=${session.serviceDate}&to=${session.serviceDate}`}
+                            >
+                              <Percent className="size-3.5" />
+                            </Link>
                           </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                          {isOpen ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              disabled={busy}
+                              onClick={() =>
+                                setConfirmCloseDate(session.serviceDate)
+                              }
+                            >
+                              <Lock className="size-3.5" />
+                              Fechar
+                            </Button>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8"
+                              disabled={busy || Boolean(openCashRegister)}
+                              onClick={() =>
+                                startOpenCash(
+                                  session.serviceDate,
+                                  "reopen",
+                                  session
+                                )
+                              }
+                            >
+                              <RotateCcw className="size-3.5" />
+                              Reabrir
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
-
-      <p className="text-xs text-muted-foreground">
-        {filtered.length} caixa{filtered.length === 1 ? "" : "s"} no período de{" "}
-        {formatDateBR(from)} a {formatDateBR(to)}
-      </p>
 
       <OpenCashRegisterDialog
         open={openDialog}
@@ -349,8 +505,47 @@ export function CashRegisterHistoryView({
         responsibleOptions={responsibleOptions}
         defaultResponsibleId={defaultResponsibleId}
         defaultOpeningBalanceCents={dialogSession?.openingBalanceCents ?? 0}
-        onSuccess={() => startTransition(() => router.refresh())}
+        onSuccess={() => {
+          window.setTimeout(() => refreshSoon(), 0);
+        }}
       />
+
+      <Dialog
+        open={confirmCloseDate != null}
+        onOpenChange={(open) => !open && setConfirmCloseDate(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Encerrar caixa?</DialogTitle>
+            <DialogDescription>
+              {confirmCloseDate && (
+                <>
+                  Caixa de {formatDateBR(confirmCloseDate)}. Depois de encerrar,
+                  não será possível finalizar novas comandas neste dia.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setConfirmCloseDate(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={busyDate != null}
+              onClick={() =>
+                confirmCloseDate && void runClose(confirmCloseDate)
+              }
+            >
+              Encerrar caixa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
