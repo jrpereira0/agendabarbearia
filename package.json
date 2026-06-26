@@ -9,6 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:api:protected": "node scripts/test-protected-api.mjs",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
     "test:api:customer-by-whatsapp": "node scripts/test-customer-by-whatsapp.mjs"

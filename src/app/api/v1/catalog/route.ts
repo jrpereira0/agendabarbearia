@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { safeApiRoute } from "@/lib/api/safe-route";
-import { withApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withPublicApiRouteGuard } from "@/lib/api/with-api-guard";
 import { TIMEZONE } from "@/lib/availability";
 import { getShopCatalog } from "@/lib/get-shop-catalog";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -8,7 +8,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 // GET /api/v1/catalog — barbearia, barbeiros, serviços e horários (automações e site)
 export async function GET(request: Request) {
   return safeApiRoute(() =>
-    withApiRouteGuard(
+    withPublicApiRouteGuard(
       request,
       { scope: "catalog:read", rateLimit: "catalog" },
       async () => {

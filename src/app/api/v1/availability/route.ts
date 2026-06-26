@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
-import { withApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withPublicApiRouteGuard } from "@/lib/api/with-api-guard";
 import { getAvailability } from "@/lib/get-availability";
 
 const querySchema = z.object({
@@ -18,7 +18,7 @@ const querySchema = z.object({
 // GET /api/v1/availability?professionalId=...&date=2026-06-15&serviceIds=id1,id2
 export async function GET(request: NextRequest) {
   return safeApiRoute(() =>
-    withApiRouteGuard(
+    withPublicApiRouteGuard(
       request,
       { scope: "availability:read", rateLimit: "availability" },
       async () => {

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeApiRoute } from "@/lib/api/safe-route";
-import { withApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
 import { getCustomerByWhatsapp } from "@/lib/lookup-customer";
 
 // GET /api/v1/customers/by-whatsapp?whatsapp=... — consulta cliente pelo WhatsApp (automações)
 export async function GET(request: NextRequest) {
   return safeApiRoute(() =>
-    withApiRouteGuard(
+    withProtectedApiRouteGuard(
       request,
       { scope: "customers:read", rateLimit: "whatsappSensitive" },
       async () => {

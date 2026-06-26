@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
-import { withApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
 import { resolveApiAuth } from "@/lib/api-key-auth";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import { listPublicAppointmentsByWhatsapp } from "@/lib/manage-public-appointment";
@@ -28,20 +28,24 @@ const bodySchema = z.object({
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
 export async function GET(request: NextRequest) {
-  return safeApiRoute(() =>
-    withApiRouteGuard(
-      request,
-      { scope: "appointments:read", rateLimit: "whatsappSensitive" },
-      async () => {
-        const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
-        const whatsapp = normalizeWhatsapp(raw);
-        if (!whatsapp) {
-          return NextResponse.json(
-            { error: WHATSAPP_INVALID_MESSAGE },
-            { status: 400 }
-          );
-        }
+  return safeApiRoute(async () => {
+    const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
+    const whatsapp = normalizeWhatsapp(raw);
+    if (!whatsapp) {
+      return NextResponse.json(
+        { ok: false, error: WHATSAPP_INVALID_MESSAGE },
+        { status: 400 }
+      );
+    }
 
+    return withProtectedApiRouteGuard(
+      request,
+      {
+        scope: "appointments:read",
+        rateLimit: "whatsappSensitive",
+        whatsapp,
+      },
+      async () => {
         const result = await listPublicAppointmentsByWhatsapp(whatsapp);
 
         if (!result.ok) {
@@ -53,11 +57,11 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({ appointments: result.data });
       }
-    )
-  );
+    );
+  });
 }
 
-// POST /api/v1/appointments — agendamento online pelo cliente
+// POST /api/v1/appointments — agendamento online pelo cliente (público com rate limit)
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
     const authResult = await resolveApiAuth(request, "appointments:create");

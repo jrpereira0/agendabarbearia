@@ -9,15 +9,25 @@ import { hasScope, type ApiScope } from "@/lib/api-key-scopes";
 
 export const SHOP_ID = 1;
 
-export const API_UNAUTHORIZED = NextResponse.json(
-  { ok: false, error: "Não autorizado." },
-  { status: 401 }
-);
+export function apiUnauthorizedResponse() {
+  return NextResponse.json(
+    { ok: false, error: "Não autorizado." },
+    { status: 401 }
+  );
+}
 
-export const API_FORBIDDEN = NextResponse.json(
-  { ok: false, error: "Sem permissão." },
-  { status: 403 }
-);
+export function apiForbiddenResponse() {
+  return NextResponse.json(
+    { ok: false, error: "Sem permissão." },
+    { status: 403 }
+  );
+}
+
+/** @deprecated use apiUnauthorizedResponse() */
+export const API_UNAUTHORIZED = apiUnauthorizedResponse();
+
+/** @deprecated use apiForbiddenResponse() */
+export const API_FORBIDDEN = apiForbiddenResponse();
 
 export type ApiKeyAuthContext = {
   type: "api_key";
@@ -61,7 +71,7 @@ export async function validateApiKeyFromRequest(
 > {
   const parsed = parseBearerApiKey(getAuthorizationHeader(request));
   if (!parsed) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   const validated = await validateApiKeyRecord(
@@ -86,7 +96,7 @@ export async function validateApiKeyRecord(
 > {
   const admin = createAdminClient();
   if (!admin) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   const { data, error } = await admin
@@ -96,26 +106,26 @@ export async function validateApiKeyRecord(
     .maybeSingle();
 
   if (error || !data) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   const row = data as ApiKeyRow;
 
   if (!row.active || row.revoked_at) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   if (row.expires_at && new Date(row.expires_at) <= new Date()) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   const secretOk = await verifyApiKeySecret(secret, row.secret_hash);
   if (!secretOk) {
-    return { ok: false, response: API_UNAUTHORIZED };
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   if (!hasScope(row.scopes, requiredScope)) {
-    return { ok: false, response: API_FORBIDDEN };
+    return { ok: false, response: apiForbiddenResponse() };
   }
 
   touchApiKeyLastUsed(row.id);

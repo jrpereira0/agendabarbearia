@@ -5,8 +5,6 @@ import {
   hashApiKeySecret,
 } from "@/lib/api-key-crypto";
 import {
-  API_FORBIDDEN,
-  API_UNAUTHORIZED,
   validateApiKeyFromRequest,
   validateApiKeyRecord,
 } from "@/lib/api-key-auth";
@@ -85,7 +83,10 @@ describe("api-key-auth", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.response).toBe(API_UNAUTHORIZED);
+      expect(await result.response.json()).toEqual({
+        ok: false,
+        error: "Não autorizado.",
+      });
     }
   });
 
@@ -137,7 +138,10 @@ describe("api-key-auth", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.response).toBe(API_FORBIDDEN);
+      expect(await result.response.json()).toEqual({
+        ok: false,
+        error: "Sem permissão.",
+      });
     }
   });
 

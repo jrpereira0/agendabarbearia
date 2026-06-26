@@ -106,8 +106,24 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const fetchAppointments = useCallback(async (canonical: string) => {
     setLoadingList(true);
     try {
+      const sessionRes = await fetch("/api/agenda/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ whatsapp: canonical }),
+      });
+
+      if (!sessionRes.ok) {
+        const sessionBody = await sessionRes.json().catch(() => ({}));
+        toast.error(
+          sessionBody.error ?? "Não foi possível verificar seu WhatsApp."
+        );
+        return false;
+      }
+
       const res = await fetch(
-        `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}`
+        `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}`,
+        { credentials: "include" }
       );
       const body = await res.json();
       if (!res.ok) {
@@ -223,7 +239,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     try {
       const res = await fetch(
         `/api/v1/appointments/${cancelTarget.id}?whatsapp=${encodeURIComponent(whatsappDigits)}`,
-        { method: "DELETE" }
+        { method: "DELETE", credentials: "include" }
       );
       const body = await res.json();
 
@@ -254,6 +270,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     try {
       const res = await fetch(`/api/v1/appointments/${editing.id}`, {
         method: "PATCH",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           whatsapp: whatsappDigits,

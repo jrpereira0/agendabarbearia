@@ -90,7 +90,19 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 
 ### Site público vs integração
 
-- O site `/agenda` **não usa** chave de API — continua funcionando pelo navegador
+- O site `/agenda` **não usa** chave de API no navegador
+- **Meus horários:** após digitar o WhatsApp, o site chama `POST /api/agenda/session` (cookie httpOnly assinado) e depois as rotas protegidas com `credentials: include`
+- **Novo agendamento:** continua em `POST /api/v1/appointments` sem chave (rate limit por IP/WhatsApp)
+- **Catálogo e disponibilidade:** continuam públicos (`GET /catalog`, `GET /availability`)
+- **Rotas sensíveis** exigem API Key, sessão admin ou cookie de cliente — sem fallback público:
+
+| Rota | Auth obrigatória |
+| --- | --- |
+| `GET /customers/by-whatsapp` | Sim |
+| `GET /appointments` | Sim |
+| `PATCH /appointments/:id` | Sim |
+| `DELETE /appointments/:id` | Sim |
+
 - Se você **enviar** `Authorization: Bearer ...` na requisição, a chave será validada e o scope exigido
 - Chaves com rate limit próprio: **120 req / 15 min** por chave (além dos limites por IP/WhatsApp onde aplicável)
 
