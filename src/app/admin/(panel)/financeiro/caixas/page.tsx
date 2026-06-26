@@ -3,7 +3,9 @@ import { assertOwnerPage } from "@/lib/require-owner";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { todayInTimezone } from "@/lib/availability";
-import { listCashRegisterSessions } from "@/lib/cash-register-service";
+import { listCashRegisterSessions, getOpenCashRegisterSession } from "@/lib/cash-register-service";
+import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
+import { getAdminSession } from "@/lib/require-admin";
 import { CashRegisterHistoryView } from "@/components/admin/cash-register-history-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -41,9 +43,23 @@ export default async function CaixasPage({ searchParams }: PageProps) {
     );
   }
 
-  const sessions = await listCashRegisterSessions(admin, from, to);
+  const adminSession = await getAdminSession();
+  const [sessions, openCashRegister, responsibleOptions] = await Promise.all([
+    listCashRegisterSessions(admin, from, to),
+    getOpenCashRegisterSession(admin),
+    adminSession
+      ? loadCashRegisterResponsibleOptions(admin, adminSession.userId)
+      : Promise.resolve([]),
+  ]);
 
   return (
-    <CashRegisterHistoryView from={from} to={to} sessions={sessions} />
+    <CashRegisterHistoryView
+      from={from}
+      to={to}
+      today={today}
+      sessions={sessions}
+      openCashRegister={openCashRegister}
+      responsibleOptions={responsibleOptions}
+    />
   );
 }

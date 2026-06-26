@@ -21,6 +21,8 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Barbeiro na comanda | Exibido por serviço, mas **não é editável** na comanda — altere na agenda |
 | Fechar comanda | Registra pagamento, marca atendimentos como `done` e entra no caixa/comissão |
 | Caixa do dia | Precisa estar **aberto** para finalizar comandas daquele dia |
+| Um caixa por vez | Só pode haver **um** caixa aberto; feche o atual antes de abrir outro dia |
+| Comanda no caixa | Só fecha comanda do **mesmo dia** do caixa aberto; fica vinculada à sessão |
 | Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável |
 | Cancelar horário | Motivo obrigatório; some da agenda; **bloqueado** se a comanda estiver fechada (reabra antes) |
 

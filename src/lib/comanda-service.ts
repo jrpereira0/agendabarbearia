@@ -14,7 +14,7 @@ import {
   PAYMENT_METHODS,
 } from "@/lib/comanda-types";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
-import { isCashRegisterOpen } from "@/lib/cash-register-service";
+import { assertComandaClosableInOpenCashRegister } from "@/lib/cash-register-service";
 
 type DbComandaRow = {
   id: string;
@@ -2021,13 +2021,12 @@ export async function closeComanda(
     return { ok: false, error: paymentError, status: 400 };
   }
 
-  const cashOpen = await isCashRegisterOpen(admin, comanda.serviceDate);
-  if (!cashOpen) {
-    return {
-      ok: false,
-      error: "Abra o caixa deste dia antes de fechar comandas.",
-      status: 409,
-    };
+  const cashCheck = await assertComandaClosableInOpenCashRegister(
+    admin,
+    comanda.serviceDate
+  );
+  if (!cashCheck.ok) {
+    return { ok: false, error: cashCheck.error, status: cashCheck.status };
   }
 
   const totals = await recalculateComandaTotals(admin, comandaId);
@@ -2069,6 +2068,7 @@ export async function closeComanda(
       commission_cents: totals.commissionCents,
       closed_at: now,
       closed_by: closedBy,
+      cash_register_session_id: cashCheck.sessionId,
       updated_at: now,
     })
     .eq("id", comandaId);
@@ -2216,6 +2216,7 @@ export async function reopenComanda(
       commission_cents: totals.commissionCents,
       closed_at: null,
       closed_by: null,
+      cash_register_session_id: null,
       updated_at: now,
     })
     .eq("id", comandaId);

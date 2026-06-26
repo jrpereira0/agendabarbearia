@@ -15,7 +15,10 @@ import {
   reopenComanda,
   updateComandaItems,
 } from "@/lib/comanda-service";
-import { isCashRegisterOpen } from "@/lib/cash-register-service";
+import {
+  canCloseComandaInOpenCashRegister,
+  getOpenCashRegisterSession,
+} from "@/lib/cash-register-service";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
@@ -49,6 +52,7 @@ export async function loadComandaForAppointment(
       comanda: ComandaDetail;
       isOwner: boolean;
       cashRegisterOpen: boolean;
+      openCashRegisterDate: string | null;
     }
   | { ok: false; error: string }
 > {
@@ -80,11 +84,17 @@ export async function loadComandaForAppointment(
     }
   }
 
+  const openCashRegister = await getOpenCashRegisterSession(admin);
+
   return {
     ok: true,
     comanda: result.comanda,
     isOwner: session.isOwner,
-    cashRegisterOpen: await isCashRegisterOpen(admin, result.comanda.serviceDate),
+    cashRegisterOpen: await canCloseComandaInOpenCashRegister(
+      admin,
+      result.comanda.serviceDate
+    ),
+    openCashRegisterDate: openCashRegister?.serviceDate ?? null,
   };
 }
 

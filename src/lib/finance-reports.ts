@@ -53,11 +53,10 @@ function dateRangeBounds(from: string, to: string): { start: string; end: string
 
 export async function getCashRegisterSummary(
   admin: SupabaseClient,
-  date: string
+  date: string,
+  options: { cashRegisterSessionId?: string } = {}
 ): Promise<CashRegisterSummary> {
-  const bounds = dateRangeBounds(date, date);
-
-  const { data } = await admin
+  let query = admin
     .from("comandas")
     .select(
       `
@@ -75,9 +74,17 @@ export async function getCashRegisterSummary(
     `
     )
     .eq("status", "closed")
-    .gte("closed_at", bounds.start)
-    .lte("closed_at", bounds.end)
+    .eq("service_date", date)
     .order("closed_at", { ascending: true });
+
+  if (options.cashRegisterSessionId) {
+    query = query.eq(
+      "cash_register_session_id",
+      options.cashRegisterSessionId
+    );
+  }
+
+  const { data } = await query;
 
   const byPaymentMethod: Record<PaymentMethod, number> = {
     pix: 0,

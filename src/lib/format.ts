@@ -35,6 +35,13 @@ export function formatTime(time: string): string {
   return time.slice(0, 5);
 }
 
+// Dígitos de campo monetário -> centavos (ex.: "35,00" ou "3500" -> 3500)
+export function parsePriceBRLInput(value: string): number {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return 0;
+  return Number.parseInt(digits, 10);
+}
+
 // Formata centavos como moeda: 3500 -> "R$ 35,00"
 export function formatPriceBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", {

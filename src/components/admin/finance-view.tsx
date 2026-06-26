@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Lock, Receipt, RotateCcw, Unlock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +19,13 @@ import {
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import {
   closeCashRegisterAction,
-  openCashRegisterAction,
-  reopenCashRegisterAction,
 } from "@/app/admin/(panel)/financeiro/actions";
+import {
+  OpenCashRegisterDialog,
+  type CashRegisterResponsibleOption,
+} from "@/components/admin/open-cash-register-dialog";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
-import { formatDateBR, formatPriceBRL } from "@/lib/format";
+import { formatDateBR, formatDateTimeBR, formatPriceBRL } from "@/lib/format";
 
 type FinanceViewProps = {
   date: string;
@@ -32,6 +34,8 @@ type FinanceViewProps = {
   cash: CashRegisterSummary;
   commissions: CommissionSummary;
   cashSession: CashRegisterSession | null;
+  openCashRegister: CashRegisterSession | null;
+  responsibleOptions: CashRegisterResponsibleOption[];
 };
 
 function shiftDate(isoDate: string, days: number): string {
@@ -58,28 +62,33 @@ export function FinanceView({
   cash,
   commissions,
   cashSession,
+  openCashRegister,
+  responsibleOptions,
 }: FinanceViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
   const isToday = date === today;
   const isCashOpen = cashSession?.status === "open";
+  const otherDayOpen =
+    openCashRegister && openCashRegister.serviceDate !== date
+      ? openCashRegister
+      : null;
 
-  async function handleCashAction(action: "open" | "close" | "reopen") {
-    const fn =
-      action === "open"
-        ? openCashRegisterAction
-        : action === "close"
-          ? closeCashRegisterAction
-          : reopenCashRegisterAction;
+  const defaultResponsibleId = responsibleOptions.find(
+    (option) => option.label === cashSession?.responsibleName
+  )?.id;
 
-    const result = await fn(date);
+  function startOpenCash(mode: "open" | "reopen") {
+    setOpenMode(mode);
+    setOpenDialog(true);
+  }
+
+  async function handleCloseCash() {
+    const result = await closeCashRegisterAction(date);
     if (result.ok) {
-      const labels = {
-        open: "Caixa aberto.",
-        close: "Caixa fechado.",
-        reopen: "Caixa reaberto.",
-      };
-      toast.success(labels[action]);
+      toast.success("Caixa fechado.");
       startTransition(() => router.refresh());
     } else {
       toast.error(result.error);
@@ -98,6 +107,19 @@ export function FinanceView({
         }
       />
 
+      {otherDayOpen && (
+        <div className="rounded-lg border border-dashed px-4 py-3 text-sm">
+          O caixa de{" "}
+          <Link
+            href={`/admin/financeiro?date=${otherDayOpen.serviceDate}`}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {formatDateBR(otherDayOpen.serviceDate)}
+          </Link>{" "}
+          está aberto. Feche-o antes de abrir outro dia.
+        </div>
+      )}
+
       <Card>
         <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1">
@@ -112,6 +134,25 @@ export function FinanceView({
                 ? "Você pode finalizar comandas neste dia."
                 : "Abra o caixa para finalizar comandas neste dia."}
             </p>
+            {cashSession && (
+              <p className="text-xs text-muted-foreground">
+                Dia do caixa: {formatDateBR(cashSession.serviceDate)}
+                {cashSession.openedAt && (
+                  <> · Aberto em {formatDateTimeBR(cashSession.openedAt)}</>
+                )}
+                {cashSession.closedAt && (
+                  <> · Fechado em {formatDateTimeBR(cashSession.closedAt)}</>
+                )}
+              </p>
+            )}
+            {cashSession && (
+              <p className="text-xs text-muted-foreground">
+                {cashSession.responsibleName && (
+                  <>Responsável: {cashSession.responsibleName} · </>
+                )}
+                Dinheiro inicial: {formatPriceBRL(cashSession.openingBalanceCents)}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {isCashOpen ? (
@@ -120,7 +161,7 @@ export function FinanceView({
                 variant="outline"
                 size="sm"
                 disabled={pending}
-                onClick={() => void handleCashAction("close")}
+                onClick={() => void handleCloseCash()}
               >
                 <Lock className="size-4" />
                 Fechar caixa
@@ -129,8 +170,8 @@ export function FinanceView({
               <Button
                 type="button"
                 size="sm"
-                disabled={pending}
-                onClick={() => void handleCashAction("reopen")}
+                disabled={pending || Boolean(otherDayOpen)}
+                onClick={() => startOpenCash("reopen")}
               >
                 <RotateCcw className="size-4" />
                 Reabrir caixa
@@ -139,8 +180,8 @@ export function FinanceView({
               <Button
                 type="button"
                 size="sm"
-                disabled={pending}
-                onClick={() => void handleCashAction("open")}
+                disabled={pending || Boolean(otherDayOpen)}
+                onClick={() => startOpenCash("open")}
               >
                 <Unlock className="size-4" />
                 Abrir caixa
@@ -149,6 +190,25 @@ export function FinanceView({
           </div>
         </CardContent>
       </Card>
+
+      <OpenCashRegisterDialog
+        open={openDialog}
+        onOpenChange={setOpenDialog}
+        serviceDate={date}
+        today={today}
+        mode={openMode}
+        lockServiceDate={openMode === "reopen"}
+        responsibleOptions={responsibleOptions}
+        defaultResponsibleId={defaultResponsibleId}
+        defaultOpeningBalanceCents={cashSession?.openingBalanceCents ?? 0}
+        onSuccess={(openedDate) => {
+          if (openedDate !== date) {
+            router.push(`/admin/financeiro?date=${openedDate}`);
+          } else {
+            startTransition(() => router.refresh());
+          }
+        }}
+      />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -163,6 +163,9 @@ export function ComandaDialog({
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [isOwner, setIsOwner] = useState(false);
   const [cashRegisterOpen, setCashRegisterOpen] = useState(false);
+  const [openCashRegisterDate, setOpenCashRegisterDate] = useState<string | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -192,6 +195,7 @@ export function ComandaDialog({
       setComanda(result.comanda);
       setIsOwner(result.isOwner);
       setCashRegisterOpen(result.cashRegisterOpen);
+      setOpenCashRegisterDate(result.openCashRegisterDate);
       setItems(mapComandaItemsToEditable(result.comanda.items));
       if (result.comanda.status === "closed") {
         setPayments(
@@ -1039,14 +1043,27 @@ export function ComandaDialog({
 
               {canEdit && !cashRegisterOpen && isOwner && (
                 <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-                  O caixa de {formatDateBR(serviceDate)} está fechado. Abra o caixa em{" "}
-                  <Link
-                    href={`/admin/financeiro?date=${serviceDate}`}
-                    className="font-medium text-foreground underline-offset-4 hover:underline"
-                  >
-                    Financeiro
-                  </Link>{" "}
-                  antes de finalizar comandas.
+                  {openCashRegisterDate &&
+                  openCashRegisterDate !== serviceDate ? (
+                    <>
+                      O caixa aberto é do dia{" "}
+                      {formatDateBR(openCashRegisterDate)}. Esta comanda é do dia{" "}
+                      {formatDateBR(serviceDate)} — só dá para finalizar comandas do
+                      dia do caixa aberto.
+                    </>
+                  ) : (
+                    <>
+                      Não há caixa aberto para o dia {formatDateBR(serviceDate)}.
+                      Abra o caixa em{" "}
+                      <Link
+                        href={`/admin/financeiro?date=${serviceDate}`}
+                        className="font-medium text-foreground underline-offset-4 hover:underline"
+                      >
+                        Financeiro
+                      </Link>{" "}
+                      antes de finalizar comandas.
+                    </>
+                  )}
                 </div>
               )}
 

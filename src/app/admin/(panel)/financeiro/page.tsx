@@ -7,7 +7,9 @@ import {
   getCashRegisterSummary,
   getCommissionSummary,
 } from "@/lib/finance-reports";
-import { getCashRegisterSession } from "@/lib/cash-register-service";
+import { getCashRegisterSession, getOpenCashRegisterSession } from "@/lib/cash-register-service";
+import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
+import { getAdminSession } from "@/lib/require-admin";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -37,11 +39,21 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     );
   }
 
-  const [cash, commissions, cashSession] = await Promise.all([
-    getCashRegisterSummary(admin, date),
-    getCommissionSummary(admin, monthFrom, date),
+  const adminSession = await getAdminSession();
+  const [cashSession, openCashRegister, commissions, responsibleOptions] =
+    await Promise.all([
     getCashRegisterSession(admin, date),
+    getOpenCashRegisterSession(admin),
+    getCommissionSummary(admin, monthFrom, date),
+    adminSession
+      ? loadCashRegisterResponsibleOptions(admin, adminSession.userId)
+      : Promise.resolve([]),
   ]);
+
+  const cash = await getCashRegisterSummary(admin, date, {
+    cashRegisterSessionId:
+      cashSession?.status === "open" ? cashSession.id : undefined,
+  });
 
   return (
     <FinanceView
@@ -51,6 +63,8 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       cash={cash}
       commissions={commissions}
       cashSession={cashSession}
+      openCashRegister={openCashRegister}
+      responsibleOptions={responsibleOptions}
     />
   );
 }

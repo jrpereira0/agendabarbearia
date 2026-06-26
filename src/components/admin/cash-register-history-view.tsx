@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   Eye,
   Lock,
+  Plus,
   RotateCcw,
   Wallet,
 } from "lucide-react";
@@ -19,9 +20,11 @@ import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import {
   closeCashRegisterAction,
-  openCashRegisterAction,
-  reopenCashRegisterAction,
 } from "@/app/admin/(panel)/financeiro/actions";
+import {
+  OpenCashRegisterDialog,
+  type CashRegisterResponsibleOption,
+} from "@/components/admin/open-cash-register-dialog";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import { formatDateBR, formatDateTimeBR, formatPriceBRL } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
@@ -29,7 +32,10 @@ import { matchesSearch } from "@/lib/text";
 type CashRegisterHistoryViewProps = {
   from: string;
   to: string;
+  today: string;
   sessions: CashRegisterSession[];
+  openCashRegister: CashRegisterSession | null;
+  responsibleOptions: CashRegisterResponsibleOption[];
 };
 
 function shiftDate(isoDate: string, days: number): string {
@@ -41,7 +47,10 @@ function shiftDate(isoDate: string, days: number): string {
 export function CashRegisterHistoryView({
   from,
   to,
+  today,
   sessions,
+  openCashRegister,
+  responsibleOptions,
 }: CashRegisterHistoryViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -49,6 +58,12 @@ export function CashRegisterHistoryView({
   const [toDate, setToDate] = useState(to);
   const [search, setSearch] = useState("");
   const [busyDate, setBusyDate] = useState<string | null>(null);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
+  const [dialogDate, setDialogDate] = useState<string | null>(null);
+  const [dialogSession, setDialogSession] = useState<CashRegisterSession | null>(
+    null
+  );
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sessions;
@@ -58,6 +73,7 @@ export function CashRegisterHistoryView({
           formatDateBR(session.serviceDate),
           session.status === "open" ? "aberto" : "fechado",
           session.openedByName ?? "",
+          session.responsibleName ?? "",
           session.closedByName ?? "",
         ].join(" "),
         search
@@ -77,33 +93,35 @@ export function CashRegisterHistoryView({
     );
   }
 
-  async function runAction(
-    serviceDate: string,
-    action: "open" | "close" | "reopen"
-  ) {
+  async function runClose(serviceDate: string) {
     setBusyDate(serviceDate);
-    const fn =
-      action === "open"
-        ? openCashRegisterAction
-        : action === "close"
-          ? closeCashRegisterAction
-          : reopenCashRegisterAction;
-
-    const result = await fn(serviceDate);
+    const result = await closeCashRegisterAction(serviceDate);
     setBusyDate(null);
 
     if (result.ok) {
-      const labels = {
-        open: "Caixa aberto.",
-        close: "Caixa fechado.",
-        reopen: "Caixa reaberto.",
-      };
-      toast.success(labels[action]);
+      toast.success("Caixa fechado.");
       startTransition(() => router.refresh());
     } else {
       toast.error(result.error);
     }
   }
+
+  function startOpenCash(
+    serviceDate: string,
+    mode: "open" | "reopen",
+    session?: CashRegisterSession
+  ) {
+    setDialogDate(serviceDate);
+    setDialogSession(session ?? null);
+    setOpenMode(mode);
+    setOpenDialog(true);
+  }
+
+  const defaultResponsibleId = dialogSession
+    ? responsibleOptions.find(
+        (option) => option.label === dialogSession.responsibleName
+      )?.id
+    : undefined;
 
   return (
     <div className="flex flex-col gap-6">
@@ -111,11 +129,38 @@ export function CashRegisterHistoryView({
         title="Histórico de caixas"
         description="Abra e feche o caixa por dia. Só é possível finalizar comandas com o caixa aberto."
         action={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/admin/financeiro">Caixa do dia</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={Boolean(openCashRegister)}
+              onClick={() => startOpenCash(today, "open")}
+            >
+              <Plus className="size-4" />
+              Abrir caixa
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/financeiro">Caixa do dia</Link>
+            </Button>
+          </div>
         }
       />
+
+      {openCashRegister && (
+        <div className="rounded-lg border border-dashed px-4 py-3 text-sm">
+          Caixa aberto:{" "}
+          <Link
+            href={`/admin/financeiro?date=${openCashRegister.serviceDate}`}
+            className="font-medium underline-offset-4 hover:underline"
+          >
+            {formatDateBR(openCashRegister.serviceDate)}
+          </Link>
+          {openCashRegister.responsibleName && (
+            <> · {openCashRegister.responsibleName}</>
+          )}
+          . Feche este caixa antes de abrir outro.
+        </div>
+      )}
 
       <Card>
         <CardContent className="pt-6">
@@ -173,8 +218,14 @@ export function CashRegisterHistoryView({
           title="Nenhum caixa neste período"
           description="Abra o caixa do dia em Financeiro ou ajuste o intervalo de datas."
           action={
-            <Button asChild size="sm">
-              <Link href="/admin/financeiro">Ir para o caixa de hoje</Link>
+            <Button
+              type="button"
+              size="sm"
+              disabled={Boolean(openCashRegister)}
+              onClick={() => startOpenCash(today, "open")}
+            >
+              <Plus className="size-4" />
+              Abrir caixa
             </Button>
           }
         />
@@ -183,12 +234,12 @@ export function CashRegisterHistoryView({
           <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left">
-                <th className="px-3 py-2.5 font-medium">Data</th>
+                <th className="px-3 py-2.5 font-medium">Dia do caixa</th>
                 <th className="px-3 py-2.5 font-medium">Status</th>
                 <th className="px-3 py-2.5 font-medium text-right">Saldo</th>
                 <th className="px-3 py-2.5 font-medium text-right">Inicial</th>
-                <th className="px-3 py-2.5 font-medium">Abertura</th>
-                <th className="px-3 py-2.5 font-medium">Fechamento</th>
+                <th className="px-3 py-2.5 font-medium">Aberto em</th>
+                <th className="px-3 py-2.5 font-medium">Fechado em</th>
                 <th className="px-3 py-2.5 font-medium">Responsável</th>
                 <th className="px-3 py-2.5 font-medium text-right">Ações</th>
               </tr>
@@ -198,7 +249,10 @@ export function CashRegisterHistoryView({
                 const isOpen = session.status === "open";
                 const busy = busyDate === session.serviceDate || pending;
                 const operator =
-                  session.openedByName ?? session.closedByName ?? "—";
+                  session.responsibleName ??
+                  session.openedByName ??
+                  session.closedByName ??
+                  "—";
 
                 return (
                   <tr key={session.id} className="border-b last:border-b-0">
@@ -250,9 +304,7 @@ export function CashRegisterHistoryView({
                             size="sm"
                             className="h-8"
                             disabled={busy}
-                            onClick={() =>
-                              void runAction(session.serviceDate, "close")
-                            }
+                            onClick={() => void runClose(session.serviceDate)}
                           >
                             <Lock className="size-3.5" />
                             Fechar
@@ -263,9 +315,9 @@ export function CashRegisterHistoryView({
                             variant="outline"
                             size="sm"
                             className="h-8"
-                            disabled={busy}
+                            disabled={busy || Boolean(openCashRegister)}
                             onClick={() =>
-                              void runAction(session.serviceDate, "reopen")
+                              startOpenCash(session.serviceDate, "reopen", session)
                             }
                           >
                             <RotateCcw className="size-3.5" />
@@ -286,6 +338,19 @@ export function CashRegisterHistoryView({
         {filtered.length} caixa{filtered.length === 1 ? "" : "s"} no período de{" "}
         {formatDateBR(from)} a {formatDateBR(to)}
       </p>
+
+      <OpenCashRegisterDialog
+        open={openDialog}
+        onOpenChange={setOpenDialog}
+        serviceDate={dialogDate ?? today}
+        today={today}
+        mode={openMode}
+        lockServiceDate={openMode === "reopen"}
+        responsibleOptions={responsibleOptions}
+        defaultResponsibleId={defaultResponsibleId}
+        defaultOpeningBalanceCents={dialogSession?.openingBalanceCents ?? 0}
+        onSuccess={() => startTransition(() => router.refresh())}
+      />
     </div>
   );
 }

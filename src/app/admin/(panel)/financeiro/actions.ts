@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import {
   closeCashRegister,
   getCashRegisterSession,
@@ -18,6 +19,14 @@ function revalidateFinance() {
   revalidatePath("/admin/financeiro");
   revalidatePath("/admin/financeiro/caixas");
 }
+
+const openCashRegisterSchema = z.object({
+  responsibleName: z.string().trim().min(1, "Informe o responsável pelo caixa."),
+  openingBalanceCents: z
+    .number()
+    .int()
+    .min(0, "O valor em dinheiro não pode ser negativo."),
+});
 
 export async function loadCashRegisterHistory(
   from: string,
@@ -46,7 +55,8 @@ export async function loadCashRegisterHistory(
 }
 
 export async function openCashRegisterAction(
-  serviceDate: string
+  serviceDate: string,
+  input: { responsibleName: string; openingBalanceCents: number }
 ): Promise<
   { ok: true; session: CashRegisterSession } | { ok: false; error: string }
 > {
@@ -55,6 +65,11 @@ export async function openCashRegisterAction(
     return session.ok === false
       ? { ok: false, error: session.error }
       : { ok: false, error: "Sem permissão." };
+  }
+
+  const parsed = openCashRegisterSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
   }
 
   const adminUser = await getAdminSession();
@@ -71,7 +86,7 @@ export async function openCashRegisterAction(
     admin,
     serviceDate,
     adminUser.userId,
-    0
+    parsed.data
   );
   if (!result.ok) return { ok: false, error: result.error };
 
@@ -109,7 +124,8 @@ export async function closeCashRegisterAction(
 }
 
 export async function reopenCashRegisterAction(
-  serviceDate: string
+  serviceDate: string,
+  input: { responsibleName: string; openingBalanceCents: number }
 ): Promise<
   { ok: true; session: CashRegisterSession } | { ok: false; error: string }
 > {
@@ -118,6 +134,11 @@ export async function reopenCashRegisterAction(
     return session.ok === false
       ? { ok: false, error: session.error }
       : { ok: false, error: "Sem permissão." };
+  }
+
+  const parsed = openCashRegisterSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
   }
 
   const auth = await getAdminSession();
@@ -130,7 +151,12 @@ export async function reopenCashRegisterAction(
     return { ok: false, error: admin.error };
   }
 
-  const result = await reopenCashRegister(admin, serviceDate, auth.userId);
+  const result = await reopenCashRegister(
+    admin,
+    serviceDate,
+    auth.userId,
+    parsed.data
+  );
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidateFinance();
