@@ -62,6 +62,7 @@ export const PUBLIC_API_RATE_LIMITS = {
   appointmentCreateIp: { limit: 5, windowMs: 60 * 60 * 1000 },
   appointmentCreateWhatsapp: { limit: 3, windowMs: 60 * 60 * 1000 },
   appointmentMutate: { limit: 10, windowMs: 15 * 60 * 1000 },
+  apiKey: { limit: 120, windowMs: 15 * 60 * 1000 },
 } as const;
 
 export type PublicApiRateLimitBucket = keyof typeof PUBLIC_API_RATE_LIMITS;

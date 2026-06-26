@@ -11,7 +11,7 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
 - **Painel admin:** `https://agendabarbearia-seven.vercel.app/` (login do dono/barbeiro).
 - **API base (produção):** `https://agendabarbearia-seven.vercel.app/api/v1`
 - **Fuso horário:** `America/Sao_Paulo`
-- **Autenticação:** nenhuma chave obrigatória hoje. A API é pública com limite de requisições por IP (e por WhatsApp em algumas rotas).
+- **Autenticação:** rotas públicas continuam acessíveis pelo site sem chave. Para integrações (n8n), use **chave de API** gerada no painel (`Configurações > Integrações > Chaves de API`). Header: `Authorization: Bearer dbc_live_<keyId>_<secret>`.
 - **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` (ou `{ "ok": false, "error": "..." }` em `/customers/by-whatsapp`).
 
 O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, horários livres, buscar cliente, criar/cancelar/remarcar agendamentos — as mesmas regras do site `/agenda`.
@@ -35,7 +35,66 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 
 ---
 
-## Regras de negócio importantes
+## Autenticação com chave de API (n8n)
+
+### Gerar a chave
+
+1. Entre no painel como **dono**
+2. Vá em **Configurações > Integrações > Chaves de API**
+3. Clique em **Nova chave**, dê um nome (ex.: `WhatsApp n8n`) e escolha as permissões
+4. **Copie a chave na hora** — ela não será exibida de novo
+
+Formato da chave:
+
+```
+dbc_live_<keyId>_<secret>
+```
+
+### Configurar no n8n
+
+| Campo | Valor |
+| --- | --- |
+| Tipo de credencial | **Header Auth** |
+| Nome do header | `Authorization` |
+| Valor | `Bearer dbc_live_SEU_KEYID_SEU_SECRET` |
+
+Use a **mesma credencial** em todos os nós **HTTP Request** e **HTTP Request Tool**.
+
+### Exemplo (sem segredo real)
+
+```
+GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
+Authorization: Bearer dbc_live_a1b2c3d4e5f6_EXEMPLO_NAO_USE_ESTA_CHAVE_NO_PROD
+```
+
+### Permissões (scopes)
+
+| Scope | Rotas |
+| --- | --- |
+| `catalog:read` | `GET /catalog` |
+| `availability:read` | `GET /availability` |
+| `customers:read` | `GET /customers/by-whatsapp`, `GET /customers/lookup` |
+| `appointments:read` | `GET /appointments` |
+| `appointments:create` | `POST /appointments` |
+| `appointments:update` | `PATCH /appointments/:id` |
+| `appointments:cancel` | `DELETE /appointments/:id` |
+
+Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personalizada**.
+
+### Erros de autenticação
+
+| HTTP | Body | Quando |
+| --- | --- | --- |
+| **401** | `{ "ok": false, "error": "Não autorizado." }` | Chave ausente/inválida/revogada/expirada (mensagem genérica) |
+| **403** | `{ "ok": false, "error": "Sem permissão." }` | Chave válida sem o scope da rota |
+
+### Site público vs integração
+
+- O site `/agenda` **não usa** chave de API — continua funcionando pelo navegador
+- Se você **enviar** `Authorization: Bearer ...` na requisição, a chave será validada e o scope exigido
+- Chaves com rate limit próprio: **120 req / 15 min** por chave (além dos limites por IP/WhatsApp onde aplicável)
+
+---
 
 1. **WhatsApp:** aceita **DDD + número** (10 ou 11 dígitos), com ou sem o prefixo `55`, com ou sem máscara (`(11) 98100-8852`) ou `+55`. O sistema normaliza e grava como `5511981008852`. Nos exemplos abaixo pode usar `11981008852` ou `5511981008852`.
 2. **Datas:** formato `AAAA-MM-DD` (ex.: `2026-06-15`). Não aceita datas no passado para agendar.
@@ -55,7 +114,8 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | Código | Quando |
 | --- | --- |
 | **200** | Sucesso |
-| **400** | Parâmetro ou body inválido (data, UUID, WhatsApp, nome vazio…) |
+| **401** | Chave de API inválida ou ausente quando Bearer foi enviado |
+| **403** | Chave válida sem permissão (scope) para a rota |
 | **404** | Profissional/serviço/agendamento não encontrado |
 | **409** | Conflito (horário ocupado, data passada, agendamento não pode mais ser alterado) |
 | **429** | Muitas requisições (rate limit) — header `Retry-After` em segundos |
@@ -75,10 +135,11 @@ Se exceder, a API responde **429** com:
 
 | Rotas | Limite |
 | --- | --- |
-| `GET /catalog`, `GET /availability` | 60 requisições / 15 min por IP |
-| `GET /customers/by-whatsapp`, `GET /customers/lookup`, `GET /appointments?whatsapp=` | 10 / 15 min por IP |
-| `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp |
-| `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP |
+| `GET /catalog`, `GET /availability` | 60 requisições / 15 min por IP (ou por chave de API) |
+| `GET /customers/by-whatsapp`, `GET /customers/lookup`, `GET /appointments?whatsapp=` | 10 / 15 min por IP (ou por chave) |
+| `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp (chave: 120/15min por keyId) |
+| `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP (ou por chave) |
+| Qualquer rota com chave de API | 120 / 15 min por `keyId` |
 
 **Dica para n8n:** chamar `/catalog` no início da conversa ou em cache; não repetir a cada mensagem “oi”.
 

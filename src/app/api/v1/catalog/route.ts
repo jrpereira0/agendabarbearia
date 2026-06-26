@@ -1,28 +1,31 @@
 import { NextResponse } from "next/server";
 import { safeApiRoute } from "@/lib/api/safe-route";
+import { withApiRouteGuard } from "@/lib/api/with-api-guard";
 import { TIMEZONE } from "@/lib/availability";
 import { getShopCatalog } from "@/lib/get-shop-catalog";
-import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 // GET /api/v1/catalog — barbearia, barbeiros, serviços e horários (automações e site)
 export async function GET(request: Request) {
-  return safeApiRoute(async () => {
-    const limited = enforcePublicApiRateLimit(request, "catalog");
-    if (limited) return limited;
+  return safeApiRoute(() =>
+    withApiRouteGuard(
+      request,
+      { scope: "catalog:read", rateLimit: "catalog" },
+      async () => {
+        if (!isSupabaseConfigured()) {
+          return NextResponse.json(
+            { error: "Sistema indisponível no momento." },
+            { status: 503 }
+          );
+        }
 
-    if (!isSupabaseConfigured()) {
-      return NextResponse.json(
-        { error: "Sistema indisponível no momento." },
-        { status: 503 }
-      );
-    }
+        const catalog = await getShopCatalog();
 
-    const catalog = await getShopCatalog();
-
-    return NextResponse.json({
-      timezone: TIMEZONE,
-      ...catalog,
-    });
-  });
+        return NextResponse.json({
+          timezone: TIMEZONE,
+          ...catalog,
+        });
+      }
+    )
+  );
 }

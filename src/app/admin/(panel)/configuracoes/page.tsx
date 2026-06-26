@@ -11,6 +11,9 @@ import {
 import { ShopProfileForm } from "@/components/admin/shop-profile-form";
 import { assertOwnerSettingsPage } from "@/lib/require-owner";
 import { formatCep, formatTime } from "@/lib/format";
+import Link from "next/link";
+import { ChevronRight, KeyRound } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 export const metadata = { title: "Configurações" };
 
@@ -61,6 +64,28 @@ export default async function SettingsPage() {
         title="Configurações da barbearia"
         description="Perfil, endereço, horários e dias especiais. A grade de cada barbeiro fica em Profissionais."
       />
+
+      <Card>
+        <CardContent className="p-0">
+          <Link
+            href="/admin/configuracoes/integracoes"
+            className="flex items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-muted/40 sm:px-6"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+                <KeyRound className="size-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Integrações</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Chaves de API para n8n e outras automações.
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
+        </CardContent>
+      </Card>
 
       <ShopProfileForm
         initialValues={{

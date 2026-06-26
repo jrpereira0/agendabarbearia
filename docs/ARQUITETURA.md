@@ -131,6 +131,8 @@ Todas as rotas disponíveis (8 operações em 6 paths):
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
+**Chaves de API:** geradas no painel em Configurações > Integrações > Chaves de API. Integrações (n8n) autenticam com `Authorization: Bearer dbc_live_...`. O site público continua sem chave.
+
 Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [API-N8N.md](./API-N8N.md).
 
 Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limit.ts`):

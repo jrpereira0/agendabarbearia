@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
+import { withApiRouteGuard } from "@/lib/api/with-api-guard";
 import {
   cancelPublicAppointment,
   updatePublicAppointment,
 } from "@/lib/manage-public-appointment";
-import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -25,84 +25,97 @@ type RouteContext = { params: Promise<{ id: string }> };
 // PATCH /api/v1/appointments/:id — remarcar agendamento do cliente
 export async function PATCH(request: NextRequest, context: RouteContext) {
   return safeApiRoute(async () => {
-    const limited = enforcePublicApiRateLimit(request, "appointmentMutate");
-    if (limited) return limited;
-
     const { id } = await context.params;
 
-    let json: unknown;
-    try {
-      json = await request.json();
-    } catch {
-      return NextResponse.json(
-        { error: "Corpo da requisição inválido." },
-        { status: 400 }
-      );
-    }
+    return withApiRouteGuard(
+      request,
+      { scope: "appointments:update", rateLimit: "appointmentMutate" },
+      async () => {
+        let json: unknown;
+        try {
+          json = await request.json();
+        } catch {
+          return NextResponse.json(
+            { error: "Corpo da requisição inválido." },
+            { status: 400 }
+          );
+        }
 
-    if (typeof json !== "object" || json === null) {
-      return NextResponse.json(
-        { error: "Corpo da requisição inválido." },
-        { status: 400 }
-      );
-    }
+        if (typeof json !== "object" || json === null) {
+          return NextResponse.json(
+            { error: "Corpo da requisição inválido." },
+            { status: 400 }
+          );
+        }
 
-    const raw = json as Record<string, unknown>;
-    const whatsapp =
-      typeof raw.whatsapp === "string"
-        ? normalizeWhatsapp(raw.whatsapp)
-        : null;
-    if (!whatsapp) {
-      return NextResponse.json(
-        { error: WHATSAPP_INVALID_MESSAGE },
-        { status: 400 }
-      );
-    }
+        const raw = json as Record<string, unknown>;
+        const whatsapp =
+          typeof raw.whatsapp === "string"
+            ? normalizeWhatsapp(raw.whatsapp)
+            : null;
+        if (!whatsapp) {
+          return NextResponse.json(
+            { error: WHATSAPP_INVALID_MESSAGE },
+            { status: 400 }
+          );
+        }
 
-    const parsed = updateBodySchema.safeParse({ ...raw, whatsapp });
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
-    }
+        const parsed = updateBodySchema.safeParse({ ...raw, whatsapp });
+        if (!parsed.success) {
+          return NextResponse.json(
+            { error: parsed.error.issues[0].message },
+            { status: 400 }
+          );
+        }
 
-    const result = await updatePublicAppointment(id, parsed.data);
+        const result = await updatePublicAppointment(id, parsed.data);
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+          );
+        }
 
-    revalidatePath("/admin");
-    revalidatePath("/agenda");
-    return NextResponse.json({ ok: true, appointmentId: result.data.id });
+        revalidatePath("/admin");
+        revalidatePath("/agenda");
+        return NextResponse.json({ ok: true, appointmentId: result.data.id });
+      }
+    );
   });
 }
 
 // DELETE /api/v1/appointments/:id?whatsapp=... — cancelar agendamento do cliente
 export async function DELETE(request: NextRequest, context: RouteContext) {
   return safeApiRoute(async () => {
-    const limited = enforcePublicApiRateLimit(request, "appointmentMutate");
-    if (limited) return limited;
-
     const { id } = await context.params;
-    const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
-    const whatsapp = normalizeWhatsapp(raw);
-    if (!whatsapp) {
-      return NextResponse.json(
-        { error: WHATSAPP_INVALID_MESSAGE },
-        { status: 400 }
-      );
-    }
 
-    const result = await cancelPublicAppointment(id, whatsapp);
+    return withApiRouteGuard(
+      request,
+      { scope: "appointments:cancel", rateLimit: "appointmentMutate" },
+      async () => {
+        const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
+        const whatsapp = normalizeWhatsapp(raw);
+        if (!whatsapp) {
+          return NextResponse.json(
+            { error: WHATSAPP_INVALID_MESSAGE },
+            { status: 400 }
+          );
+        }
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
+        const result = await cancelPublicAppointment(id, whatsapp);
 
-    revalidatePath("/admin");
-    revalidatePath("/agenda");
-    return NextResponse.json({ ok: true, appointmentId: result.data.id });
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+          );
+        }
+
+        revalidatePath("/admin");
+        revalidatePath("/agenda");
+        return NextResponse.json({ ok: true, appointmentId: result.data.id });
+      }
+    );
   });
 }

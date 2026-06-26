@@ -60,4 +60,4 @@ npm run create-admin  # cria usuário do painel: -- email senha "Nome"
 ## Documentação
 
 - [docs/ARQUITETURA.md](docs/ARQUITETURA.md) — como o sistema é organizado, tabelas do banco e permissões
-- [docs/API-N8N.md](docs/API-N8N.md) — API para automação no WhatsApp (n8n): endpoints, exemplos e fluxo de conversa
+- [docs/API-N8N.md](docs/API-N8N.md) — API para automação no WhatsApp (n8n): endpoints, chaves de API, exemplos e fluxo de conversa

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:migrate": "node --env-file=.env.local scripts/migrate.mjs",
     "create-admin": "node --env-file=.env.local scripts/create-admin.mjs",
     "test:api:customer-by-whatsapp": "node scripts/test-customer-by-whatsapp.mjs"
@@ -39,6 +41,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }

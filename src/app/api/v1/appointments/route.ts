@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
+import { withApiRouteGuard } from "@/lib/api/with-api-guard";
+import { resolveApiAuth } from "@/lib/api-key-auth";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import { listPublicAppointmentsByWhatsapp } from "@/lib/manage-public-appointment";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
@@ -26,34 +28,57 @@ const bodySchema = z.object({
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
 export async function GET(request: NextRequest) {
-  return safeApiRoute(async () => {
-    const limited = enforcePublicApiRateLimit(request, "whatsappSensitive");
-    if (limited) return limited;
+  return safeApiRoute(() =>
+    withApiRouteGuard(
+      request,
+      { scope: "appointments:read", rateLimit: "whatsappSensitive" },
+      async () => {
+        const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
+        const whatsapp = normalizeWhatsapp(raw);
+        if (!whatsapp) {
+          return NextResponse.json(
+            { error: WHATSAPP_INVALID_MESSAGE },
+            { status: 400 }
+          );
+        }
 
-    const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
-    const whatsapp = normalizeWhatsapp(raw);
-    if (!whatsapp) {
-      return NextResponse.json(
-        { error: WHATSAPP_INVALID_MESSAGE },
-        { status: 400 }
-      );
-    }
+        const result = await listPublicAppointmentsByWhatsapp(whatsapp);
 
-    const result = await listPublicAppointmentsByWhatsapp(whatsapp);
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+          );
+        }
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
-
-    return NextResponse.json({ appointments: result.data });
-  });
+        return NextResponse.json({ appointments: result.data });
+      }
+    )
+  );
 }
 
 // POST /api/v1/appointments — agendamento online pelo cliente
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
-    const limitedIp = enforcePublicApiRateLimit(request, "appointmentCreateIp");
-    if (limitedIp) return limitedIp;
+    const authResult = await resolveApiAuth(request, "appointments:create");
+    if (!authResult.ok) {
+      return authResult.response;
+    }
+
+    if (authResult.auth.type === "api_key") {
+      const limited = enforcePublicApiRateLimit(
+        request,
+        "apiKey",
+        authResult.auth.keyUuid
+      );
+      if (limited) return limited;
+    } else {
+      const limitedIp = enforcePublicApiRateLimit(
+        request,
+        "appointmentCreateIp"
+      );
+      if (limitedIp) return limitedIp;
+    }
 
     let json: unknown;
     try {
@@ -84,6 +109,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (authResult.auth.type === "public") {
+      const limitedWhatsapp = enforcePublicApiRateLimit(
+        request,
+        "appointmentCreateWhatsapp",
+        whatsapp
+      );
+      if (limitedWhatsapp) return limitedWhatsapp;
+    }
+
     const parsed = bodySchema.safeParse({ ...raw, whatsapp });
     if (!parsed.success) {
       return NextResponse.json(
@@ -92,17 +126,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const limitedWhatsapp = enforcePublicApiRateLimit(
-      request,
-      "appointmentCreateWhatsapp",
-      parsed.data.whatsapp
-    );
-    if (limitedWhatsapp) return limitedWhatsapp;
-
     const result = await createPublicAppointment(parsed.data);
 
     if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status }
+      );
     }
 
     revalidatePath("/admin");

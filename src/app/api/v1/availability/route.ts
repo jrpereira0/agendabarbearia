@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
+import { withApiRouteGuard } from "@/lib/api/with-api-guard";
 import { getAvailability } from "@/lib/get-availability";
-import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 
 const querySchema = z.object({
   professionalId: z.uuid("professionalId inválido."),
@@ -17,33 +17,39 @@ const querySchema = z.object({
 
 // GET /api/v1/availability?professionalId=...&date=2026-06-15&serviceIds=id1,id2
 export async function GET(request: NextRequest) {
-  return safeApiRoute(async () => {
-    const limited = enforcePublicApiRateLimit(request, "availability");
-    if (limited) return limited;
+  return safeApiRoute(() =>
+    withApiRouteGuard(
+      request,
+      { scope: "availability:read", rateLimit: "availability" },
+      async () => {
+        const params = Object.fromEntries(request.nextUrl.searchParams);
+        const parsed = querySchema.safeParse(params);
 
-    const params = Object.fromEntries(request.nextUrl.searchParams);
-    const parsed = querySchema.safeParse(params);
+        if (!parsed.success) {
+          return NextResponse.json(
+            { error: parsed.error.issues[0].message },
+            { status: 400 }
+          );
+        }
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
-    }
+        const { professionalId, date, serviceIds, excludeAppointmentId } =
+          parsed.data;
+        const result = await getAvailability(
+          professionalId,
+          date,
+          serviceIds,
+          excludeAppointmentId
+        );
 
-    const { professionalId, date, serviceIds, excludeAppointmentId } =
-      parsed.data;
-    const result = await getAvailability(
-      professionalId,
-      date,
-      serviceIds,
-      excludeAppointmentId
-    );
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+          );
+        }
 
-    if (!result.ok) {
-      return NextResponse.json({ error: result.error }, { status: result.status });
-    }
-
-    return NextResponse.json(result);
-  });
+        return NextResponse.json(result);
+      }
+    )
+  );
 }
