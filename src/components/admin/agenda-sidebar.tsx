@@ -139,6 +139,10 @@ export function AgendaSidebar({
               label="Cancelado"
             />
             <LegendItem swatchClass={agendaLegend.squeezeIn} label="Encaixe" />
+            <LegendItem
+              swatchClass={agendaLegend.comandaExtra}
+              label="Serviço extra"
+            />
             <LegendItem swatchClass={agendaLegend.done} label="Atendido" />
           </ul>
         )}

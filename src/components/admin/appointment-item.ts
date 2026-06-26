@@ -15,6 +15,7 @@ export type AppointmentItem = {
     | "cancelled"
     | "done";
   isSqueezeIn?: boolean;
+  isComandaExtra?: boolean;
   services: {
     id: string;
     name: string;

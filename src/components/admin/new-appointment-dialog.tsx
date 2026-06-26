@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
+import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
   formatDateBR,
@@ -673,23 +674,14 @@ export function NewAppointmentDialog({
                   {slotsError}
                 </p>
               ) : (
-                <div className="grid max-h-56 grid-cols-3 gap-2.5 overflow-y-auto sm:max-h-64 sm:grid-cols-4">
-                  {timeSlots.map((slot) => {
-                    const disabled = ownerFreeMode && blockedSlots.has(slot);
-                    return (
-                      <Button
-                        key={slot}
-                        type="button"
-                        variant={startTime === slot ? "default" : "outline"}
-                        className="h-10 tabular-nums"
-                        disabled={disabled}
-                        onClick={() => setStartTime(slot)}
-                      >
-                        {slot}
-                      </Button>
-                    );
-                  })}
-                </div>
+                <TimeSlotGrid
+                  slots={timeSlots}
+                  value={startTime}
+                  onChange={setStartTime}
+                  isSlotDisabled={(slot) =>
+                    ownerFreeMode && blockedSlots.has(slot)
+                  }
+                />
               )}
 
               {ownerFreeMode && startTime && selectedOutsideSchedule && (

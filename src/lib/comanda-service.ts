@@ -139,11 +139,8 @@ function mapComandaRow(
 
   const items: ComandaItem[] = [...(row.comanda_items ?? [])]
     .filter((item) => {
-      if (
-        item.squeeze_appointment_id &&
-        validSqueezeAppointmentIds.has(item.squeeze_appointment_id)
-      ) {
-        return true;
+      if (item.squeeze_appointment_id) {
+        return validSqueezeAppointmentIds.has(item.squeeze_appointment_id);
       }
       return (
         !item.appointment_id || validAppointmentIds.has(item.appointment_id)
@@ -224,6 +221,7 @@ async function loadCustomerDayEncaixes(
       end_time,
       status,
       is_squeeze_in,
+      is_comanda_extra,
       professionals ( nickname )
     `
     )
@@ -243,9 +241,81 @@ async function loadCustomerDayEncaixes(
         endTime: formatTime(apt.end_time),
         status: apt.status,
         isSqueezeIn: true,
+        isComandaExtra: apt.is_comanda_extra ?? false,
       };
     })
     .sort((a, b) => a.startTime.localeCompare(b.startTime, "pt-BR"));
+}
+
+async function pruneStaleEncaixeComandaItems(
+  admin: SupabaseClient,
+  comandaId: string,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<void> {
+  const { data: activeSqueeze } = await admin
+    .from("appointments")
+    .select("id")
+    .eq("customer_whatsapp", customerWhatsapp)
+    .eq("date", serviceDate)
+    .eq("is_squeeze_in", true)
+    .in("status", [...ACTIVE_APPOINTMENT_STATUSES]);
+
+  const validIds = new Set((activeSqueeze ?? []).map((row) => row.id));
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("id, squeeze_appointment_id")
+    .eq("comanda_id", comandaId)
+    .not("squeeze_appointment_id", "is", null);
+
+  const staleIds = (items ?? [])
+    .filter(
+      (item) =>
+        item.squeeze_appointment_id &&
+        !validIds.has(item.squeeze_appointment_id)
+    )
+    .map((item) => item.id);
+
+  if (staleIds.length > 0) {
+    await admin.from("comanda_items").delete().in("id", staleIds);
+  }
+}
+
+/** Remove itens de encaixe excluído/cancelado e recalcula comandas abertas. */
+export async function detachEncaixeFromOpenComandas(
+  admin: SupabaseClient,
+  squeezeAppointmentId: string
+): Promise<void> {
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("comanda_id")
+    .eq("squeeze_appointment_id", squeezeAppointmentId);
+
+  const comandaIds = [
+    ...new Set((items ?? []).map((item) => item.comanda_id)),
+  ];
+
+  if (items?.length) {
+    await admin
+      .from("comanda_items")
+      .delete()
+      .eq("squeeze_appointment_id", squeezeAppointmentId);
+  }
+
+  const now = new Date().toISOString();
+  for (const comandaId of comandaIds) {
+    const totals = await recalculateComandaTotals(admin, comandaId);
+    await admin
+      .from("comandas")
+      .update({
+        total_cents: totals.totalCents,
+        commission_cents: totals.commissionCents,
+        updated_at: now,
+      })
+      .eq("id", comandaId)
+      .eq("status", "open");
+  }
 }
 
 async function syncManualEncaixeItemsToComanda(
@@ -254,12 +324,20 @@ async function syncManualEncaixeItemsToComanda(
   customerWhatsapp: string,
   serviceDate: string
 ): Promise<void> {
+  await pruneStaleEncaixeComandaItems(
+    admin,
+    comandaId,
+    customerWhatsapp,
+    serviceDate
+  );
+
   const { data: squeezeApts } = await admin
     .from("appointments")
     .select("id, professional_id")
     .eq("customer_whatsapp", customerWhatsapp)
     .eq("date", serviceDate)
     .eq("is_squeeze_in", true)
+    .eq("is_comanda_extra", false)
     .in("status", [...ACTIVE_APPOINTMENT_STATUSES]);
 
   if (!squeezeApts?.length) return;
@@ -1055,33 +1133,52 @@ async function upsertSqueezeAppointment(
   professionalId: string,
   serviceId: string,
   durationMinutes: number,
-  existingSqueezeId: string | null
+  existingSqueezeId: string | null,
+  options: {
+    startTime?: string;
+    isComandaExtra?: boolean;
+  } = {}
 ): Promise<
   { ok: true; appointmentId: string } | { ok: false; error: string; status: number }
 > {
-  const startTime = formatTime(main.start_time);
-  const endMinutes = timeToMinutes(startTime) + durationMinutes;
+  const startTime = options.startTime ?? formatTime(main.start_time);
+  const startMinutes = timeToMinutes(startTime);
+  const endMinutes = startMinutes + durationMinutes;
   if (endMinutes > 24 * 60) {
     return {
       ok: false,
       error:
-        "O serviço extra passa da meia-noite. Remova-o ou ajuste o horário do agendamento.",
+        "O serviço extra passa da meia-noite. Escolha um horário mais cedo.",
       status: 400,
     };
   }
   const endTime = minutesToTime(endMinutes);
   const status = squeezeStatusFromMain(main.status);
+  const startTimeDb = minutesToTime(startMinutes);
+  const isComandaExtra = options.isComandaExtra ?? false;
 
   if (existingSqueezeId) {
+    const updateRow: {
+      professional_id: string;
+      date: string;
+      start_time: string;
+      end_time: string;
+      status: string;
+      is_comanda_extra?: boolean;
+    } = {
+      professional_id: professionalId,
+      date: main.date,
+      start_time: startTimeDb,
+      end_time: endTime,
+      status,
+    };
+    if (options.isComandaExtra !== undefined) {
+      updateRow.is_comanda_extra = options.isComandaExtra;
+    }
+
     const { error: updateError } = await admin
       .from("appointments")
-      .update({
-        professional_id: professionalId,
-        date: main.date,
-        start_time: main.start_time,
-        end_time: endTime,
-        status,
-      })
+      .update(updateRow)
       .eq("id", existingSqueezeId)
       .eq("is_squeeze_in", true);
 
@@ -1124,10 +1221,11 @@ async function upsertSqueezeAppointment(
       customer_last_name: main.customer_last_name,
       customer_whatsapp: main.customer_whatsapp,
       date: main.date,
-      start_time: main.start_time,
+      start_time: startTimeDb,
       end_time: endTime,
       status,
       is_squeeze_in: true,
+      is_comanda_extra: isComandaExtra,
     })
     .select("id")
     .single();
@@ -1516,6 +1614,8 @@ async function syncComandaAddonAppointments(
       continue;
     }
 
+    const isExplicitExtra = Boolean(item.isComandaExtra && item.startTime);
+
     const main = await resolveMainForComandaItem(admin, item);
     if (!main || main.status === "cancelled") continue;
 
@@ -1525,10 +1625,10 @@ async function syncComandaAddonAppointments(
       .eq("appointment_id", main.id);
 
     const mainServiceIds = (mainLinks ?? []).map((link) => link.service_id);
-    const needsSqueeze = flagComandaItemsNeedingSqueeze(
-      [item],
-      mainServiceIds
-    )[0];
+    const needsSqueeze =
+      isExplicitExtra ||
+      Boolean(previous?.squeezeAppointmentId) ||
+      flagComandaItemsNeedingSqueeze([item], mainServiceIds)[0];
 
     if (!needsSqueeze) {
       if (previous?.squeezeAppointmentId) {
@@ -1561,7 +1661,11 @@ async function syncComandaAddonAppointments(
       item.professionalId ?? main.professional_id,
       item.serviceId,
       durations.get(item.serviceId) ?? 0,
-      existingSqueezeId
+      existingSqueezeId,
+      {
+        startTime: item.startTime,
+        isComandaExtra: isExplicitExtra ? true : undefined,
+      }
     );
 
     if (!upsert.ok) {

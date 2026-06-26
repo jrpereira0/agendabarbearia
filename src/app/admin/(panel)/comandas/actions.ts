@@ -28,6 +28,11 @@ const itemSchema = z.object({
   chargedPriceCents: z.number().int().min(0),
   appointmentId: z.uuid().optional(),
   professionalId: z.uuid().optional(),
+  startTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/, "Horário inválido.")
+    .optional(),
+  isComandaExtra: z.boolean().optional(),
 });
 
 const paymentSchema = z.object({

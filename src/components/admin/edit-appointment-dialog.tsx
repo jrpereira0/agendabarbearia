@@ -20,6 +20,7 @@ import { SearchInput } from "@/components/admin/search-input";
 import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-appointment-dialog";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { DialogSection } from "@/components/admin/dialog-section";
+import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
   formatDateBR,
@@ -29,6 +30,7 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import type { MinuteRange } from "@/lib/availability";
+import { timeToMinutes } from "@/lib/availability";
 import {
   encaixeTimeSlots,
   findAppointmentConflicts,
@@ -76,6 +78,7 @@ export function EditAppointmentDialog({
   const [saving, setSaving] = useState(false);
 
   const isEncaixe = appointment?.isSqueezeIn ?? false;
+  const ownerFreeMode = isOwner && !isEncaixe;
   const selectedProfessional = professionals.find((p) => p.id === professionalId);
 
   const availableServices = useMemo(() => {
@@ -108,12 +111,62 @@ export function EditAppointmentDialog({
   );
 
   const timeSlots = useMemo(() => {
-    const base = isEncaixe ? encaixeSlots : availableSlots;
+    const base =
+      isEncaixe || ownerFreeMode ? encaixeSlots : availableSlots;
     if (startTime && !base.includes(startTime)) {
       return [...base, startTime].sort();
     }
     return base;
-  }, [isEncaixe, encaixeSlots, availableSlots, startTime]);
+  }, [isEncaixe, ownerFreeMode, encaixeSlots, availableSlots, startTime]);
+
+  const conflictAppointments = useMemo(
+    () =>
+      appointments.map((a) => ({
+        id: a.id,
+        customerFirstName: a.customerFirstName,
+        customerLastName: a.customerLastName,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        professionalId: a.professionalId,
+        status: a.status,
+        isSqueezeIn: a.isSqueezeIn,
+      })),
+    [appointments]
+  );
+
+  const blockedSlots = useMemo(() => {
+    if (!ownerFreeMode || !professionalId || totalMinutes === 0) {
+      return new Set<string>();
+    }
+
+    const blocked = new Set<string>();
+    for (const slot of encaixeSlots) {
+      if (timeToMinutes(slot) + totalMinutes > 24 * 60) {
+        blocked.add(slot);
+        continue;
+      }
+
+      const conflicts = findAppointmentConflicts(
+        professionalId,
+        slot,
+        totalMinutes,
+        conflictAppointments,
+        appointment?.id,
+        { ignoreSqueezeIn: true }
+      );
+      if (conflicts.length > 0) {
+        blocked.add(slot);
+      }
+    }
+    return blocked;
+  }, [
+    ownerFreeMode,
+    professionalId,
+    totalMinutes,
+    encaixeSlots,
+    conflictAppointments,
+    appointment?.id,
+  ]);
 
   const selectedRanges = useMemo(
     () =>
@@ -130,20 +183,19 @@ export function EditAppointmentDialog({
       professionalId,
       startTime,
       totalMinutes,
-      appointments.map((a) => ({
-        id: a.id,
-        customerFirstName: a.customerFirstName,
-        customerLastName: a.customerLastName,
-        startTime: a.startTime,
-        endTime: a.endTime,
-        professionalId: a.professionalId,
-        status: a.status,
-        isSqueezeIn: a.isSqueezeIn,
-      })),
+      conflictAppointments,
       appointment.id,
       { ignoreSqueezeIn: isOwner && !isEncaixe }
     );
-  }, [appointment, professionalId, startTime, totalMinutes, appointments]);
+  }, [
+    appointment,
+    professionalId,
+    startTime,
+    totalMinutes,
+    conflictAppointments,
+    isOwner,
+    isEncaixe,
+  ]);
 
   const selectedOutsideSchedule = useMemo(() => {
     if (!startTime || totalMinutes === 0) return false;
@@ -178,7 +230,14 @@ export function EditAppointmentDialog({
   }, [open, professionalId, professionals]);
 
   useEffect(() => {
-    if (!open || !appointment || isEncaixe || serviceIds.length === 0 || !professionalId) {
+    if (
+      !open ||
+      !appointment ||
+      isEncaixe ||
+      ownerFreeMode ||
+      serviceIds.length === 0 ||
+      !professionalId
+    ) {
       return;
     }
 
@@ -219,7 +278,7 @@ export function EditAppointmentDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, appointment, isEncaixe, serviceIds, professionalId]);
+  }, [open, appointment, isEncaixe, ownerFreeMode, serviceIds, professionalId]);
 
   function toggleService(id: string, checked: boolean) {
     setServiceIds((prev) =>
@@ -447,37 +506,47 @@ export function EditAppointmentDialog({
                 </p>
               )}
 
-              {!isEncaixe && loadingSlots ? (
+              {!isEncaixe && !ownerFreeMode && loadingSlots ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
                   Carregando horários...
                 </p>
-              ) : !isEncaixe && slotsError ? (
+              ) : !isEncaixe && !ownerFreeMode && slotsError ? (
                 <p className="rounded-lg border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">
                   {slotsError}
                 </p>
               ) : (
                 <>
-                  {availableSlots.length === 0 && startTime && (
-                    <p className="rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  {!isEncaixe &&
+                    !ownerFreeMode &&
+                    availableSlots.length === 0 &&
+                    startTime && (
+                    <p className="mb-3 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
                       Só o horário atual está disponível — o painel permite
                       corrigir agendamentos mesmo fora do horário de reserva
                       online.
                     </p>
                   )}
-                  <div className="grid max-h-48 grid-cols-3 gap-2 sm:grid-cols-4">
-                    {timeSlots.map((slot) => (
-                      <Button
-                        key={slot}
-                        type="button"
-                        variant={startTime === slot ? "default" : "outline"}
-                        className="h-9 tabular-nums"
-                        onClick={() => setStartTime(slot)}
-                      >
-                        {slot}
-                      </Button>
-                    ))}
-                  </div>
+                  <TimeSlotGrid
+                    slots={timeSlots}
+                    value={startTime}
+                    onChange={setStartTime}
+                    buttonSize="sm"
+                    buttonClassName="h-9"
+                    isSlotDisabled={(slot) =>
+                      Boolean(
+                        ownerFreeMode &&
+                          blockedSlots.has(slot) &&
+                          slot !== startTime
+                      )
+                    }
+                  />
                 </>
+              )}
+
+              {ownerFreeMode && startTime && selectedOutsideSchedule && (
+                <p className="mt-3 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  Fora do horário de funcionamento deste barbeiro.
+                </p>
               )}
 
               {isEncaixe && selectedOutsideSchedule && startTime && (

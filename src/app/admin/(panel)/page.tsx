@@ -49,6 +49,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       end_time,
       status,
       is_squeeze_in,
+      is_comanda_extra,
       professionals ( nickname ),
       appointment_services (
         services ( id, name, duration_minutes, price_cents )
@@ -98,6 +99,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     endTime: formatTime(a.end_time),
     status: a.status as AppointmentItem["status"],
     isSqueezeIn: a.is_squeeze_in ?? false,
+    isComandaExtra: a.is_comanda_extra ?? false,
     services: (a.appointment_services ?? []).flatMap((row) => {
       const raw = row.services as
         | { id: string; name: string; duration_minutes: number; price_cents: number }

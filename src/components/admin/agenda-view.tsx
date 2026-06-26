@@ -8,6 +8,7 @@ import { AgendaGrid } from "@/components/admin/agenda-grid";
 import { AgendaSidebar } from "@/components/admin/agenda-sidebar";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { ComandaDialog } from "@/components/admin/comanda-dialog";
+import { AppointmentActionsDialog } from "@/components/admin/appointment-actions-dialog";
 import { EditAppointmentDialog } from "@/components/admin/edit-appointment-dialog";
 import {
   NewAppointmentDialog,
@@ -157,7 +158,8 @@ export function AgendaView({
   const [newOpen, setNewOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentItem | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [comandaOpen, setComandaOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [bookingMode, setBookingMode] = useState<BookingMode>("normal");
   const [bookingProfessionalId, setBookingProfessionalId] = useState<
@@ -208,11 +210,15 @@ export function AgendaView({
 
   function handleAppointmentClick(apt: AppointmentItem) {
     setSelectedAppointment(apt);
-    setDetailOpen(true);
+    setActionsOpen(true);
   }
 
-  function handleEditAppointment(apt: AppointmentItem) {
-    setSelectedAppointment(apt);
+  function handleOpenComanda() {
+    setComandaOpen(true);
+  }
+
+  function handleEditAppointment(apt?: AppointmentItem) {
+    if (apt) setSelectedAppointment(apt);
     setEditOpen(true);
   }
 
@@ -300,12 +306,24 @@ export function AgendaView({
         }))}
       />
 
+      <AppointmentActionsDialog
+        appointment={selectedAppointment}
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        isOwner={isOwner}
+        sessionProfessionalId={professionalId}
+        onOpenComanda={handleOpenComanda}
+        onEditAppointment={() => handleEditAppointment()}
+      />
+
       <ComandaDialog
         appointment={selectedAppointment}
-        open={detailOpen}
-        onOpenChange={setDetailOpen}
+        open={comandaOpen}
+        onOpenChange={setComandaOpen}
         servicesCatalog={services}
         sessionProfessionalId={professionalId}
+        slotStepMinutes={dayContext.slotStepMinutes}
+        appointments={appointments}
         professionals={dayContext.professionals.map((p) => ({
           id: p.id,
           nickname: p.nickname,
@@ -323,8 +341,8 @@ export function AgendaView({
         onEditSchedule={
           isOwner && selectedAppointment
             ? () => {
-                setDetailOpen(false);
-                handleEditAppointment(selectedAppointment);
+                setComandaOpen(false);
+                handleEditAppointment();
               }
             : undefined
         }

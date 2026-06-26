@@ -98,8 +98,8 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Bloqueio de horário** (`schedule_blocks`): na sidebar, bloqueia uma faixa do dia para um barbeiro; agendamento normal e API pública não oferecem esse horário; **encaixe manual** ainda pode usar
 - **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`). Encaixes do **mesmo cliente no mesmo dia** entram automaticamente na comanda aberta dele
 - **Cancelar** horário: motivo obrigatório; o card **some da agenda** (não fica visível como cancelado)
-- Ações no horário: **comanda** (serviços, preços, pagamento misto, fechar/reabrir), **editar** horário e cliente (inclusive trocar barbeiro), ou **cancelar** (bloqueado se comanda fechada)
-- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais do dia e os encaixes manuais desse cliente; serviços extras adicionados na comanda viram encaixe na agenda
+- Ações no horário: ao **clicar no card**, abre um modal com resumo e opções (abrir comanda, editar, trocar cliente, cancelar, WhatsApp); a comanda abre só quando escolher essa opção
+- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais do dia e os encaixes manuais desse cliente; ao **adicionar serviço na comanda**, o dono escolhe barbeiro e horário — vira **serviço extra** na agenda (borda tracejada cinza; encaixe manual continua vermelho)
 - Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
 - Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
 - Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)

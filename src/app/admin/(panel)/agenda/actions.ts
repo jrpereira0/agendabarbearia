@@ -21,6 +21,7 @@ import {
   ACTIVE_APPOINTMENT_STATUSES,
   type AppointmentStatus,
 } from "@/lib/appointment-status";
+import { detachEncaixeFromOpenComandas } from "@/lib/comanda-service";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -686,6 +687,53 @@ export async function cancelAppointment(input: {
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
+  const { data: aptInfo } = await admin
+    .from("appointments")
+    .select("is_squeeze_in")
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (aptInfo?.is_squeeze_in) {
+    const { data: squeezeItemLink } = await admin
+      .from("comanda_items")
+      .select("comandas ( status )")
+      .eq("squeeze_appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle();
+
+    const squeezeComanda = Array.isArray(squeezeItemLink?.comandas)
+      ? squeezeItemLink?.comandas[0]
+      : squeezeItemLink?.comandas;
+
+    if (squeezeComanda?.status === "closed") {
+      return {
+        ok: false,
+        error:
+          "Esta comanda está fechada. Reabra a comanda antes de cancelar o horário.",
+      };
+    }
+
+    const cancelledAt = new Date().toISOString();
+    const { error } = await admin
+      .from("appointments")
+      .update({
+        status: "cancelled",
+        cancellation_reason: reason,
+        cancelled_at: cancelledAt,
+      })
+      .eq("id", appointmentId);
+
+    if (error) {
+      return { ok: false, error: "Não foi possível cancelar o agendamento." };
+    }
+
+    await detachEncaixeFromOpenComandas(admin, appointmentId);
+
+    revalidatePath("/admin");
+    revalidatePath("/agenda");
+    return { ok: true };
+  }
+
   const { data: link } = await admin
     .from("comanda_appointments")
     .select("comanda_id, comandas ( id, status )")
@@ -822,6 +870,48 @@ export async function deleteAppointment(
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
+
+  const { data: aptInfo } = await admin
+    .from("appointments")
+    .select("is_squeeze_in")
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (aptInfo?.is_squeeze_in) {
+    const { data: squeezeItemLink } = await admin
+      .from("comanda_items")
+      .select("comandas ( status )")
+      .eq("squeeze_appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle();
+
+    const squeezeComanda = Array.isArray(squeezeItemLink?.comandas)
+      ? squeezeItemLink?.comandas[0]
+      : squeezeItemLink?.comandas;
+
+    if (squeezeComanda?.status === "closed") {
+      return {
+        ok: false,
+        error:
+          "Esta comanda está fechada. Reabra antes de excluir o agendamento.",
+      };
+    }
+
+    await detachEncaixeFromOpenComandas(admin, appointmentId);
+
+    const { error } = await admin
+      .from("appointments")
+      .delete()
+      .eq("id", appointmentId);
+
+    if (error) {
+      return { ok: false, error: "Não foi possível excluir o agendamento." };
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/agenda");
+    return { ok: true };
+  }
 
   const { data: link } = await admin
     .from("comanda_appointments")

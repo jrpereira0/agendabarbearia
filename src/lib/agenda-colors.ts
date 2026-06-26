@@ -14,6 +14,7 @@ export const agendaLegend = {
   onSite: "bg-[#d97706]",
   cancelled: "bg-[#c41e3a]",
   squeezeIn: "border-2 border-dashed border-[#c41e3a] bg-white",
+  comandaExtra: "border-2 border-dashed border-neutral-900 bg-neutral-100",
   done: "bg-[#15803d]",
 } as const;
 
@@ -58,12 +59,16 @@ export function agendaStatusSwatchClass(
 export function agendaAppointmentClass(appointment: {
   status: AppointmentStatus;
   isSqueezeIn?: boolean;
+  isComandaExtra?: boolean;
 }): string {
   if (appointment.status === "cancelled") {
     return statusCardClass.cancelled;
   }
   if (appointment.status === "done") {
     return statusCardClass.done;
+  }
+  if (appointment.isComandaExtra) {
+    return "border-2 border-dashed border-neutral-900 bg-neutral-100 text-neutral-900";
   }
   if (appointment.isSqueezeIn) {
     return "border-2 border-dashed border-[#c41e3a] bg-white text-[#9f1239]";

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/admin/search-input";
 import { DialogSection } from "@/components/admin/dialog-section";
+import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import type {
   ProfessionalOption,
@@ -63,6 +64,8 @@ import {
 import { cn } from "@/lib/utils";
 import { adminWideDialogClassName } from "@/lib/admin-dialog";
 import { matchesSearch } from "@/lib/text";
+import { encaixeTimeSlots, findAppointmentConflicts } from "@/lib/encaixe";
+import { timeToMinutes } from "@/lib/availability";
 import {
   cancelAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
@@ -76,6 +79,7 @@ import {
 type EditableItem = ComandaItemInput & {
   localKey: string;
   professionalNickname?: string;
+  squeezeAppointmentId?: string | null;
 };
 
 function mapComandaItemsToEditable(
@@ -89,6 +93,7 @@ function mapComandaItemsToEditable(
     catalogPriceCents: item.catalogPriceCents,
     chargedPriceCents: item.chargedPriceCents,
     appointmentId: item.appointmentId ?? undefined,
+    squeezeAppointmentId: item.squeezeAppointmentId,
     professionalId: item.professionalId ?? undefined,
     professionalNickname: item.professionalNickname,
   }));
@@ -99,6 +104,7 @@ function stripEditableItem(item: EditableItem): ComandaItemInput {
     localKey: _k,
     id,
     professionalNickname: _pn,
+    squeezeAppointmentId: _sq,
     ...rest
   } = item;
   return { ...rest, ...(id ? { id } : {}) };
@@ -122,6 +128,8 @@ type ComandaDialogProps = {
   professionals?: ComandaProfessionalOption[];
   sessionProfessionalId?: string | null;
   commissionPercent?: number;
+  slotStepMinutes?: number;
+  appointments?: AppointmentItem[];
   onEditSchedule?: () => void;
 };
 
@@ -143,6 +151,8 @@ export function ComandaDialog({
   professionals = [],
   sessionProfessionalId = null,
   commissionPercent = 50,
+  slotStepMinutes = 15,
+  appointments = [],
   onEditSchedule,
 }: ComandaDialogProps) {
   const router = useRouter();
@@ -162,6 +172,11 @@ export function ComandaDialog({
   );
   const [cancelReason, setCancelReason] = useState("");
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  const [cancelTargetLabel, setCancelTargetLabel] = useState<string | null>(null);
+  const [pendingExtraService, setPendingExtraService] =
+    useState<ServiceOption | null>(null);
+  const [extraProfessionalId, setExtraProfessionalId] = useState("");
+  const [extraStartTime, setExtraStartTime] = useState("");
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -215,6 +230,10 @@ export function ComandaDialog({
       setFocusAppointmentId(null);
       setCancelReason("");
       setCancelTargetId(null);
+      setCancelTargetLabel(null);
+      setPendingExtraService(null);
+      setExtraProfessionalId("");
+      setExtraStartTime("");
     }
   }, [open, appointment?.id, load]);
 
@@ -319,6 +338,46 @@ export function ComandaDialog({
     );
   }, [appointment, comanda?.linkedAppointments]);
 
+  const extraTimeSlots = useMemo(
+    () => encaixeTimeSlots(slotStepMinutes),
+    [slotStepMinutes]
+  );
+
+  const extraServiceDuration = pendingExtraService?.durationMinutes ?? 0;
+
+  const extraConflicts = useMemo(() => {
+    if (!extraStartTime || !extraProfessionalId || extraServiceDuration <= 0) {
+      return [];
+    }
+    return findAppointmentConflicts(
+      extraProfessionalId,
+      extraStartTime,
+      extraServiceDuration,
+      appointments.map((apt) => ({
+        id: apt.id,
+        customerFirstName: apt.customerFirstName,
+        customerLastName: apt.customerLastName,
+        startTime: apt.startTime,
+        endTime: apt.endTime,
+        professionalId: apt.professionalId,
+        status: apt.status,
+        isSqueezeIn: apt.isSqueezeIn,
+      }))
+    );
+  }, [
+    extraStartTime,
+    extraProfessionalId,
+    extraServiceDuration,
+    appointments,
+  ]);
+
+  const eligibleExtraProfessionals = useMemo(() => {
+    if (!pendingExtraService) return [];
+    return professionals.filter((pro) =>
+      pro.serviceIds.includes(pendingExtraService.id)
+    );
+  }, [pendingExtraService, professionals]);
+
   if (!appointment) return null;
 
   const linkedAppointments = linkedAppointmentsForMemo;
@@ -361,6 +420,50 @@ export function ComandaDialog({
       return false;
     }
     return isOwner || apt.professionalId === sessionProfessionalId;
+  }
+
+  function getCancelTargetForItem(item: EditableItem): string | null {
+    if (item.squeezeAppointmentId) {
+      const apt = linkedAppointments.find(
+        (linked) => linked.id === item.squeezeAppointmentId
+      );
+      if (apt && canCancelLinkedAppointment(apt)) {
+        return item.squeezeAppointmentId;
+      }
+      return null;
+    }
+
+    if (item.appointmentId && item.id) {
+      const apt = linkedAppointments.find(
+        (linked) => linked.id === item.appointmentId && !linked.isSqueezeIn
+      );
+      if (apt && canCancelLinkedAppointment(apt)) {
+        return item.appointmentId;
+      }
+    }
+
+    return null;
+  }
+
+  function canRemoveItemFromComanda(item: EditableItem): boolean {
+    return canEdit && !getCancelTargetForItem(item) && items.length > 1;
+  }
+
+  function handleItemTrash(item: EditableItem) {
+    const cancelTarget = getCancelTargetForItem(item);
+    if (cancelTarget) {
+      openCancelDialog(cancelTarget, item.serviceName);
+      return;
+    }
+
+    if (canRemoveItemFromComanda(item)) {
+      void removeItem(item.localKey);
+    }
+  }
+
+  function isItemTrashDisabled(item: EditableItem): boolean {
+    if (busy || isClosed) return true;
+    return !getCancelTargetForItem(item) && !canRemoveItemFromComanda(item);
   }
 
   const appointmentToCancel =
@@ -440,30 +543,73 @@ export function ComandaDialog({
 
   async function pickService(svc: ServiceOption) {
     if (!canEdit || busy) return;
-    const defaultApt =
-      linkedAppointments.find((apt) => apt.id === appointment?.id) ??
-      linkedAppointments[0];
-    if (!defaultApt) return;
+    const eligible = professionals.filter((pro) => pro.serviceIds.includes(svc.id));
+    if (eligible.length === 0) {
+      toast.error("Nenhum barbeiro faz este serviço.");
+      return;
+    }
 
+    const linkedProIds = new Set(linkedAppointments.map((apt) => apt.professionalId));
+    const defaultPro =
+      eligible.find((pro) => linkedProIds.has(pro.id)) ??
+      eligible.find((pro) => pro.id === sessionProfessionalId) ??
+      eligible[0];
+
+    setPendingExtraService(svc);
+    setExtraProfessionalId(defaultPro?.id ?? "");
+    setExtraStartTime("");
+    setServiceSearch("");
+    setServicePickerOpen(false);
+  }
+
+  async function confirmExtraService() {
+    if (!pendingExtraService || !canEdit || busy) return;
+
+    if (!extraProfessionalId) {
+      toast.error("Escolha o barbeiro.");
+      return;
+    }
+    if (!extraStartTime) {
+      toast.error("Escolha o horário.");
+      return;
+    }
+
+    const contextApt =
+      linkedAppointments.find((apt) => !apt.isSqueezeIn) ??
+      linkedAppointments[0];
+    if (!contextApt) {
+      toast.error("Não há agendamento ativo nesta comanda.");
+      return;
+    }
+
+    const pro = professionals.find((p) => p.id === extraProfessionalId);
     const previous = items;
-    const nextItems = [
+    const nextItems: EditableItem[] = [
       ...items,
       {
         localKey: newLocalKey(),
-        serviceId: svc.id,
-        serviceName: svc.name,
-        catalogPriceCents: svc.priceCents,
-        chargedPriceCents: svc.priceCents,
-        appointmentId: defaultApt.id,
-        professionalId: defaultApt.professionalId,
-        professionalNickname: defaultApt.professionalNickname,
+        serviceId: pendingExtraService.id,
+        serviceName: pendingExtraService.name,
+        catalogPriceCents: pendingExtraService.priceCents,
+        chargedPriceCents: pendingExtraService.priceCents,
+        appointmentId: contextApt.id,
+        professionalId: extraProfessionalId,
+        professionalNickname: pro?.nickname,
+        startTime: extraStartTime,
+        isComandaExtra: true,
       },
     ];
+
     setItems(nextItems);
-    setServiceSearch("");
-    setServicePickerOpen(false);
     const ok = await persistItems(nextItems);
-    if (!ok) setItems(previous);
+    if (ok) {
+      setPendingExtraService(null);
+      setExtraProfessionalId("");
+      setExtraStartTime("");
+      toast.success("Serviço extra adicionado.");
+    } else {
+      setItems(previous);
+    }
   }
 
   async function handleClose() {
@@ -534,6 +680,7 @@ export function ComandaDialog({
       setConfirmCancel(false);
       setCancelReason("");
       setCancelTargetId(null);
+      setCancelTargetLabel(null);
       const remaining = linkedAppointments.filter((apt) => apt.id !== targetId);
       if (remaining.length === 0) {
         onOpenChange(false);
@@ -550,9 +697,10 @@ export function ComandaDialog({
     setBusy(false);
   }
 
-  function openCancelDialog(appointmentId: string) {
+  function openCancelDialog(appointmentId: string, serviceLabel?: string) {
     setCancelTargetId(appointmentId);
     setFocusAppointmentId(appointmentId);
+    setCancelTargetLabel(serviceLabel ?? null);
     setCancelReason("");
     setConfirmCancel(true);
   }
@@ -560,7 +708,7 @@ export function ComandaDialog({
   return (
     <>
       <Dialog
-        open={open && !confirmCancel}
+        open={open && !confirmCancel && !pendingExtraService}
         onOpenChange={onOpenChange}
       >
         <DialogContent className={adminWideDialogClassName()}>
@@ -714,14 +862,20 @@ export function ComandaDialog({
                             </div>
                           </div>
                         </div>
-                        {canEdit && (
+                        {!isClosed &&
+                          (getCancelTargetForItem(item) || canEdit) && (
                           <Button
                             type="button"
                             variant="ghost"
                             size="icon"
                             className="size-8 shrink-0 text-destructive"
-                            onClick={() => removeItem(item.localKey)}
-                            disabled={items.length <= 1 || busy}
+                            onClick={() => handleItemTrash(item)}
+                            disabled={isItemTrashDisabled(item)}
+                            title={
+                              getCancelTargetForItem(item)
+                                ? "Cancelar horário"
+                                : "Remover serviço"
+                            }
                           >
                             <Trash2 className="size-4" />
                           </Button>
@@ -840,14 +994,20 @@ export function ComandaDialog({
                             )}
                           </td>
                           <td className="px-2 py-3">
-                            {canEdit && (
+                            {!isClosed &&
+                              (getCancelTargetForItem(item) || canEdit) && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
                                 className="size-8 text-destructive"
-                                onClick={() => removeItem(item.localKey)}
-                                disabled={items.length <= 1 || busy}
+                                onClick={() => handleItemTrash(item)}
+                                disabled={isItemTrashDisabled(item)}
+                                title={
+                                  getCancelTargetForItem(item)
+                                    ? "Cancelar horário"
+                                    : "Remover serviço"
+                                }
                               >
                                 <Trash2 className="size-4" />
                               </Button>
@@ -1167,20 +1327,39 @@ export function ComandaDialog({
           if (!open) {
             setCancelReason("");
             setCancelTargetId(null);
+            setCancelTargetLabel(null);
           }
         }}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Cancelar agendamento?</DialogTitle>
+            <DialogTitle>
+              {appointmentToCancel?.isComandaExtra
+                ? "Cancelar serviço extra?"
+                : appointmentToCancel?.isSqueezeIn
+                  ? "Cancelar encaixe?"
+                  : "Cancelar agendamento?"}
+            </DialogTitle>
             <DialogDescription>
               O horário some da agenda e nenhum valor entra no caixa.
+              {cancelTargetLabel && (
+                <>
+                  {" "}
+                  Serviço: <strong>{cancelTargetLabel}</strong>.
+                </>
+              )}
               {appointmentToCancel && linkedAppointments.length > 1 && (
                 <>
                   {" "}
                   Será cancelado o horário de{" "}
                   {appointmentToCancel.professionalNickname} (
-                  {formatTime(appointmentToCancel.startTime)}).
+                  {formatTime(appointmentToCancel.startTime)}
+                  {appointmentToCancel.isComandaExtra
+                    ? " · serviço extra"
+                    : appointmentToCancel.isSqueezeIn
+                      ? " · encaixe"
+                      : ""}
+                  ).
                 </>
               )}
             </DialogDescription>
@@ -1203,6 +1382,7 @@ export function ComandaDialog({
                 setConfirmCancel(false);
                 setCancelReason("");
                 setCancelTargetId(null);
+                setCancelTargetLabel(null);
               }}
             >
               Voltar
@@ -1213,6 +1393,113 @@ export function ComandaDialog({
               disabled={busy || cancelReason.trim().length < 3}
             >
               Confirmar cancelamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingExtraService !== null}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && !busy) {
+            setPendingExtraService(null);
+            setExtraProfessionalId("");
+            setExtraStartTime("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Serviço extra</DialogTitle>
+            <DialogDescription>
+              {pendingExtraService?.name} · {formatDateBR(serviceDate)}. Vai
+              para a agenda com a cor de serviço extra.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="space-y-2">
+              <Label htmlFor="extra-professional">Barbeiro</Label>
+              <Select
+                value={extraProfessionalId}
+                onValueChange={setExtraProfessionalId}
+                disabled={busy}
+              >
+                <SelectTrigger id="extra-professional" className="w-full">
+                  <SelectValue placeholder="Escolha o barbeiro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {eligibleExtraProfessionals.map((pro) => (
+                    <SelectItem key={pro.id} value={pro.id}>
+                      {pro.nickname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Horário</Label>
+              {!extraProfessionalId ? (
+                <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+                  Escolha o barbeiro primeiro.
+                </p>
+              ) : (
+                <TimeSlotGrid
+                  slots={extraTimeSlots}
+                  value={extraStartTime}
+                  onChange={setExtraStartTime}
+                  disabled={busy}
+                  buttonSize="sm"
+                  formatSlot={formatTime}
+                  isSlotDisabled={(slot) =>
+                    extraServiceDuration > 0 &&
+                    timeToMinutes(slot) + extraServiceDuration > 24 * 60
+                  }
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                Pode sobrepor outros horários, como um encaixe.
+              </p>
+            </div>
+
+            {extraConflicts.length > 0 && extraStartTime && (
+              <p className="text-xs text-amber-800">
+                Sobrepõe:{" "}
+                {extraConflicts
+                  .map(
+                    (apt) =>
+                      `${apt.customerFirstName} ${apt.customerLastName} (${formatTime(apt.startTime)})`
+                  )
+                  .join(" · ")}
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setPendingExtraService(null);
+                setExtraProfessionalId("");
+                setExtraStartTime("");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmExtraService()}
+              disabled={
+                busy ||
+                !extraProfessionalId ||
+                !extraStartTime ||
+                !pendingExtraService
+              }
+            >
+              Adicionar à comanda
             </Button>
           </div>
         </DialogContent>

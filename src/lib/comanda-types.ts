@@ -38,6 +38,7 @@ export type ComandaLinkedAppointment = {
   endTime: string;
   status: string;
   isSqueezeIn: boolean;
+  isComandaExtra?: boolean;
 };
 
 export type ComandaDetail = {
@@ -78,6 +79,10 @@ export type ComandaItemInput = {
   chargedPriceCents: number;
   appointmentId?: string;
   professionalId?: string;
+  /** Horário do serviço extra na agenda (HH:mm). */
+  startTime?: string;
+  /** Serviço adicionado na comanda com barbeiro e horário próprios. */
+  isComandaExtra?: boolean;
 };
 
 export type ComandaPaymentInput = {
