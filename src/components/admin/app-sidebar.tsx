@@ -8,6 +8,7 @@ import {
   ExternalLink,
   History,
   LogOut,
+  Percent,
   Scissors,
   Settings,
   Users,
@@ -46,6 +47,12 @@ const dayToDayItems = [
     title: "Caixas",
     url: "/admin/financeiro/caixas",
     icon: History,
+    ownerOnly: true,
+  },
+  {
+    title: "Comissões",
+    url: "/admin/financeiro/comissoes",
+    icon: Percent,
     ownerOnly: true,
   },
 ];

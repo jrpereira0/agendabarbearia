@@ -299,7 +299,7 @@ Resposta (`200`):
 }
 ```
 
-Filtro por `closed_at` no fuso `America/Sao_Paulo`.
+Filtro por `service_date` (dia do caixa / data do atendimento), não por `closed_at`.
 
 ---
 

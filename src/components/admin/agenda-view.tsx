@@ -8,6 +8,7 @@ import { AgendaGrid } from "@/components/admin/agenda-grid";
 import { AgendaSidebar } from "@/components/admin/agenda-sidebar";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { ComandaDialog } from "@/components/admin/comanda-dialog";
+import { AgendaCashRegisterSheet } from "@/components/admin/agenda-cash-register-sheet";
 import { AppointmentActionsDialog } from "@/components/admin/appointment-actions-dialog";
 import { EditAppointmentDialog } from "@/components/admin/edit-appointment-dialog";
 import {
@@ -18,6 +19,16 @@ import {
 } from "@/components/admin/new-appointment-dialog";
 import { formatAgendaHeaderDate } from "@/lib/agenda-grid-utils";
 import type { AgendaDayContext } from "@/lib/get-agenda-day";
+import type { CashRegisterSession } from "@/lib/cash-register-service";
+import type { CashRegisterSummary } from "@/lib/finance-reports";
+import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
+
+type AgendaCashRegisterData = {
+  cash: CashRegisterSummary;
+  cashSession: CashRegisterSession | null;
+  openCashRegister: CashRegisterSession | null;
+  responsibleOptions: CashRegisterResponsibleOption[];
+};
 
 type AgendaViewProps = {
   date: string;
@@ -27,6 +38,7 @@ type AgendaViewProps = {
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
   services: ServiceOption[];
+  cashRegister?: AgendaCashRegisterData;
 };
 
 function shiftDate(isoDate: string, days: number): string {
@@ -153,6 +165,7 @@ export function AgendaView({
   dayContext,
   appointments,
   services,
+  cashRegister,
 }: AgendaViewProps) {
   const router = useRouter();
   const [newOpen, setNewOpen] = useState(false);
@@ -220,6 +233,13 @@ export function AgendaView({
   function handleEditAppointment(apt?: AppointmentItem) {
     if (apt) setSelectedAppointment(apt);
     setEditOpen(true);
+  }
+
+  function handleCashComandaClick(appointmentId: string) {
+    const apt = appointments.find((row) => row.id === appointmentId);
+    if (!apt) return;
+    setSelectedAppointment(apt);
+    setComandaOpen(true);
   }
 
   const sidebarProps = {
@@ -362,6 +382,18 @@ export function AgendaView({
           availableRanges: p.availableRanges,
         }))}
       />
+
+      {isOwner && cashRegister && (
+        <AgendaCashRegisterSheet
+          date={date}
+          today={today}
+          cash={cashRegister.cash}
+          cashSession={cashRegister.cashSession}
+          openCashRegister={cashRegister.openCashRegister}
+          responsibleOptions={cashRegister.responsibleOptions}
+          onComandaClick={handleCashComandaClick}
+        />
+      )}
     </div>
   );
 }

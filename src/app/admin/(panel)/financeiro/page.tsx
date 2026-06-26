@@ -3,30 +3,54 @@ import { assertOwnerPage } from "@/lib/require-owner";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { todayInTimezone } from "@/lib/availability";
-import {
-  getCashRegisterSummary,
-  getCommissionSummary,
-} from "@/lib/finance-reports";
-import { getCashRegisterSession, getOpenCashRegisterSession } from "@/lib/cash-register-service";
-import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
-import { getAdminSession } from "@/lib/require-admin";
+import { getFinanceMetricsReport } from "@/lib/finance-reports";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
 export const metadata = { title: "Financeiro" };
 
 type PageProps = {
-  searchParams: Promise<{ date?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; date?: string }>;
 };
+
+function shiftDate(isoDate: string, days: number): string {
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function isIsoDate(value: string | undefined): value is string {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function normalizeRange(
+  fromParam: string | undefined,
+  toParam: string | undefined,
+  legacyDate: string | undefined,
+  today: string
+): { from: string; to: string } {
+  const defaultFrom = shiftDate(today, -10);
+  let from = isIsoDate(fromParam)
+    ? fromParam
+    : isIsoDate(legacyDate)
+      ? legacyDate
+      : defaultFrom;
+  let to = isIsoDate(toParam)
+    ? toParam
+    : isIsoDate(legacyDate)
+      ? legacyDate
+      : today;
+
+  if (from > to) [from, to] = [to, from];
+  return { from, to };
+}
 
 export default async function FinanceiroPage({ searchParams }: PageProps) {
   await assertOwnerPage();
 
-  const { date: dateParam } = await searchParams;
+  const { from: fromParam, to: toParam, date: legacyDate } = await searchParams;
   const today = todayInTimezone();
-  const date =
-    dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
-  const monthFrom = `${date.slice(0, 7)}-01`;
+  const { from, to } = normalizeRange(fromParam, toParam, legacyDate, today);
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
@@ -39,32 +63,14 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     );
   }
 
-  const adminSession = await getAdminSession();
-  const [cashSession, openCashRegister, commissions, responsibleOptions] =
-    await Promise.all([
-    getCashRegisterSession(admin, date),
-    getOpenCashRegisterSession(admin),
-    getCommissionSummary(admin, monthFrom, date),
-    adminSession
-      ? loadCashRegisterResponsibleOptions(admin, adminSession.userId)
-      : Promise.resolve([]),
-  ]);
-
-  const cash = await getCashRegisterSummary(admin, date, {
-    cashRegisterSessionId:
-      cashSession?.status === "open" ? cashSession.id : undefined,
-  });
+  const report = await getFinanceMetricsReport(admin, from, to);
 
   return (
     <FinanceView
-      date={date}
+      from={from}
+      to={to}
       today={today}
-      monthFrom={monthFrom}
-      cash={cash}
-      commissions={commissions}
-      cashSession={cashSession}
-      openCashRegister={openCashRegister}
-      responsibleOptions={responsibleOptions}
+      report={report}
     />
   );
 }

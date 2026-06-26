@@ -1,12 +1,23 @@
 import { redirect } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
+import { requireAdminClient } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getAgendaDayContext } from "@/lib/get-agenda-day";
+import { getCashRegisterSummary } from "@/lib/finance-reports";
+import {
+  getCashRegisterSession,
+  getOpenCashRegisterSession,
+} from "@/lib/cash-register-service";
+import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { formatTime } from "@/lib/format";
 import { getAdminSession } from "@/lib/require-admin";
 import { AgendaView } from "@/components/admin/agenda-view";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
+import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
+import type { CashRegisterSession } from "@/lib/cash-register-service";
+import type { CashRegisterSummary } from "@/lib/finance-reports";
 
 type PageProps = {
   searchParams: Promise<{ date?: string }>;
@@ -78,6 +89,37 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       appointmentsQuery,
     ]);
 
+  let cashRegister:
+    | {
+        cash: CashRegisterSummary;
+        cashSession: CashRegisterSession | null;
+        openCashRegister: CashRegisterSession | null;
+        responsibleOptions: CashRegisterResponsibleOption[];
+      }
+    | undefined;
+
+  if (session.isOwner) {
+    const admin = requireAdminClient();
+    if (!isActionResult(admin)) {
+      const [cashSession, openCashRegister, responsibleOptions] =
+        await Promise.all([
+          getCashRegisterSession(admin, date),
+          getOpenCashRegisterSession(admin),
+          loadCashRegisterResponsibleOptions(admin, session.userId),
+        ]);
+      const cash = await getCashRegisterSummary(admin, date, {
+        cashRegisterSessionId:
+          cashSession?.status === "open" ? cashSession.id : undefined,
+      });
+      cashRegister = {
+        cash,
+        cashSession,
+        openCashRegister,
+        responsibleOptions,
+      };
+    }
+  }
+
   const appointments: AppointmentItem[] = (rawAppointments ?? []).map((a) => {
     const rawPro = a.professionals as
       | { nickname: string }
@@ -130,6 +172,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         durationMinutes: s.duration_minutes,
         priceCents: s.price_cents,
       }))}
+      cashRegister={cashRegister}
     />
   );
 }

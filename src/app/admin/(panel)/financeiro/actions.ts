@@ -16,6 +16,7 @@ import { getAdminSession } from "@/lib/require-admin";
 import { requireOwner } from "@/lib/require-owner";
 
 function revalidateFinance() {
+  revalidatePath("/admin");
   revalidatePath("/admin/financeiro");
   revalidatePath("/admin/financeiro/caixas");
 }
