@@ -7,6 +7,7 @@ import {
   getCashRegisterSummary,
   getCommissionSummary,
 } from "@/lib/finance-reports";
+import { getCashRegisterSession } from "@/lib/cash-register-service";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -36,9 +37,10 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     );
   }
 
-  const [cash, commissions] = await Promise.all([
+  const [cash, commissions, cashSession] = await Promise.all([
     getCashRegisterSummary(admin, date),
     getCommissionSummary(admin, monthFrom, date),
+    getCashRegisterSession(admin, date),
   ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       monthFrom={monthFrom}
       cash={cash}
       commissions={commissions}
+      cashSession={cashSession}
     />
   );
 }

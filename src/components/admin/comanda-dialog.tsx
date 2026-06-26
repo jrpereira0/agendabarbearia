@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -161,6 +162,7 @@ export function ComandaDialog({
   const [items, setItems] = useState<EditableItem[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [isOwner, setIsOwner] = useState(false);
+  const [cashRegisterOpen, setCashRegisterOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -189,6 +191,7 @@ export function ComandaDialog({
       }
       setComanda(result.comanda);
       setIsOwner(result.isOwner);
+      setCashRegisterOpen(result.cashRegisterOpen);
       setItems(mapComandaItemsToEditable(result.comanda.items));
       if (result.comanda.status === "closed") {
         setPayments(
@@ -1034,6 +1037,19 @@ export function ComandaDialog({
                 </div>
               </DialogSection>
 
+              {canEdit && !cashRegisterOpen && isOwner && (
+                <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                  O caixa de {formatDateBR(serviceDate)} está fechado. Abra o caixa em{" "}
+                  <Link
+                    href={`/admin/financeiro?date=${serviceDate}`}
+                    className="font-medium text-foreground underline-offset-4 hover:underline"
+                  >
+                    Financeiro
+                  </Link>{" "}
+                  antes de finalizar comandas.
+                </div>
+              )}
+
               {(canEdit || isClosed) && (
                 <div className="grid gap-4 lg:grid-cols-3">
                   <DialogSection icon={Wallet} title="Formas de pagamento">
@@ -1307,7 +1323,10 @@ export function ComandaDialog({
                     className="w-full sm:w-auto"
                     onClick={handleClose}
                     disabled={
-                      busy || loading || paymentsSum !== totals.totalCents
+                      busy ||
+                      loading ||
+                      !cashRegisterOpen ||
+                      paymentsSum !== totals.totalCents
                     }
                   >
                     <Check />

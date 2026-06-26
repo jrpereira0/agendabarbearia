@@ -6,6 +6,7 @@ import {
   CalendarDays,
   Contact,
   ExternalLink,
+  History,
   LogOut,
   Scissors,
   Settings,
@@ -41,6 +42,12 @@ import { BOOKING_PATH } from "@/lib/booking-path";
 const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
   { title: "Financeiro", url: "/admin/financeiro", icon: Wallet, ownerOnly: true },
+  {
+    title: "Caixas",
+    url: "/admin/financeiro/caixas",
+    icon: History,
+    ownerOnly: true,
+  },
 ];
 
 const managementItems = [
@@ -76,7 +83,13 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton
           asChild
-          isActive={pathname === item.url}
+          isActive={
+            item.url === "/admin"
+              ? pathname === "/admin"
+              : item.url === "/admin/financeiro"
+                ? pathname === "/admin/financeiro"
+                : pathname === item.url || pathname.startsWith(`${item.url}/`)
+          }
           tooltip={item.title}
           onClick={() => setOpenMobile(false)}
         >

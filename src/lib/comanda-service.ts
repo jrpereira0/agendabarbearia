@@ -14,6 +14,7 @@ import {
   PAYMENT_METHODS,
 } from "@/lib/comanda-types";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
+import { isCashRegisterOpen } from "@/lib/cash-register-service";
 
 type DbComandaRow = {
   id: string;
@@ -2018,6 +2019,15 @@ export async function closeComanda(
   const paymentError = validatePayments(payments, comanda.totalCents);
   if (paymentError) {
     return { ok: false, error: paymentError, status: 400 };
+  }
+
+  const cashOpen = await isCashRegisterOpen(admin, comanda.serviceDate);
+  if (!cashOpen) {
+    return {
+      ok: false,
+      error: "Abra o caixa deste dia antes de fechar comandas.",
+      status: 409,
+    };
   }
 
   const totals = await recalculateComandaTotals(admin, comandaId);

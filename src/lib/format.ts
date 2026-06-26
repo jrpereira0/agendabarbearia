@@ -18,6 +18,18 @@ export function formatDateBR(isoDate: string): string {
   });
 }
 
+// ISO -> "24/06/2026 14:30"
+export function formatDateTimeBR(iso: string): string {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "America/Sao_Paulo",
+  });
+}
+
 // "09:00:00" ou "09:00" -> "09:00"
 export function formatTime(time: string): string {
   return time.slice(0, 5);

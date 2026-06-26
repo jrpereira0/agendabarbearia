@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Receipt } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+import { toast } from "sonner";
+import { ChevronLeft, ChevronRight, Lock, Receipt, RotateCcw, Unlock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +16,12 @@ import {
   type CashRegisterSummary,
   type CommissionSummary,
 } from "@/lib/finance-reports";
+import type { CashRegisterSession } from "@/lib/cash-register-service";
+import {
+  closeCashRegisterAction,
+  openCashRegisterAction,
+  reopenCashRegisterAction,
+} from "@/app/admin/(panel)/financeiro/actions";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL } from "@/lib/format";
 
@@ -21,6 +31,7 @@ type FinanceViewProps = {
   monthFrom: string;
   cash: CashRegisterSummary;
   commissions: CommissionSummary;
+  cashSession: CashRegisterSession | null;
 };
 
 function shiftDate(isoDate: string, days: number): string {
@@ -46,15 +57,98 @@ export function FinanceView({
   monthFrom,
   cash,
   commissions,
+  cashSession,
 }: FinanceViewProps) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
   const isToday = date === today;
+  const isCashOpen = cashSession?.status === "open";
+
+  async function handleCashAction(action: "open" | "close" | "reopen") {
+    const fn =
+      action === "open"
+        ? openCashRegisterAction
+        : action === "close"
+          ? closeCashRegisterAction
+          : reopenCashRegisterAction;
+
+    const result = await fn(date);
+    if (result.ok) {
+      const labels = {
+        open: "Caixa aberto.",
+        close: "Caixa fechado.",
+        reopen: "Caixa reaberto.",
+      };
+      toast.success(labels[action]);
+      startTransition(() => router.refresh());
+    } else {
+      toast.error(result.error);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Financeiro"
         description="Caixa do dia e comissões dos barbeiros."
+        action={
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/financeiro/caixas">Histórico de caixas</Link>
+          </Button>
+        }
       />
+
+      <Card>
+        <CardContent className="flex flex-col gap-4 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium">Caixa do dia</p>
+              <Badge variant={isCashOpen ? "default" : "secondary"}>
+                {isCashOpen ? "Aberto" : "Fechado"}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {isCashOpen
+                ? "Você pode finalizar comandas neste dia."
+                : "Abra o caixa para finalizar comandas neste dia."}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {isCashOpen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleCashAction("close")}
+              >
+                <Lock className="size-4" />
+                Fechar caixa
+              </Button>
+            ) : cashSession ? (
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleCashAction("reopen")}
+              >
+                <RotateCcw className="size-4" />
+                Reabrir caixa
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                disabled={pending}
+                onClick={() => void handleCashAction("open")}
+              >
+                <Unlock className="size-4" />
+                Abrir caixa
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

@@ -15,6 +15,7 @@ import {
   reopenComanda,
   updateComandaItems,
 } from "@/lib/comanda-service";
+import { isCashRegisterOpen } from "@/lib/cash-register-service";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
@@ -43,7 +44,12 @@ const paymentSchema = z.object({
 export async function loadComandaForAppointment(
   appointmentId: string
 ): Promise<
-  | { ok: true; comanda: ComandaDetail; isOwner: boolean }
+  | {
+      ok: true;
+      comanda: ComandaDetail;
+      isOwner: boolean;
+      cashRegisterOpen: boolean;
+    }
   | { ok: false; error: string }
 > {
   const session = await requireAdmin();
@@ -78,6 +84,7 @@ export async function loadComandaForAppointment(
     ok: true,
     comanda: result.comanda,
     isOwner: session.isOwner,
+    cashRegisterOpen: await isCashRegisterOpen(admin, result.comanda.serviceDate),
   };
 }
 
