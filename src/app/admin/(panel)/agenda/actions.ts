@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
-import { minutesToTime, timeToMinutes } from "@/lib/availability";
+import { minutesToTime, nowMinutesInTimezone, timeToMinutes, todayInTimezone } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
   getAvailability,
@@ -33,6 +33,34 @@ const createSchema = z.object({
     .string()
     .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
 });
+
+const OCCUPIED_SLOT_MESSAGE =
+  "Esse horário já está ocupado. Use encaixe ou serviço extra na comanda.";
+
+function rejectPastBookingForBarber(
+  session: AdminSession,
+  date: string,
+  startTime: string
+): ActionResult | null {
+  if (session.isOwner) return null;
+
+  const today = todayInTimezone();
+  if (date < today) {
+    return {
+      ok: false,
+      error: "Só o dono pode agendar em datas passadas.",
+    };
+  }
+
+  if (date === today && timeToMinutes(startTime) < nowMinutesInTimezone()) {
+    return {
+      ok: false,
+      error: "Só o dono pode agendar em horários que já passaram.",
+    };
+  }
+
+  return null;
+}
 
 async function assertCanManageAppointment(
   appointmentId: string,
@@ -284,6 +312,30 @@ export async function createNormalAppointment(input: {
   const validated = await validateCreateInput(parsed.data, session);
   if (!("durationMinutes" in validated)) return validated;
 
+  const pastError = rejectPastBookingForBarber(
+    session,
+    parsed.data.date,
+    parsed.data.startTime
+  );
+  if (pastError) return pastError;
+
+  if (session.isOwner) {
+    const slotCheck = await validateAdminAppointmentSlot(
+      parsed.data.professionalId,
+      parsed.data.date,
+      parsed.data.startTime,
+      validated.durationMinutes,
+      "",
+      { skipScheduleBlocks: true }
+    );
+
+    if (!slotCheck.ok) {
+      return { ok: false, error: OCCUPIED_SLOT_MESSAGE };
+    }
+
+    return insertAppointment(parsed.data, validated.durationMinutes, false);
+  }
+
   const availability = await getAvailability(
     parsed.data.professionalId,
     parsed.data.date,
@@ -333,6 +385,13 @@ export async function createSqueezeInAppointment(input: {
 
   const validated = await validateCreateInput(parsed.data, session);
   if (!("durationMinutes" in validated)) return validated;
+
+  const pastError = rejectPastBookingForBarber(
+    session,
+    parsed.data.date,
+    parsed.data.startTime
+  );
+  if (pastError) return pastError;
 
   return insertAppointment(parsed.data, validated.durationMinutes, true);
 }
@@ -406,17 +465,30 @@ export async function updateAppointment(input: {
   const validated = await validateCreateInput(createInput, session);
   if (!("durationMinutes" in validated)) return validated;
 
+  const pastError = rejectPastBookingForBarber(
+    session,
+    existing.date,
+    parsed.data.startTime
+  );
+  if (pastError) return pastError;
+
   if (!existing.is_squeeze_in) {
     const slotCheck = await validateAdminAppointmentSlot(
       parsed.data.professionalId,
       existing.date,
       parsed.data.startTime,
       validated.durationMinutes,
-      parsed.data.appointmentId
+      parsed.data.appointmentId,
+      { skipScheduleBlocks: session.isOwner }
     );
 
     if (!slotCheck.ok) {
-      return { ok: false, error: slotCheck.error };
+      return {
+        ok: false,
+        error: session.isOwner
+          ? OCCUPIED_SLOT_MESSAGE
+          : slotCheck.error,
+      };
     }
   }
 
@@ -583,11 +655,27 @@ export async function deleteScheduleBlock(
   return { ok: true };
 }
 
-export async function cancelAppointment(
-  appointmentId: string
-): Promise<ActionResult> {
+const cancelAppointmentSchema = z.object({
+  appointmentId: z.uuid(),
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Informe o motivo do cancelamento (mínimo 3 caracteres)."),
+});
+
+export async function cancelAppointment(input: {
+  appointmentId: string;
+  reason: string;
+}): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
+
+  const parsed = cancelAppointmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const { appointmentId, reason } = parsed.data;
 
   const check = await assertCanManageAppointment(appointmentId, session, [
     ...ACTIVE_APPOINTMENT_STATUSES,
@@ -598,11 +686,15 @@ export async function cancelAppointment(
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
-  const { data: comanda } = await admin
-    .from("comandas")
-    .select("status")
+  const { data: link } = await admin
+    .from("comanda_appointments")
+    .select("comanda_id, comandas ( id, status )")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
+
+  const comanda = Array.isArray(link?.comandas)
+    ? link?.comandas[0]
+    : link?.comandas;
 
   if (comanda?.status === "closed") {
     return {
@@ -612,16 +704,106 @@ export async function cancelAppointment(
     };
   }
 
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("squeeze_appointment_id")
+    .eq("appointment_id", appointmentId);
+
+  const squeezeIds = (items ?? [])
+    .map((row) => row.squeeze_appointment_id)
+    .filter((id): id is string => Boolean(id));
+
+  const cancelledAt = new Date().toISOString();
+
   const { error } = await admin
     .from("appointments")
-    .update({ status: "cancelled" })
+    .update({
+      status: "cancelled",
+      cancellation_reason: reason,
+      cancelled_at: cancelledAt,
+    })
     .eq("id", appointmentId);
 
   if (error) {
     return { ok: false, error: "Não foi possível cancelar o agendamento." };
   }
 
+  if (squeezeIds.length > 0) {
+    await admin
+      .from("appointments")
+      .update({
+        status: "cancelled",
+        cancellation_reason: reason,
+        cancelled_at: cancelledAt,
+      })
+      .in("id", squeezeIds)
+      .eq("is_squeeze_in", true);
+  }
+
+  await admin.from("comanda_items").delete().eq("appointment_id", appointmentId);
+  await admin
+    .from("comanda_appointments")
+    .delete()
+    .eq("appointment_id", appointmentId);
+
+  if (comanda?.id) {
+    const { data: remainingLinks } = await admin
+      .from("comanda_appointments")
+      .select("appointment_id")
+      .eq("comanda_id", comanda.id);
+
+    if (!remainingLinks?.length) {
+      await admin.from("comandas").delete().eq("id", comanda.id).eq("status", "open");
+    } else {
+      const { data: remainingItems } = await admin
+        .from("comanda_items")
+        .select("charged_price_cents, professional_id")
+        .eq("comanda_id", comanda.id);
+
+      let totalCents = 0;
+      let commissionCents = 0;
+      const proIds = [
+        ...new Set(
+          (remainingItems ?? [])
+            .map((item) => item.professional_id)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ];
+
+      const { data: pros } = proIds.length
+        ? await admin
+            .from("professionals")
+            .select("id, commission_percent")
+            .in("id", proIds)
+        : { data: [] };
+
+      const commissionByPro = new Map(
+        (pros ?? []).map((pro) => [pro.id, pro.commission_percent ?? 50])
+      );
+
+      for (const item of remainingItems ?? []) {
+        totalCents += item.charged_price_cents;
+        const pct = item.professional_id
+          ? (commissionByPro.get(item.professional_id) ?? 50)
+          : 50;
+        commissionCents += Math.round(
+          (item.charged_price_cents * pct) / 100
+        );
+      }
+
+      await admin
+        .from("comandas")
+        .update({
+          total_cents: totalCents,
+          commission_cents: commissionCents,
+          updated_at: cancelledAt,
+        })
+        .eq("id", comanda.id);
+    }
+  }
+
   revalidatePath("/admin");
+  revalidatePath("/agenda");
   return { ok: true };
 }
 
@@ -631,13 +813,57 @@ export async function deleteAppointment(
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  if (!session.isOwner) {
+    return { ok: false, error: "Apenas o dono pode excluir agendamentos." };
+  }
+
   const check = await assertOwnsAppointment(appointmentId, session);
   if (!("professionalId" in check)) return check;
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
-  const { error } = await admin.from("appointments").delete().eq("id", appointmentId);
+  const { data: link } = await admin
+    .from("comanda_appointments")
+    .select("comanda_id, comandas ( status )")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  const comanda = Array.isArray(link?.comandas)
+    ? link?.comandas[0]
+    : link?.comandas;
+
+  if (comanda?.status === "closed") {
+    return {
+      ok: false,
+      error:
+        "Esta comanda está fechada. Reabra antes de excluir o agendamento.",
+    };
+  }
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("squeeze_appointment_id")
+    .eq("appointment_id", appointmentId);
+
+  const squeezeIds = (items ?? [])
+    .map((item) => item.squeeze_appointment_id)
+    .filter((id): id is string => Boolean(id));
+
+  await admin.from("comanda_items").delete().eq("appointment_id", appointmentId);
+  await admin
+    .from("comanda_appointments")
+    .delete()
+    .eq("appointment_id", appointmentId);
+
+  if (squeezeIds.length > 0) {
+    await admin.from("appointments").delete().in("id", squeezeIds);
+  }
+
+  const { error } = await admin
+    .from("appointments")
+    .delete()
+    .eq("id", appointmentId);
 
   if (error) {
     return { ok: false, error: "Não foi possível excluir o agendamento." };
@@ -645,6 +871,92 @@ export async function deleteAppointment(
 
   revalidatePath("/admin");
   revalidatePath("/agenda");
+  return { ok: true };
+}
+
+const moveDateSchema = z.object({
+  appointmentId: z.uuid(),
+  newDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export async function moveAppointmentToDate(input: {
+  appointmentId: string;
+  newDate: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+  if (!session.isOwner) {
+    return { ok: false, error: "Apenas o dono pode mudar a data." };
+  }
+
+  const parsed = moveDateSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { data: appointment } = await admin
+    .from("appointments")
+    .select("id, date")
+    .eq("id", parsed.data.appointmentId)
+    .maybeSingle();
+
+  if (!appointment) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  if (appointment.date === parsed.data.newDate) {
+    return { ok: true };
+  }
+
+  const { data: link } = await admin
+    .from("comanda_appointments")
+    .select("comandas ( status )")
+    .eq("appointment_id", parsed.data.appointmentId)
+    .maybeSingle();
+
+  const comanda = Array.isArray(link?.comandas)
+    ? link?.comandas[0]
+    : link?.comandas;
+
+  if (comanda?.status === "closed") {
+    return {
+      ok: false,
+      error: "Comanda fechada. Reabra antes de mudar a data.",
+    };
+  }
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("squeeze_appointment_id")
+    .eq("appointment_id", parsed.data.appointmentId);
+
+  const squeezeIds = (items ?? [])
+    .map((item) => item.squeeze_appointment_id)
+    .filter((id): id is string => Boolean(id));
+
+  await admin.from("comanda_items").delete().eq("appointment_id", parsed.data.appointmentId);
+  await admin
+    .from("comanda_appointments")
+    .delete()
+    .eq("appointment_id", parsed.data.appointmentId);
+
+  if (squeezeIds.length > 0) {
+    await admin.from("appointments").delete().in("id", squeezeIds);
+  }
+
+  const { error } = await admin
+    .from("appointments")
+    .update({ date: parsed.data.newDate })
+    .eq("id", parsed.data.appointmentId);
+
+  if (error) {
+    return { ok: false, error: "Não foi possível mudar a data do agendamento." };
+  }
+
+  revalidatePath("/admin");
   return { ok: true };
 }
 
@@ -664,7 +976,8 @@ async function ensureSlotForActiveStatus(
     serviceIds: string[];
     isSqueezeIn: boolean;
   },
-  appointmentId: string
+  appointmentId: string,
+  isOwner: boolean
 ): Promise<ActionResult | null> {
   if (check.isSqueezeIn || check.serviceIds.length === 0) {
     return null;
@@ -675,11 +988,18 @@ async function ensureSlotForActiveStatus(
     check.date,
     check.serviceIds,
     undefined,
-    { adminEdit: true }
+    { adminEdit: true, ownerFreeSchedule: isOwner }
   );
 
   if (!availability.ok) {
     return { ok: false, error: availability.error };
+  }
+
+  if (
+    !isOwner &&
+    !availability.slots.includes(check.startTime)
+  ) {
+    return { ok: false, error: "Esse horário não está mais disponível." };
   }
 
   const slotCheck = await validateAdminAppointmentSlot(
@@ -687,11 +1007,15 @@ async function ensureSlotForActiveStatus(
     check.date,
     check.startTime,
     availability.durationMinutes,
-    appointmentId
+    appointmentId,
+    { skipScheduleBlocks: isOwner }
   );
 
   if (!slotCheck.ok) {
-    return { ok: false, error: slotCheck.error };
+    return {
+      ok: false,
+      error: isOwner ? OCCUPIED_SLOT_MESSAGE : slotCheck.error,
+    };
   }
 
   return null;
@@ -724,7 +1048,11 @@ export async function updateAppointmentStatus(
     check.status === "cancelled" || check.status === "done";
 
   if (becomingActive && wasInactive) {
-    const slotError = await ensureSlotForActiveStatus(check, appointmentId);
+    const slotError = await ensureSlotForActiveStatus(
+      check,
+      appointmentId,
+      session.isOwner
+    );
     if (slotError) return slotError;
   }
 
@@ -785,7 +1113,10 @@ export async function getEditAvailabilitySlots(input: {
     input.date,
     input.serviceIds,
     input.excludeAppointmentId,
-    { adminEdit: true }
+    {
+      adminEdit: true,
+      ownerFreeSchedule: session.isOwner,
+    }
   );
 
   if (!result.ok) {

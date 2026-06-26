@@ -112,11 +112,13 @@ function AgendaToolbar({
 function AgendaMainContent({
   dayContext,
   appointments,
+  isOwner,
   onSlotClick,
   onAppointmentClick,
 }: {
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
+  isOwner: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
   onAppointmentClick: (apt: AppointmentItem) => void;
 }) {
@@ -134,6 +136,7 @@ function AgendaMainContent({
         slotStepMinutes={dayContext.slotStepMinutes}
         professionals={dayContext.professionals}
         appointments={appointments}
+        isOwner={isOwner}
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
       />
@@ -245,6 +248,7 @@ export function AgendaView({
   const mainContentProps = {
     dayContext,
     appointments,
+    isOwner,
     onSlotClick: handleSlotClick,
     onAppointmentClick: handleAppointmentClick,
   };
@@ -300,15 +304,15 @@ export function AgendaView({
         appointment={selectedAppointment}
         open={detailOpen}
         onOpenChange={setDetailOpen}
-        showProfessional={isOwner}
-        professionalPhotoUrl={
-          selectedAppointment
-            ? dayContext.professionals.find(
-                (p) => p.id === selectedAppointment.professionalId
-              )?.photoUrl ?? null
-            : null
-        }
         servicesCatalog={services}
+        sessionProfessionalId={professionalId}
+        professionals={dayContext.professionals.map((p) => ({
+          id: p.id,
+          nickname: p.nickname,
+          photoUrl: p.photoUrl,
+          serviceIds: p.serviceIds,
+          commissionPercent: p.commissionPercent,
+        }))}
         commissionPercent={
           selectedAppointment
             ? (dayContext.professionals.find(

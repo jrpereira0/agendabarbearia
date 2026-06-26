@@ -21,10 +21,13 @@ import { requireAdmin } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
 const itemSchema = z.object({
+  id: z.uuid().optional(),
   serviceId: z.uuid(),
   serviceName: z.string().trim().min(1),
   catalogPriceCents: z.number().int().min(0),
   chargedPriceCents: z.number().int().min(0),
+  appointmentId: z.uuid().optional(),
+  professionalId: z.uuid().optional(),
 });
 
 const paymentSchema = z.object({
@@ -51,11 +54,19 @@ export async function loadComandaForAppointment(
   const result = await getOrCreateComandaForAppointment(admin, appointmentId);
   if (!result.ok) return { ok: false, error: result.error };
 
-  if (
-    !session.isOwner &&
-    result.comanda.professionalId !== session.professionalId
-  ) {
-    return { ok: false, error: "Você não pode ver esta comanda." };
+  if (!session.isOwner) {
+    const canAccess =
+      result.comanda.linkedAppointments.some(
+        (apt) => apt.professionalId === session.professionalId
+      ) ||
+      result.comanda.items.some(
+        (item) => item.professionalId === session.professionalId
+      ) ||
+      result.comanda.professionalId === session.professionalId;
+
+    if (!canAccess) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
   }
 
   return {

@@ -10,14 +10,18 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 
 | Regra | Detalhe |
 | --- | --- |
+| Comanda por cliente/dia | Uma comanda **aberta** por WhatsApp + data; agrupa atendimentos do mesmo cliente naquele dia |
+| Encaixes na comanda | Encaixes manuais do mesmo cliente no dia entram na comanda automaticamente (serviços + lista de atendimentos) |
+| Extras na comanda | Serviço adicionado na comanda além dos do agendamento vira **encaixe** na agenda |
 | Comissão | % sobre o valor **cobrado** de cada serviço na comanda (configurável por barbeiro) |
 | Quem fecha | Somente o **dono** (painel ou API com chave com `comandas:write`) |
 | Taxa de cartão | **Não** entra no cálculo da comissão |
 | Pagamento misto | Várias formas na mesma comanda (ex.: R$ 50 Pix + R$ 50 dinheiro) |
 | Preço editável | Cada linha da comanda guarda snapshot do preço cobrado (não altera a tabela de serviços) |
-| Fechar comanda | Registra pagamento, marca o agendamento como `done` e entra no caixa/comissão |
+| Barbeiro na comanda | Exibido por serviço, mas **não é editável** na comanda — altere na agenda |
+| Fechar comanda | Registra pagamento, marca atendimentos como `done` e entra no caixa/comissão |
 | Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável |
-| Cancelar horário | Sem lançamento financeiro; **bloqueado** se a comanda estiver fechada (reabra antes) |
+| Cancelar horário | Motivo obrigatório; some da agenda; **bloqueado** se a comanda estiver fechada (reabra antes) |
 
 Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`.
 
@@ -90,7 +94,7 @@ Resposta (`200`):
 
 ## 2. Comanda por agendamento
 
-Cria automaticamente a comanda (status `open`) se ainda não existir, com os serviços do agendamento.
+Cria automaticamente a comanda (status `open`) se ainda não existir. Une todos os agendamentos **normais** do mesmo cliente naquele dia e inclui **encaixes manuais** desse cliente (serviços e atendimentos na resposta).
 
 ```
 GET /api/v1/comandas?appointmentId=<uuid-do-agendamento>
@@ -111,6 +115,10 @@ Resposta (`200`):
     "totalCents": 0,
     "commissionCents": 0,
     "closedAt": null,
+    "customerFirstName": "João",
+    "customerLastName": "Silva",
+    "customerWhatsapp": "5511999999999",
+    "serviceDate": "2026-06-25",
     "items": [
       {
         "id": "uuid",
@@ -118,7 +126,22 @@ Resposta (`200`):
         "serviceName": "Corte",
         "catalogPriceCents": 4000,
         "chargedPriceCents": 4000,
-        "sortOrder": 0
+        "sortOrder": 0,
+        "professionalId": "uuid",
+        "professionalNickname": "Carlão",
+        "appointmentId": "uuid",
+        "squeezeAppointmentId": null
+      }
+    ],
+    "linkedAppointments": [
+      {
+        "id": "uuid",
+        "professionalId": "uuid",
+        "professionalNickname": "Carlão",
+        "startTime": "14:00",
+        "endTime": "14:30",
+        "status": "confirmed",
+        "isSqueezeIn": false
       }
     ],
     "payments": [],
@@ -135,6 +158,8 @@ Resposta (`200`):
   }
 }
 ```
+
+`appointment` no JSON é legado; prefira `linkedAppointments` e `serviceDate`.
 
 ---
 
@@ -182,6 +207,8 @@ Corpo:
 
 - `catalogPriceCents`: preço de tabela no momento (referência)
 - `chargedPriceCents`: valor cobrado (pode ter desconto)
+
+Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original.
 
 Resposta: `{ "comanda": { ... } }` atualizada.
 

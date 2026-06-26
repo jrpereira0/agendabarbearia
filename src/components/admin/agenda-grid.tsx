@@ -31,6 +31,7 @@ type AgendaGridProps = {
   slotStepMinutes: number;
   professionals: AgendaProfessionalColumn[];
   appointments: AppointmentItem[];
+  isOwner: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
   onAppointmentClick: (appointment: AppointmentItem) => void;
 };
@@ -52,6 +53,7 @@ export function AgendaGrid({
   slotStepMinutes,
   professionals,
   appointments,
+  isOwner,
   onSlotClick,
   onAppointmentClick,
 }: AgendaGridProps) {
@@ -160,6 +162,7 @@ export function AgendaGrid({
               slotStepMinutes={slotStepMinutes}
               professionals={professionals}
               appointmentsByPro={appointmentsByPro}
+              isOwner={isOwner}
               onSlotClick={onSlotClick}
             />
           );
@@ -234,6 +237,7 @@ type TimeSlotCellsProps = {
   slotStepMinutes: number;
   professionals: AgendaProfessionalColumn[];
   appointmentsByPro: Map<string, AppointmentItem[]>;
+  isOwner: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
 };
 
@@ -245,6 +249,7 @@ function TimeSlotCells({
   slotStepMinutes,
   professionals,
   appointmentsByPro,
+  isOwner,
   onSlotClick,
 }: TimeSlotCellsProps) {
   return (
@@ -283,21 +288,22 @@ function TimeSlotCells({
           slotEnd,
           pro.blockRanges
         );
-        const available =
-          isSlotStartAvailable(
-            minute,
-            slotStepMinutes,
-            pro.availableRanges,
-            busy
-          ) && !blocked;
+        const occupied = busy.some(
+          (b) => minute >= b.start && minute < b.end
+        );
+        const available = isOwner
+          ? !occupied
+          : isSlotStartAvailable(
+              minute,
+              slotStepMinutes,
+              pro.availableRanges,
+              busy
+            ) && !blocked;
         const inSchedule = isSlotStartAvailable(
           minute,
           slotStepMinutes,
           pro.availableRanges,
           []
-        );
-        const occupied = busy.some(
-          (b) => minute >= b.start && minute < b.end
         );
 
         return (

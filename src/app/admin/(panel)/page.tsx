@@ -56,6 +56,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     `
     )
     .eq("date", date)
+    .neq("status", "cancelled")
     .order("start_time");
 
   if (!session.isOwner && session.professionalId) {
@@ -76,13 +77,20 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       appointmentsQuery,
     ]);
 
-  const appointments: AppointmentItem[] = (rawAppointments ?? []).map((a) => ({
+  const appointments: AppointmentItem[] = (rawAppointments ?? []).map((a) => {
+    const rawPro = a.professionals as
+      | { nickname: string }
+      | { nickname: string }[]
+      | null;
+    const professionalNickname = Array.isArray(rawPro)
+      ? (rawPro[0]?.nickname ?? "—")
+      : (rawPro?.nickname ?? "—");
+
+    return {
     id: a.id,
     date: a.date,
     professionalId: a.professional_id,
-    professionalNickname:
-      (a.professionals as { nickname: string }[] | null)?.[0]?.nickname ??
-      "—",
+    professionalNickname,
     customerFirstName: a.customer_first_name,
     customerLastName: a.customer_last_name,
     customerWhatsapp: a.customer_whatsapp,
@@ -103,7 +111,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         priceCents: s.price_cents,
       }));
     }),
-  }));
+  };
+  });
 
   return (
     <AgendaView

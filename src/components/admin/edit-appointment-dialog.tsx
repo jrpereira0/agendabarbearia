@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Clock, Scissors, User, Check } from "lucide-react";
+import { Clock, Scissors, User, UserRound, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -15,11 +15,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { SearchInput } from "@/components/admin/search-input";
 import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-appointment-dialog";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
+import { DialogSection } from "@/components/admin/dialog-section";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
   formatDateBR,
@@ -36,6 +36,7 @@ import {
 } from "@/lib/encaixe";
 import { matchesSearch } from "@/lib/text";
 import { cn } from "@/lib/utils";
+import { adminWideDialogClassName } from "@/lib/admin-dialog";
 import { updateAppointment, getEditAvailabilitySlots } from "@/app/admin/(panel)/agenda/actions";
 
 type EditAppointmentDialogProps = {
@@ -137,8 +138,10 @@ export function EditAppointmentDialog({
         endTime: a.endTime,
         professionalId: a.professionalId,
         status: a.status,
+        isSqueezeIn: a.isSqueezeIn,
       })),
-      appointment.id
+      appointment.id,
+      { ignoreSqueezeIn: isOwner && !isEncaixe }
     );
   }, [appointment, professionalId, startTime, totalMinutes, appointments]);
 
@@ -274,7 +277,7 @@ export function EditAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90dvh,720px)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+      <DialogContent className={adminWideDialogClassName()}>
         <DialogHeader className="shrink-0 gap-1 border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
           <DialogTitle>Editar agendamento</DialogTitle>
           <DialogDescription>
@@ -287,12 +290,10 @@ export function EditAppointmentDialog({
           onSubmit={handleSubmit}
           className="flex min-h-0 flex-1 flex-col overflow-hidden"
         >
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-4 py-5 sm:px-6">
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <User className="size-4" />
-                Barbeiro
-              </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+            <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
+              <div className="space-y-4">
+                <DialogSection icon={User} title="Barbeiro">
               {isOwner ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {professionals.map((pro) => {
@@ -337,15 +338,13 @@ export function EditAppointmentDialog({
                   </div>
                 </div>
               ) : null}
-            </section>
+                </DialogSection>
 
-            <Separator />
-
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <User className="size-4" />
-                Cliente
-              </div>
+                <DialogSection
+                  icon={UserRound}
+                  title="Cliente"
+                  description="Nome e WhatsApp para contato."
+                >
               <AdminCustomerFields
                 firstName={firstName}
                 lastName={lastName}
@@ -356,15 +355,16 @@ export function EditAppointmentDialog({
                 enabled={open}
                 idPrefix="editCustomer"
               />
-            </section>
-
-            <Separator />
-
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Scissors className="size-4" />
-                Serviços
+                </DialogSection>
               </div>
+
+              <div className="space-y-4">
+                <DialogSection
+                  icon={Scissors}
+                  title="Serviços"
+                  description="Escolha o que será feito no atendimento."
+                >
+                  <div className="space-y-3">
               <SearchInput
                 value={serviceSearch}
                 onChange={setServiceSearch}
@@ -379,7 +379,7 @@ export function EditAppointmentDialog({
                   Nenhum serviço encontrado.
                 </p>
               ) : (
-                <div className="flex max-h-40 flex-col gap-2 overflow-y-auto">
+                <div className="flex max-h-56 flex-col gap-2 overflow-y-auto sm:max-h-64">
                   {filteredServices.map((svc) => {
                     const checked = serviceIds.includes(svc.id);
                     return (
@@ -417,24 +417,33 @@ export function EditAppointmentDialog({
                   {formatPriceBRL(totalPrice)}
                 </p>
               )}
-            </section>
+                  </div>
+                </DialogSection>
 
-            <Separator />
+                <DialogSection
+                  icon={Clock}
+                  title="Horário"
+                  description={
+                    isEncaixe
+                      ? "Encaixe: qualquer horário do dia."
+                      : isOwner
+                        ? "Qualquer horário do dia, exceto se já tiver outro agendamento."
+                        : "Horários livres no expediente."
+                  }
+                >
 
-            <section className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <Clock className="size-4" />
-                Horário
-              </div>
-
-              {isEncaixe ? (
-                <p className="text-sm text-muted-foreground">
-                  Encaixe: qualquer horário do dia.
+              {!isEncaixe && !loadingSlots && !slotsError && !isOwner && (
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Na edição, o horário atual sempre pode ser mantido para
+                  corrigir barbeiro ou dados.
                 </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Horários livres no expediente. Na edição, o horário atual
-                  sempre pode ser mantido para corrigir barbeiro ou dados.
+              )}
+
+              {!isEncaixe && isOwner && !loadingSlots && (
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Como dono, você pode escolher qualquer horário — inclusive
+                  fora do expediente ou em datas passadas. Se o horário já
+                  estiver ocupado, use encaixe.
                 </p>
               )}
 
@@ -493,7 +502,9 @@ export function EditAppointmentDialog({
                   </ul>
                 </div>
               )}
-            </section>
+                </DialogSection>
+              </div>
+            </div>
           </div>
 
           <div className="min-w-0 shrink-0 overflow-hidden rounded-b-xl border-t bg-muted/30 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">

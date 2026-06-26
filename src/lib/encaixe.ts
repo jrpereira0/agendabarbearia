@@ -23,6 +23,12 @@ export type ConflictAppointment = {
   endTime: string;
   professionalId: string;
   status: string;
+  isSqueezeIn?: boolean;
+};
+
+export type FindConflictsOptions = {
+  /** Encaixes não bloqueiam agendamento normal do dono. */
+  ignoreSqueezeIn?: boolean;
 };
 
 export function findAppointmentConflicts(
@@ -30,13 +36,16 @@ export function findAppointmentConflicts(
   startTime: string,
   durationMinutes: number,
   appointments: ConflictAppointment[],
-  excludeAppointmentId?: string
+  excludeAppointmentId?: string,
+  options: FindConflictsOptions = {}
 ): ConflictAppointment[] {
+  const { ignoreSqueezeIn = false } = options;
   const start = timeToMinutes(startTime);
   const end = start + durationMinutes;
 
   return appointments.filter((a) => {
     if (excludeAppointmentId && a.id === excludeAppointmentId) return false;
+    if (ignoreSqueezeIn && a.isSqueezeIn) return false;
     if (
       a.professionalId !== professionalId ||
       !isActiveAppointmentStatus(a.status)

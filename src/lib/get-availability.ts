@@ -35,6 +35,8 @@ const MAX_DAYS_AHEAD = 60;
 export type GetAvailabilityOptions = {
   /** Edição no painel: ignora antecedência mínima e limite de data passada. */
   adminEdit?: boolean;
+  /** Dono: qualquer horário do dia; só remove slots com outro agendamento (não encaixe). */
+  ownerFreeSchedule?: boolean;
 };
 
 function toDayException(e: {
@@ -61,7 +63,7 @@ export async function getAvailability(
   excludeAppointmentId?: string,
   options: GetAvailabilityOptions = {}
 ): Promise<AvailabilityResult> {
-  const { adminEdit = false } = options;
+  const { adminEdit = false, ownerFreeSchedule = false } = options;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return { ok: false, error: "Data inválida. Use o formato AAAA-MM-DD.", status: 400 };
   }
@@ -182,25 +184,27 @@ export async function getAvailability(
     (exceptions ?? []).find((e) => e.professional_id === professionalId) ??
     null;
 
-  const ranges = resolveDayRanges({
-    businessDay: businessDay
-      ? {
-          active: businessDay.active,
-          range: {
-            start: timeToMinutes(businessDay.open_time),
-            end: timeToMinutes(businessDay.close_time),
-          },
-        }
-      : null,
-    shopException: shopException ? toDayException(shopException) : null,
-    weeklyRanges: (workingHours ?? []).map((w) => ({
-      start: timeToMinutes(w.start_time),
-      end: timeToMinutes(w.end_time),
-    })),
-    professionalException: professionalException
-      ? toDayException(professionalException)
-      : null,
-  });
+  const ranges = ownerFreeSchedule
+    ? [{ start: 0, end: 24 * 60 }]
+    : resolveDayRanges({
+        businessDay: businessDay
+          ? {
+              active: businessDay.active,
+              range: {
+                start: timeToMinutes(businessDay.open_time),
+                end: timeToMinutes(businessDay.close_time),
+              },
+            }
+          : null,
+        shopException: shopException ? toDayException(shopException) : null,
+        weeklyRanges: (workingHours ?? []).map((w) => ({
+          start: timeToMinutes(w.start_time),
+          end: timeToMinutes(w.end_time),
+        })),
+        professionalException: professionalException
+          ? toDayException(professionalException)
+          : null,
+      });
 
   const busy: MinuteRange[] = [
     ...(appointments ?? [])
@@ -209,10 +213,12 @@ export async function getAvailability(
         start: timeToMinutes(a.start_time),
         end: timeToMinutes(a.end_time),
       })),
-    ...(scheduleBlocks ?? []).map((b) => ({
-      start: timeToMinutes(b.start_time),
-      end: timeToMinutes(b.end_time),
-    })),
+    ...(ownerFreeSchedule
+      ? []
+      : (scheduleBlocks ?? []).map((b) => ({
+          start: timeToMinutes(b.start_time),
+          end: timeToMinutes(b.end_time),
+        }))),
   ];
 
   const stepMinutes = settings?.slot_step_minutes ?? SLOT_STEP_MINUTES;
@@ -242,14 +248,22 @@ export async function getAvailability(
   };
 }
 
-/** Valida horário na edição do painel: só conflito com outro agendamento ou bloqueio. */
+export type ValidateAdminSlotOptions = {
+  /** Dono: ignora bloqueios manuais na agenda. */
+  skipScheduleBlocks?: boolean;
+  excludeAppointmentId?: string;
+};
+
+/** Valida horário na edição do painel: conflito com outro agendamento (e bloqueio, se aplicável). */
 export async function validateAdminAppointmentSlot(
   professionalId: string,
   date: string,
   startTime: string,
   durationMinutes: number,
-  excludeAppointmentId: string
+  excludeAppointmentId = "",
+  options: ValidateAdminSlotOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { skipScheduleBlocks = false } = options;
   const start = timeToMinutes(startTime);
   const end = start + durationMinutes;
 
@@ -293,14 +307,16 @@ export async function validateAdminAppointmentSlot(
     }
   }
 
-  for (const block of scheduleBlocks ?? []) {
-    const bStart = timeToMinutes(block.start_time);
-    const bEnd = timeToMinutes(block.end_time);
-    if (start < bEnd && end > bStart) {
-      return {
-        ok: false,
-        error: "Esse horário está bloqueado na agenda desse barbeiro.",
-      };
+  if (!skipScheduleBlocks) {
+    for (const block of scheduleBlocks ?? []) {
+      const bStart = timeToMinutes(block.start_time);
+      const bEnd = timeToMinutes(block.end_time);
+      if (start < bEnd && end > bStart) {
+        return {
+          ok: false,
+          error: "Esse horário está bloqueado na agenda desse barbeiro.",
+        };
+      }
     }
   }
 

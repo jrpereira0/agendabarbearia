@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
+  Coins,
   MessageCircle,
+  Pencil,
   Plus,
+  Receipt,
   RotateCcw,
   Scissors,
   Trash2,
+  Wallet,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,28 +35,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
-import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
+import { SearchInput } from "@/components/admin/search-input";
+import { DialogSection } from "@/components/admin/dialog-section";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
-import type { ServiceOption } from "@/components/admin/new-appointment-dialog";
-import {
-  closeComandaAction,
-  loadComandaForAppointment,
-  reopenComandaAction,
-  saveComandaItems,
-} from "@/app/admin/(panel)/comandas/actions";
-import { cancelAppointment } from "@/app/admin/(panel)/agenda/actions";
+import type {
+  ProfessionalOption,
+  ServiceOption,
+} from "@/components/admin/new-appointment-dialog";
 import {
   ACTIVE_APPOINTMENT_STATUSES,
-  STATUS_LABELS,
 } from "@/lib/appointment-status";
-import { agendaAppointmentClass } from "@/lib/agenda-colors";
 import {
-  calculateComandaTotals,
+  calculateComandaTotalsByProfessional,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type ComandaDetail,
   type ComandaItemInput,
+  type ComandaLinkedAppointment,
   type PaymentMethod,
 } from "@/lib/comanda-types";
 import {
@@ -61,8 +61,48 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { adminWideDialogClassName } from "@/lib/admin-dialog";
+import { matchesSearch } from "@/lib/text";
+import {
+  cancelAppointment,
+} from "@/app/admin/(panel)/agenda/actions";
+import {
+  closeComandaAction,
+  loadComandaForAppointment,
+  reopenComandaAction,
+  saveComandaItems,
+} from "@/app/admin/(panel)/comandas/actions";
 
-type EditableItem = ComandaItemInput & { localKey: string };
+type EditableItem = ComandaItemInput & {
+  localKey: string;
+  professionalNickname?: string;
+};
+
+function mapComandaItemsToEditable(
+  comandaItems: ComandaDetail["items"]
+): EditableItem[] {
+  return comandaItems.map((item) => ({
+    localKey: item.id,
+    id: item.id,
+    serviceId: item.serviceId ?? "",
+    serviceName: item.serviceName,
+    catalogPriceCents: item.catalogPriceCents,
+    chargedPriceCents: item.chargedPriceCents,
+    appointmentId: item.appointmentId ?? undefined,
+    professionalId: item.professionalId ?? undefined,
+    professionalNickname: item.professionalNickname,
+  }));
+}
+
+function stripEditableItem(item: EditableItem): ComandaItemInput {
+  const {
+    localKey: _k,
+    id,
+    professionalNickname: _pn,
+    ...rest
+  } = item;
+  return { ...rest, ...(id ? { id } : {}) };
+}
 
 type PaymentRow = {
   localKey: string;
@@ -70,13 +110,17 @@ type PaymentRow = {
   amountCents: number;
 };
 
+type ComandaProfessionalOption = ProfessionalOption & {
+  commissionPercent: number;
+};
+
 type ComandaDialogProps = {
   appointment: AppointmentItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  showProfessional: boolean;
-  professionalPhotoUrl?: string | null;
   servicesCatalog: ServiceOption[];
+  professionals?: ComandaProfessionalOption[];
+  sessionProfessionalId?: string | null;
   commissionPercent?: number;
   onEditSchedule?: () => void;
 };
@@ -95,13 +139,14 @@ export function ComandaDialog({
   appointment,
   open,
   onOpenChange,
-  showProfessional,
-  professionalPhotoUrl = null,
   servicesCatalog,
+  professionals = [],
+  sessionProfessionalId = null,
   commissionPercent = 50,
   onEditSchedule,
 }: ComandaDialogProps) {
   const router = useRouter();
+  const servicePickerRef = useRef<HTMLDivElement>(null);
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
@@ -109,7 +154,14 @@ export function ComandaDialog({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [addServiceId, setAddServiceId] = useState("");
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [servicePickerOpen, setServicePickerOpen] = useState(false);
+  const [cashReceivedCents, setCashReceivedCents] = useState(0);
+  const [focusAppointmentId, setFocusAppointmentId] = useState<string | null>(
+    null
+  );
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -122,16 +174,7 @@ export function ComandaDialog({
       }
       setComanda(result.comanda);
       setIsOwner(result.isOwner);
-      setItems(
-        result.comanda.items.map((item) => ({
-          localKey: item.id,
-          id: item.id,
-          serviceId: item.serviceId ?? "",
-          serviceName: item.serviceName,
-          catalogPriceCents: item.catalogPriceCents,
-          chargedPriceCents: item.chargedPriceCents,
-        }))
-      );
+      setItems(mapComandaItemsToEditable(result.comanda.items));
       if (result.comanda.status === "closed") {
         setPayments(
           result.comanda.payments.map((p) => ({
@@ -141,14 +184,19 @@ export function ComandaDialog({
           }))
         );
       } else {
+        const total = result.comanda.items.reduce(
+          (s, i) => s + i.chargedPriceCents,
+          0
+        );
         setPayments([
           {
             localKey: newLocalKey(),
             paymentMethod: "pix",
-            amountCents: result.comanda.totalCents,
+            amountCents: total,
           },
         ]);
       }
+      setCashReceivedCents(0);
     } finally {
       setLoading(false);
     }
@@ -156,36 +204,205 @@ export function ComandaDialog({
 
   useEffect(() => {
     if (open && appointment) {
+      setFocusAppointmentId(appointment.id);
       void load();
     } else {
       setComanda(null);
       setConfirmCancel(false);
+      setCashReceivedCents(0);
+      setServiceSearch("");
+      setServicePickerOpen(false);
+      setFocusAppointmentId(null);
+      setCancelReason("");
+      setCancelTargetId(null);
     }
-  }, [open, appointment, load]);
+  }, [open, appointment?.id, load]);
 
-  const totals = useMemo(
-    () =>
-      calculateComandaTotals(
-        items.map((i) => ({ chargedPriceCents: i.chargedPriceCents })),
-        comanda?.commissionPercentSnapshot ?? commissionPercent
-      ),
-    [items, comanda?.commissionPercentSnapshot, commissionPercent]
-  );
+  useEffect(() => {
+    if (!servicePickerOpen) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        servicePickerRef.current &&
+        !servicePickerRef.current.contains(event.target as Node)
+      ) {
+        setServicePickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [servicePickerOpen]);
+
+  const commissionByProfessional = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const pro of professionals) {
+      map.set(pro.id, pro.commissionPercent);
+    }
+    return map;
+  }, [professionals]);
+
+  const totals = useMemo(() => {
+    if (comanda?.status === "closed") {
+      return {
+        totalCents: comanda.totalCents,
+        commissionCents: comanda.commissionCents,
+      };
+    }
+    return calculateComandaTotalsByProfessional(
+      items.map((item) => ({
+        chargedPriceCents: item.chargedPriceCents,
+        professionalId: item.professionalId ?? null,
+      })),
+      commissionByProfessional
+    );
+  }, [items, comanda, commissionByProfessional]);
 
   const paymentsSum = useMemo(
     () => payments.reduce((s, p) => s + p.amountCents, 0),
     [payments]
   );
 
+  const changeCents = useMemo(() => {
+    if (cashReceivedCents <= 0) return 0;
+    return Math.max(0, cashReceivedCents - totals.totalCents);
+  }, [cashReceivedCents, totals.totalCents]);
+
+  const hasCashPayment = payments.some((p) => p.paymentMethod === "cash");
+
+  const filteredServices = useMemo(() => {
+    if (!appointment) return [];
+
+    const linked =
+      comanda?.linkedAppointments ??
+      [
+        {
+          id: appointment.id,
+          professionalId: appointment.professionalId,
+          professionalNickname: appointment.professionalNickname,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          isSqueezeIn: appointment.isSqueezeIn ?? false,
+        },
+      ];
+
+    const linkedProIds = new Set(linked.map((apt) => apt.professionalId));
+    const allowed = new Set(
+      professionals
+        .filter((pro) => linkedProIds.has(pro.id))
+        .flatMap((pro) => pro.serviceIds)
+    );
+    const base = servicesCatalog.filter((svc) => allowed.has(svc.id));
+    if (!serviceSearch.trim()) return base;
+    return base.filter((svc) => matchesSearch(svc.name, serviceSearch));
+  }, [
+    appointment,
+    comanda?.linkedAppointments,
+    servicesCatalog,
+    serviceSearch,
+    professionals,
+  ]);
+
+  const linkedAppointmentsForMemo = useMemo((): ComandaLinkedAppointment[] => {
+    if (!appointment) return [];
+    return (
+      comanda?.linkedAppointments ?? [
+        {
+          id: appointment.id,
+          professionalId: appointment.professionalId,
+          professionalNickname: appointment.professionalNickname,
+          startTime: appointment.startTime,
+          endTime: appointment.endTime,
+          status: appointment.status,
+          isSqueezeIn: appointment.isSqueezeIn ?? false,
+        },
+      ]
+    );
+  }, [appointment, comanda?.linkedAppointments]);
+
   if (!appointment) return null;
 
-  const customerName = `${appointment.customerFirstName} ${appointment.customerLastName}`;
-  const whatsappLink = `https://wa.me/55${appointment.customerWhatsapp}`;
+  const linkedAppointments = linkedAppointmentsForMemo;
+
+  const customerName = comanda
+    ? `${comanda.customerFirstName} ${comanda.customerLastName}`
+    : `${appointment.customerFirstName} ${appointment.customerLastName}`;
+  const customerWhatsapp =
+    comanda?.customerWhatsapp ?? appointment.customerWhatsapp;
+  const serviceDate = comanda?.serviceDate ?? appointment.date;
+  const whatsappLink = `https://wa.me/55${customerWhatsapp}`;
   const isClosed = comanda?.status === "closed";
-  const isActive = (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(
-    appointment.status
+  const hasActiveLinked = linkedAppointments.some((apt) =>
+    (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
   );
-  const canEdit = isOwner && !isClosed && appointment.status !== "cancelled";
+  const canEdit = isOwner && !isClosed && hasActiveLinked;
+
+  function getItemProfessionalName(item: EditableItem): string {
+    if (item.professionalNickname && item.professionalNickname !== "—") {
+      return item.professionalNickname;
+    }
+    if (item.professionalId) {
+      const fromPro = professionals.find((p) => p.id === item.professionalId);
+      if (fromPro?.nickname) return fromPro.nickname;
+      const fromLinked = linkedAppointments.find(
+        (apt) => apt.professionalId === item.professionalId
+      );
+      if (fromLinked?.professionalNickname) return fromLinked.professionalNickname;
+    }
+    return "—";
+  }
+
+  const focusAppointment =
+    linkedAppointments.find((apt) => apt.id === focusAppointmentId) ??
+    linkedAppointments[0];
+
+  function canCancelLinkedAppointment(apt: ComandaLinkedAppointment): boolean {
+    if (isClosed) return false;
+    if (!(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)) {
+      return false;
+    }
+    return isOwner || apt.professionalId === sessionProfessionalId;
+  }
+
+  const appointmentToCancel =
+    linkedAppointments.find(
+      (apt) => apt.id === (cancelTargetId ?? focusAppointmentId)
+    ) ?? focusAppointment;
+
+  const canCancelFocused = appointmentToCancel
+    ? canCancelLinkedAppointment(appointmentToCancel)
+    : false;
+
+  const paymentMismatch = canEdit && paymentsSum !== totals.totalCents;
+
+  const persistItems = async (
+    nextItems: EditableItem[]
+  ): Promise<boolean> => {
+    if (!comanda || !canEdit) return false;
+
+    setBusy(true);
+    try {
+      const result = await saveComandaItems(
+        comanda.id,
+        nextItems.map(stripEditableItem)
+      );
+      if (!result.ok) {
+        toast.error(result.error);
+        return false;
+      }
+
+      setComanda(result.comanda);
+      setItems(mapComandaItemsToEditable(result.comanda.items));
+      setPayments((prev) =>
+        prev.length === 1
+          ? [{ ...prev[0], amountCents: result.comanda.totalCents }]
+          : prev
+      );
+      router.refresh();
+      return true;
+    } finally {
+      setBusy(false);
+    }
+  };
 
   function updateItemPrice(localKey: string, value: string) {
     const cents = parsePriceInput(value);
@@ -198,41 +415,55 @@ export function ComandaDialog({
     );
   }
 
-  function removeItem(localKey: string) {
-    setItems((prev) => prev.filter((i) => i.localKey !== localKey));
+  async function commitItemPrice(localKey: string, value: string) {
+    if (!canEdit || busy) return;
+    const cents = parsePriceInput(value);
+    const previous = items;
+    const nextItems = items.map((item) =>
+      item.localKey === localKey
+        ? { ...item, chargedPriceCents: cents }
+        : item
+    );
+    setItems(nextItems);
+    const ok = await persistItems(nextItems);
+    if (!ok) setItems(previous);
   }
 
-  function addService() {
-    const svc = servicesCatalog.find((s) => s.id === addServiceId);
-    if (!svc) return;
-    setItems((prev) => [
-      ...prev,
+  async function removeItem(localKey: string) {
+    if (!canEdit || busy || items.length <= 1) return;
+    const previous = items;
+    const nextItems = items.filter((i) => i.localKey !== localKey);
+    setItems(nextItems);
+    const ok = await persistItems(nextItems);
+    if (!ok) setItems(previous);
+  }
+
+  async function pickService(svc: ServiceOption) {
+    if (!canEdit || busy) return;
+    const defaultApt =
+      linkedAppointments.find((apt) => apt.id === appointment?.id) ??
+      linkedAppointments[0];
+    if (!defaultApt) return;
+
+    const previous = items;
+    const nextItems = [
+      ...items,
       {
         localKey: newLocalKey(),
         serviceId: svc.id,
         serviceName: svc.name,
         catalogPriceCents: svc.priceCents,
         chargedPriceCents: svc.priceCents,
+        appointmentId: defaultApt.id,
+        professionalId: defaultApt.professionalId,
+        professionalNickname: defaultApt.professionalNickname,
       },
-    ]);
-    setAddServiceId("");
-  }
-
-  async function handleSaveItems() {
-    if (!comanda) return;
-    setBusy(true);
-    const result = await saveComandaItems(
-      comanda.id,
-      items.map(({ localKey: _k, id: _id, ...item }) => item)
-    );
-    if (result.ok) {
-      toast.success("Comanda atualizada.");
-      setComanda(result.comanda);
-      router.refresh();
-    } else {
-      toast.error(result.error);
-    }
-    setBusy(false);
+    ];
+    setItems(nextItems);
+    setServiceSearch("");
+    setServicePickerOpen(false);
+    const ok = await persistItems(nextItems);
+    if (!ok) setItems(previous);
   }
 
   async function handleClose() {
@@ -242,6 +473,15 @@ export function ComandaDialog({
       return;
     }
     setBusy(true);
+    const saved = await saveComandaItems(
+      comanda.id,
+      items.map(stripEditableItem)
+    );
+    if (!saved.ok) {
+      toast.error(saved.error);
+      setBusy(false);
+      return;
+    }
     const result = await closeComandaAction(
       comanda.id,
       payments.map(({ paymentMethod, amountCents }) => ({
@@ -275,12 +515,34 @@ export function ComandaDialog({
   }
 
   async function handleCancel() {
+    const targetId = cancelTargetId ?? focusAppointmentId;
+    if (!targetId) return;
+
+    const reason = cancelReason.trim();
+    if (reason.length < 3) {
+      toast.error("Informe o motivo do cancelamento.");
+      return;
+    }
+
     setBusy(true);
-    const result = await cancelAppointment(appointment!.id);
+    const result = await cancelAppointment({
+      appointmentId: targetId,
+      reason,
+    });
     if (result.ok) {
       toast.success("Agendamento cancelado.");
       setConfirmCancel(false);
-      onOpenChange(false);
+      setCancelReason("");
+      setCancelTargetId(null);
+      const remaining = linkedAppointments.filter((apt) => apt.id !== targetId);
+      if (remaining.length === 0) {
+        onOpenChange(false);
+      } else {
+        if (focusAppointmentId === targetId) {
+          setFocusAppointmentId(remaining[0]?.id ?? null);
+        }
+        await load();
+      }
       router.refresh();
     } else {
       toast.error(result.error);
@@ -288,204 +550,341 @@ export function ComandaDialog({
     setBusy(false);
   }
 
+  function openCancelDialog(appointmentId: string) {
+    setCancelTargetId(appointmentId);
+    setFocusAppointmentId(appointmentId);
+    setCancelReason("");
+    setConfirmCancel(true);
+  }
+
   return (
     <>
-      <Dialog open={open && !confirmCancel} onOpenChange={onOpenChange}>
-        <DialogContent className="flex max-h-[min(92dvh,720px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+      <Dialog
+        open={open && !confirmCancel}
+        onOpenChange={onOpenChange}
+      >
+        <DialogContent className={adminWideDialogClassName()}>
           <DialogHeader className="sr-only">
             <DialogTitle>Comanda — {customerName}</DialogTitle>
             <DialogDescription>
-              Atendimento das {formatTime(appointment.startTime)} às{" "}
-              {formatTime(appointment.endTime)}
+              Comanda do dia {formatDateBR(serviceDate)} —{" "}
+              {linkedAppointments.length} atendimento
+              {linkedAppointments.length === 1 ? "" : "s"}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="border-b bg-muted/25 px-5 pb-4 pt-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+          {/* Cabeçalho */}
+          <div className="shrink-0 border-b bg-muted/20 px-4 py-4 sm:px-6">
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+              <div className="min-w-0 space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Comanda
+                  Cliente
                 </p>
-                <p className="text-2xl font-semibold tabular-nums tracking-tight">
-                  {formatTime(appointment.startTime)}
-                  <span className="mx-1.5 font-normal text-muted-foreground">
-                    –
-                  </span>
-                  {formatTime(appointment.endTime)}
-                </p>
-                <p className="mt-1 truncate text-base font-medium">
+                <p className="text-xl font-semibold leading-tight">
                   {customerName}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {formatDateBR(appointment.date)}
-                </p>
-              </div>
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "border-0 font-normal",
-                  appointment.status === "cancelled"
-                    ? "bg-muted text-muted-foreground"
-                    : isClosed
-                      ? "bg-neutral-800 text-white"
-                      : agendaAppointmentClass(appointment)
-                )}
-              >
-                {isClosed ? "Fechada" : STATUS_LABELS[appointment.status]}
-              </Badge>
-            </div>
-
-            {showProfessional && (
-              <div className="mt-4 flex items-center gap-2.5 rounded-lg border bg-background/80 px-3 py-2">
-                <ProfessionalAvatar
-                  photoUrl={professionalPhotoUrl}
-                  name={appointment.professionalNickname}
-                  size="sm"
-                />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
-                    {appointment.professionalNickname}
-                  </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <MessageCircle className="size-4" />
+                    <span className="tabular-nums">
+                      {formatWhatsapp(customerWhatsapp)}
+                    </span>
+                  </a>
+                </div>
+                {linkedAppointments.length > 1 && (
                   <p className="text-xs text-muted-foreground">
-                    Comissão {comanda?.commissionPercentSnapshot ?? commissionPercent}%
+                    {linkedAppointments.length} atendimentos nesta comanda
                   </p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2 sm:items-end sm:text-right">
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "w-fit sm:ml-auto",
+                    isClosed
+                      ? "bg-neutral-800 text-white"
+                      : "bg-background text-foreground"
+                  )}
+                >
+                  {isClosed ? "Comanda fechada" : "Comanda aberta"}
+                </Badge>
+                <div>
+                  <p className="text-xs text-muted-foreground">Dia</p>
+                  <p className="font-semibold tabular-nums">
+                    {formatDateBR(serviceDate)}
+                  </p>
+                  {linkedAppointments.length === 1 && focusAppointment && (
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      {formatTime(focusAppointment.startTime)} –{" "}
+                      {formatTime(focusAppointment.endTime)}
+                    </p>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            {loading ? (
-              <p className="text-sm text-muted-foreground">Carregando comanda…</p>
-            ) : (
-              <div className="flex flex-col gap-4">
-                <a
-                  href={whatsappLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 rounded-lg border px-3 py-3 transition-colors hover:bg-muted/40"
-                >
-                  <MessageCircle className="size-4 text-muted-foreground" />
-                  <span className="text-sm font-medium tabular-nums">
-                    {formatWhatsapp(appointment.customerWhatsapp)}
-                  </span>
-                </a>
-
-                <div>
-                  <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    <Scissors className="size-3.5" />
-                    Serviços
-                  </div>
-                  <ul className="overflow-hidden rounded-lg border">
-                    {items.map((item, index) => (
-                      <li
-                        key={item.localKey}
-                        className={cn(
-                          "flex flex-col gap-2 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between",
-                          index > 0 && "border-t"
-                        )}
-                      >
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center py-16">
+              <p className="text-sm text-muted-foreground">
+                Carregando comanda…
+              </p>
+            </div>
+          ) : (
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
+              <DialogSection
+                icon={Scissors}
+                title="Serviços"
+                description="Itens do atendimento e valores cobrados."
+                headerAction={
+                  canEdit ? (
+                    <div
+                      ref={servicePickerRef}
+                      className="relative w-full sm:max-w-xs sm:shrink-0"
+                    >
+                      <SearchInput
+                        value={serviceSearch}
+                        onChange={(value) => {
+                          setServiceSearch(value);
+                          setServicePickerOpen(true);
+                        }}
+                        onFocus={() => setServicePickerOpen(true)}
+                        placeholder="Buscar serviço para adicionar…"
+                      />
+                      {servicePickerOpen && (
+                        <ul
+                          className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border bg-popover py-1 shadow-md"
+                          role="listbox"
+                        >
+                          {filteredServices.length === 0 ? (
+                            <li className="px-3 py-2 text-sm text-muted-foreground">
+                              Nenhum serviço encontrado.
+                            </li>
+                          ) : (
+                            filteredServices.map((svc) => (
+                              <li key={svc.id}>
+                                <button
+                                  type="button"
+                                  role="option"
+                                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/60"
+                                  onClick={() => pickService(svc)}
+                                  disabled={busy}
+                                >
+                                  <span className="font-medium">{svc.name}</span>
+                                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                                    {formatPriceBRL(svc.priceCents)}
+                                  </span>
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              >
+                {/* Mobile: cards */}
+                <div className="space-y-3 md:hidden">
+                  {items.map((item) => (
+                    <div
+                      key={item.localKey}
+                      className="rounded-lg border bg-background p-4"
+                    >
+                      <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium">{item.serviceName}</p>
-                          {item.catalogPriceCents !== item.chargedPriceCents && (
-                            <p className="text-xs text-muted-foreground line-through">
-                              Tabela: {formatPriceBRL(item.catalogPriceCents)}
+                          <p className="font-medium leading-snug">
+                            {item.serviceName}
+                          </p>
+                          <div className="mt-2">
+                            <p className="text-xs text-muted-foreground">
+                              Barbeiro
+                            </p>
+                            <div className="mt-1">
+                              <span className="text-sm">
+                                {getItemProfessionalName(item)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        {canEdit && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 shrink-0 text-destructive"
+                            onClick={() => removeItem(item.localKey)}
+                            disabled={items.length <= 1 || busy}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        )}
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Preço</p>
+                          <p className="tabular-nums">
+                            {formatPriceBRL(item.catalogPriceCents)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">
+                            Valor cobrado
+                          </p>
+                          {canEdit ? (
+                            <Input
+                              className="mt-1 h-9 w-full tabular-nums"
+                              value={
+                                item.chargedPriceCents > 0
+                                  ? formatPriceBRL(item.chargedPriceCents)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                updateItemPrice(item.localKey, e.target.value)
+                              }
+                              onBlur={(e) =>
+                                void commitItemPrice(
+                                  item.localKey,
+                                  e.target.value
+                                )
+                              }
+                              disabled={busy}
+                              aria-label={`Valor ${item.serviceName}`}
+                            />
+                          ) : (
+                            <p className="font-semibold tabular-nums">
+                              {formatPriceBRL(item.chargedPriceCents)}
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-2">
-                          {canEdit ? (
-                            <>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between border-t px-1 py-3 text-sm font-semibold">
+                    <span>Total dos serviços</span>
+                    <span className="tabular-nums">
+                      {formatPriceBRL(totals.totalCents)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Desktop: tabela */}
+                <div className="hidden overflow-hidden rounded-lg border md:block">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                        <th className="w-10 px-3 py-2.5 font-medium" />
+                        <th className="px-3 py-2.5 font-medium">Serviço</th>
+                        <th className="hidden px-3 py-2.5 font-medium md:table-cell">
+                          Profissional
+                        </th>
+                        <th className="px-3 py-2.5 text-right font-medium">
+                          Preço
+                        </th>
+                        <th className="px-3 py-2.5 text-right font-medium">
+                          Valor cobrado
+                        </th>
+                        <th className="w-12 px-2 py-2.5" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => (
+                        <tr key={item.localKey} className="border-b last:border-0">
+                          <td className="px-3 py-3 text-muted-foreground">
+                            <Scissors className="size-4" />
+                          </td>
+                          <td className="px-3 py-3 font-medium">
+                            {item.serviceName}
+                          </td>
+                          <td className="hidden px-3 py-3 md:table-cell">
+                            {getItemProfessionalName(item)}
+                          </td>
+                          <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
+                            {formatPriceBRL(item.catalogPriceCents)}
+                          </td>
+                          <td className="px-3 py-3 text-right">
+                            {canEdit ? (
                               <Input
-                                className="h-9 w-28 tabular-nums"
+                                className="ml-auto h-9 w-28 tabular-nums"
                                 value={
                                   item.chargedPriceCents > 0
                                     ? formatPriceBRL(item.chargedPriceCents)
                                     : ""
                                 }
                                 onChange={(e) =>
-                                  updateItemPrice(item.localKey, e.target.value)
+                                  updateItemPrice(
+                                    item.localKey,
+                                    e.target.value
+                                  )
                                 }
+                                onBlur={(e) =>
+                                  void commitItemPrice(
+                                    item.localKey,
+                                    e.target.value
+                                  )
+                                }
+                                disabled={busy}
                                 aria-label={`Valor ${item.serviceName}`}
                               />
+                            ) : (
+                              <span className="font-semibold tabular-nums">
+                                {formatPriceBRL(item.chargedPriceCents)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-2 py-3">
+                            {canEdit && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-9 shrink-0 text-destructive"
+                                className="size-8 text-destructive"
                                 onClick={() => removeItem(item.localKey)}
                                 disabled={items.length <= 1 || busy}
                               >
                                 <Trash2 className="size-4" />
                               </Button>
-                            </>
-                          ) : (
-                            <span className="text-sm tabular-nums font-medium">
-                              {formatPriceBRL(item.chargedPriceCents)}
-                            </span>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {canEdit && (
-                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <Select value={addServiceId} onValueChange={setAddServiceId}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Adicionar serviço…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {servicesCatalog.map((svc) => (
-                            <SelectItem key={svc.id} value={svc.id}>
-                              {svc.name} — {formatPriceBRL(svc.priceCents)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addService}
-                        disabled={!addServiceId || busy}
-                        className="shrink-0"
-                      >
-                        <Plus />
-                        Adicionar
-                      </Button>
-                    </div>
-                  )}
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/30 font-medium">
+                        <td
+                          colSpan={4}
+                          className="px-3 py-3 text-right text-sm"
+                        >
+                          Total dos serviços
+                        </td>
+                        <td className="px-3 py-3 text-right text-base font-semibold tabular-nums">
+                          {formatPriceBRL(totals.totalCents)}
+                        </td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
+              </DialogSection>
 
-                <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-sm">
-                  <div className="flex justify-between">
-                    <span>Total</span>
-                    <span className="font-semibold tabular-nums">
-                      {formatPriceBRL(totals.totalCents)}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex justify-between text-muted-foreground">
-                    <span>Comissão barbeiro</span>
-                    <span className="tabular-nums">
-                      {formatPriceBRL(totals.commissionCents)}
-                    </span>
-                  </div>
-                </div>
-
-                {(canEdit || isClosed) && (
-                  <>
-                    <Separator />
-                    <div>
-                      <Label className="text-xs uppercase tracking-wide text-muted-foreground">
-                        Pagamento
-                      </Label>
-                      <div className="mt-2 flex flex-col gap-2">
+              {(canEdit || isClosed) && (
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <DialogSection icon={Wallet} title="Formas de pagamento">
+                    <div className="space-y-2">
                         {payments.map((row) => (
                           <div
                             key={row.localKey}
                             className="flex flex-col gap-2 sm:flex-row sm:items-center"
                           >
-                            <Select
+                            <div className="flex min-w-0 flex-1 gap-2">
+                              <Select
                               value={row.paymentMethod}
                               onValueChange={(v) =>
                                 setPayments((prev) =>
@@ -501,7 +900,7 @@ export function ComandaDialog({
                               }
                               disabled={!canEdit || busy}
                             >
-                              <SelectTrigger className="w-full sm:w-40">
+                              <SelectTrigger className="h-9 min-w-0 flex-1 bg-background">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -513,7 +912,7 @@ export function ComandaDialog({
                               </SelectContent>
                             </Select>
                             <Input
-                              className="tabular-nums sm:w-32"
+                              className="h-9 w-full shrink-0 tabular-nums bg-background sm:w-[7.5rem]"
                               value={
                                 row.amountCents > 0
                                   ? formatPriceBRL(row.amountCents)
@@ -531,14 +930,18 @@ export function ComandaDialog({
                               }}
                               disabled={!canEdit || busy}
                             />
+                            </div>
                             {canEdit && payments.length > 1 && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
+                                className="size-8 shrink-0"
                                 onClick={() =>
                                   setPayments((prev) =>
-                                    prev.filter((p) => p.localKey !== row.localKey)
+                                    prev.filter(
+                                      (p) => p.localKey !== row.localKey
+                                    )
                                   )
                                 }
                               >
@@ -552,7 +955,7 @@ export function ComandaDialog({
                             type="button"
                             variant="outline"
                             size="sm"
-                            className="w-fit"
+                            className="w-full"
                             onClick={() =>
                               setPayments((prev) => [
                                 ...prev,
@@ -571,96 +974,245 @@ export function ComandaDialog({
                             Outra forma de pagamento
                           </Button>
                         )}
-                        {canEdit && paymentsSum !== totals.totalCents && (
-                          <p className="text-xs text-destructive">
-                            Falta {formatPriceBRL(totals.totalCents - paymentsSum)}{" "}
-                            para fechar a comanda.
-                          </p>
-                        )}
                       </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+                  </DialogSection>
 
-          <div className="shrink-0 border-t bg-muted/20 px-5 py-4">
-            {canEdit && (
-              <div className="flex flex-col gap-2">
-                {onEditSchedule && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="w-full"
-                    onClick={onEditSchedule}
-                    disabled={busy}
-                  >
-                    Editar horário e cliente
-                  </Button>
-                )}
+                  <DialogSection icon={Receipt} title="Resumo">
+                      <dl className="space-y-2.5 text-sm">
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">
+                            Total da comanda
+                          </dt>
+                          <dd className="font-semibold tabular-nums">
+                            {formatPriceBRL(totals.totalCents)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                          <dt className="text-muted-foreground">Valor pago</dt>
+                          <dd
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              paymentMismatch && "text-destructive"
+                            )}
+                          >
+                            {formatPriceBRL(paymentsSum)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-4 border-t pt-2 text-muted-foreground">
+                          <dt>Comissão</dt>
+                          <dd className="tabular-nums">
+                            {formatPriceBRL(totals.commissionCents)}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-4 text-muted-foreground">
+                          <dt>Barbearia</dt>
+                          <dd className="tabular-nums">
+                            {formatPriceBRL(
+                              totals.totalCents - totals.commissionCents
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                      {paymentMismatch && (
+                        <p className="text-xs text-destructive">
+                          Falta{" "}
+                          {formatPriceBRL(totals.totalCents - paymentsSum)} para
+                          fechar.
+                        </p>
+                      )}
+                  </DialogSection>
+
+                  <DialogSection icon={Coins} title="Troco">
+                      {canEdit ? (
+                        <div className="grid grid-cols-2 gap-3 pt-1">
+                          <div className="space-y-1.5">
+                            <Label
+                              htmlFor="cash-received"
+                              className="text-xs text-muted-foreground"
+                            >
+                              Recebido em dinheiro
+                            </Label>
+                            <Input
+                              id="cash-received"
+                              className="h-9 tabular-nums bg-background"
+                              value={
+                                cashReceivedCents > 0
+                                  ? formatPriceBRL(cashReceivedCents)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                setCashReceivedCents(
+                                  parsePriceInput(e.target.value)
+                                )
+                              }
+                              disabled={busy}
+                              placeholder="R$ 0,00"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-muted-foreground">
+                              Troco a devolver
+                            </p>
+                            <div className="flex h-9 items-center rounded-md border bg-background px-3 text-base font-semibold tabular-nums">
+                              {changeCents > 0
+                                ? formatPriceBRL(changeCents)
+                                : "—"}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="pt-1 text-sm text-muted-foreground">
+                          Comanda finalizada · Pago{" "}
+                          {formatPriceBRL(paymentsSum)}
+                        </p>
+                      )}
+                      {canEdit && hasCashPayment && cashReceivedCents === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Informe o valor recebido para calcular o troco.
+                        </p>
+                      )}
+                  </DialogSection>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Rodapé */}
+          <div className="shrink-0 border-t bg-muted/20 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto"
+                onClick={() => onOpenChange(false)}
+                disabled={busy}
+              >
+                Fechar
+              </Button>
+              {canEdit && onEditSchedule && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleSaveItems}
-                  disabled={busy || loading || items.length === 0}
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={onEditSchedule}
+                  disabled={busy}
                 >
-                  Salvar serviços
+                  <Pencil />
+                  Editar agendamento
                 </Button>
+              )}
+              {canCancelFocused && (
                 <Button
                   type="button"
-                  onClick={handleClose}
-                  disabled={busy || loading || paymentsSum !== totals.totalCents}
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-destructive hover:text-destructive sm:w-auto"
+                  onClick={() =>
+                    openCancelDialog(
+                      cancelTargetId ?? focusAppointmentId ?? appointment.id
+                    )
+                  }
+                  disabled={busy}
                 >
-                  <Check />
-                  Fechar comanda
+                  <X />
+                  Cancelar horário
                 </Button>
-              </div>
-            )}
+              )}
+              {isOwner && isClosed && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full sm:w-auto"
+                  onClick={handleReopen}
+                  disabled={busy}
+                >
+                  <RotateCcw />
+                  Reabrir comanda
+                </Button>
+              )}
 
-            {isOwner && isClosed && (
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleReopen}
-                disabled={busy}
-              >
-                <RotateCcw />
-                Reabrir comanda
-              </Button>
-            )}
-
-            {isOwner && isActive && !isClosed && (
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-2 w-full"
-                onClick={() => setConfirmCancel(true)}
-                disabled={busy}
-              >
-                <X />
-                Cancelar horário
-              </Button>
-            )}
+              {canEdit && (
+                <>
+                  <span className="w-full sm:hidden" aria-hidden />
+                  <span
+                    className="hidden min-w-0 flex-1 sm:block"
+                    aria-hidden
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={handleClose}
+                    disabled={
+                      busy || loading || paymentsSum !== totals.totalCents
+                    }
+                  >
+                    <Check />
+                    Finalizar comanda
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmCancel} onOpenChange={setConfirmCancel}>
-        <DialogContent className="sm:max-w-sm">
+      <Dialog
+        open={confirmCancel}
+        onOpenChange={(open) => {
+          setConfirmCancel(open);
+          if (!open) {
+            setCancelReason("");
+            setCancelTargetId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Cancelar agendamento?</DialogTitle>
             <DialogDescription>
-              Nenhum valor será lançado no caixa. O horário será liberado na agenda.
+              O horário some da agenda e nenhum valor entra no caixa.
+              {appointmentToCancel && linkedAppointments.length > 1 && (
+                <>
+                  {" "}
+                  Será cancelado o horário de{" "}
+                  {appointmentToCancel.professionalNickname} (
+                  {formatTime(appointmentToCancel.startTime)}).
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2 py-1">
+            <Label htmlFor="cancel-reason">Motivo do cancelamento</Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Ex.: cliente desmarcou, não compareceu, trocou de horário…"
+              rows={3}
+              disabled={busy}
+            />
+          </div>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setConfirmCancel(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConfirmCancel(false);
+                setCancelReason("");
+                setCancelTargetId(null);
+              }}
+            >
               Voltar
             </Button>
-            <Button variant="destructive" onClick={handleCancel} disabled={busy}>
-              Confirmar
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={busy || cancelReason.trim().length < 3}
+            >
+              Confirmar cancelamento
             </Button>
           </div>
         </DialogContent>

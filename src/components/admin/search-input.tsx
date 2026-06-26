@@ -7,10 +7,16 @@ type SearchInputProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
+  onFocus?: () => void;
 };
 
 // Barra de busca padrão das listagens do painel.
-export function SearchInput({ value, onChange, placeholder }: SearchInputProps) {
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  onFocus,
+}: SearchInputProps) {
   return (
     <div className="relative w-full">
       <Search className="absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -18,6 +24,7 @@ export function SearchInput({ value, onChange, placeholder }: SearchInputProps) 
         type="search"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
         placeholder={placeholder}
         className="h-10 pl-10 pr-9 [&::-webkit-search-cancel-button]:hidden"
       />

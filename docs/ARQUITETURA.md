@@ -42,8 +42,9 @@ Atualizado por fase, conforme o sistema evolui.
 | `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp) |
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
-| `comandas` | Comanda financeira por agendamento (`open` ou `closed`) |
-| `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot) |
+| `comandas` | Comanda financeira por cliente/dia (`open` ou `closed`); uma comanda aberta por WhatsApp + data |
+| `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia |
+| `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 
 Regras importantes no banco:
@@ -89,13 +90,18 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Barra superior: navegar dias, botão **Hoje**, **+ Encaixe** e data no centro
 - Sidebar: mini-calendário, **bloqueios do dia** (pausa, almoço etc.), legenda recolhível
 - **Dono** vê todos os barbeiros; **barbeiro** vê só a própria coluna
+- **Dono** pode agendar em **qualquer horário** do dia (inclusive fora do expediente, data passada ou horário que já passou), exceto se já houver outro agendamento normal naquele horário — aí deve usar **encaixe** ou serviço extra na comanda
+- **Barbeiro** só agenda nos horários livres do expediente e **não** pode marcar em datas ou horários passados
 - Cabeçalho da grade mostra **foto e nome** de cada barbeiro
 - **Agendamento normal** (`+ Agendar` ou clique em horário livre): só mostra horários disponíveis (mesma regra da API pública); grava com `is_squeeze_in = false`
 - A grade do dia cobre **24 horas** (00:00 às 24:00); fora do expediente aparece em cinza
 - **Bloqueio de horário** (`schedule_blocks`): na sidebar, bloqueia uma faixa do dia para um barbeiro; agendamento normal e API pública não oferecem esse horário; **encaixe manual** ainda pode usar
-- **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`)
-- Ações no horário: **comanda** (serviços, preços, pagamento misto, fechar/reabrir), **editar** horário e cliente, ou **cancelar** (bloqueado se comanda fechada)
-- Fechar comanda marca o atendimento como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
+- **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`). Encaixes do **mesmo cliente no mesmo dia** entram automaticamente na comanda aberta dele
+- **Cancelar** horário: motivo obrigatório; o card **some da agenda** (não fica visível como cancelado)
+- Ações no horário: **comanda** (serviços, preços, pagamento misto, fechar/reabrir), **editar** horário e cliente (inclusive trocar barbeiro), ou **cancelar** (bloqueado se comanda fechada)
+- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais do dia e os encaixes manuais desse cliente; serviços extras adicionados na comanda viram encaixe na agenda
+- Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
+- Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
 - Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)
 - Tela **Financeiro** (`/admin/financeiro`): caixa do dia, formas de pagamento e comissões do mês
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
