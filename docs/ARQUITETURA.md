@@ -142,6 +142,7 @@ Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das 
 | GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
 | GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
+| GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | POST | `/api/v1/appointments` | Pública | Criar agendamento online |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |

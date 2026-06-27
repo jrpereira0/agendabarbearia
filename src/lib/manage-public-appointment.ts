@@ -37,9 +37,51 @@ export type PublicAppointmentItem = {
   totalPriceCents: number;
 };
 
+export type LastCompletedAppointment = {
+  appointmentId: string;
+  professionalId: string;
+  professionalName: string;
+  date: string;
+  startTime: string;
+  serviceIds: string[];
+  serviceNames: string[];
+};
+
 type Result<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status: number };
+
+type AppointmentServiceLink = {
+  service_id: string;
+  services:
+    | { name: string; duration_minutes: number; price_cents: number }
+    | { name: string; duration_minutes: number; price_cents: number }[]
+    | null;
+};
+
+function mapAppointmentServices(links: AppointmentServiceLink[]): {
+  serviceIds: string[];
+  serviceNames: string[];
+  totalMinutes: number;
+  totalPriceCents: number;
+} {
+  const serviceIds: string[] = [];
+  const serviceNames: string[] = [];
+  let totalMinutes = 0;
+  let totalPriceCents = 0;
+
+  for (const link of links) {
+    serviceIds.push(link.service_id);
+    const svc = link.services;
+    const service = Array.isArray(svc) ? svc[0] : svc;
+    if (!service) continue;
+    serviceNames.push(service.name);
+    totalMinutes += service.duration_minutes;
+    totalPriceCents += service.price_cents;
+  }
+
+  return { serviceIds, serviceNames, totalMinutes, totalPriceCents };
+}
 
 function isUpcoming(date: string, startTime: string): boolean {
   const today = todayInTimezone();
@@ -142,24 +184,9 @@ export async function listPublicAppointmentsByWhatsapp(
         | null;
       const professional = Array.isArray(pro) ? pro[0] : pro;
 
-      const links = row.appointment_services ?? [];
-      const serviceIds: string[] = [];
-      const serviceNames: string[] = [];
-      let totalMinutes = 0;
-      let totalPriceCents = 0;
-
-      for (const link of links) {
-        serviceIds.push(link.service_id);
-        const svc = link.services as
-          | { name: string; duration_minutes: number; price_cents: number }
-          | { name: string; duration_minutes: number; price_cents: number }[]
-          | null;
-        const service = Array.isArray(svc) ? svc[0] : svc;
-        if (!service) continue;
-        serviceNames.push(service.name);
-        totalMinutes += service.duration_minutes;
-        totalPriceCents += service.price_cents;
-      }
+      const links = (row.appointment_services ?? []) as AppointmentServiceLink[];
+      const { serviceIds, serviceNames, totalMinutes, totalPriceCents } =
+        mapAppointmentServices(links);
 
       return {
         id: row.id,
@@ -177,6 +204,75 @@ export async function listPublicAppointmentsByWhatsapp(
     .filter((item): item is PublicAppointmentItem => item !== null);
 
   return { ok: true, data: appointments };
+}
+
+export async function getLastCompletedAppointmentByWhatsapp(
+  rawWhatsapp: string
+): Promise<Result<LastCompletedAppointment | null>> {
+  const whatsapp = normalizeWhatsapp(rawWhatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: WHATSAPP_INVALID_MESSAGE, status: 400 };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
+  }
+
+  const { data: row, error } = await admin
+    .from("appointments")
+    .select(
+      `
+      id,
+      professional_id,
+      date,
+      start_time,
+      professionals (nickname),
+      appointment_services (
+        service_id,
+        services (name, duration_minutes, price_cents)
+      )
+    `
+    )
+    .in("customer_whatsapp", whatsappLookupKeys(whatsapp))
+    .eq("status", "done")
+    .order("date", { ascending: false })
+    .order("start_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Não foi possível buscar o histórico.",
+      status: 500,
+    };
+  }
+
+  if (!row) {
+    return { ok: true, data: null };
+  }
+
+  const pro = row.professionals as
+    | { nickname: string }
+    | { nickname: string }[]
+    | null;
+  const professional = Array.isArray(pro) ? pro[0] : pro;
+  const links = (row.appointment_services ?? []) as AppointmentServiceLink[];
+  const { serviceIds, serviceNames } = mapAppointmentServices(links);
+
+  return {
+    ok: true,
+    data: {
+      appointmentId: row.id,
+      professionalId: row.professional_id,
+      professionalName: professional?.nickname ?? "Barbeiro",
+      date: row.date,
+      startTime: formatTime(row.start_time),
+      serviceIds,
+      serviceNames,
+    },
+  };
 }
 
 export async function cancelPublicAppointment(

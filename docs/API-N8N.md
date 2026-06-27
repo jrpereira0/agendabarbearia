@@ -27,6 +27,7 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | 3 | `GET` | `/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (**recomendado para n8n**; retorna `id`) |
 | 4 | `GET` | `/customers/lookup` | Pública | Buscar cliente pelo WhatsApp (resposta simples; usado pelo site) |
 | 5 | `GET` | `/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
+| 5b | `GET` | `/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | 6 | `POST` | `/appointments` | Pública | Criar agendamento (site e bot sem chave) |
 | 7 | `PATCH` | `/appointments/:id` | **Privada** | Remarcar agendamento |
 | 8 | `DELETE` | `/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
@@ -84,7 +85,7 @@ Authorization: Bearer <sua-chave-do-painel>
 | `catalog:read` | `GET /catalog` |
 | `availability:read` | `GET /availability` |
 | `customers:read` | `GET /customers/by-whatsapp`, `GET /customers/lookup` |
-| `appointments:read` | `GET /appointments` |
+| `appointments:read` | `GET /appointments`, `GET /appointments/last-completed` |
 | `appointments:create` | `POST /appointments` |
 | `appointments:update` | `PATCH /appointments/:id` |
 | `appointments:cancel` | `DELETE /appointments/:id` |
@@ -518,6 +519,61 @@ Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
 ```
 
 Lista só agendamentos **futuros**, status ativo (`scheduled`, `confirmed`, `on_site`), **sem encaixe**. Array vazio se não houver nenhum.
+
+---
+
+### 5b. Último atendimento concluído
+
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/appointments/last-completed` |
+| **Auth** | **Privada** — scope `appointments:read` |
+| **Rate limit** | 10 / 15 min (mesmo bucket de consultas sensíveis por WhatsApp) |
+
+**Query params:**
+
+| Parâmetro | Obrigatório | Descrição |
+| --- | --- | --- |
+| `whatsapp` | Sim | WhatsApp do cliente |
+
+**Exemplo:**
+
+```bash
+curl -G "https://agendabarbearia-seven.vercel.app/api/v1/appointments/last-completed" \
+  --data-urlencode "whatsapp=5513981008852" \
+  -H "Authorization: Bearer SUA_CHAVE"
+```
+
+**Resposta 200 — encontrado:**
+
+```json
+{
+  "found": true,
+  "lastAppointment": {
+    "appointmentId": "uuid",
+    "professionalId": "uuid",
+    "professionalName": "Chico",
+    "date": "2026-06-20",
+    "startTime": "15:00",
+    "serviceIds": ["uuid"],
+    "serviceNames": ["02 - Corte Qui. - Sáb."]
+  }
+}
+```
+
+**Resposta 200 — sem histórico:**
+
+```json
+{
+  "found": false,
+  "lastAppointment": null
+}
+```
+
+**Sem chave (401):** `{ "ok": false, "error": "Não autorizado." }`
+
+Retorna o agendamento mais recente com status **`done`** (atendido), ordenado por data e horário decrescentes.
 
 ---
 
