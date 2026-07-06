@@ -3,9 +3,20 @@ import { TIMEZONE } from "@/lib/availability";
 import type { BusinessHourRow, ShopCatalog } from "@/lib/get-shop-catalog";
 import {
   cleanLegacyServiceName,
-  isOfferedOnWeekday,
+  groupWeekdayPrices,
   priceForWeekday,
 } from "@/lib/service-weekday-prices";
+
+/** Índice 0–6 = domingo … sábado (legenda única na resposta, economiza tokens). */
+export const BOOKING_DAY_LABELS = [
+  "Dom",
+  "Seg",
+  "Ter",
+  "Qua",
+  "Qui",
+  "Sex",
+  "Sab",
+] as const;
 
 const WEEKDAY_SHORT_MAP: Record<string, number> = {
   Sun: 0,
@@ -37,15 +48,19 @@ export type BookingCatalogService = {
   name: string;
   displayName: string;
   durationMinutes: number;
-  priceCents: number;
+  /** Preço na data pedida (só quando `date` informada). */
+  priceCents?: number;
+  /** [[centavos, [dias]], ...] — dias = índice em `dayLabels` (0=Dom … 6=Sab). */
+  prices: [number, number[]][];
 };
 
 export type BookingCatalog = {
   timezone: string;
-  date: string;
-  weekday: number;
-  priceBand: "seg_qua" | "qui_sab" | "sunday";
-  shopClosed: boolean;
+  dayLabels: readonly string[];
+  date?: string;
+  weekday?: number;
+  priceBand?: "seg_qua" | "qui_sab" | "sunday";
+  shopClosed?: boolean;
   shop: {
     name: string;
     address: string;
@@ -89,14 +104,6 @@ export function parseCatalogQuery(
   if (dateParam) options.date = dateParam;
   if (modeParam) options.mode = "booking";
   if (professionalIdParam) options.professionalId = professionalIdParam;
-
-  if (options.mode === "booking" && !options.date) {
-    return {
-      ok: false,
-      error: "Parâmetro 'date' é obrigatório no modo 'booking'.",
-      status: 400,
-    };
-  }
 
   return { ok: true, data: options };
 }
@@ -151,14 +158,104 @@ export function isShopClosedOnWeekday(
   return day ? !day.active : true;
 }
 
+function servicePricesGrouped(
+  service: ShopCatalog["services"][number]
+): [number, number[]][] {
+  if (service.weekdayPrices.length > 0) {
+    return groupWeekdayPrices(service.weekdayPrices);
+  }
+  return [[service.priceCents, [1, 2, 3, 4, 5, 6]]];
+}
+
+function isServiceOfferedOnWeekday(
+  service: ShopCatalog["services"][number],
+  weekday: number
+): boolean {
+  if (service.weekdayPrices.length > 0) {
+    return priceForWeekday(service.weekdayPrices, weekday) !== null;
+  }
+  return serviceMatchesDateBand(service.name, weekday);
+}
+
+function priceOnWeekday(
+  service: ShopCatalog["services"][number],
+  weekday: number
+): number | null {
+  if (service.weekdayPrices.length > 0) {
+    return priceForWeekday(service.weekdayPrices, weekday);
+  }
+  return serviceMatchesDateBand(service.name, weekday)
+    ? service.priceCents
+    : null;
+}
+
+function matchesProfessional(
+  service: ShopCatalog["services"][number],
+  fullCatalog: ShopCatalog,
+  professional?: BookingProfessional | null
+): boolean {
+  if (!professional) return true;
+  const pro = fullCatalog.professionals.find((p) => p.id === professional.id);
+  return pro?.serviceIds.includes(service.id) ?? false;
+}
+
+function mapBookingService(
+  service: ShopCatalog["services"][number],
+  weekday?: number
+): BookingCatalogService {
+  const prices = servicePricesGrouped(service);
+  const dayPrice = weekday !== undefined ? priceOnWeekday(service, weekday) : null;
+
+  return {
+    id: service.id,
+    name: service.name,
+    displayName: serviceDisplayName(service.name),
+    durationMinutes: service.durationMinutes,
+    prices,
+    ...(dayPrice !== null ? { priceCents: dayPrice } : {}),
+  };
+}
+
 export function buildBookingCatalog(
   fullCatalog: ShopCatalog,
   options: {
-    date: string;
+    date?: string;
     professional?: BookingProfessional | null;
   }
 ): BookingCatalog {
   const { date, professional } = options;
+  const shop = {
+    name: fullCatalog.shop.name,
+    address: fullCatalog.shop.address,
+    whatsapp: fullCatalog.shop.whatsapp,
+  };
+
+  const professionals: BookingProfessional[] = professional
+    ? [professional]
+    : fullCatalog.professionals.map((pro) => ({
+        id: pro.id,
+        nickname: pro.nickname,
+      }));
+
+  if (!date) {
+    const services = fullCatalog.services
+      .filter((service) => {
+        if (service.weekdayPrices.length === 0 && service.priceCents <= 0) {
+          return false;
+        }
+        return matchesProfessional(service, fullCatalog, professional);
+      })
+      .map((service) => mapBookingService(service));
+
+    return {
+      timezone: TIMEZONE,
+      dayLabels: BOOKING_DAY_LABELS,
+      shop,
+      professionals,
+      services,
+    };
+  }
+
   const weekday = weekdayFromIsoDate(date, TIMEZONE);
   const priceBand = priceBandForWeekday(weekday);
   const shopClosed = isShopClosedOnWeekday(
@@ -169,68 +266,33 @@ export function buildBookingCatalog(
   if (shopClosed) {
     return {
       timezone: TIMEZONE,
+      dayLabels: BOOKING_DAY_LABELS,
       date,
       weekday,
       priceBand,
       shopClosed: true,
-      shop: {
-        name: fullCatalog.shop.name,
-        address: fullCatalog.shop.address,
-        whatsapp: fullCatalog.shop.whatsapp,
-      },
+      shop,
       professionals: [],
       services: [],
     };
   }
 
-  const filteredServices = fullCatalog.services
+  const services = fullCatalog.services
     .filter((service) => {
-      const dayPrice =
-        service.weekdayPrices.length > 0
-          ? priceForWeekday(service.weekdayPrices, weekday)
-          : serviceMatchesDateBand(service.name, weekday)
-            ? service.priceCents
-            : null;
-      if (dayPrice === null) return false;
-
-      if (!professional) return true;
-      const pro = fullCatalog.professionals.find((p) => p.id === professional.id);
-      return pro?.serviceIds.includes(service.id) ?? false;
+      if (!isServiceOfferedOnWeekday(service, weekday)) return false;
+      return matchesProfessional(service, fullCatalog, professional);
     })
-    .map((service) => {
-      const dayPrice =
-        service.weekdayPrices.length > 0
-          ? priceForWeekday(service.weekdayPrices, weekday)!
-          : service.priceCents;
-
-      return {
-        id: service.id,
-        name: service.name,
-        displayName: serviceDisplayName(service.name),
-        durationMinutes: service.durationMinutes,
-        priceCents: dayPrice,
-      };
-    });
-
-  const professionals: BookingProfessional[] = professional
-    ? [professional]
-    : fullCatalog.professionals.map((pro) => ({
-        id: pro.id,
-        nickname: pro.nickname,
-      }));
+    .map((service) => mapBookingService(service, weekday));
 
   return {
     timezone: TIMEZONE,
+    dayLabels: BOOKING_DAY_LABELS,
     date,
     weekday,
     priceBand,
     shopClosed: false,
-    shop: {
-      name: fullCatalog.shop.name,
-      address: fullCatalog.shop.address,
-      whatsapp: fullCatalog.shop.whatsapp,
-    },
+    shop,
     professionals,
-    services: filteredServices,
+    services,
   };
 }

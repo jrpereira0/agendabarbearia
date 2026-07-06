@@ -116,6 +116,24 @@ export function parseWeekdayPricesForm(
   return { ok: true, prices };
 }
 
+/** Agrupa dias com o mesmo preço — formato compacto para IA/n8n: [[centavos, [dias]], ...] */
+export function groupWeekdayPrices(
+  prices: ServiceWeekdayPrice[]
+): [number, number[]][] {
+  const byPrice = new Map<number, number[]>();
+  for (const { weekday, priceCents } of prices) {
+    const days = byPrice.get(priceCents) ?? [];
+    days.push(weekday);
+    byPrice.set(priceCents, days);
+  }
+  return [...byPrice.entries()]
+    .map(([priceCents, weekdays]) => [
+      priceCents,
+      weekdays.sort((a, b) => a - b),
+    ] as [number, number[]])
+    .sort((a, b) => a[1][0] - b[1][0]);
+}
+
 export function weekdayPriceInputsFromRows(
   prices: ServiceWeekdayPrice[],
   businessHours: { weekday: number; active: boolean }[]

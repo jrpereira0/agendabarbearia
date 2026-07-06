@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildWeekdayPricesFromLegacy,
   cleanLegacyServiceName,
+  groupWeekdayPrices,
   inferLegacyWeekdays,
   minWeekdayPrice,
   parseWeekdayPricesForm,
@@ -50,6 +51,21 @@ describe("buildWeekdayPricesFromLegacy", () => {
     ]);
     expect(priceForWeekday(prices, 5)).toBeNull();
     expect(minWeekdayPrice(prices)).toBe(6000);
+  });
+});
+
+describe("groupWeekdayPrices", () => {
+  it("agrupa dias com o mesmo preço", () => {
+    const grouped = groupWeekdayPrices([
+      { weekday: 1, priceCents: 6000 },
+      { weekday: 2, priceCents: 6000 },
+      { weekday: 4, priceCents: 6500 },
+      { weekday: 5, priceCents: 6500 },
+    ]);
+    expect(grouped).toEqual([
+      [6000, [1, 2]],
+      [6500, [4, 5]],
+    ]);
   });
 });
 

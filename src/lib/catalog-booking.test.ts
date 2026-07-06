@@ -227,13 +227,9 @@ describe("parseCatalogQuery", () => {
     }
   });
 
-  it("exige date com mode=booking", () => {
+  it("aceita mode=booking sem date (catálogo com preços por dia)", () => {
     const result = parseCatalogQuery(new URLSearchParams({ mode: "booking" }));
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.status).toBe(400);
-      expect(result.error).toContain("date");
-    }
+    expect(result).toEqual({ ok: true, data: { mode: "booking" } });
   });
 
   it("aceita mode=booking com date e professionalId", () => {
@@ -306,20 +302,31 @@ describe("buildBookingCatalog", () => {
   it("omite campos extras do catálogo completo", () => {
     const result = buildBookingCatalog(catalog, { date: "2026-07-06" });
     expect(result).not.toHaveProperty("businessHours");
+    expect(result.dayLabels).toEqual(["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"]);
     expect(result.shop).toEqual({
       name: "Dinho Barber Coffee",
       address: "Rua Teste, 123",
       whatsapp: "11999999999",
     });
-    expect(result.services[0]).toEqual({
-      id: expect.any(String),
-      name: expect.any(String),
-      displayName: expect.any(String),
-      durationMinutes: expect.any(Number),
-      priceCents: expect.any(Number),
-    });
-    expect(result.services[0]).not.toHaveProperty("photoUrl");
-    expect(result.services[0]).not.toHaveProperty("description");
+    const corte = result.services.find((s) => s.id === "s1");
+    expect(corte?.priceCents).toBe(6000);
+    expect(corte?.prices).toEqual([[6000, [1, 2, 3]]]);
+    expect(corte).not.toHaveProperty("photoUrl");
+    expect(corte).not.toHaveProperty("description");
+  });
+
+  it("agrupa preços iguais em faixas compactas", () => {
+    const result = buildBookingCatalog(catalog, { date: "2026-07-06" });
+    const sobrancelha = result.services.find((s) => s.id === "s3");
+    expect(sobrancelha?.prices).toEqual([[2000, [1, 2, 3, 4, 5, 6]]]);
+  });
+
+  it("sem date retorna todos os serviços com prices e sem priceCents", () => {
+    const result = buildBookingCatalog(catalog, {});
+    expect(result.date).toBeUndefined();
+    expect(result.services.length).toBeGreaterThan(0);
+    expect(result.services.every((s) => s.prices.length > 0)).toBe(true);
+    expect(result.services.every((s) => s.priceCents === undefined)).toBe(true);
   });
 
   it("retorna o preço do dia correto", () => {

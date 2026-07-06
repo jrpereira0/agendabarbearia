@@ -274,13 +274,19 @@ Para o bot de agendamento (n8n + IA), use o modo enxuto depois que o cliente esc
 
 | Parâmetro | Obrigatório | Descrição |
 | --- | --- | --- |
-| `date` | Sim (com `mode=booking`) | Data do agendamento (`AAAA-MM-DD`) |
-| `mode` | Não | `booking` — ativa resposta enxuta |
+| `date` | Não | Data do agendamento (`AAAA-MM-DD`). Com data: filtra serviços do dia e preenche `priceCents`. Sem data: lista todos com preços por dia |
+| `mode` | Não | `booking` — ativa resposta enxuta para IA |
 | `professionalId` | Não | UUID do barbeiro; se informado, filtra serviços que ele faz |
 
-**Validações (400):** `date` inválida, `mode` diferente de `booking`, `professionalId` que não é UUID, ou `mode=booking` sem `date`.
+**Validações (400):** `date` inválida, `mode` diferente de `booking`, `professionalId` que não é UUID.
 
 **404:** `professionalId` inexistente ou inativo → `{ "error": "Profissional não encontrado." }`
+
+**Formato compacto de preços (economiza tokens na IA):**
+
+- `dayLabels`: `["Dom","Seg","Ter","Qua","Qui","Sex","Sab"]` — legenda única; o número do dia é o índice (0=domingo … 6=sábado)
+- Em cada serviço, `prices`: `[[centavos, [dias]], ...]` — dias com o mesmo preço vêm agrupados
+- Com `date`: `priceCents` = preço **na data pedida**; `prices` traz **todos** os dias do serviço (a IA compara outros dias sem nova requisição)
 
 **Exemplo (segunda-feira):**
 
@@ -293,6 +299,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?date=2026-07-06&mode
 ```json
 {
   "timezone": "America/Sao_Paulo",
+  "dayLabels": ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"],
   "date": "2026-07-06",
   "weekday": 1,
   "priceBand": "seg_qua",
@@ -311,17 +318,21 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?date=2026-07-06&mode
       "name": "Corte",
       "displayName": "Corte",
       "durationMinutes": 30,
-      "priceCents": 6000
+      "priceCents": 6000,
+      "prices": [[6000, [1, 2, 3]], [6500, [4, 5, 6]]]
     }
   ]
 }
 ```
 
+Leitura do exemplo: Corte custa **R$ 60,00** (`6000` centavos) seg–qua (índices 1–3) e **R$ 65,00** qui–sáb (4–6). Na data `2026-07-06` (segunda), `priceCents` já vem **6000**.
+
 **Regras de filtro por data:**
 
-- Cada serviço tem **preço por dia da semana** cadastrado no painel (`service_weekday_prices`)
-- Só entram na resposta os serviços com preço configurado para o dia da data informada
-- `priceCents` na resposta é o preço **daquele dia** (não o menor preço da semana)
+- Cada serviço tem preços por dia em `prices` (cadastrados no painel)
+- Com `date`: só entram serviços oferecidos naquele dia; `priceCents` = preço da data
+- Sem `date`: todos os serviços ativos com `prices` (útil antes do cliente escolher o dia)
+- `priceCents` na resposta com data é o preço **daquele dia**; use `prices` + `dayLabels` para explicar outros dias
 - **Domingo:** se a loja estiver fechada (`businessHours[0].active = false`), retorna `shopClosed: true`, `professionals: []`, `services: []`, `priceBand: "sunday"`
 - **Feriados:** não tratados nesta versão — use exceções de agenda no painel se precisar fechar um dia específico
 - `GET /availability` e `POST /appointments` também validam se o serviço está disponível no dia escolhido

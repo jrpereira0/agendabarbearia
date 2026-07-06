@@ -56,12 +56,6 @@ export async function GET(request: NextRequest) {
         }
 
         const { date, professionalId } = parsed.data;
-        if (!date) {
-          return NextResponse.json(
-            { error: "Parâmetro 'date' é obrigatório no modo 'booking'." },
-            { status: 400 }
-          );
-        }
 
         let professional: { id: string; nickname: string } | null = null;
         if (professionalId) {
