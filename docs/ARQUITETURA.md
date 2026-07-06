@@ -30,7 +30,9 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login). No Next.js 16, "Middleware" foi renomeado para "Proxy" — é o mesmo conceito |
 | `src/lib/login-path.ts` | Caminho do login (`/`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
-| `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices` e `create-admin` |
+| `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices`, `db:reset-shop` e `create-admin` |
+| `src/lib/catalog-booking.ts` | Catálogo enxuto `mode=booking` (preços agrupados por dia para n8n/IA) |
+| `src/lib/service-weekday-prices.ts` | Preço por dia da semana (cadastro, API e validação de agendamento) |
 
 ## Banco de dados
 
@@ -72,10 +74,12 @@ Regras importantes no banco:
 
 ## Serviços
 
-- Campos: nome, descrição, foto, preço (guardado em **centavos**) e duração (em **minutos** — é o que define os horários livres na agenda)
+- Campos: nome, descrição, foto, **preço por dia da semana** (tabela `service_weekday_prices`), duração (em **minutos** — define os horários livres na agenda)
+- No cadastro: grade dos 7 dias; dias em que a barbearia está fechada (`business_hours`) aparecem bloqueados; atalho **“Mesmo preço em todos os dias abertos”**
+- O campo `price_cents` na tabela `services` guarda o **menor** preço da semana (referência para listagens)
+- A API e o agendamento validam se o serviço está disponível no **dia da reserva** e usam o preço daquele dia
 - Excluir um serviço usado em agendamentos é bloqueado; o caminho é **desativar**
 - Foto vai pro bucket `photos` (pasta `services/`)
-- No formulário, o preço tem máscara de moeda (digite números e vira R$ automaticamente)
 
 ## Horários
 
@@ -141,7 +145,7 @@ Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das 
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
-| GET | `/api/v1/catalog` | Pública | Catálogo completo; `?date=&mode=booking` retorna versão enxuta para n8n/IA |
+| GET | `/api/v1/catalog` | Pública | Catálogo completo (`weekdayPrices` em cada serviço) ou `?mode=booking` enxuto para n8n/IA (`dayLabels` + `prices` agrupados) |
 | GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro num dia |
 | GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
 | GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
@@ -200,3 +204,10 @@ Nunca rode SQL manualmente. Crie um arquivo numerado em `supabase/migrations` e 
 ```bash
 npm run db:migrate
 ```
+
+Scripts auxiliares (com `.env.local` apontando para o banco certo):
+
+| Comando | Quando usar |
+| --- | --- |
+| `npm run db:migrate-weekday-prices` | Após migration `0030`: converte serviços legados (nomes AppBarber) para preço por dia |
+| `npm run db:reset-shop` | Zera agendamentos, clientes, serviços, comandas e caixa; **mantém** logins e profissionais |

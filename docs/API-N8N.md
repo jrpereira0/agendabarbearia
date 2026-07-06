@@ -196,11 +196,13 @@ Cada profissional tem `serviceIds`: lista de serviços que ele realiza (no catá
 
 ### Serviços
 
-| Nome | serviceId | Duração | Preço |
+Os preços **variam por dia da semana** (cadastrados no painel). No catálogo completo, cada serviço traz `weekdayPrices`; o campo `priceCents` é o **menor** preço da semana. Consulte sempre a API — a tabela abaixo é só referência histórica.
+
+| Nome | serviceId | Duração | Preço (ex.) |
 | --- | --- | --- | --- |
-| Barba | `0ab080c4-514c-41ef-9ad3-07b66141d0c1` | 30 min | R$ 65,00 |
-| Corte | `3a62b091-6916-4741-a3d4-754a33b2cb31` | 30 min | R$ 65,00 |
-| Corte e Barba | `da8126ca-730d-49e9-a429-2dd0d6965409` | 60 min | R$ 120,00 |
+| Barba | `0ab080c4-514c-41ef-9ad3-07b66141d0c1` | 30 min | varia por dia |
+| Corte | `3a62b091-6916-4741-a3d4-754a33b2cb31` | 30 min | varia por dia |
+| Corte e Barba | `da8126ca-730d-49e9-a429-2dd0d6965409` | 60 min | varia por dia |
 
 ### Horário de funcionamento
 
@@ -220,7 +222,9 @@ Cada profissional tem `serviceIds`: lista de serviços que ele realiza (no catá
 | **Auth** | Pública (sem header). Opcional: chave com `catalog:read` |
 | **Rate limit** | 60 / 15 min por IP |
 
-Retorna loja, profissionais ativos, serviços ativos e horários da barbearia.
+Retorna loja, profissionais ativos, serviços ativos (com **preço por dia** em `weekdayPrices`) e horários da barbearia. Use este modo para o **site** ou integrações que precisam de fotos, descrição e `businessHours`.
+
+**Para bot com IA**, prefira `?mode=booking` (payload menor e `prices` agrupados — ver seção abaixo).
 
 **Exemplo:**
 
@@ -257,7 +261,15 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
       "description": "",
       "photoUrl": "https://...",
       "durationMinutes": 30,
-      "priceCents": 6500
+      "priceCents": 6000,
+      "weekdayPrices": [
+        { "weekday": 1, "priceCents": 6000 },
+        { "weekday": 2, "priceCents": 6000 },
+        { "weekday": 3, "priceCents": 6000 },
+        { "weekday": 4, "priceCents": 6500 },
+        { "weekday": 5, "priceCents": 6500 },
+        { "weekday": 6, "priceCents": 6500 }
+      ]
     }
   ],
   "businessHours": [
@@ -266,11 +278,13 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 }
 ```
 
-**Uso no bot:** montar menus numerados (1, 2, 3…) com `nickname` e `name`. Guardar os `id` escolhidos no estado da conversa.
+**Uso no bot (menus fixos):** montar menus numerados (1, 2, 3…) com `nickname` e `name`. Guardar os `id` escolhidos no estado da conversa.
+
+**`weekdayPrices`:** `weekday` 0=domingo … 6=sábado; só aparecem dias em que o serviço é oferecido. `priceCents` no catálogo completo é o **menor** preço da semana.
 
 #### Catálogo enxuto (`mode=booking`)
 
-Para o bot de agendamento (n8n + IA), use o modo enxuto depois que o cliente escolher a **data** (e opcionalmente o barbeiro). Reduz o payload e devolve só os serviços com preço cadastrado para aquele dia da semana.
+Para o bot de agendamento (n8n + IA), use o modo enxuto. Pode chamar **sem `date`** no início da conversa (cache com todos os `prices`) ou **com `date`** depois que o cliente escolher o dia (filtra serviços e preenche `priceCents`). `professionalId` é opcional.
 
 | Parâmetro | Obrigatório | Descrição |
 | --- | --- | --- |
@@ -350,6 +364,25 @@ GET {{baseUrl}}/catalog?date={{data_escolhida}}&mode=booking&professionalId={{pr
 `mode=booking` **não** resolve linguagem natural (“quero um corte”); só reduz o catálogo para o Code node do `resolver_servico` cruzar com a intenção da IA. A lógica de NLP continua no n8n.
 
 `GET /catalog` **sem parâmetros** permanece igual (catálogo completo para o site).
+
+#### Instrução para a IA (ler preços no `mode=booking`)
+
+Cole no system prompt do agente ou no nó Code:
+
+```
+dayLabels: índice do dia (0=Dom, 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sab).
+Cada serviço tem prices: [[centavos, [dias]], ...]. Ex.: [[6000,[1,2,3]],[6500,[4,5,6]]] = R$ 60 seg–qua, R$ 65 qui–sáb.
+Com date na URL, priceCents já é o preço da data pedida; use prices para explicar outros dias.
+Valores em centavos (6000 = R$ 60,00).
+```
+
+**Exemplo sem `date`** (cliente ainda não escolheu o dia — menos campos na resposta):
+
+```
+GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?mode=booking
+```
+
+Retorna todos os serviços com `prices` (sem `priceCents` nem filtro por dia).
 
 ---
 
@@ -821,10 +854,23 @@ Estado da conversa deve ser guardado por número de WhatsApp (variáveis do work
    - 3 Cancelar
    - 4 Falar com atendente (opcional)
 
-FLUXO AGENDAR:
+FLUXO AGENDAR (com IA):
+3. GET /catalog?mode=booking → profissionais + serviços com prices (cache no início da conversa)
+4. Cliente escolhe barbeiro → guardar professionalId
+5. Perguntar data (validar não domingo/fechado, não passado)
+6. GET /catalog?date=AAAA-MM-DD&mode=booking&professionalId=... → serviços do dia + priceCents + prices completos
+7. IA ou menu: cliente escolhe serviço(s) → guardar serviceIds[] (usar id do JSON)
+8. GET /availability → listar slots
+9. Cliente escolhe horário → guardar startTime
+10. GET /customers/by-whatsapp?whatsapp= → se found: usar customer.firstName + lastName; senão perguntar firstName + lastName
+11. Resumo e confirmação (Sim/Não) — mostrar preço de priceCents ou da faixa em prices
+12. POST /appointments
+13. Mensagem de sucesso com data, hora, barbeiro, serviço e endereço da loja
+
+FLUXO AGENDAR (menus 1-2-3, sem IA):
 3. GET /catalog → listar profissionais
 4. Cliente escolhe número → guardar professionalId
-5. Filtrar services onde id está em professional.serviceIds → listar
+5. Filtrar services onde id está em professional.serviceIds → listar (priceCents = menor da semana; após escolher data, chame availability para preço certo)
 6. Cliente escolhe serviço(s) → guardar serviceIds[]
 7. Perguntar data (validar não domingo, não passado)
 8. GET /availability → listar slots
@@ -856,7 +902,8 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Passo | Method | URL | Auth |
 | --- | --- | --- | --- |
 | Catálogo (site) | GET | `{{baseUrl}}/catalog` | Pública (envie a chave mesmo assim) |
-| Catálogo (bot) | GET | `{{baseUrl}}/catalog?date={{data}}&mode=booking&professionalId={{id}}` | Pública |
+| Catálogo (bot, com data) | GET | `{{baseUrl}}/catalog?date={{data}}&mode=booking&professionalId={{id}}` | Pública |
+| Catálogo (bot, sem data) | GET | `{{baseUrl}}/catalog?mode=booking` | Pública |
 | Disponibilidade | GET | `{{baseUrl}}/availability?professionalId=...&date=...&serviceIds=...` | Pública |
 | Disponibilidade (remarcar) | GET | `{{baseUrl}}/availability?...&excludeAppointmentId=...` | Pública |
 | Lookup cliente | GET | `{{baseUrl}}/customers/by-whatsapp?whatsapp=...` | **Privada** |
@@ -888,6 +935,8 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 - [ ] Redeploy após salvar variáveis
 - [ ] `GET /catalog` retorna JSON com profissionais e serviços
 - [ ] Profissionais e serviços cadastrados e **ativos** no painel
+- [ ] Serviços cadastrados com **preço por dia** em pelo menos um dia aberto (painel > Serviços)
+- [ ] `GET /catalog?mode=booking&date=AAAA-MM-DD` retorna `dayLabels`, `prices` e `priceCents` nos serviços
 - [ ] Chave de API criada no painel (`Configurações > Integrações > Chaves de API`)
 
 ### Testes de segurança (produção)

@@ -1,6 +1,6 @@
 # Agenda Barbearia
 
-Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes, **comandas unificadas por cliente/dia** (fechamento com pagamento misto e comissão por barbeiro) e **caixa do dia** (abrir/fechar por data; só finaliza comanda com caixa aberto) por um painel administrativo. No painel, o **caixa do dia** pode ser operado na aba lateral da agenda; o **histórico de caixas** e o **painel financeiro** (métricas por período) ficam em rotas próprias. Toda a funcionalidade também é exposta por uma API REST em `/api/v1` (rotas públicas para agendar e rotas privadas com chave de API para consultas sensíveis e financeiro) para automações como agendamento via WhatsApp com IA. Guias: [docs/API-N8N.md](docs/API-N8N.md) (agenda) e [docs/API-FINANCE.md](docs/API-FINANCE.md) (comandas e caixa).
+Sistema de agendamento online para barbearia. Os clientes escolhem o profissional, os serviços e o horário disponível, identificam-se pelo WhatsApp e confirmam o agendamento. Os **preços dos serviços podem variar por dia da semana** (configurados no painel). Também podem consultar, remarcar ou cancelar horários futuros pela aba **Meus horários** na página `/agenda`. A barbearia gerencia profissionais, serviços, clientes, **comandas unificadas por cliente/dia** (fechamento com pagamento misto e comissão por barbeiro) e **caixa do dia** (abrir/fechar por data; só finaliza comanda com caixa aberto) por um painel administrativo. No painel, o **caixa do dia** pode ser operado na aba lateral da agenda; o **histórico de caixas** e o **painel financeiro** (métricas por período) ficam em rotas próprias. Toda a funcionalidade também é exposta por uma API REST em `/api/v1` (rotas públicas para agendar e rotas privadas com chave de API para consultas sensíveis e financeiro) para automações como agendamento via WhatsApp com IA. Guias: [docs/API-N8N.md](docs/API-N8N.md) (agenda) e [docs/API-FINANCE.md](docs/API-FINANCE.md) (comandas e caixa).
 
 ## Tecnologias
 
@@ -62,7 +62,8 @@ Sem isso o site abre sem dados da barbearia e o painel mostra erro de Supabase n
 ```bash
 npm run dev           # roda o site em localhost:3000
 npm run db:migrate    # aplica mudanças pendentes no banco
-npm run db:migrate-weekday-prices  # migra serviços atuais para preço por dia (rodar após db:migrate)
+npm run db:migrate-weekday-prices  # migra serviços legados para preço por dia (após db:migrate)
+npm run db:reset-shop   # zera dados operacionais; mantém login e profissionais
 npm run create-admin  # cria usuário do painel: -- email senha "Nome"
 npm run lint          # checa o código com o ESLint
 npm run typecheck     # checa os tipos com o TypeScript
