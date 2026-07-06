@@ -16,6 +16,7 @@ import { upsertCustomer } from "@/lib/upsert-customer";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
+  whatsappSchema,
 } from "@/lib/whatsapp";
 import {
   ACTIVE_APPOINTMENT_STATUSES,
@@ -30,9 +31,7 @@ const createSchema = z.object({
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: z
-    .string()
-    .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
+  whatsapp: whatsappSchema,
 });
 
 const OCCUPIED_SLOT_MESSAGE =
@@ -404,9 +403,7 @@ const updateSchema = z.object({
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: z
-    .string()
-    .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
+  whatsapp: whatsappSchema,
 });
 
 export async function updateAppointment(input: {

@@ -31,6 +31,7 @@ import {
 } from "@/lib/finance-reports";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL } from "@/lib/format";
+import { shiftDate, monthStart, formatPeriodLabel } from "@/lib/date-range";
 import { matchesSearch } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
@@ -48,21 +49,6 @@ type CommissionsViewProps = {
   report: CommissionReport;
   professionals: CommissionProfessionalOption[];
 };
-
-function shiftDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function monthStart(isoDate: string): string {
-  return `${isoDate.slice(0, 7)}-01`;
-}
-
-function formatPeriodLabel(from: string, to: string): string {
-  if (from === to) return formatDateBR(from);
-  return `${formatDateBR(from)} a ${formatDateBR(to)}`;
-}
 
 function MetricCard({
   label,

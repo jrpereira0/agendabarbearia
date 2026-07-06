@@ -190,6 +190,13 @@ export async function previewComandaTotals(
   professionalId: string,
   items: Pick<ComandaItemInput, "chargedPriceCents">[]
 ): Promise<{ totalCents: number; commissionCents: number } | null> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return null;
+
+  if (!session.isOwner && session.professionalId !== professionalId) {
+    return null;
+  }
+
   const admin = requireAdminClient();
   if (isActionResult(admin)) return null;
 

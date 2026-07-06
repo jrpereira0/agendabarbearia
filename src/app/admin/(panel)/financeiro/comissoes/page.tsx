@@ -4,6 +4,7 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { todayInTimezone } from "@/lib/availability";
 import { getCommissionReport } from "@/lib/finance-reports";
+import { shiftDate } from "@/lib/date-range";
 import { CommissionsView } from "@/components/admin/commissions-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -12,12 +13,6 @@ export const metadata = { title: "Comissões" };
 type PageProps = {
   searchParams: Promise<{ from?: string; to?: string; professionalId?: string }>;
 };
-
-function shiftDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 export default async function ComissoesPage({ searchParams }: PageProps) {
   await assertOwnerPage();

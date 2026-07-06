@@ -10,6 +10,7 @@ import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
+  whatsappSchema,
 } from "@/lib/whatsapp";
 
 const bodySchema = z.object({
@@ -23,7 +24,7 @@ const bodySchema = z.object({
     .min(1, "Informe ao menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
+  whatsapp: whatsappSchema,
 });
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente

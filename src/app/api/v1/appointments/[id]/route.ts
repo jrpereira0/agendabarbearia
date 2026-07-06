@@ -10,10 +10,11 @@ import {
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
+  whatsappSchema,
 } from "@/lib/whatsapp";
 
 const updateBodySchema = z.object({
-  whatsapp: z.string().regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE),
+  whatsapp: whatsappSchema,
   professionalId: z.uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),

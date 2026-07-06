@@ -20,25 +20,10 @@ export function getSupabasePublicEnv() {
   return { url, anonKey };
 }
 
-export function getSupabaseBrowserEnv() {
-  const url = readEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const anonKey = readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-
-  if (!url || !anonKey) {
-    return null;
-  }
-
-  return { url, anonKey };
-}
-
 export function getSupabaseServiceRoleKey(): string | undefined {
   return readEnv("SUPABASE_SERVICE_ROLE_KEY");
 }
 
 export function isSupabaseConfigured(): boolean {
   return getSupabasePublicEnv() !== null;
-}
-
-export function isSupabaseBrowserConfigured(): boolean {
-  return getSupabaseBrowserEnv() !== null;
 }

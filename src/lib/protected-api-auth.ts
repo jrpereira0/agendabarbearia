@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import {
-  READONLY_API_SCOPES,
-  type ApiScope,
-} from "@/lib/api-key-scopes";
+import { type ApiScope } from "@/lib/api-key-scopes";
 import {
   apiForbiddenResponse,
   apiUnauthorizedResponse,
@@ -36,9 +33,22 @@ const CLIENT_SESSION_SCOPES: ApiScope[] = [
   "appointments:cancel",
 ];
 
+// Escopos liberados para barbeiro autenticado com sessão do painel (cookie).
+// Não inclui "customers:read" nem "appointments:read": essas rotas devolvem
+// dados de QUALQUER WhatsApp informado, sem restringir ao próprio barbeiro,
+// então um barbeiro logado poderia ler clientes/agendamentos de terceiros.
+// "comandas:read" e "finance:read" já são filtrados por rota
+// (barberCanAccessComanda / financeForbiddenForBarberWrite).
+const BARBER_SESSION_SCOPES: ApiScope[] = [
+  "catalog:read",
+  "availability:read",
+  "comandas:read",
+  "finance:read",
+];
+
 function adminHasScope(role: "owner" | "barber", scope: ApiScope): boolean {
   if (role === "owner") return true;
-  return READONLY_API_SCOPES.includes(scope);
+  return BARBER_SESSION_SCOPES.includes(scope);
 }
 
 function clientHasScope(scope: ApiScope): boolean {

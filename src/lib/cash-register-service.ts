@@ -103,19 +103,6 @@ export async function getCashRegisterSession(
   return enrichSession(admin, data as DbSessionRow);
 }
 
-export async function isCashRegisterOpen(
-  admin: SupabaseClient,
-  serviceDate: string
-): Promise<boolean> {
-  const { data } = await admin
-    .from("cash_register_sessions")
-    .select("status")
-    .eq("service_date", serviceDate)
-    .maybeSingle();
-
-  return data?.status === "open";
-}
-
 /** Retorna o único caixa aberto no sistema, se existir. */
 export async function getOpenCashRegisterSession(
   admin: SupabaseClient

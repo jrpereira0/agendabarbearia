@@ -79,6 +79,3 @@ export async function withProtectedApiRouteGuard(
 
   return handler({ auth: authResult.auth });
 }
-
-/** @deprecated Use withPublicApiRouteGuard */
-export const withApiRouteGuard = withPublicApiRouteGuard;

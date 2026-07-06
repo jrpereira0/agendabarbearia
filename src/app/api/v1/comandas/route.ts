@@ -7,7 +7,6 @@ import {
   getOrCreateComandaForAppointment,
   listComandasByDate,
 } from "@/lib/comanda-service";
-import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
 import { apiErrorResponse, apiSuccessResponse } from "@/lib/finance-api-auth";
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -36,25 +35,33 @@ export async function GET(request: NextRequest) {
         }
 
         if (appointmentId) {
+          if (auth.type === "admin" && auth.role === "barber") {
+            const [{ data: pro }, { data: appointment }] = await Promise.all([
+              admin
+                .from("professionals")
+                .select("id")
+                .eq("profile_id", auth.userId)
+                .maybeSingle(),
+              admin
+                .from("appointments")
+                .select("id, professional_id")
+                .eq("id", appointmentId)
+                .maybeSingle(),
+            ]);
+            if (!appointment) {
+              return apiErrorResponse("Agendamento não encontrado.", 404);
+            }
+            if (!pro || appointment.professional_id !== pro.id) {
+              return apiErrorResponse("Sem permissão.", 403);
+            }
+          }
+
           const result = await getOrCreateComandaForAppointment(
             admin,
             appointmentId
           );
           if (!result.ok) {
             return apiErrorResponse(result.error, result.status);
-          }
-          if (auth.type === "admin" && auth.role === "barber") {
-            const { data: pro } = await admin
-              .from("professionals")
-              .select("id")
-              .eq("profile_id", auth.userId)
-              .maybeSingle();
-            if (
-              !pro ||
-              !barberCanAccessComanda(result.comanda, pro.id)
-            ) {
-              return apiErrorResponse("Sem permissão.", 403);
-            }
           }
           return apiSuccessResponse({ comanda: result.comanda });
         }

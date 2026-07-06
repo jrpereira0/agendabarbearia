@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
 import type { ApiScope } from "@/lib/api-key-scopes";
-import {
-  apiForbiddenResponse,
-  apiUnauthorizedResponse,
-} from "@/lib/api-key-auth";
+import { apiForbiddenResponse } from "@/lib/api-key-auth";
 import {
   resolveProtectedApiAuth,
   type ProtectedApiAuthContext,

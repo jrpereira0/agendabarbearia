@@ -2,7 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
-  calculateComandaTotals,
   calculateComandaTotalsByProfessional,
   type ComandaDetail,
   type ComandaItem,
@@ -1149,13 +1148,17 @@ async function loadServiceDurationsForSync(
   items: Pick<ComandaItemInput, "serviceId" | "professionalId">[],
   fallbackProfessionalId: string
 ): Promise<
-  | { ok: true; durations: Map<string, number> }
+  | {
+      ok: true;
+      durations: Map<string, number>;
+      catalogPrices: Map<string, number>;
+    }
   | { ok: false; error: string; status: number }
 > {
   const uniqueIds = [...new Set(items.map((item) => item.serviceId))];
   const { data: foundServices } = await admin
     .from("services")
-    .select("id, duration_minutes, active")
+    .select("id, duration_minutes, price_cents, active")
     .in("id", uniqueIds);
 
   if (!foundServices || foundServices.length !== uniqueIds.length) {
@@ -1203,6 +1206,9 @@ async function loadServiceDurationsForSync(
     ok: true,
     durations: new Map(
       foundServices.map((service) => [service.id, service.duration_minutes])
+    ),
+    catalogPrices: new Map(
+      foundServices.map((service) => [service.id, service.price_cents])
     ),
   };
 }
@@ -1359,18 +1365,6 @@ async function upsertSqueezeAppointment(
   }
 
   return { ok: true, appointmentId: created.id };
-}
-
-async function cancelSqueezeAppointments(
-  admin: SupabaseClient,
-  appointmentIds: string[]
-): Promise<void> {
-  if (appointmentIds.length === 0) return;
-  await admin
-    .from("appointments")
-    .update({ status: "cancelled" })
-    .in("id", appointmentIds)
-    .eq("is_squeeze_in", true);
 }
 
 async function removeSqueezeAppointments(
@@ -1911,7 +1905,11 @@ export async function updateComandaItems(
       comanda_id: comandaId,
       service_id: item.serviceId,
       service_name: item.serviceName,
-      catalog_price_cents: item.catalogPriceCents,
+      // Preço de catálogo sempre vem do banco (nunca do cliente), para que
+      // a comparação com o valor cobrado reflita o preço real do serviço.
+      catalog_price_cents:
+        durationsResult.catalogPrices.get(item.serviceId) ??
+        item.catalogPriceCents,
       charged_price_cents: item.chargedPriceCents,
       sort_order: index,
       squeeze_appointment_id:

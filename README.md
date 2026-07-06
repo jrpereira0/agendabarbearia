@@ -33,7 +33,7 @@ Acesse [http://localhost:3000](http://localhost:3000) para entrar no painel. O l
 
 ## Publicar na Vercel
 
-No painel da Vercel, abra **Settings → Environment Variables** e cadastre **as 5 chaves** abaixo (copie os mesmos valores do `.env.local`):
+No painel da Vercel, abra **Settings → Environment Variables** e cadastre as chaves abaixo (copie os mesmos valores do `.env.local`):
 
 | Variável | Para quê |
 |---|---|
@@ -42,6 +42,14 @@ No painel da Vercel, abra **Settings → Environment Variables** e cadastre **as
 | `SUPABASE_SERVICE_ROLE_KEY` | API e ações do painel |
 | `NEXT_PUBLIC_SUPABASE_URL` | Login no navegador (mesmo valor de `SUPABASE_URL`) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Login no navegador (mesmo valor de `SUPABASE_ANON_KEY`) |
+| `CLIENT_SESSION_SECRET` | **Obrigatória** — assina o cookie de sessão de "Meus horários" no site (gere uma string aleatória de 32+ caracteres) |
+
+Opcionais (só quem usa a funcionalidade correspondente):
+
+| Variável | Para quê |
+|---|---|
+| `DATABASE_URL` | Rodar `npm run db:migrate` (não precisa na Vercel, só localmente) |
+| `API_SECRET_KEY` / chaves geradas em Configurações > Integrações | Automações externas (n8n) |
 
 Marque **Production**, **Preview** e **Development**.
 
@@ -55,6 +63,9 @@ Sem isso o site abre sem dados da barbearia e o painel mostra erro de Supabase n
 npm run dev           # roda o site em localhost:3000
 npm run db:migrate    # aplica mudanças pendentes no banco
 npm run create-admin  # cria usuário do painel: -- email senha "Nome"
+npm run lint          # checa o código com o ESLint
+npm run typecheck     # checa os tipos com o TypeScript
+npm run test          # roda os testes automatizados (vitest)
 ```
 
 ## Documentação

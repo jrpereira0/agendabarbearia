@@ -6,6 +6,7 @@ import { todayInTimezone } from "@/lib/availability";
 import { listCashRegisterSessions, getOpenCashRegisterSession } from "@/lib/cash-register-service";
 import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { getAdminSession } from "@/lib/require-admin";
+import { shiftDate } from "@/lib/date-range";
 import { CashRegisterHistoryView } from "@/components/admin/cash-register-history-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -14,12 +15,6 @@ export const metadata = { title: "Caixas" };
 type PageProps = {
   searchParams: Promise<{ from?: string; to?: string }>;
 };
-
-function shiftDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 export default async function CaixasPage({ searchParams }: PageProps) {
   await assertOwnerPage();

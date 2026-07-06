@@ -19,12 +19,15 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
 | `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
-| `src/app/admin/(panel)/comandas` | Server actions da comanda na agenda |
+| `src/app/admin/(panel)/comandas` | Server actions da comanda (sem página própria — a UI é o `ComandaDialog`, aberto a partir da agenda) |
+| `src/app/api/agenda/session` | Emite o cookie de sessão do cliente (aba "Meus horários") |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
 | `src/components/booking` | Página pública de agendamento do cliente |
-| `src/lib/supabase` | Conexões com o Supabase (browser, server, admin) |
-| `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login) |
+| `src/hooks` | Hooks compartilhados (ex.: `use-mobile`, usado pela sidebar) |
+| `src/lib/supabase` | Conexões com o Supabase (server e admin) |
+| `src/lib/api` | Guards de autenticação/rate limit das rotas REST (`with-api-guard.ts`, `safe-route.ts`) |
+| `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login). No Next.js 16, "Middleware" foi renomeado para "Proxy" — é o mesmo conceito |
 | `src/lib/login-path.ts` | Caminho do login (`/`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
 | `scripts` | Ferramentas: `db:migrate` e `create-admin` |
@@ -181,6 +184,13 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 - Toda foto é **comprimida no navegador antes do envio** (`src/lib/compress-image.ts`): redimensionada pra até 1024px e convertida pra WebP
 - Se a compressão falhar, o arquivo original é enviado (limite de 10 MB configurado no `next.config.ts`)
+
+## Riscos de segurança conhecidos (aceitos por ora)
+
+Identificados em auditoria (jul/2026); decisão consciente de não corrigir agora — revisar quando fizer sentido:
+
+- **`GET /api/v1/customers/lookup` permite enumerar WhatsApp cadastrados**: é pública (usada no site para autocompletar nome ao agendar) e devolve se um número é cliente. Só tem rate limit de 10 tentativas/15 min por IP. Mitigar exigiria sessão prévia ou CAPTCHA, o que mudaria a experiência de quem chega direto no site.
+- **Sessão "Meus horários" não confirma posse do WhatsApp**: `POST /api/agenda/session` emite cookie de acesso aos agendamentos só de informar o número, sem checar se quem está pedindo é o dono dele. Corrigir direito exige enviar um código de verificação por WhatsApp (integração nova, ex. via n8n) — planejar quando essa integração existir.
 
 ## Como atualizar o banco
 

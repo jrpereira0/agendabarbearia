@@ -23,12 +23,6 @@ export function apiForbiddenResponse() {
   );
 }
 
-/** @deprecated use apiUnauthorizedResponse() */
-export const API_UNAUTHORIZED = apiUnauthorizedResponse();
-
-/** @deprecated use apiForbiddenResponse() */
-export const API_FORBIDDEN = apiForbiddenResponse();
-
 export type ApiKeyAuthContext = {
   type: "api_key";
   shopId: number;

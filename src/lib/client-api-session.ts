@@ -1,5 +1,4 @@
-import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { cookies } from "next/headers";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export const CLIENT_SESSION_COOKIE = "agenda_client_session";
@@ -13,14 +12,6 @@ export type ClientSessionPayload = {
 function getSessionSecret(): string | null {
   const secret = process.env.CLIENT_SESSION_SECRET?.trim();
   if (secret && secret.length >= 32) return secret;
-
-  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (serviceRole && serviceRole.length >= 32) {
-    return createHmac("sha256", "agenda-client-session")
-      .update(serviceRole)
-      .digest("hex");
-  }
-
   return null;
 }
 
@@ -103,12 +94,6 @@ export function getClientSessionCookieOptions() {
   };
 }
 
-export async function readClientSessionFromCookies(): Promise<ClientSessionPayload | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(CLIENT_SESSION_COOKIE)?.value;
-  return verifyClientSessionToken(token);
-}
-
 export function readClientSessionFromRequest(
   request: Request
 ): ClientSessionPayload | null {
@@ -124,8 +109,4 @@ export function readClientSessionFromRequest(
 
   const token = decodeURIComponent(match.slice(CLIENT_SESSION_COOKIE.length + 1));
   return verifyClientSessionToken(token);
-}
-
-export function createCsrfToken(): string {
-  return randomBytes(16).toString("base64url");
 }

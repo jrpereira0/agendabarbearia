@@ -1,5 +1,12 @@
+import { z } from "zod";
+
 export const WHATSAPP_INVALID_MESSAGE =
   "WhatsApp deve ter DDD + número (10 ou 11 dígitos).";
+
+/** WhatsApp já normalizado (com 55), pra validar body/query com Zod. */
+export const whatsappSchema = z
+  .string()
+  .regex(/^55\d{10,11}$/, WHATSAPP_INVALID_MESSAGE);
 
 /** Remove tudo que não é dígito. */
 export function digitsOnlyWhatsapp(input: string): string {
@@ -34,16 +41,6 @@ export function whatsappLookupKeys(canonical: string): string[] {
     keys.push(canonical.slice(2));
   }
   return [...new Set(keys)];
-}
-
-/** Valida e normaliza entrada (máscara, com ou sem 55). */
-export function parseWhatsapp(raw: string): string | null {
-  return normalizeWhatsapp(raw);
-}
-
-/** Número completo o bastante para buscar cadastro automaticamente. */
-export function isWhatsappLookupReady(input: string): boolean {
-  return normalizeWhatsapp(input) !== null;
 }
 
 /** Dois números são o mesmo WhatsApp (com ou sem 55 no banco). */

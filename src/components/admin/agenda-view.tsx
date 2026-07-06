@@ -18,6 +18,7 @@ import {
   type ServiceOption,
 } from "@/components/admin/new-appointment-dialog";
 import { formatAgendaHeaderDate } from "@/lib/agenda-grid-utils";
+import { shiftDate } from "@/lib/date-range";
 import type { AgendaDayContext } from "@/lib/get-agenda-day";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
@@ -40,12 +41,6 @@ type AgendaViewProps = {
   services: ServiceOption[];
   cashRegister?: AgendaCashRegisterData;
 };
-
-function shiftDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function AgendaToolbar({
   date,

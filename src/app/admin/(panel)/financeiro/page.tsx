@@ -4,6 +4,7 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { todayInTimezone } from "@/lib/availability";
 import { getFinanceMetricsReport } from "@/lib/finance-reports";
+import { shiftDate } from "@/lib/date-range";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -12,12 +13,6 @@ export const metadata = { title: "Financeiro" };
 type PageProps = {
   searchParams: Promise<{ from?: string; to?: string; date?: string }>;
 };
-
-function shiftDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 
 function isIsoDate(value: string | undefined): value is string {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));

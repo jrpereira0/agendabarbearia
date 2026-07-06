@@ -6,6 +6,7 @@ import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/
 import { isActionResult } from "@/lib/is-action-result";
 import { formatShopAddress } from "@/lib/format";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
+import { uploadPublicPhoto } from "@/lib/upload-photo";
 
 import { BOOKING_PATH } from "@/lib/booking-path";
 
@@ -147,18 +148,8 @@ export async function deleteException(id: string): Promise<ActionResult> {
 async function uploadLogo(photo: File): Promise<string | null> {
   const admin = createAdminClient();
   if (!admin) return null;
-  const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `shop/logo-${Date.now()}.${ext}`;
-
-  const { error } = await admin.storage
-    .from("photos")
-    .upload(path, await photo.arrayBuffer(), {
-      contentType: photo.type || "image/jpeg",
-      upsert: true,
-    });
-
-  if (error) return null;
-  return admin.storage.from("photos").getPublicUrl(path).data.publicUrl;
+  const result = await uploadPublicPhoto(admin, "shop", "logo", photo);
+  return result.ok ? result.url : null;
 }
 
 const shopProfileSchema = z.object({

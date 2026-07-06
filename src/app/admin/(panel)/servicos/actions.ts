@@ -5,6 +5,7 @@ import { z } from "zod";
 import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
+import { uploadPublicPhoto } from "@/lib/upload-photo";
 
 const serviceSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome do serviço."),
@@ -52,18 +53,8 @@ async function syncProfessionals(serviceId: string, professionalIds: string[]) {
 async function uploadPhoto(serviceId: string, photo: File): Promise<string | null> {
   const admin = createAdminClient();
   if (!admin) return null;
-  const ext = photo.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `services/${serviceId}-${Date.now()}.${ext}`;
-
-  const { error } = await admin.storage
-    .from("photos")
-    .upload(path, await photo.arrayBuffer(), {
-      contentType: photo.type || "image/jpeg",
-      upsert: true,
-    });
-
-  if (error) return null;
-  return admin.storage.from("photos").getPublicUrl(path).data.publicUrl;
+  const result = await uploadPublicPhoto(admin, "services", serviceId, photo);
+  return result.ok ? result.url : null;
 }
 
 export async function createService(formData: FormData): Promise<ActionResult> {
