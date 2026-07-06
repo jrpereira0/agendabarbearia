@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
-  Coins,
   MessageCircle,
   Pencil,
   Plus,
@@ -19,7 +18,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -50,7 +48,6 @@ import {
 } from "@/lib/appointment-status";
 import {
   calculateComandaTotalsByProfessional,
-  CASH_INFLOW_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type CashInflowPaymentMethod,
@@ -167,6 +164,73 @@ function newLocalKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function splitPaymentsForClose(
+  payments: PaymentRow[],
+  totalCents: number
+): {
+  comandaPayments: Array<{ paymentMethod: PaymentMethod; amountCents: number }>;
+  creditDeposits: Array<{
+    amountCents: number;
+    paymentMethod: CashInflowPaymentMethod;
+  }>;
+} {
+  let remaining = totalCents;
+  const comandaPayments: Array<{
+    paymentMethod: PaymentMethod;
+    amountCents: number;
+  }> = [];
+  const creditDeposits: Array<{
+    amountCents: number;
+    paymentMethod: CashInflowPaymentMethod;
+  }> = [];
+
+  for (const payment of payments) {
+    if (payment.amountCents <= 0) continue;
+
+    if (payment.paymentMethod === "store_credit") {
+      const applied = Math.min(payment.amountCents, remaining);
+      if (applied > 0) {
+        comandaPayments.push({
+          paymentMethod: "store_credit",
+          amountCents: applied,
+        });
+        remaining -= applied;
+      }
+      continue;
+    }
+
+    const inflowMethod = payment.paymentMethod as CashInflowPaymentMethod;
+
+    if (remaining <= 0) {
+      creditDeposits.push({
+        amountCents: payment.amountCents,
+        paymentMethod: inflowMethod,
+      });
+      continue;
+    }
+
+    if (payment.amountCents <= remaining) {
+      comandaPayments.push({
+        paymentMethod: payment.paymentMethod,
+        amountCents: payment.amountCents,
+      });
+      remaining -= payment.amountCents;
+    } else {
+      comandaPayments.push({
+        paymentMethod: payment.paymentMethod,
+        amountCents: remaining,
+      });
+      creditDeposits.push({
+        amountCents: payment.amountCents - remaining,
+        paymentMethod: inflowMethod,
+      });
+      remaining = 0;
+    }
+  }
+
+  return { comandaPayments, creditDeposits };
+}
+
 export function ComandaDialog({
   appointment,
   open,
@@ -194,7 +258,6 @@ export function ComandaDialog({
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
-  const [cashReceivedCents, setCashReceivedCents] = useState(0);
   const [focusAppointmentId, setFocusAppointmentId] = useState<string | null>(
     null
   );
@@ -208,10 +271,7 @@ export function ComandaDialog({
   const [tipCents, setTipCents] = useState(0);
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
-  const [trocoAsCredit, setTrocoAsCredit] = useState(false);
-  const [extraCreditDepositCents, setExtraCreditDepositCents] = useState(0);
-  const [extraCreditDepositMethod, setExtraCreditDepositMethod] =
-    useState<CashInflowPaymentMethod>("pix");
+  const [confirmOverpayCredit, setConfirmOverpayCredit] = useState(false);
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -227,9 +287,6 @@ export function ComandaDialog({
       setCashRegisterOpen(result.cashRegisterOpen);
       setOpenCashRegisterDate(result.openCashRegisterDate);
       setCustomerCreditBalanceCents(result.customerCreditBalanceCents);
-      setTrocoAsCredit(false);
-      setExtraCreditDepositCents(0);
-      setExtraCreditDepositMethod("pix");
       const tipItem = result.comanda.items.find((item) => item.isTip);
       setItems(mapComandaItemsToEditable(result.comanda.items));
       setTipCents(tipItem?.chargedPriceCents ?? 0);
@@ -260,7 +317,6 @@ export function ComandaDialog({
           },
         ]);
       }
-      setCashReceivedCents(0);
     } finally {
       setLoading(false);
     }
@@ -273,7 +329,7 @@ export function ComandaDialog({
     } else {
       setComanda(null);
       setConfirmCancel(false);
-      setCashReceivedCents(0);
+      setConfirmOverpayCredit(false);
       setServiceSearch("");
       setServicePickerOpen(false);
       setFocusAppointmentId(null);
@@ -286,8 +342,6 @@ export function ComandaDialog({
       setTipCents(0);
       setTipProfessionalId("");
       setCustomerCreditBalanceCents(0);
-      setTrocoAsCredit(false);
-      setExtraCreditDepositCents(0);
     }
   }, [open, appointment?.id, load]);
 
@@ -345,12 +399,8 @@ export function ComandaDialog({
     [payments]
   );
 
-  const changeCents = useMemo(() => {
-    if (cashReceivedCents <= 0) return 0;
-    return Math.max(0, cashReceivedCents - totals.totalCents);
-  }, [cashReceivedCents, totals.totalCents]);
-
-  const hasCashPayment = payments.some((p) => p.paymentMethod === "cash");
+  const paymentShortfallCents = Math.max(0, totals.totalCents - paymentsSum);
+  const paymentOverpayCents = Math.max(0, paymentsSum - totals.totalCents);
 
   const availablePaymentMethods = useMemo(() => {
     if (customerCreditBalanceCents > 0) return PAYMENT_METHODS;
@@ -456,13 +506,6 @@ export function ComandaDialog({
     );
   }, [pendingExtraService, professionals]);
 
-  const tipEligibleProfessionals = useMemo(() => {
-    const linkedProIds = new Set(
-      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
-    );
-    return professionals.filter((pro) => linkedProIds.has(pro.id));
-  }, [linkedAppointmentsForMemo, professionals]);
-
   if (!appointment) return null;
 
   const linkedAppointments = linkedAppointmentsForMemo;
@@ -560,24 +603,12 @@ export function ComandaDialog({
     ? canCancelLinkedAppointment(appointmentToCancel)
     : false;
 
-  const paymentMismatch = canEdit && paymentsSum !== totals.totalCents;
+  const paymentShortfall = canEdit && paymentShortfallCents > 0;
 
   function syncSinglePaymentToTotal(nextTotal: number) {
     setPayments((prev) =>
       prev.length === 1 ? [{ ...prev[0], amountCents: nextTotal }] : prev
     );
-  }
-
-  function handleTipCentsChange(value: string) {
-    const cents = parsePriceInput(value);
-    setTipCents(cents);
-    if (canEdit) {
-      const servicesTotal = items.reduce(
-        (sum, item) => sum + item.chargedPriceCents,
-        0
-      );
-      syncSinglePaymentToTotal(servicesTotal + cents);
-    }
   }
 
   const persistItems = async (
@@ -724,10 +755,38 @@ export function ComandaDialog({
     }
   }
 
-  async function handleClose() {
+  async function finalizeComanda(saveOverpayAsCredit: boolean) {
     if (!comanda) return;
-    if (paymentsSum !== totals.totalCents) {
-      toast.error("A soma dos pagamentos deve ser igual ao total da comanda.");
+
+    const { comandaPayments, creditDeposits } = splitPaymentsForClose(
+      payments,
+      totals.totalCents
+    );
+
+    setBusy(true);
+    const result = await closeComandaWithItemsAction(
+      comanda.id,
+      buildPersistItems(items, tipCents, tipProfessionalId),
+      comandaPayments,
+      {
+        creditDeposits: saveOverpayAsCredit ? creditDeposits : undefined,
+      }
+    );
+    if (result.ok) {
+      toast.success("Comanda fechada.");
+      setConfirmOverpayCredit(false);
+      onOpenChange(false);
+      router.refresh();
+    } else {
+      toast.error(result.error);
+    }
+    setBusy(false);
+  }
+
+  function handleClose() {
+    if (!comanda) return;
+    if (paymentShortfallCents > 0) {
+      toast.error("O valor pago ainda não cobre o total da comanda.");
       return;
     }
     if (storeCreditUsedCents > customerCreditBalanceCents) {
@@ -735,43 +794,12 @@ export function ComandaDialog({
       return;
     }
 
-    const creditDeposits: Array<{
-      amountCents: number;
-      paymentMethod: CashInflowPaymentMethod;
-    }> = [];
-
-    if (trocoAsCredit && changeCents > 0) {
-      creditDeposits.push({
-        amountCents: changeCents,
-        paymentMethod: "cash",
-      });
+    if (paymentOverpayCents > 0) {
+      setConfirmOverpayCredit(true);
+      return;
     }
 
-    if (extraCreditDepositCents > 0) {
-      creditDeposits.push({
-        amountCents: extraCreditDepositCents,
-        paymentMethod: extraCreditDepositMethod,
-      });
-    }
-
-    setBusy(true);
-    const result = await closeComandaWithItemsAction(
-      comanda.id,
-      buildPersistItems(items, tipCents, tipProfessionalId),
-      payments.map(({ paymentMethod, amountCents }) => ({
-        paymentMethod,
-        amountCents,
-      })),
-      { creditDeposits: creditDeposits.length > 0 ? creditDeposits : undefined }
-    );
-    if (result.ok) {
-      toast.success("Comanda fechada.");
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      toast.error(result.error);
-    }
-    setBusy(false);
+    void finalizeComanda(false);
   }
 
   async function handleReopen() {
@@ -1195,57 +1223,7 @@ export function ComandaDialog({
               )}
 
               {(canEdit || isClosed) && (
-                <div className="grid gap-4 lg:grid-cols-3">
-                  {canEdit && (
-                    <DialogSection icon={Coins} title="Gorjeta">
-                      <p className="mb-3 text-xs text-muted-foreground">
-                        Opcional. O barbeiro recebe 100% do valor.
-                      </p>
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="tip-amount">Valor</Label>
-                          <Input
-                            id="tip-amount"
-                            className="h-9 tabular-nums bg-background"
-                            value={tipCents > 0 ? formatPriceBRL(tipCents) : ""}
-                            onChange={(e) => handleTipCentsChange(e.target.value)}
-                            onBlur={() => {
-                              if (tipCents > 0) {
-                                void persistItems(items, tipCents, tipProfessionalId);
-                              }
-                            }}
-                            placeholder="R$ 0,00"
-                            disabled={busy}
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label>Barbeiro</Label>
-                          <Select
-                            value={tipProfessionalId}
-                            onValueChange={(value) => {
-                              setTipProfessionalId(value);
-                              if (tipCents > 0) {
-                                void persistItems(items, tipCents, value);
-                              }
-                            }}
-                            disabled={busy || tipEligibleProfessionals.length === 0}
-                          >
-                            <SelectTrigger className="h-9 bg-background">
-                              <SelectValue placeholder="Quem recebe" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {tipEligibleProfessionals.map((pro) => (
-                                <SelectItem key={pro.id} value={pro.id}>
-                                  {pro.nickname}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    </DialogSection>
-                  )}
-
+                <div className="grid gap-4 lg:grid-cols-2">
                   <DialogSection icon={Wallet} title="Formas de pagamento">
                     {customerCreditBalanceCents > 0 && (
                       <p className="mb-2 text-xs text-muted-foreground">
@@ -1377,25 +1355,12 @@ export function ComandaDialog({
                           <dd
                             className={cn(
                               "font-semibold tabular-nums",
-                              paymentMismatch && "text-destructive"
+                              paymentShortfall && "text-destructive"
                             )}
                           >
                             {formatPriceBRL(paymentsSum)}
                           </dd>
                         </div>
-                        {tipCents > 0 && (
-                          <div className="flex justify-between gap-4 text-muted-foreground">
-                            <dt>
-                              Gorjeta
-                              {tipProfessionalId
-                                ? ` (${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"})`
-                                : ""}
-                            </dt>
-                            <dd className="tabular-nums">
-                              {formatPriceBRL(tipCents)}
-                            </dd>
-                          </div>
-                        )}
                         <div className="flex justify-between gap-4 border-t pt-2 text-muted-foreground">
                           <dt>Comissão</dt>
                           <dd className="tabular-nums">
@@ -1411,131 +1376,17 @@ export function ComandaDialog({
                           </dd>
                         </div>
                       </dl>
-                      {paymentMismatch && (
+                      {paymentShortfall && (
                         <p className="text-xs text-destructive">
-                          Falta{" "}
-                          {formatPriceBRL(totals.totalCents - paymentsSum)} para
+                          Falta {formatPriceBRL(paymentShortfallCents)} para
                           fechar.
                         </p>
                       )}
-                  </DialogSection>
-
-                  <DialogSection icon={Coins} title="Troco e crédito">
-                      {canEdit ? (
-                        <div className="space-y-4 pt-1">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label
-                                htmlFor="cash-received"
-                                className="text-xs text-muted-foreground"
-                              >
-                                Recebido em dinheiro
-                              </Label>
-                              <Input
-                                id="cash-received"
-                                className="h-9 tabular-nums bg-background"
-                                value={
-                                  cashReceivedCents > 0
-                                    ? formatPriceBRL(cashReceivedCents)
-                                    : ""
-                                }
-                                onChange={(e) =>
-                                  setCashReceivedCents(
-                                    parsePriceInput(e.target.value)
-                                  )
-                                }
-                                disabled={busy}
-                                placeholder="R$ 0,00"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <p className="text-xs text-muted-foreground">
-                                Troco a devolver
-                              </p>
-                              <div className="flex h-9 items-center rounded-md border bg-background px-3 text-base font-semibold tabular-nums">
-                                {changeCents > 0
-                                  ? formatPriceBRL(changeCents)
-                                  : "—"}
-                              </div>
-                            </div>
-                          </div>
-
-                          {changeCents > 0 && (
-                            <label className="flex items-start gap-2 text-sm">
-                              <Checkbox
-                                checked={trocoAsCredit}
-                                onCheckedChange={(checked) =>
-                                  setTrocoAsCredit(checked === true)
-                                }
-                                disabled={busy}
-                              />
-                              <span>
-                                Guardar{" "}
-                                <span className="font-medium">
-                                  {formatPriceBRL(changeCents)}
-                                </span>{" "}
-                                como crédito do cliente (entra no caixa como
-                                dinheiro)
-                              </span>
-                            </label>
-                          )}
-
-                          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
-                            <p className="text-xs font-medium text-muted-foreground">
-                              Cliente deixou crédito adicional
-                            </p>
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <Input
-                                className="h-9 tabular-nums bg-background"
-                                value={
-                                  extraCreditDepositCents > 0
-                                    ? formatPriceBRL(extraCreditDepositCents)
-                                    : ""
-                                }
-                                onChange={(e) =>
-                                  setExtraCreditDepositCents(
-                                    parsePriceInput(e.target.value)
-                                  )
-                                }
-                                disabled={busy}
-                                placeholder="R$ 0,00"
-                              />
-                              <Select
-                                value={extraCreditDepositMethod}
-                                onValueChange={(value) =>
-                                  setExtraCreditDepositMethod(
-                                    value as CashInflowPaymentMethod
-                                  )
-                                }
-                                disabled={busy}
-                              >
-                                <SelectTrigger className="h-9 bg-background">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {CASH_INFLOW_PAYMENT_METHODS.map((method) => (
-                                    <SelectItem key={method} value={method}>
-                                      {PAYMENT_METHOD_LABELS[method]}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <p className="text-[11px] text-muted-foreground">
-                              Use quando o cliente pagar a mais por Pix, cartão ou
-                              outra forma e quiser deixar o valor como crédito.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="pt-1 text-sm text-muted-foreground">
-                          Comanda finalizada · Pago{" "}
-                          {formatPriceBRL(paymentsSum)}
-                        </p>
-                      )}
-                      {canEdit && hasCashPayment && cashReceivedCents === 0 && (
+                      {canEdit && paymentOverpayCents > 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Informe o valor recebido para calcular o troco.
+                          Pagou {formatPriceBRL(paymentOverpayCents)} a mais. Ao
+                          finalizar, você pode guardar esse valor como crédito do
+                          cliente.
                         </p>
                       )}
                   </DialogSection>
@@ -1617,7 +1468,7 @@ export function ComandaDialog({
                       busy ||
                       loading ||
                       !cashRegisterOpen ||
-                      paymentsSum !== totals.totalCents
+                      paymentShortfallCents > 0
                     }
                   >
                     <Check />
@@ -1703,6 +1554,37 @@ export function ComandaDialog({
               disabled={busy || cancelReason.trim().length < 3}
             >
               Confirmar cancelamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmOverpayCredit} onOpenChange={setConfirmOverpayCredit}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Guardar o troco como crédito?</DialogTitle>
+            <DialogDescription>
+              O cliente pagou{" "}
+              <strong>{formatPriceBRL(paymentOverpayCents)}</strong> a mais que o
+              total da comanda ({formatPriceBRL(totals.totalCents)}). Deseja
+              guardar esse valor como crédito para ele?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void finalizeComanda(false)}
+            >
+              Não, foi troco
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void finalizeComanda(true)}
+            >
+              Sim, guardar crédito
             </Button>
           </div>
         </DialogContent>
