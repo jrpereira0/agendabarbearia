@@ -428,6 +428,13 @@ export function ComandaDialog({
     );
   }, [pendingExtraService, professionals]);
 
+  const tipEligibleProfessionals = useMemo(() => {
+    const linkedProIds = new Set(
+      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
+    );
+    return professionals.filter((pro) => linkedProIds.has(pro.id));
+  }, [linkedAppointmentsForMemo, professionals]);
+
   if (!appointment) return null;
 
   const linkedAppointments = linkedAppointmentsForMemo;
@@ -524,13 +531,6 @@ export function ComandaDialog({
   const canCancelFocused = appointmentToCancel
     ? canCancelLinkedAppointment(appointmentToCancel)
     : false;
-
-  const tipEligibleProfessionals = useMemo(() => {
-    const linkedProIds = new Set(
-      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
-    );
-    return professionals.filter((pro) => linkedProIds.has(pro.id));
-  }, [linkedAppointmentsForMemo, professionals]);
 
   const paymentMismatch = canEdit && paymentsSum !== totals.totalCents;
 
