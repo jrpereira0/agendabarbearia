@@ -138,6 +138,56 @@ function SelectionSummary({
   );
 }
 
+const SLOT_PERIODS = [
+  { label: "Manhã", from: 0, to: 12 },
+  { label: "Tarde", from: 12, to: 18 },
+  { label: "Noite", from: 18, to: 24 },
+] as const;
+
+function SlotGroups({
+  slots,
+  selected,
+  onSelect,
+}: {
+  slots: string[];
+  selected: string | null;
+  onSelect: (slot: string) => void;
+}) {
+  const groups = SLOT_PERIODS.map((period) => ({
+    label: period.label,
+    slots: slots.filter((s) => {
+      const hour = parseInt(s.split(":")[0], 10);
+      return hour >= period.from && hour < period.to;
+    }),
+  })).filter((g) => g.slots.length > 0);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {groups.map((group) => (
+        <div key={group.label}>
+          <p className="mb-2 text-xs font-medium text-muted-foreground">
+            {group.label}
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {group.slots.map((slot) => (
+              <Button
+                key={slot}
+                type="button"
+                variant={selected === slot ? "default" : "outline"}
+                size="sm"
+                className="h-9 tabular-nums"
+                onClick={() => onSelect(slot)}
+              >
+                {slot}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
 
@@ -682,20 +732,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                 {slotsError}
               </p>
             ) : (
-              <div className="grid grid-cols-4 gap-2">
-                {availableSlots.map((slot) => (
-                  <Button
-                    key={slot}
-                    type="button"
-                    variant={startTime === slot ? "default" : "outline"}
-                    size="sm"
-                    className="h-9 tabular-nums"
-                    onClick={() => setStartTime(slot)}
-                  >
-                    {slot}
-                  </Button>
-                ))}
-              </div>
+              <SlotGroups
+                slots={availableSlots}
+                selected={startTime}
+                onSelect={setStartTime}
+              />
             )}
           </div>
         )}
