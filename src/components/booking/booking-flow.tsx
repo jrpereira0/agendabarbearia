@@ -161,6 +161,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+  const serviceAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
 
   const { services } = catalog;
   const professionals = catalog.professionals.filter(
@@ -241,6 +244,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setProfessionalId(id);
     setServiceIds([]);
     setStartTime(null);
+    setTimeout(() => setStep("services"), 200);
   }
 
   function toggleService(id: string, checked: boolean) {
@@ -249,6 +253,31 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     );
     setStartTime(null);
   }
+
+  useEffect(() => {
+    if (step !== "services") {
+      if (serviceAdvanceTimerRef.current) {
+        clearTimeout(serviceAdvanceTimerRef.current);
+        serviceAdvanceTimerRef.current = null;
+      }
+      return;
+    }
+    if (serviceIds.length === 0) return;
+
+    if (serviceAdvanceTimerRef.current) {
+      clearTimeout(serviceAdvanceTimerRef.current);
+    }
+    serviceAdvanceTimerRef.current = setTimeout(() => {
+      setStep("datetime");
+    }, 800);
+
+    return () => {
+      if (serviceAdvanceTimerRef.current) {
+        clearTimeout(serviceAdvanceTimerRef.current);
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, serviceIds]);
 
   function resetCustomerStep() {
     setCustomerSubstep("whatsapp");
@@ -690,7 +719,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                     variant={startTime === slot ? "default" : "outline"}
                     size="sm"
                     className="h-9 tabular-nums"
-                    onClick={() => setStartTime(slot)}
+                    onClick={() => {
+                      setStartTime(slot);
+                      resetCustomerStep();
+                      setTimeout(() => setStep("confirm"), 200);
+                    }}
                   >
                     {slot}
                   </Button>
