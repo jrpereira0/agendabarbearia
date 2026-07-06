@@ -269,7 +269,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         const loaded: string[] = body.slots ?? [];
         setAvailableSlots(loaded);
         if (loaded.length === 0) {
-          setSlotsError("Nenhum horário livre neste dia para esses serviços.");
+          setSlotsError(
+            body.message ?? "Nenhum horário livre neste dia para esses serviços."
+          );
         }
       })
       .catch(() => {

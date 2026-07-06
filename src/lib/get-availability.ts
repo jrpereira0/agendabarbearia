@@ -17,13 +17,35 @@ import {
 } from "@/lib/availability";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 
+export type UnavailableReason =
+  | "shop_closed"
+  | "professional_day_off"
+  | "service_unavailable_on_date"
+  | "no_slots"
+  | null;
+
+export type WorkingPeriod = { startTime: string; endTime: string };
+
 export type AvailabilityOk = {
   ok: true;
   professionalId: string;
   date: string;
   durationMinutes: number;
   totalPriceCents: number;
-  slots: string[]; // horários de início: ["09:00", "09:15", ...]
+  /** Horários de início disponíveis: ["09:00", "09:15", ...]. Vazio quando indisponível. */
+  slots: string[];
+  /** true quando há pelo menos um horário livre. */
+  available: boolean;
+  /** Motivo quando available = false; null quando há horários. */
+  unavailableReason: UnavailableReason;
+  /** Mensagem legível para exibir ao usuário ou enviar via IA. */
+  message: string | null;
+  /** O profissional está de folga nesta data (após aplicar exceções). */
+  professionalDayOff: boolean;
+  /** A barbearia está fechada nesta data (após aplicar exceções). */
+  shopClosed: boolean;
+  /** Faixas em que o profissional trabalha (antes de remover horários ocupados). */
+  workingPeriods: WorkingPeriod[];
 };
 
 export type AvailabilityError = { ok: false; error: string; status: number };
@@ -53,6 +75,53 @@ function toDayException(e: {
             end: timeToMinutes(e.end_time),
           }
         : null,
+  };
+}
+
+/** Retorna true se a barbearia está fechada nesta data (após exceções). */
+function computeIsShopClosed(
+  businessDay: { active: boolean; range: MinuteRange } | null,
+  shopException: DayException | null
+): boolean {
+  if (shopException) return shopException.kind === "closed";
+  return !(businessDay?.active);
+}
+
+/** Retorna true se o profissional está de folga (após exceções). Só chamar se a barbearia estiver aberta. */
+function computeIsProfessionalDayOff(
+  weeklyRanges: MinuteRange[],
+  professionalException: DayException | null
+): boolean {
+  if (professionalException) {
+    return professionalException.kind === "closed" || !professionalException.range;
+  }
+  return weeklyRanges.length === 0;
+}
+
+/** Monta um AvailabilityOk sem slots e com motivo de indisponibilidade. */
+function unavailableResult(
+  professionalId: string,
+  date: string,
+  durationMinutes: number,
+  totalPriceCents: number,
+  unavailableReason: NonNullable<UnavailableReason>,
+  message: string,
+  shopClosed: boolean,
+  professionalDayOff: boolean
+): AvailabilityOk {
+  return {
+    ok: true,
+    professionalId,
+    date,
+    durationMinutes,
+    totalPriceCents,
+    slots: [],
+    available: false,
+    unavailableReason,
+    message,
+    professionalDayOff,
+    shopClosed,
+    workingPeriods: [],
   };
 }
 
@@ -175,57 +244,85 @@ export async function getAvailability(
     };
   }
 
-  const priceByServiceId = new Map(
-    (weekdayPriceRows ?? []).map((row) => [row.service_id, row.price_cents])
-  );
+  // Resolve exceções e calcula shopClosed / professionalDayOff antes dos slots.
+  // Isso garante que "folga" e "barbearia fechada" não sejam confundidos com
+  // "agenda cheia" mais tarde.
+  const shopExceptionRaw =
+    (exceptions ?? []).find((e) => e.professional_id === null) ?? null;
+  const professionalExceptionRaw =
+    (exceptions ?? []).find((e) => e.professional_id === professionalId) ??
+    null;
+  const shopException = shopExceptionRaw
+    ? toDayException(shopExceptionRaw)
+    : null;
+  const professionalException = professionalExceptionRaw
+    ? toDayException(professionalExceptionRaw)
+    : null;
 
-  for (const service of foundServices) {
-    const hasWeekdayPrice = priceByServiceId.has(service.id);
-    if (!hasWeekdayPrice) {
-      return {
-        ok: false,
-        error: `"${service.name}" não está disponível neste dia da semana.`,
-        status: 400,
-      };
-    }
-  }
+  const businessDayResolved = businessDay
+    ? {
+        active: businessDay.active,
+        range: {
+          start: timeToMinutes(businessDay.open_time),
+          end: timeToMinutes(businessDay.close_time),
+        },
+      }
+    : null;
+
+  const weeklyRanges = (workingHours ?? []).map((w) => ({
+    start: timeToMinutes(w.start_time),
+    end: timeToMinutes(w.end_time),
+  }));
+
+  const isShopClosed = computeIsShopClosed(businessDayResolved, shopException);
+  const isProfessionalDayOff =
+    !isShopClosed &&
+    computeIsProfessionalDayOff(weeklyRanges, professionalException);
 
   const durationMinutes = foundServices.reduce(
     (sum, s) => sum + s.duration_minutes,
     0
   );
+
+  // Verifica disponibilidade por dia da semana ANTES de calcular preços totais,
+  // pois alguns serviços podem não ter preço configurado nesse dia.
+  const priceByServiceId = new Map(
+    (weekdayPriceRows ?? []).map((row) => [row.service_id, row.price_cents])
+  );
+
+  for (const service of foundServices) {
+    if (!priceByServiceId.has(service.id)) {
+      return unavailableResult(
+        professionalId,
+        date,
+        durationMinutes,
+        0,
+        "service_unavailable_on_date",
+        `"${service.name}" não está disponível neste dia da semana.`,
+        isShopClosed,
+        isProfessionalDayOff
+      );
+    }
+  }
+
   const totalPriceCents = foundServices.reduce(
     (sum, s) => sum + (priceByServiceId.get(s.id) ?? s.price_cents),
     0
   );
 
-  const shopException =
-    (exceptions ?? []).find((e) => e.professional_id === null) ?? null;
-  const professionalException =
-    (exceptions ?? []).find((e) => e.professional_id === professionalId) ??
-    null;
-
   const ranges = ownerFreeSchedule
     ? [{ start: 0, end: 24 * 60 }]
     : resolveDayRanges({
-        businessDay: businessDay
-          ? {
-              active: businessDay.active,
-              range: {
-                start: timeToMinutes(businessDay.open_time),
-                end: timeToMinutes(businessDay.close_time),
-              },
-            }
-          : null,
-        shopException: shopException ? toDayException(shopException) : null,
-        weeklyRanges: (workingHours ?? []).map((w) => ({
-          start: timeToMinutes(w.start_time),
-          end: timeToMinutes(w.end_time),
-        })),
-        professionalException: professionalException
-          ? toDayException(professionalException)
-          : null,
+        businessDay: businessDayResolved,
+        shopException,
+        weeklyRanges,
+        professionalException,
       });
+
+  const workingPeriods: WorkingPeriod[] = ranges.map((r) => ({
+    startTime: minutesToTime(r.start),
+    endTime: minutesToTime(r.end),
+  }));
 
   const busy: MinuteRange[] = [
     ...(appointments ?? [])
@@ -251,7 +348,7 @@ export async function getAvailability(
     minStart = Math.ceil(earliest / stepMinutes) * stepMinutes;
   }
 
-  const slots = computeSlots({
+  const slotMinutes = computeSlots({
     ranges,
     busy,
     durationMinutes,
@@ -259,13 +356,36 @@ export async function getAvailability(
     minStart,
   });
 
+  const slots = slotMinutes.map(minutesToTime);
+
+  // Determina o motivo de indisponibilidade, na ordem de prioridade certa:
+  // 1. barbearia fechada  2. profissional de folga  3. sem horários livres
+  let unavailableReason: UnavailableReason = null;
+  let message: string | null = null;
+  if (isShopClosed) {
+    unavailableReason = "shop_closed";
+    message = "A barbearia está fechada nessa data.";
+  } else if (isProfessionalDayOff) {
+    unavailableReason = "professional_day_off";
+    message = "Profissional de folga nessa data.";
+  } else if (slots.length === 0) {
+    unavailableReason = "no_slots";
+    message = "Não há horários disponíveis para esse profissional nessa data.";
+  }
+
   return {
     ok: true,
     professionalId,
     date,
     durationMinutes,
     totalPriceCents,
-    slots: slots.map(minutesToTime),
+    slots,
+    available: slots.length > 0,
+    unavailableReason,
+    message,
+    professionalDayOff: isProfessionalDayOff,
+    shopClosed: isShopClosed,
+    workingPeriods,
   };
 }
 

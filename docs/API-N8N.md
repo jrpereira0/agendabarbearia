@@ -410,7 +410,7 @@ Retorna todos os serviços com `prices` (sem `priceCents` nem filtro por dia).
 GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=054a545a-75c8-4807-b72d-5c460bb3539f&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
 ```
 
-**Resposta 200:**
+**Resposta 200 — com horários disponíveis:**
 
 ```json
 {
@@ -419,9 +419,96 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=
   "date": "2026-06-15",
   "durationMinutes": 60,
   "totalPriceCents": 12000,
-  "slots": ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00"]
+  "slots": ["09:00", "09:30", "10:00", "10:30"],
+  "available": true,
+  "unavailableReason": null,
+  "message": null,
+  "professionalDayOff": false,
+  "shopClosed": false,
+  "workingPeriods": [
+    { "startTime": "09:00", "endTime": "19:00" }
+  ]
 }
 ```
+
+**Resposta 200 — profissional de folga:**
+
+```json
+{
+  "ok": true,
+  "professionalId": "054a545a-...",
+  "date": "2026-06-21",
+  "durationMinutes": 60,
+  "totalPriceCents": 12000,
+  "slots": [],
+  "available": false,
+  "unavailableReason": "professional_day_off",
+  "message": "Profissional de folga nessa data.",
+  "professionalDayOff": true,
+  "shopClosed": false,
+  "workingPeriods": []
+}
+```
+
+**Resposta 200 — agenda cheia (profissional trabalha, mas sem horários livres):**
+
+```json
+{
+  "ok": true,
+  "professionalId": "054a545a-...",
+  "date": "2026-06-15",
+  "durationMinutes": 60,
+  "totalPriceCents": 12000,
+  "slots": [],
+  "available": false,
+  "unavailableReason": "no_slots",
+  "message": "Não há horários disponíveis para esse profissional nessa data.",
+  "professionalDayOff": false,
+  "shopClosed": false,
+  "workingPeriods": [
+    { "startTime": "09:00", "endTime": "19:00" }
+  ]
+}
+```
+
+**Resposta 200 — barbearia fechada:**
+
+```json
+{
+  "ok": true,
+  "slots": [],
+  "available": false,
+  "unavailableReason": "shop_closed",
+  "message": "A barbearia está fechada nessa data.",
+  "professionalDayOff": false,
+  "shopClosed": true,
+  "workingPeriods": []
+}
+```
+
+**Campos da resposta:**
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `slots` | `string[]` | Horários de início disponíveis (`"HH:MM"`). Vazio quando indisponível. **Campo legado — sempre presente.** |
+| `available` | `boolean` | `true` quando há pelo menos um horário livre |
+| `unavailableReason` | `string \| null` | Motivo quando `available = false` (ver tabela abaixo) |
+| `message` | `string \| null` | Mensagem legível para o cliente / IA. `null` quando disponível |
+| `professionalDayOff` | `boolean` | O barbeiro está de folga nesta data |
+| `shopClosed` | `boolean` | A barbearia está fechada nesta data |
+| `workingPeriods` | `{ startTime, endTime }[]` | Faixas de trabalho do barbeiro (antes de remover horários ocupados) |
+| `durationMinutes` | `number` | Duração total dos serviços em minutos |
+| `totalPriceCents` | `number` | Preço total em centavos |
+
+**Valores de `unavailableReason`:**
+
+| Valor | Quando ocorre |
+| --- | --- |
+| `null` | Há horários disponíveis |
+| `"shop_closed"` | Barbearia fechada nessa data (grade semanal ou exceção de folha) |
+| `"professional_day_off"` | Barbeiro sem expediente ou com exceção de folga nessa data |
+| `"no_slots"` | Barbeiro trabalha no dia, mas toda a agenda está ocupada ou bloqueada |
+| `"service_unavailable_on_date"` | O serviço não tem preço configurado para esse dia da semana |
 
 **Erros comuns (400/404):**
 
@@ -433,7 +520,13 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=
 | `Profissional não encontrado.` | UUID inexistente ou inativo |
 | `Serviço não encontrado.` | UUID de serviço inválido |
 
-**Uso no bot:** mostrar `slots` numerados; `totalPriceCents / 100` = valor em reais.
+**Uso no bot:**
+
+- Verificar `available` antes de listar horários.
+- Usar `message` para responder ao cliente quando `available = false` — ex.: _"O Chico está de folga nesse dia. Quer tentar outro dia ou outro barbeiro?"_
+- Quando `unavailableReason = "professional_day_off"`, o bot pode sugerir outra data ou outro profissional.
+- `workingPeriods` informa ao bot o horário de trabalho do barbeiro (para respostas como _"O Junior trabalha das 09:00 às 19:00"_).
+- `totalPriceCents / 100` = valor em reais.
 
 ---
 
