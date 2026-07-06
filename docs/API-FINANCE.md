@@ -15,6 +15,8 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Extras na comanda | Serviço adicionado na comanda além dos do agendamento vira **encaixe** na agenda |
 | Comissão | % sobre o valor **cobrado** de cada serviço na comanda (configurável por barbeiro) |
 | Gorjeta | Opcional ao fechar; linha `is_tip` na comanda — o barbeiro escolhido recebe **100%** (entra no total e no caixa) |
+| Crédito do cliente | Saldo por cliente; pode pagar comanda com `store_credit`; troco ou depósito vira crédito e **entra no caixa** pelo método de origem (Pix, dinheiro etc.) |
+| Uso de crédito | Pagamento `store_credit` **não** entra no caixa (dinheiro já entrou antes), mas **gera comissão** normalmente |
 | Quem fecha | Somente o **dono** (painel ou API com chave com `comandas:write`) |
 | Taxa de cartão | **Não** entra no cálculo da comissão |
 | Pagamento misto | Várias formas na mesma comanda (ex.: R$ 50 Pix + R$ 50 dinheiro) |
@@ -27,7 +29,9 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável |
 | Cancelar horário | Motivo obrigatório; some da agenda; **bloqueado** se a comanda estiver fechada (reabra antes) |
 
-Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`.
+Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`, `store_credit`.
+
+**Crédito do cliente:** depósitos (troco ou valor extra ao fechar comanda) entram no caixa do dia pelo método informado. Pagamentos com `store_credit` não somam nas entradas do caixa.
 
 ---
 

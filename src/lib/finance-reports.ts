@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   calculateItemCommissionCents,
+  CASH_INFLOW_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
+  type CashInflowPaymentMethod,
   type PaymentMethod,
 } from "@/lib/comanda-types";
 
@@ -13,6 +15,9 @@ export type CashRegisterSummary = {
   commissionCents: number;
   shopCents: number;
   byPaymentMethod: Record<PaymentMethod, number>;
+  creditDepositsByMethod: Record<CashInflowPaymentMethod, number>;
+  creditDepositsCents: number;
+  cashInflowCents: number;
   comandaCount: number;
   comandas: {
     id: string;
@@ -87,12 +92,8 @@ export async function getFinancePeriodSummary(
 
   const { data } = await query;
 
-  const byPaymentMethod: Record<PaymentMethod, number> = {
-    pix: 0,
-    cash: 0,
-    debit: 0,
-    credit: 0,
-  };
+  const byPaymentMethod = emptyPaymentMap();
+  const creditDepositsByMethod = emptyCashInflowMap();
 
   let totalCents = 0;
   let commissionCents = 0;
@@ -103,7 +104,9 @@ export async function getFinancePeriodSummary(
 
     const payments = (row.comanda_payments ?? []).map((p) => {
       const method = p.payment_method as PaymentMethod;
-      byPaymentMethod[method] += p.amount_cents;
+      if (method in byPaymentMethod) {
+        byPaymentMethod[method] += p.amount_cents;
+      }
       return { method, amountCents: p.amount_cents };
     });
 
@@ -129,6 +132,30 @@ export async function getFinancePeriodSummary(
     };
   });
 
+  if (options.cashRegisterSessionId) {
+    const { data: creditDeposits } = await admin
+      .from("customer_credit_transactions")
+      .select("amount_cents, payment_method")
+      .eq("cash_register_session_id", options.cashRegisterSessionId)
+      .eq("type", "add");
+
+    for (const row of creditDeposits ?? []) {
+      const method = row.payment_method as CashInflowPaymentMethod | null;
+      if (!method || !(method in creditDepositsByMethod)) continue;
+      creditDepositsByMethod[method] += row.amount_cents;
+    }
+  }
+
+  const creditDepositsCents = CASH_INFLOW_PAYMENT_METHODS.reduce(
+    (sum, method) => sum + creditDepositsByMethod[method],
+    0
+  );
+  const cashInflowCents =
+    CASH_INFLOW_PAYMENT_METHODS.reduce(
+      (sum, method) => sum + byPaymentMethod[method],
+      0
+    ) + creditDepositsCents;
+
   return {
     from,
     to,
@@ -136,6 +163,9 @@ export async function getFinancePeriodSummary(
     commissionCents,
     shopCents: totalCents - commissionCents,
     byPaymentMethod,
+    creditDepositsByMethod,
+    creditDepositsCents,
+    cashInflowCents,
     comandaCount: comandas.length,
     comandas,
   };
@@ -476,6 +506,16 @@ function dayMapToRows(
 }
 
 function emptyPaymentMap(): Record<PaymentMethod, number> {
+  return {
+    pix: 0,
+    cash: 0,
+    debit: 0,
+    credit: 0,
+    store_credit: 0,
+  };
+}
+
+function emptyCashInflowMap(): Record<CashInflowPaymentMethod, number> {
   return { pix: 0, cash: 0, debit: 0, credit: 0 };
 }
 

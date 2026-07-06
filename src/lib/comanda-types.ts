@@ -1,12 +1,29 @@
-export const PAYMENT_METHODS = ["pix", "cash", "debit", "credit"] as const;
+export const PAYMENT_METHODS = [
+  "pix",
+  "cash",
+  "debit",
+  "credit",
+  "store_credit",
+] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
+export const CASH_INFLOW_PAYMENT_METHODS = [
+  "pix",
+  "cash",
+  "debit",
+  "credit",
+] as const;
+
+export type CashInflowPaymentMethod =
+  (typeof CASH_INFLOW_PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   pix: "Pix",
   cash: "Dinheiro",
   debit: "Cartão débito",
   credit: "Cartão crédito",
+  store_credit: "Crédito do cliente",
 };
 
 export type ComandaStatus = "open" | "closed";

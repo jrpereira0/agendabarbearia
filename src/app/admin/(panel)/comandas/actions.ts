@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   calculateComandaTotals,
+  CASH_INFLOW_PAYMENT_METHODS,
   PAYMENT_METHODS,
   type ComandaDetail,
   type ComandaItemInput,
@@ -14,12 +15,17 @@ import {
   getComandaForAppointment,
   reopenComanda,
   updateComandaItems,
+  type CreditDepositInput,
 } from "@/lib/comanda-service";
 import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
 import {
   canCloseComandaInOpenCashRegister,
   getOpenCashRegisterSessionBasic,
 } from "@/lib/cash-register-service";
+import {
+  addCustomerCredit,
+  getCustomerCreditBalanceByWhatsapp,
+} from "@/lib/customer-credit-service";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
@@ -63,6 +69,11 @@ const paymentSchema = z.object({
   amountCents: z.number().int().positive(),
 });
 
+const creditDepositSchema = z.object({
+  amountCents: z.number().int().positive(),
+  paymentMethod: z.enum(CASH_INFLOW_PAYMENT_METHODS),
+});
+
 export async function loadComandaForAppointment(
   appointmentId: string
 ): Promise<
@@ -72,6 +83,7 @@ export async function loadComandaForAppointment(
       isOwner: boolean;
       cashRegisterOpen: boolean;
       openCashRegisterDate: string | null;
+      customerCreditBalanceCents: number;
     }
   | { ok: false; error: string }
 > {
@@ -85,12 +97,13 @@ export async function loadComandaForAppointment(
     return { ok: false, error: admin.error };
   }
 
-  const [result, openCashRegister] = await Promise.all([
-    getComandaForAppointment(admin, appointmentId),
-    getOpenCashRegisterSessionBasic(admin),
-  ]);
-
+  const result = await getComandaForAppointment(admin, appointmentId);
   if (!result.ok) return { ok: false, error: result.error };
+
+  const [openCashRegister, customerCreditBalanceCents] = await Promise.all([
+    getOpenCashRegisterSessionBasic(admin),
+    getCustomerCreditBalanceByWhatsapp(admin, result.comanda.customerWhatsapp),
+  ]);
 
   if (!session.isOwner) {
     if (
@@ -111,6 +124,7 @@ export async function loadComandaForAppointment(
       openCashRegister
     ),
     openCashRegisterDate: openCashRegister?.serviceDate ?? null,
+    customerCreditBalanceCents,
   };
 }
 
@@ -152,7 +166,8 @@ export async function saveComandaItems(
 export async function closeComandaWithItemsAction(
   comandaId: string,
   items: ComandaItemInput[],
-  payments: ComandaPaymentInput[]
+  payments: ComandaPaymentInput[],
+  options?: { creditDeposits?: CreditDepositInput[] }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await requireAdmin();
   if (!("userId" in session)) {
@@ -177,6 +192,14 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: parsedPayments.error.issues[0].message };
   }
 
+  const parsedCreditDeposits = z
+    .array(creditDepositSchema)
+    .optional()
+    .safeParse(options?.creditDeposits);
+  if (!parsedCreditDeposits.success) {
+    return { ok: false, error: parsedCreditDeposits.error.issues[0].message };
+  }
+
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return { ok: false, error: admin.error };
@@ -189,7 +212,8 @@ export async function closeComandaWithItemsAction(
     admin,
     comandaId,
     parsedPayments.data,
-    session.userId
+    session.userId,
+    { creditDeposits: parsedCreditDeposits.data }
   );
   if (!closeResult.ok) return { ok: false, error: closeResult.error };
 

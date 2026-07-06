@@ -3,6 +3,7 @@ import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
   calculateComandaTotalsByProfessional,
+  type CashInflowPaymentMethod,
   type ComandaDetail,
   type ComandaItem,
   type ComandaItemInput,
@@ -14,6 +15,13 @@ import {
 } from "@/lib/comanda-types";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 import { assertComandaClosableInOpenCashRegister } from "@/lib/cash-register-service";
+import {
+  addCustomerCredit,
+  deductCustomerCredit,
+  getCustomerCreditBalanceByWhatsapp,
+  resolveCustomerIdByWhatsapp,
+  reverseComandaCreditTransactions,
+} from "@/lib/customer-credit-service";
 
 type DbComandaRow = {
   id: string;
@@ -2034,11 +2042,21 @@ function validatePayments(
   return null;
 }
 
+export type CreditDepositInput = {
+  amountCents: number;
+  paymentMethod: CashInflowPaymentMethod;
+};
+
+export type CloseComandaOptions = {
+  creditDeposits?: CreditDepositInput[];
+};
+
 export async function closeComanda(
   admin: SupabaseClient,
   comandaId: string,
   payments: ComandaPaymentInput[],
-  closedByUserId: string
+  closedByUserId: string,
+  options: CloseComandaOptions = {}
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
   const current = await getComandaById(admin, comandaId);
   if (!current.ok) return current;
@@ -2072,6 +2090,41 @@ export async function closeComanda(
     return { ok: false, error: paymentError, status: 400 };
   }
 
+  const storeCreditCents = payments
+    .filter((payment) => payment.paymentMethod === "store_credit")
+    .reduce((sum, payment) => sum + payment.amountCents, 0);
+
+  if (storeCreditCents > 0) {
+    const balance = await getCustomerCreditBalanceByWhatsapp(
+      admin,
+      comanda.customerWhatsapp
+    );
+    if (balance < storeCreditCents) {
+      return {
+        ok: false,
+        error: "Saldo de crédito insuficiente para fechar a comanda.",
+        status: 400,
+      };
+    }
+  }
+
+  const creditDeposits = (options.creditDeposits ?? []).filter(
+    (deposit) => deposit.amountCents > 0
+  );
+
+  const customerId =
+    storeCreditCents > 0 || creditDeposits.length > 0
+      ? await resolveCustomerIdByWhatsapp(admin, comanda.customerWhatsapp)
+      : null;
+
+  if ((storeCreditCents > 0 || creditDeposits.length > 0) && !customerId) {
+    return {
+      ok: false,
+      error: "Cliente não encontrado para movimentar o crédito.",
+      status: 400,
+    };
+  }
+
   const cashCheck = await assertComandaClosableInOpenCashRegister(
     admin,
     comanda.serviceDate
@@ -2094,6 +2147,20 @@ export async function closeComanda(
       ? closedByUserId
       : null;
 
+  let deductedStoreCredit = false;
+  if (storeCreditCents > 0 && customerId) {
+    const deductResult = await deductCustomerCredit(admin, {
+      customerId,
+      amountCents: storeCreditCents,
+      comandaId,
+      createdBy: closedBy,
+    });
+    if (!deductResult.ok) {
+      return { ok: false, error: deductResult.error, status: 400 };
+    }
+    deductedStoreCredit = true;
+  }
+
   const { error: payError } = await admin.from("comanda_payments").insert(
     payments.map((p) => ({
       comanda_id: comandaId,
@@ -2103,6 +2170,15 @@ export async function closeComanda(
   );
 
   if (payError) {
+    if (deductedStoreCredit && customerId) {
+      await addCustomerCredit(admin, {
+        customerId,
+        amountCents: storeCreditCents,
+        comandaId,
+        description: "Estorno automático — falha ao fechar comanda",
+        createdBy: closedBy,
+      });
+    }
     return {
       ok: false,
       error: "Não foi possível registrar os pagamentos.",
@@ -2126,6 +2202,15 @@ export async function closeComanda(
 
   if (comandaError) {
     await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
+    if (deductedStoreCredit && customerId) {
+      await addCustomerCredit(admin, {
+        customerId,
+        amountCents: storeCreditCents,
+        comandaId,
+        description: "Estorno automático — falha ao fechar comanda",
+        createdBy: closedBy,
+      });
+    }
     return {
       ok: false,
       error: "Não foi possível fechar a comanda.",
@@ -2153,6 +2238,22 @@ export async function closeComanda(
       .update({ status: "done" })
       .in("id", squeezeIds)
       .eq("is_squeeze_in", true);
+  }
+
+  if (creditDeposits.length > 0 && customerId) {
+    for (const deposit of creditDeposits) {
+      const addResult = await addCustomerCredit(admin, {
+        customerId,
+        amountCents: deposit.amountCents,
+        paymentMethod: deposit.paymentMethod,
+        comandaId,
+        cashRegisterSessionId: cashCheck.sessionId,
+        createdBy: closedBy,
+      });
+      if (!addResult.ok) {
+        return { ok: false, error: addResult.error, status: 500 };
+      }
+    }
   }
 
   return getComandaById(admin, comandaId, { sync: false });
@@ -2253,6 +2354,7 @@ export async function reopenComanda(
     comanda.serviceDate
   );
 
+  await reverseComandaCreditTransactions(admin, comandaId);
   await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
 
   const totals = await recalculateComandaTotals(admin, comandaId);

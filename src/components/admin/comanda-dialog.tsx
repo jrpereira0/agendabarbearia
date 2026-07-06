@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -49,8 +50,10 @@ import {
 } from "@/lib/appointment-status";
 import {
   calculateComandaTotalsByProfessional,
+  CASH_INFLOW_PAYMENT_METHODS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
+  type CashInflowPaymentMethod,
   type ComandaDetail,
   type ComandaItemInput,
   type ComandaLinkedAppointment,
@@ -204,6 +207,11 @@ export function ComandaDialog({
   const [extraStartTime, setExtraStartTime] = useState("");
   const [tipCents, setTipCents] = useState(0);
   const [tipProfessionalId, setTipProfessionalId] = useState("");
+  const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
+  const [trocoAsCredit, setTrocoAsCredit] = useState(false);
+  const [extraCreditDepositCents, setExtraCreditDepositCents] = useState(0);
+  const [extraCreditDepositMethod, setExtraCreditDepositMethod] =
+    useState<CashInflowPaymentMethod>("pix");
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -218,6 +226,10 @@ export function ComandaDialog({
       setIsOwner(result.isOwner);
       setCashRegisterOpen(result.cashRegisterOpen);
       setOpenCashRegisterDate(result.openCashRegisterDate);
+      setCustomerCreditBalanceCents(result.customerCreditBalanceCents);
+      setTrocoAsCredit(false);
+      setExtraCreditDepositCents(0);
+      setExtraCreditDepositMethod("pix");
       const tipItem = result.comanda.items.find((item) => item.isTip);
       setItems(mapComandaItemsToEditable(result.comanda.items));
       setTipCents(tipItem?.chargedPriceCents ?? 0);
@@ -273,6 +285,9 @@ export function ComandaDialog({
       setExtraStartTime("");
       setTipCents(0);
       setTipProfessionalId("");
+      setCustomerCreditBalanceCents(0);
+      setTrocoAsCredit(false);
+      setExtraCreditDepositCents(0);
     }
   }, [open, appointment?.id, load]);
 
@@ -336,6 +351,19 @@ export function ComandaDialog({
   }, [cashReceivedCents, totals.totalCents]);
 
   const hasCashPayment = payments.some((p) => p.paymentMethod === "cash");
+
+  const availablePaymentMethods = useMemo(() => {
+    if (customerCreditBalanceCents > 0) return PAYMENT_METHODS;
+    return PAYMENT_METHODS.filter((method) => method !== "store_credit");
+  }, [customerCreditBalanceCents]);
+
+  const storeCreditUsedCents = useMemo(
+    () =>
+      payments
+        .filter((payment) => payment.paymentMethod === "store_credit")
+        .reduce((sum, payment) => sum + payment.amountCents, 0),
+    [payments]
+  );
 
   const filteredServices = useMemo(() => {
     if (!appointment) return [];
@@ -702,6 +730,30 @@ export function ComandaDialog({
       toast.error("A soma dos pagamentos deve ser igual ao total da comanda.");
       return;
     }
+    if (storeCreditUsedCents > customerCreditBalanceCents) {
+      toast.error("Saldo de crédito insuficiente.");
+      return;
+    }
+
+    const creditDeposits: Array<{
+      amountCents: number;
+      paymentMethod: CashInflowPaymentMethod;
+    }> = [];
+
+    if (trocoAsCredit && changeCents > 0) {
+      creditDeposits.push({
+        amountCents: changeCents,
+        paymentMethod: "cash",
+      });
+    }
+
+    if (extraCreditDepositCents > 0) {
+      creditDeposits.push({
+        amountCents: extraCreditDepositCents,
+        paymentMethod: extraCreditDepositMethod,
+      });
+    }
+
     setBusy(true);
     const result = await closeComandaWithItemsAction(
       comanda.id,
@@ -709,7 +761,8 @@ export function ComandaDialog({
       payments.map(({ paymentMethod, amountCents }) => ({
         paymentMethod,
         amountCents,
-      }))
+      })),
+      { creditDeposits: creditDeposits.length > 0 ? creditDeposits : undefined }
     );
     if (result.ok) {
       toast.success("Comanda fechada.");
@@ -1194,6 +1247,14 @@ export function ComandaDialog({
                   )}
 
                   <DialogSection icon={Wallet} title="Formas de pagamento">
+                    {customerCreditBalanceCents > 0 && (
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        Saldo de crédito disponível:{" "}
+                        <span className="font-medium text-foreground">
+                          {formatPriceBRL(customerCreditBalanceCents)}
+                        </span>
+                      </p>
+                    )}
                     <div className="space-y-2">
                         {payments.map((row) => (
                           <div
@@ -1221,7 +1282,7 @@ export function ComandaDialog({
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {PAYMENT_METHODS.map((m) => (
+                                {availablePaymentMethods.map((m) => (
                                   <SelectItem key={m} value={m}>
                                     {PAYMENT_METHOD_LABELS[m]}
                                   </SelectItem>
@@ -1237,10 +1298,17 @@ export function ComandaDialog({
                               }
                               onChange={(e) => {
                                 const cents = parsePriceInput(e.target.value);
+                                const capped =
+                                  row.paymentMethod === "store_credit"
+                                    ? Math.min(
+                                        cents,
+                                        customerCreditBalanceCents
+                                      )
+                                    : cents;
                                 setPayments((prev) =>
                                   prev.map((p) =>
                                     p.localKey === row.localKey
-                                      ? { ...p, amountCents: cents }
+                                      ? { ...p, amountCents: capped }
                                       : p
                                   )
                                 );
@@ -1352,42 +1420,111 @@ export function ComandaDialog({
                       )}
                   </DialogSection>
 
-                  <DialogSection icon={Coins} title="Troco">
+                  <DialogSection icon={Coins} title="Troco e crédito">
                       {canEdit ? (
-                        <div className="grid grid-cols-2 gap-3 pt-1">
-                          <div className="space-y-1.5">
-                            <Label
-                              htmlFor="cash-received"
-                              className="text-xs text-muted-foreground"
-                            >
-                              Recebido em dinheiro
-                            </Label>
-                            <Input
-                              id="cash-received"
-                              className="h-9 tabular-nums bg-background"
-                              value={
-                                cashReceivedCents > 0
-                                  ? formatPriceBRL(cashReceivedCents)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                setCashReceivedCents(
-                                  parsePriceInput(e.target.value)
-                                )
-                              }
-                              disabled={busy}
-                              placeholder="R$ 0,00"
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <p className="text-xs text-muted-foreground">
-                              Troco a devolver
-                            </p>
-                            <div className="flex h-9 items-center rounded-md border bg-background px-3 text-base font-semibold tabular-nums">
-                              {changeCents > 0
-                                ? formatPriceBRL(changeCents)
-                                : "—"}
+                        <div className="space-y-4 pt-1">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label
+                                htmlFor="cash-received"
+                                className="text-xs text-muted-foreground"
+                              >
+                                Recebido em dinheiro
+                              </Label>
+                              <Input
+                                id="cash-received"
+                                className="h-9 tabular-nums bg-background"
+                                value={
+                                  cashReceivedCents > 0
+                                    ? formatPriceBRL(cashReceivedCents)
+                                    : ""
+                                }
+                                onChange={(e) =>
+                                  setCashReceivedCents(
+                                    parsePriceInput(e.target.value)
+                                  )
+                                }
+                                disabled={busy}
+                                placeholder="R$ 0,00"
+                              />
                             </div>
+                            <div className="space-y-1.5">
+                              <p className="text-xs text-muted-foreground">
+                                Troco a devolver
+                              </p>
+                              <div className="flex h-9 items-center rounded-md border bg-background px-3 text-base font-semibold tabular-nums">
+                                {changeCents > 0
+                                  ? formatPriceBRL(changeCents)
+                                  : "—"}
+                              </div>
+                            </div>
+                          </div>
+
+                          {changeCents > 0 && (
+                            <label className="flex items-start gap-2 text-sm">
+                              <Checkbox
+                                checked={trocoAsCredit}
+                                onCheckedChange={(checked) =>
+                                  setTrocoAsCredit(checked === true)
+                                }
+                                disabled={busy}
+                              />
+                              <span>
+                                Guardar{" "}
+                                <span className="font-medium">
+                                  {formatPriceBRL(changeCents)}
+                                </span>{" "}
+                                como crédito do cliente (entra no caixa como
+                                dinheiro)
+                              </span>
+                            </label>
+                          )}
+
+                          <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Cliente deixou crédito adicional
+                            </p>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Input
+                                className="h-9 tabular-nums bg-background"
+                                value={
+                                  extraCreditDepositCents > 0
+                                    ? formatPriceBRL(extraCreditDepositCents)
+                                    : ""
+                                }
+                                onChange={(e) =>
+                                  setExtraCreditDepositCents(
+                                    parsePriceInput(e.target.value)
+                                  )
+                                }
+                                disabled={busy}
+                                placeholder="R$ 0,00"
+                              />
+                              <Select
+                                value={extraCreditDepositMethod}
+                                onValueChange={(value) =>
+                                  setExtraCreditDepositMethod(
+                                    value as CashInflowPaymentMethod
+                                  )
+                                }
+                                disabled={busy}
+                              >
+                                <SelectTrigger className="h-9 bg-background">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {CASH_INFLOW_PAYMENT_METHODS.map((method) => (
+                                    <SelectItem key={method} value={method}>
+                                      {PAYMENT_METHOD_LABELS[method]}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground">
+                              Use quando o cliente pagar a mais por Pix, cartão ou
+                              outra forma e quiser deixar o valor como crédito.
+                            </p>
                           </div>
                         </div>
                       ) : (

@@ -40,7 +40,7 @@ import {
   type CashRegisterSummary,
 } from "@/lib/finance-reports";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
-import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/comanda-types";
+import { PAYMENT_METHODS, CASH_INFLOW_PAYMENT_METHODS, type PaymentMethod } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL, formatTime } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
 import { cn } from "@/lib/utils";
@@ -144,11 +144,29 @@ export function AgendaCashRegisterSheet({
   }, [cash.comandas, search]);
 
   const activePaymentMethods = useMemo(
-    () => PAYMENT_METHODS.filter((method) => cash.byPaymentMethod[method] > 0),
-    [cash.byPaymentMethod]
+    () =>
+      PAYMENT_METHODS.filter((method) => {
+        if (method === "store_credit") {
+          return cash.byPaymentMethod.store_credit > 0;
+        }
+        const inflowMethod = method as (typeof CASH_INFLOW_PAYMENT_METHODS)[number];
+        return (
+          cash.byPaymentMethod[inflowMethod] > 0 ||
+          cash.creditDepositsByMethod[inflowMethod] > 0
+        );
+      }),
+    [cash.byPaymentMethod, cash.creditDepositsByMethod]
   );
 
-  const cashInDrawer = cash.byPaymentMethod.cash;
+  const paymentMethodTotal = (method: PaymentMethod): number => {
+    if (method === "store_credit") return cash.byPaymentMethod.store_credit;
+    const inflowMethod = method as (typeof CASH_INFLOW_PAYMENT_METHODS)[number];
+    return (
+      cash.byPaymentMethod[inflowMethod] + cash.creditDepositsByMethod[inflowMethod]
+    );
+  };
+
+  const cashInDrawer = paymentMethodTotal("cash");
 
   const isCashOpen = cashSession?.status === "open";
 
@@ -318,11 +336,13 @@ export function AgendaCashRegisterSheet({
           <div className="grid shrink-0 grid-cols-3 gap-2 border-b px-4 py-3">
             <MetricCard
               label="Entradas"
-              value={formatPriceBRL(cash.totalCents)}
+              value={formatPriceBRL(cash.cashInflowCents)}
               hint={
-                cash.comandaCount > 0
-                  ? `${cash.comandaCount} comanda${cash.comandaCount === 1 ? "" : "s"}`
-                  : "Nenhuma ainda"
+                cash.creditDepositsCents > 0
+                  ? `Inclui ${formatPriceBRL(cash.creditDepositsCents)} em créditos`
+                  : cash.comandaCount > 0
+                    ? `${cash.comandaCount} comanda${cash.comandaCount === 1 ? "" : "s"}`
+                    : "Nenhuma ainda"
               }
             />
             <MetricCard
@@ -448,7 +468,7 @@ export function AgendaCashRegisterSheet({
                   Saldo do dia
                 </p>
                 <p className="text-2xl font-semibold tabular-nums tracking-tight">
-                  {formatPriceBRL(cash.totalCents)}
+                  {formatPriceBRL(cash.cashInflowCents)}
                 </p>
               </div>
               {activePaymentMethods.length > 0 && (
@@ -457,7 +477,7 @@ export function AgendaCashRegisterSheet({
                     <li key={method} className="tabular-nums">
                       {formatPaymentMethodLabel(method)}{" "}
                       <span className="font-medium text-foreground">
-                        {formatPriceBRL(cash.byPaymentMethod[method])}
+                        {formatPriceBRL(paymentMethodTotal(method))}
                       </span>
                     </li>
                   ))}
