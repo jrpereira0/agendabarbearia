@@ -262,43 +262,42 @@ async function findComandaIdForAppointment(
   customerWhatsapp: string,
   serviceDate: string
 ): Promise<string | null> {
-  const { data: bySqueezeItem } = await admin
-    .from("comanda_items")
-    .select("comanda_id")
-    .eq("squeeze_appointment_id", appointmentId)
-    .limit(1)
-    .maybeSingle();
+  const [bySqueezeItem, byAptItem, byLink, byCustomerDay] = await Promise.all([
+    admin
+      .from("comanda_items")
+      .select("comanda_id")
+      .eq("squeeze_appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("comanda_items")
+      .select("comanda_id")
+      .eq("appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("comanda_appointments")
+      .select("comanda_id")
+      .eq("appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle(),
+    admin
+      .from("comandas")
+      .select("id")
+      .eq("customer_whatsapp", customerWhatsapp)
+      .eq("service_date", serviceDate)
+      .order("updated_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  if (bySqueezeItem?.comanda_id) return bySqueezeItem.comanda_id;
-
-  const { data: byAptItem } = await admin
-    .from("comanda_items")
-    .select("comanda_id")
-    .eq("appointment_id", appointmentId)
-    .limit(1)
-    .maybeSingle();
-
-  if (byAptItem?.comanda_id) return byAptItem.comanda_id;
-
-  const { data: byLink } = await admin
-    .from("comanda_appointments")
-    .select("comanda_id")
-    .eq("appointment_id", appointmentId)
-    .limit(1)
-    .maybeSingle();
-
-  if (byLink?.comanda_id) return byLink.comanda_id;
-
-  const { data: byCustomerDay } = await admin
-    .from("comandas")
-    .select("id")
-    .eq("customer_whatsapp", customerWhatsapp)
-    .eq("service_date", serviceDate)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return byCustomerDay?.id ?? null;
+  return (
+    bySqueezeItem.data?.comanda_id ??
+    byAptItem.data?.comanda_id ??
+    byLink.data?.comanda_id ??
+    byCustomerDay.data?.id ??
+    null
+  );
 }
 
 export async function getComandaForAppointment(
@@ -346,11 +345,7 @@ export async function getComandaForAppointment(
   const existing = await getComandaById(admin, comandaId);
   if (!existing.ok) return existing;
 
-  if (existing.comanda.status === "closed") {
-    return existing;
-  }
-
-  return getComandaById(admin, comandaId, { sync: false });
+  return existing;
 }
 
 async function pruneStaleEncaixeComandaItems(
@@ -597,18 +592,13 @@ async function resolveComandaDetail(
   admin: SupabaseClient,
   row: DbComandaRow
 ): Promise<ComandaDetail> {
-  const linkedFromJunction = await loadLinkedAppointments(
-    admin,
-    row.id,
-    row.service_date
-  );
   const includeDone = row.status === "closed";
-  const dayEncaixes = await loadCustomerDayEncaixes(
-    admin,
-    row.customer_whatsapp,
-    row.service_date,
-    { includeDone }
-  );
+  const [linkedFromJunction, dayEncaixes] = await Promise.all([
+    loadLinkedAppointments(admin, row.id, row.service_date),
+    loadCustomerDayEncaixes(admin, row.customer_whatsapp, row.service_date, {
+      includeDone,
+    }),
+  ]);
 
   const linkedById = new Map(
     linkedFromJunction.map((apt) => [apt.id, apt] as const)

@@ -85,7 +85,11 @@ export async function loadComandaForAppointment(
     return { ok: false, error: admin.error };
   }
 
-  const result = await getComandaForAppointment(admin, appointmentId);
+  const [result, openCashRegister] = await Promise.all([
+    getComandaForAppointment(admin, appointmentId),
+    getOpenCashRegisterSessionBasic(admin),
+  ]);
+
   if (!result.ok) return { ok: false, error: result.error };
 
   if (!session.isOwner) {
@@ -96,8 +100,6 @@ export async function loadComandaForAppointment(
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
   }
-
-  const openCashRegister = await getOpenCashRegisterSessionBasic(admin);
 
   return {
     ok: true,
@@ -144,8 +146,56 @@ export async function saveComandaItems(
   if (!result.ok) return { ok: false, error: result.error };
 
   revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
   return { ok: true, comanda: result.comanda };
+}
+
+export async function closeComandaWithItemsAction(
+  comandaId: string,
+  items: ComandaItemInput[],
+  payments: ComandaPaymentInput[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+  if (!session.isOwner) {
+    return { ok: false, error: "Apenas o dono pode fechar comandas." };
+  }
+
+  const parsedItems = z.array(itemSchema).safeParse(items);
+  if (!parsedItems.success) {
+    return { ok: false, error: parsedItems.error.issues[0].message };
+  }
+
+  const serviceItems = parsedItems.data.filter((item) => !item.isTip);
+  if (serviceItems.length === 0) {
+    return { ok: false, error: "Informe ao menos um serviço na comanda." };
+  }
+
+  const parsedPayments = z.array(paymentSchema).min(1).safeParse(payments);
+  if (!parsedPayments.success) {
+    return { ok: false, error: parsedPayments.error.issues[0].message };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  const itemsResult = await updateComandaItems(admin, comandaId, parsedItems.data);
+  if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
+
+  const closeResult = await closeComanda(
+    admin,
+    comandaId,
+    parsedPayments.data,
+    session.userId
+  );
+  if (!closeResult.ok) return { ok: false, error: closeResult.error };
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/financeiro");
+  return { ok: true };
 }
 
 export async function closeComandaAction(

@@ -71,7 +71,7 @@ import {
   cancelAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
 import {
-  closeComandaAction,
+  closeComandaWithItemsAction,
   loadComandaForAppointment,
   reopenComandaAction,
   saveComandaItems,
@@ -703,17 +703,9 @@ export function ComandaDialog({
       return;
     }
     setBusy(true);
-    const saved = await saveComandaItems(
+    const result = await closeComandaWithItemsAction(
       comanda.id,
-      buildPersistItems(items, tipCents, tipProfessionalId)
-    );
-    if (!saved.ok) {
-      toast.error(saved.error);
-      setBusy(false);
-      return;
-    }
-    const result = await closeComandaAction(
-      comanda.id,
+      buildPersistItems(items, tipCents, tipProfessionalId),
       payments.map(({ paymentMethod, amountCents }) => ({
         paymentMethod,
         amountCents,
@@ -736,8 +728,13 @@ export function ComandaDialog({
     if (result.ok) {
       toast.success("Comanda reaberta.");
       setComanda(result.comanda);
+      setItems(mapComandaItemsToEditable(result.comanda.items));
+      const tipItem = result.comanda.items.find((item) => item.isTip);
+      setTipCents(tipItem?.chargedPriceCents ?? 0);
+      setTipProfessionalId(
+        tipItem?.professionalId ?? sessionProfessionalId ?? ""
+      );
       router.refresh();
-      await load();
     } else {
       toast.error(result.error);
     }
