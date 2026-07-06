@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Check,
+  Coins,
   MessageCircle,
   Pencil,
   Plus,
@@ -272,6 +273,9 @@ export function ComandaDialog({
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
   const [confirmOverpayCredit, setConfirmOverpayCredit] = useState(false);
+  const [tipDialogOpen, setTipDialogOpen] = useState(false);
+  const [tipDraftCents, setTipDraftCents] = useState(0);
+  const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -342,6 +346,7 @@ export function ComandaDialog({
       setTipCents(0);
       setTipProfessionalId("");
       setCustomerCreditBalanceCents(0);
+      setTipDialogOpen(false);
     }
   }, [open, appointment?.id, load]);
 
@@ -397,6 +402,11 @@ export function ComandaDialog({
   const paymentsSum = useMemo(
     () => payments.reduce((s, p) => s + p.amountCents, 0),
     [payments]
+  );
+
+  const servicesTotalCents = useMemo(
+    () => items.reduce((sum, item) => sum + item.chargedPriceCents, 0),
+    [items]
   );
 
   const paymentShortfallCents = Math.max(0, totals.totalCents - paymentsSum);
@@ -506,6 +516,13 @@ export function ComandaDialog({
     );
   }, [pendingExtraService, professionals]);
 
+  const tipEligibleProfessionals = useMemo(() => {
+    const linkedProIds = new Set(
+      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
+    );
+    return professionals.filter((pro) => linkedProIds.has(pro.id));
+  }, [linkedAppointmentsForMemo, professionals]);
+
   if (!appointment) return null;
 
   const linkedAppointments = linkedAppointmentsForMemo;
@@ -609,6 +626,34 @@ export function ComandaDialog({
     setPayments((prev) =>
       prev.length === 1 ? [{ ...prev[0], amountCents: nextTotal }] : prev
     );
+  }
+
+  function openTipDialog() {
+    setTipDraftCents(tipCents);
+    setTipDraftProfessionalId(
+      tipProfessionalId || tipEligibleProfessionals[0]?.id || ""
+    );
+    setTipDialogOpen(true);
+  }
+
+  function confirmTipDialog() {
+    if (tipDraftCents > 0 && !tipDraftProfessionalId) {
+      toast.error("Escolha o barbeiro da gorjeta.");
+      return;
+    }
+    setTipCents(tipDraftCents);
+    setTipProfessionalId(tipDraftProfessionalId);
+    syncSinglePaymentToTotal(servicesTotalCents + tipDraftCents);
+    setTipDialogOpen(false);
+  }
+
+  function removeTip() {
+    setTipCents(0);
+    setTipProfessionalId("");
+    setTipDraftCents(0);
+    setTipDraftProfessionalId("");
+    syncSinglePaymentToTotal(servicesTotalCents);
+    setTipDialogOpen(false);
   }
 
   const persistItems = async (
@@ -791,6 +836,10 @@ export function ComandaDialog({
     }
     if (storeCreditUsedCents > customerCreditBalanceCents) {
       toast.error("Saldo de crédito insuficiente.");
+      return;
+    }
+    if (tipCents > 0 && !tipProfessionalId) {
+      toast.error("Escolha o barbeiro da gorjeta.");
       return;
     }
 
@@ -1083,8 +1132,27 @@ export function ComandaDialog({
                       </div>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between border-t px-1 py-3 text-sm font-semibold">
-                    <span>Total dos serviços</span>
+                  <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                    <span>Subtotal serviços</span>
+                    <span className="tabular-nums">
+                      {formatPriceBRL(servicesTotalCents)}
+                    </span>
+                  </div>
+                  {tipCents > 0 && (
+                    <div className="flex items-center justify-between border-t px-3 py-2.5 text-sm text-muted-foreground">
+                      <span>
+                        Gorjeta
+                        {tipProfessionalId
+                          ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
+                          : ""}
+                      </span>
+                      <span className="tabular-nums">
+                        {formatPriceBRL(tipCents)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t px-3 py-3 text-sm font-semibold">
+                    <span>Total da comanda</span>
                     <span className="tabular-nums">
                       {formatPriceBRL(totals.totalCents)}
                     </span>
@@ -1179,14 +1247,40 @@ export function ComandaDialog({
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-muted/30 font-medium">
+                      <tr className="border-t bg-muted/20 font-medium">
+                        <td
+                          colSpan={4}
+                          className="px-3 py-2.5 text-right text-sm text-muted-foreground"
+                        >
+                          Subtotal serviços
+                        </td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">
+                          {formatPriceBRL(servicesTotalCents)}
+                        </td>
+                        <td />
+                      </tr>
+                      {tipCents > 0 && (
+                        <tr className="border-t text-sm text-muted-foreground">
+                          <td colSpan={4} className="px-3 py-2.5 text-right">
+                            Gorjeta
+                            {tipProfessionalId
+                              ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
+                              : ""}
+                          </td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">
+                            {formatPriceBRL(tipCents)}
+                          </td>
+                          <td />
+                        </tr>
+                      )}
+                      <tr className="bg-muted/30 font-semibold">
                         <td
                           colSpan={4}
                           className="px-3 py-3 text-right text-sm"
                         >
-                          Total dos serviços
+                          Total da comanda
                         </td>
-                        <td className="px-3 py-3 text-right text-base font-semibold tabular-nums">
+                        <td className="px-3 py-3 text-right text-base tabular-nums">
                           {formatPriceBRL(totals.totalCents)}
                         </td>
                         <td />
@@ -1340,10 +1434,47 @@ export function ComandaDialog({
                       </div>
                   </DialogSection>
 
-                  <DialogSection icon={Receipt} title="Resumo">
+                  <DialogSection
+                    icon={Receipt}
+                    title="Resumo"
+                    headerAction={
+                      canEdit ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto"
+                          onClick={openTipDialog}
+                          disabled={busy}
+                        >
+                          <Coins className="size-4" />
+                          {tipCents > 0 ? "Editar gorjeta" : "Adicionar gorjeta"}
+                        </Button>
+                      ) : undefined
+                    }
+                  >
                       <dl className="space-y-2.5 text-sm">
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-muted-foreground">
+                        <div className="flex justify-between gap-4 text-muted-foreground">
+                          <dt>Subtotal serviços</dt>
+                          <dd className="tabular-nums">
+                            {formatPriceBRL(servicesTotalCents)}
+                          </dd>
+                        </div>
+                        {tipCents > 0 && (
+                          <div className="flex justify-between gap-4 text-muted-foreground">
+                            <dt>
+                              Gorjeta
+                              {tipProfessionalId
+                                ? ` (${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"})`
+                                : ""}
+                            </dt>
+                            <dd className="tabular-nums">
+                              {formatPriceBRL(tipCents)}
+                            </dd>
+                          </div>
+                        )}
+                        <div className="flex justify-between gap-4 border-t pt-2">
+                          <dt className="font-medium text-foreground">
                             Total da comanda
                           </dt>
                           <dd className="font-semibold tabular-nums">
@@ -1555,6 +1686,86 @@ export function ComandaDialog({
             >
               Confirmar cancelamento
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tipDialogOpen} onOpenChange={setTipDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Gorjeta</DialogTitle>
+            <DialogDescription>
+              Opcional. O barbeiro escolhido recebe 100% do valor e entra no
+              total da comanda.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-2">
+              <Label htmlFor="tip-draft-amount">Valor</Label>
+              <Input
+                id="tip-draft-amount"
+                className="h-9 tabular-nums"
+                value={
+                  tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
+                }
+                onChange={(e) =>
+                  setTipDraftCents(parsePriceInput(e.target.value))
+                }
+                placeholder="R$ 0,00"
+                disabled={busy}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tip-draft-professional">Barbeiro</Label>
+              <Select
+                value={tipDraftProfessionalId}
+                onValueChange={setTipDraftProfessionalId}
+                disabled={busy || tipEligibleProfessionals.length === 0}
+              >
+                <SelectTrigger id="tip-draft-professional" className="h-9">
+                  <SelectValue placeholder="Quem recebe" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tipEligibleProfessionals.map((pro) => (
+                    <SelectItem key={pro.id} value={pro.id}>
+                      {pro.nickname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            {tipCents > 0 ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                disabled={busy}
+                onClick={removeTip}
+              >
+                Remover gorjeta
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={busy}
+                onClick={() => setTipDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                disabled={busy}
+                onClick={confirmTipDialog}
+              >
+                Confirmar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
