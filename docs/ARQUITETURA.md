@@ -140,7 +140,7 @@ Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das 
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
-| GET | `/api/v1/catalog` | Pública | Barbearia, barbeiros ativos, serviços e horário de funcionamento |
+| GET | `/api/v1/catalog` | Pública | Catálogo completo; `?date=&mode=booking` retorna versão enxuta para n8n/IA |
 | GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro num dia |
 | GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
 | GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |

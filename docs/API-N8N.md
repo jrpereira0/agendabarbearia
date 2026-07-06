@@ -22,7 +22,7 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 
 | # | Método | Rota | Auth | Função |
 | --- | --- | --- | --- | --- |
-| 1 | `GET` | `/catalog` | Pública | Catálogo da barbearia (loja, barbeiros, serviços, horários) |
+| 1 | `GET` | `/catalog` | Pública | Catálogo completo ou enxuto (`?date=...&mode=booking`) |
 | 2 | `GET` | `/availability` | Pública | Horários livres de um barbeiro num dia |
 | 3 | `GET` | `/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (**recomendado para n8n**; retorna `id`) |
 | 4 | `GET` | `/customers/lookup` | Pública | Buscar cliente pelo WhatsApp (resposta simples; usado pelo site) |
@@ -267,6 +267,77 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 ```
 
 **Uso no bot:** montar menus numerados (1, 2, 3…) com `nickname` e `name`. Guardar os `id` escolhidos no estado da conversa.
+
+#### Catálogo enxuto (`mode=booking`)
+
+Para o bot de agendamento (n8n + IA), use o modo enxuto depois que o cliente escolher a **data** (e opcionalmente o barbeiro). Reduz o payload e já filtra preços por faixa de dia.
+
+| Parâmetro | Obrigatório | Descrição |
+| --- | --- | --- |
+| `date` | Sim (com `mode=booking`) | Data do agendamento (`AAAA-MM-DD`) |
+| `mode` | Não | `booking` — ativa resposta enxuta |
+| `professionalId` | Não | UUID do barbeiro; se informado, filtra serviços que ele faz |
+
+**Validações (400):** `date` inválida, `mode` diferente de `booking`, `professionalId` que não é UUID, ou `mode=booking` sem `date`.
+
+**404:** `professionalId` inexistente ou inativo → `{ "error": "Profissional não encontrado." }`
+
+**Exemplo (segunda-feira):**
+
+```
+GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?date=2026-07-06&mode=booking
+```
+
+**Resposta 200 (exemplo):**
+
+```json
+{
+  "timezone": "America/Sao_Paulo",
+  "date": "2026-07-06",
+  "weekday": 1,
+  "priceBand": "seg_qua",
+  "shopClosed": false,
+  "shop": {
+    "name": "Dinho Barber Coffee",
+    "address": "...",
+    "whatsapp": "11981008852"
+  },
+  "professionals": [
+    { "id": "054a545a-75c8-4807-b72d-5c460bb3539f", "nickname": "Junior Barber" }
+  ],
+  "services": [
+    {
+      "id": "3a62b091-6916-4741-a3d4-754a33b2cb31",
+      "name": "01 - Corte Seg. - Qua.",
+      "displayName": "Corte",
+      "durationMinutes": 30,
+      "priceCents": 6000
+    }
+  ]
+}
+```
+
+**Regras de filtro por data:**
+
+- Serviços com `Seg. - Qua.` no nome → só segunda a quarta
+- Serviços com `Qui. - Sáb.` no nome → só quinta a sábado
+- Serviços **sem faixa** no nome → qualquer dia útil (segunda a sábado)
+- **Domingo:** se a loja estiver fechada (`businessHours[0].active = false`), retorna `shopClosed: true`, `professionals: []`, `services: []`, `priceBand: "sunday"`
+- **Feriados:** não tratados nesta versão — use exceções de agenda no painel se precisar fechar um dia específico
+
+**Campo `displayName`:** nome limpo para a IA mostrar ao cliente (sem código `NN - ` e sem faixa de dia). O `id` e o `name` originais continuam na resposta para criar o agendamento.
+
+**Uso no n8n (subworkflow `resolver_servico`):** troque a URL do nó HTTP de catálogo para:
+
+```
+GET {{baseUrl}}/catalog?date={{data_escolhida}}&mode=booking&professionalId={{professionalId}}
+```
+
+`professionalId` é opcional — omita se o cliente ainda não escolheu barbeiro.
+
+`mode=booking` **não** resolve linguagem natural (“quero um corte”); só reduz o catálogo para o Code node do `resolver_servico` cruzar com a intenção da IA. A lógica de NLP continua no n8n.
+
+`GET /catalog` **sem parâmetros** permanece igual (catálogo completo para o site).
 
 ---
 
@@ -772,7 +843,8 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 
 | Passo | Method | URL | Auth |
 | --- | --- | --- | --- |
-| Catálogo | GET | `{{baseUrl}}/catalog` | Pública (envie a chave mesmo assim) |
+| Catálogo (site) | GET | `{{baseUrl}}/catalog` | Pública (envie a chave mesmo assim) |
+| Catálogo (bot) | GET | `{{baseUrl}}/catalog?date={{data}}&mode=booking&professionalId={{id}}` | Pública |
 | Disponibilidade | GET | `{{baseUrl}}/availability?professionalId=...&date=...&serviceIds=...` | Pública |
 | Disponibilidade (remarcar) | GET | `{{baseUrl}}/availability?...&excludeAppointmentId=...` | Pública |
 | Lookup cliente | GET | `{{baseUrl}}/customers/by-whatsapp?whatsapp=...` | **Privada** |
