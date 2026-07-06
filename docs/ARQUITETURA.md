@@ -41,7 +41,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `profiles` | Usuários do painel (papel: `owner` ou `barber`) |
 | `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, **% comissão** |
 | `services` | Serviços: nome, foto, preço mínimo de referência (centavos), duração (minutos) |
-| `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos |
+| `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos. Leitura pública (catálogo e site); policies de escrita só para o dono (migration `0031`) |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
 | `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único) |
