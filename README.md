@@ -62,6 +62,7 @@ Sem isso o site abre sem dados da barbearia e o painel mostra erro de Supabase n
 ```bash
 npm run dev           # roda o site em localhost:3000
 npm run db:migrate    # aplica mudanças pendentes no banco
+npm run db:migrate-weekday-prices  # migra serviços atuais para preço por dia (rodar após db:migrate)
 npm run create-admin  # cria usuário do painel: -- email senha "Nome"
 npm run lint          # checa o código com o ESLint
 npm run typecheck     # checa os tipos com o TypeScript

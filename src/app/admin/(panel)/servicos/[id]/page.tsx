@@ -17,7 +17,12 @@ export default async function EditServicePage({
   const { id } = await params;
   const supabase = await requireServerClient();
 
-  const [{ data: service }, { data: professionals }] = await Promise.all([
+  const [
+    { data: service },
+    { data: professionals },
+    { data: businessHours },
+    { data: weekdayPrices },
+  ] = await Promise.all([
     supabase
       .from("services")
       .select(
@@ -30,6 +35,12 @@ export default async function EditServicePage({
       .select("id, nickname")
       .eq("active", true)
       .order("nickname"),
+    supabase.from("business_hours").select("weekday, active").order("weekday"),
+    supabase
+      .from("service_weekday_prices")
+      .select("weekday, price_cents")
+      .eq("service_id", id)
+      .order("weekday"),
   ]);
 
   if (!service) notFound();
@@ -47,15 +58,19 @@ export default async function EditServicePage({
 
       <ServiceForm
         professionals={professionals ?? []}
+        businessHours={businessHours ?? []}
         initialValues={{
           name: service.name,
           description: service.description,
-          priceCents: service.price_cents,
           durationMinutes: service.duration_minutes,
           photoUrl: service.photo_url,
           professionalIds: (service.professional_services ?? []).map(
             (ps) => ps.professional_id
           ),
+          weekdayPrices: (weekdayPrices ?? []).map((row) => ({
+            weekday: row.weekday,
+            priceCents: row.price_cents,
+          })),
         }}
         onSubmit={updateWithId}
         submitLabel="Salvar alterações"

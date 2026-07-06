@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
-import { minutesToTime, nowMinutesInTimezone, timeToMinutes, todayInTimezone } from "@/lib/availability";
+import { minutesToTime, nowMinutesInTimezone, timeToMinutes, todayInTimezone, weekdayOf } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
 import {
   getAvailability,
@@ -238,7 +238,7 @@ async function validateCreateInput(
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
-  const [{ data: professional }, { data: foundServices }, { data: links }] =
+  const [{ data: professional }, { data: foundServices }, { data: links }, { data: weekdayPrices }] =
     await Promise.all([
       admin
         .from("professionals")
@@ -247,13 +247,18 @@ async function validateCreateInput(
         .maybeSingle(),
       admin
         .from("services")
-        .select("id, active, duration_minutes")
+        .select("id, name, active, duration_minutes")
         .in("id", input.serviceIds),
       admin
         .from("professional_services")
         .select("service_id")
         .eq("professional_id", input.professionalId)
         .in("service_id", input.serviceIds),
+      admin
+        .from("service_weekday_prices")
+        .select("service_id")
+        .in("service_id", input.serviceIds)
+        .eq("weekday", weekdayOf(input.date)),
     ]);
 
   if (!professional?.active) {
@@ -273,6 +278,15 @@ async function validateCreateInput(
     return {
       ok: false,
       error: "Esse profissional não faz um dos serviços escolhidos.",
+    };
+  }
+
+  const pricedIds = new Set((weekdayPrices ?? []).map((row) => row.service_id));
+  const unavailable = foundServices.find((service) => !pricedIds.has(service.id));
+  if (unavailable) {
+    return {
+      ok: false,
+      error: `"${unavailable.name}" não está disponível neste dia da semana.`,
     };
   }
 

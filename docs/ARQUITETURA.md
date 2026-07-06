@@ -30,7 +30,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login). No Next.js 16, "Middleware" foi renomeado para "Proxy" — é o mesmo conceito |
 | `src/lib/login-path.ts` | Caminho do login (`/`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
-| `scripts` | Ferramentas: `db:migrate` e `create-admin` |
+| `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices` e `create-admin` |
 
 ## Banco de dados
 
@@ -38,7 +38,8 @@ Atualizado por fase, conforme o sistema evolui.
 | --- | --- |
 | `profiles` | Usuários do painel (papel: `owner` ou `barber`) |
 | `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, **% comissão** |
-| `services` | Serviços: nome, foto, preço (centavos), duração (minutos) |
+| `services` | Serviços: nome, foto, preço mínimo de referência (centavos), duração (minutos) |
+| `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
 | `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único) |

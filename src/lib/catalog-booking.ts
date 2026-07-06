@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { TIMEZONE } from "@/lib/availability";
 import type { BusinessHourRow, ShopCatalog } from "@/lib/get-shop-catalog";
-
-const REGEX_SEG_QUA = /Seg\.\s*-\s*Qua\.|Seg\s*-\s*Qua|Seg\.\s*-\s*Quar\./i;
-const REGEX_QUI_SAB = /Qui\.\s*-\s*Sáb\.|Qui\s*-\s*Sab|Qui\.\s*-\s*Sab\./i;
+import {
+  cleanLegacyServiceName,
+  isOfferedOnWeekday,
+  priceForWeekday,
+} from "@/lib/service-weekday-prices";
 
 const WEEKDAY_SHORT_MAP: Record<string, number> = {
   Sun: 0,
@@ -118,10 +120,13 @@ export function priceBandForWeekday(
   return "sunday";
 }
 
+/** @deprecated Mantido para testes de compatibilidade com nomes legados sem weekdayPrices. */
 export function serviceMatchesDateBand(
   serviceName: string,
   weekday: number
 ): boolean {
+  const REGEX_SEG_QUA = /Seg\.\s*-\s*Qua\.|Seg\s*-\s*Qua|Seg\.\s*-\s*Quar\./i;
+  const REGEX_QUI_SAB = /Qui\.\s*-\s*Sáb\.|Qui\s*-\s*Sab|Qui\.\s*-\s*Sab\./i;
   const hasSegQua = REGEX_SEG_QUA.test(serviceName);
   const hasQuiSab = REGEX_QUI_SAB.test(serviceName);
 
@@ -135,10 +140,7 @@ export function serviceMatchesDateBand(
 }
 
 export function serviceDisplayName(serviceName: string): string {
-  let displayName = serviceName.replace(/^\d+\s*-\s*/, "");
-  displayName = displayName.replace(REGEX_SEG_QUA, "");
-  displayName = displayName.replace(REGEX_QUI_SAB, "");
-  return displayName.trim().replace(/\s+/g, " ");
+  return cleanLegacyServiceName(serviceName);
 }
 
 export function isShopClosedOnWeekday(
@@ -183,18 +185,32 @@ export function buildBookingCatalog(
 
   const filteredServices = fullCatalog.services
     .filter((service) => {
-      if (!serviceMatchesDateBand(service.name, weekday)) return false;
+      const dayPrice =
+        service.weekdayPrices.length > 0
+          ? priceForWeekday(service.weekdayPrices, weekday)
+          : serviceMatchesDateBand(service.name, weekday)
+            ? service.priceCents
+            : null;
+      if (dayPrice === null) return false;
+
       if (!professional) return true;
       const pro = fullCatalog.professionals.find((p) => p.id === professional.id);
       return pro?.serviceIds.includes(service.id) ?? false;
     })
-    .map((service) => ({
-      id: service.id,
-      name: service.name,
-      displayName: serviceDisplayName(service.name),
-      durationMinutes: service.durationMinutes,
-      priceCents: service.priceCents,
-    }));
+    .map((service) => {
+      const dayPrice =
+        service.weekdayPrices.length > 0
+          ? priceForWeekday(service.weekdayPrices, weekday)!
+          : service.priceCents;
+
+      return {
+        id: service.id,
+        name: service.name,
+        displayName: serviceDisplayName(service.name),
+        durationMinutes: service.durationMinutes,
+        priceCents: dayPrice,
+      };
+    });
 
   const professionals: BookingProfessional[] = professional
     ? [professional]

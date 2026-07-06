@@ -97,6 +97,7 @@ export async function getAvailability(
   const [
     { data: professional },
     { data: services },
+    { data: weekdayPriceRows },
     { data: links },
     { data: businessDay },
     { data: workingHours },
@@ -112,8 +113,13 @@ export async function getAvailability(
       .maybeSingle(),
     admin
       .from("services")
-      .select("id, active, duration_minutes, price_cents")
+      .select("id, name, active, duration_minutes, price_cents")
       .in("id", serviceIds),
+    admin
+      .from("service_weekday_prices")
+      .select("service_id, weekday, price_cents")
+      .in("service_id", serviceIds)
+      .eq("weekday", weekday),
     admin
       .from("professional_services")
       .select("service_id")
@@ -169,12 +175,27 @@ export async function getAvailability(
     };
   }
 
+  const priceByServiceId = new Map(
+    (weekdayPriceRows ?? []).map((row) => [row.service_id, row.price_cents])
+  );
+
+  for (const service of foundServices) {
+    const hasWeekdayPrice = priceByServiceId.has(service.id);
+    if (!hasWeekdayPrice) {
+      return {
+        ok: false,
+        error: `"${service.name}" não está disponível neste dia da semana.`,
+        status: 400,
+      };
+    }
+  }
+
   const durationMinutes = foundServices.reduce(
     (sum, s) => sum + s.duration_minutes,
     0
   );
   const totalPriceCents = foundServices.reduce(
-    (sum, s) => sum + s.price_cents,
+    (sum, s) => sum + (priceByServiceId.get(s.id) ?? s.price_cents),
     0
   );
 

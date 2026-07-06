@@ -270,7 +270,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 
 #### Catálogo enxuto (`mode=booking`)
 
-Para o bot de agendamento (n8n + IA), use o modo enxuto depois que o cliente escolher a **data** (e opcionalmente o barbeiro). Reduz o payload e já filtra preços por faixa de dia.
+Para o bot de agendamento (n8n + IA), use o modo enxuto depois que o cliente escolher a **data** (e opcionalmente o barbeiro). Reduz o payload e devolve só os serviços com preço cadastrado para aquele dia da semana.
 
 | Parâmetro | Obrigatório | Descrição |
 | --- | --- | --- |
@@ -308,7 +308,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?date=2026-07-06&mode
   "services": [
     {
       "id": "3a62b091-6916-4741-a3d4-754a33b2cb31",
-      "name": "01 - Corte Seg. - Qua.",
+      "name": "Corte",
       "displayName": "Corte",
       "durationMinutes": 30,
       "priceCents": 6000
@@ -319,13 +319,14 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog?date=2026-07-06&mode
 
 **Regras de filtro por data:**
 
-- Serviços com `Seg. - Qua.` no nome → só segunda a quarta
-- Serviços com `Qui. - Sáb.` no nome → só quinta a sábado
-- Serviços **sem faixa** no nome → qualquer dia útil (segunda a sábado)
+- Cada serviço tem **preço por dia da semana** cadastrado no painel (`service_weekday_prices`)
+- Só entram na resposta os serviços com preço configurado para o dia da data informada
+- `priceCents` na resposta é o preço **daquele dia** (não o menor preço da semana)
 - **Domingo:** se a loja estiver fechada (`businessHours[0].active = false`), retorna `shopClosed: true`, `professionals: []`, `services: []`, `priceBand: "sunday"`
 - **Feriados:** não tratados nesta versão — use exceções de agenda no painel se precisar fechar um dia específico
+- `GET /availability` e `POST /appointments` também validam se o serviço está disponível no dia escolhido
 
-**Campo `displayName`:** nome limpo para a IA mostrar ao cliente (sem código `NN - ` e sem faixa de dia). O `id` e o `name` originais continuam na resposta para criar o agendamento.
+**Campo `displayName`:** igual ao `name` (nome limpo no cadastro). Mantido para o bot/IA.
 
 **Uso no n8n (subworkflow `resolver_servico`):** troque a URL do nó HTTP de catálogo para:
 

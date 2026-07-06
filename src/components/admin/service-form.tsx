@@ -1,43 +1,72 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { Camera, Clock, Scissors, Users } from "lucide-react";
+import { CalendarDays, Camera, Clock, Scissors, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { compressImage } from "@/lib/compress-image";
-import { formatPriceBRL } from "@/lib/format";
+import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
+import { weekdayPriceInputsFromRows } from "@/lib/service-weekday-prices";
 import type { ActionResult } from "@/lib/require-owner";
 
 export type ProfessionalOption = { id: string; nickname: string };
 
+export type BusinessHourOption = {
+  weekday: number;
+  active: boolean;
+};
+
 export type ServiceFormValues = {
   name: string;
   description: string;
-  priceCents: number;
   durationMinutes: number;
   photoUrl: string | null;
   professionalIds: string[];
+  weekdayPrices: { weekday: number; priceCents: number }[];
+};
+
+type WeekdayRowState = {
+  weekday: number;
+  shopOpen: boolean;
+  offered: boolean;
+  priceCents: number;
 };
 
 type ServiceFormProps = {
   professionals: ProfessionalOption[];
+  businessHours: BusinessHourOption[];
   initialValues?: ServiceFormValues;
   onSubmit: (formData: FormData) => Promise<ActionResult>;
   submitLabel: string;
   isEdit?: boolean;
 };
 
+function buildInitialWeekdayRows(
+  businessHours: BusinessHourOption[],
+  weekdayPrices: { weekday: number; priceCents: number }[]
+): WeekdayRowState[] {
+  const inputs = weekdayPriceInputsFromRows(weekdayPrices, businessHours);
+  return inputs.map((row) => ({
+    weekday: row.weekday,
+    shopOpen: row.shopOpen,
+    offered: row.priceCents !== null,
+    priceCents: row.priceCents ?? 0,
+  }));
+}
+
 export function ServiceForm({
   professionals,
+  businessHours,
   initialValues,
   onSubmit,
   submitLabel,
@@ -48,20 +77,57 @@ export function ServiceForm({
   const [preview, setPreview] = useState<string | null>(
     initialValues?.photoUrl ?? null
   );
-  const [priceCents, setPriceCents] = useState(initialValues?.priceCents ?? 0);
   const [professionalIds, setProfessionalIds] = useState<string[]>(
     initialValues?.professionalIds ?? []
   );
+  const [weekdayRows, setWeekdayRows] = useState<WeekdayRowState[]>(() =>
+    buildInitialWeekdayRows(
+      businessHours,
+      initialValues?.weekdayPrices ?? []
+    )
+  );
+  const [bulkPriceCents, setBulkPriceCents] = useState(0);
   const [saving, setSaving] = useState(false);
+
+  const openWeekdays = useMemo(
+    () => businessHours.filter((row) => row.active).map((row) => row.weekday),
+    [businessHours]
+  );
 
   function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) setPreview(URL.createObjectURL(file));
   }
 
-  function handlePriceChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleBulkPriceChange(e: React.ChangeEvent<HTMLInputElement>) {
     const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
-    setPriceCents(Number(digits));
+    setBulkPriceCents(Number(digits));
+  }
+
+  function applyBulkPrice() {
+    if (bulkPriceCents < 1) {
+      toast.error("Informe um preço válido para aplicar em todos os dias.");
+      return;
+    }
+    setWeekdayRows((rows) =>
+      rows.map((row) =>
+        row.shopOpen
+          ? { ...row, offered: true, priceCents: bulkPriceCents }
+          : row
+      )
+    );
+    toast.success("Preço aplicado nos dias abertos.");
+  }
+
+  function updateWeekdayRow(
+    weekday: number,
+    patch: Partial<Pick<WeekdayRowState, "offered" | "priceCents">>
+  ) {
+    setWeekdayRows((rows) =>
+      rows.map((row) =>
+        row.weekday === weekday ? { ...row, ...patch } : row
+      )
+    );
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -72,6 +138,14 @@ export function ServiceForm({
     const photo = formData.get("photo");
     if (photo instanceof File && photo.size > 0) {
       formData.set("photo", await compressImage(photo));
+    }
+
+    for (const row of weekdayRows) {
+      if (!row.shopOpen) continue;
+      if (row.offered) {
+        formData.set(`weekdayOffered_${row.weekday}`, "on");
+        formData.set(`weekdayPriceCents_${row.weekday}`, String(row.priceCents));
+      }
     }
 
     const result = await onSubmit(formData);
@@ -90,7 +164,6 @@ export function ServiceForm({
     <form onSubmit={handleSubmit}>
       <Card>
         <CardContent className="flex flex-col gap-8">
-          {/* Serviço */}
           <section className="flex flex-col gap-5">
             <FormSectionTitle
               icon={Scissors}
@@ -174,48 +247,120 @@ export function ServiceForm({
 
           <Separator />
 
-          {/* Preço e duração */}
           <section className="flex flex-col gap-5">
             <FormSectionTitle
-              icon={Clock}
-              title="Preço e duração"
-              description="A duração define quais horários aparecem livres na agenda."
+              icon={CalendarDays}
+              title="Preço por dia da semana"
+              description="Marque em quais dias o serviço é oferecido e o preço de cada um. Dias em que a barbearia está fechada ficam bloqueados."
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="price">Preço</Label>
+            <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
+              <div className="flex flex-1 flex-col gap-2">
+                <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
                 <Input
-                  id="price"
+                  id="bulkPrice"
                   type="text"
                   inputMode="numeric"
                   placeholder="R$ 0,00"
-                  value={priceCents > 0 ? formatPriceBRL(priceCents) : ""}
-                  onChange={handlePriceChange}
-                  required
-                />
-                <input type="hidden" name="priceCents" value={priceCents} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="durationMinutes">Duração (minutos)</Label>
-                <Input
-                  id="durationMinutes"
-                  name="durationMinutes"
-                  type="number"
-                  min={5}
-                  max={480}
-                  step={5}
-                  placeholder="Ex: 40"
-                  defaultValue={initialValues?.durationMinutes || ""}
-                  required
+                  value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
+                  onChange={handleBulkPriceChange}
                 />
               </div>
+              <Button type="button" variant="outline" onClick={applyBulkPrice}>
+                Aplicar
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {weekdayRows.map((row) => (
+                <div
+                  key={row.weekday}
+                  className={`grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_auto_140px] sm:items-center ${
+                    row.shopOpen ? "" : "bg-muted/40 opacity-70"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    {row.shopOpen ? (
+                      <Checkbox
+                        id={`weekday-offered-${row.weekday}`}
+                        checked={row.offered}
+                        onCheckedChange={(checked) =>
+                          updateWeekdayRow(row.weekday, {
+                            offered: checked === true,
+                          })
+                        }
+                      />
+                    ) : (
+                      <span className="size-4 shrink-0 rounded-sm border bg-muted" />
+                    )}
+                    <Label
+                      htmlFor={`weekday-offered-${row.weekday}`}
+                      className="font-medium"
+                    >
+                      {WEEKDAYS[row.weekday]}
+                    </Label>
+                  </div>
+
+                  <span className="text-xs text-muted-foreground sm:text-right">
+                    {row.shopOpen ? "Oferece neste dia" : "Barbearia fechada"}
+                  </span>
+
+                  <Input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="R$ 0,00"
+                    disabled={!row.shopOpen || !row.offered}
+                    value={
+                      row.offered && row.priceCents > 0
+                        ? formatPriceBRL(row.priceCents)
+                        : ""
+                    }
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+                      updateWeekdayRow(row.weekday, {
+                        priceCents: Number(digits),
+                      });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {openWeekdays.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                A barbearia não tem dias abertos cadastrados. Ajuste em
+                Configurações antes de cadastrar serviços.
+              </p>
+            )}
+          </section>
+
+          <Separator />
+
+          <section className="flex flex-col gap-5">
+            <FormSectionTitle
+              icon={Clock}
+              title="Duração"
+              description="Define quais horários aparecem livres na agenda."
+            />
+
+            <div className="flex flex-col gap-2 sm:max-w-xs">
+              <Label htmlFor="durationMinutes">Duração (minutos)</Label>
+              <Input
+                id="durationMinutes"
+                name="durationMinutes"
+                type="number"
+                min={5}
+                max={480}
+                step={5}
+                placeholder="Ex: 40"
+                defaultValue={initialValues?.durationMinutes || ""}
+                required
+              />
             </div>
           </section>
 
           <Separator />
 
-          {/* Profissionais */}
           <section className="flex flex-col gap-5">
             <FormSectionTitle
               icon={Users}
@@ -246,7 +391,6 @@ export function ServiceForm({
         </CardContent>
       </Card>
 
-      {/* Barra de ações fixa no rodapé */}
       <div className="sticky bottom-0 z-10 mt-6 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-end gap-3">
           <Button

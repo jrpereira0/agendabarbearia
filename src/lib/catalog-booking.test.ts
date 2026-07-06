@@ -50,19 +50,29 @@ function makeFixtureCatalog(): ShopCatalog {
     services: [
       {
         id: "s1",
-        name: "01 - Corte Seg. - Qua.",
+        name: "Corte",
         description: "",
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 6000,
+        weekdayPrices: [
+          { weekday: 1, priceCents: 6000 },
+          { weekday: 2, priceCents: 6000 },
+          { weekday: 3, priceCents: 6000 },
+        ],
       },
       {
         id: "s2",
-        name: "02 - Corte Qui. - Sáb.",
+        name: "Corte premium",
         description: "",
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 6500,
+        weekdayPrices: [
+          { weekday: 4, priceCents: 6500 },
+          { weekday: 5, priceCents: 6500 },
+          { weekday: 6, priceCents: 6500 },
+        ],
       },
       {
         id: "s3",
@@ -71,14 +81,23 @@ function makeFixtureCatalog(): ShopCatalog {
         photoUrl: null,
         durationMinutes: 15,
         priceCents: 2000,
+        weekdayPrices: [1, 2, 3, 4, 5, 6].map((weekday) => ({
+          weekday,
+          priceCents: 2000,
+        })),
       },
       {
         id: "s4",
-        name: "03 - Corte+Sobrancelha Seg. - Qua.",
+        name: "Corte+Sobrancelha",
         description: "",
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 7000,
+        weekdayPrices: [
+          { weekday: 1, priceCents: 7000 },
+          { weekday: 2, priceCents: 7000 },
+          { weekday: 3, priceCents: 7000 },
+        ],
       },
     ],
     businessHours: makeBusinessHours(false, true),
@@ -243,9 +262,10 @@ describe("buildBookingCatalog", () => {
   it("segunda filtra serviços Seg-Qua e serviços sem faixa", () => {
     const result = buildBookingCatalog(catalog, { date: "2026-07-06" });
     const names = result.services.map((s) => s.name);
-    expect(names).toContain("01 - Corte Seg. - Qua.");
+    expect(names).toContain("Corte");
     expect(names).toContain("Sobrancelha");
-    expect(names).not.toContain("02 - Corte Qui. - Sáb.");
+    expect(names).toContain("Corte+Sobrancelha");
+    expect(names).not.toContain("Corte premium");
     expect(result.priceBand).toBe("seg_qua");
     expect(result.weekday).toBe(1);
     expect(result.shopClosed).toBe(false);
@@ -254,9 +274,9 @@ describe("buildBookingCatalog", () => {
   it("sexta filtra serviços Qui-Sáb e serviços sem faixa", () => {
     const result = buildBookingCatalog(catalog, { date: "2026-07-10" });
     const names = result.services.map((s) => s.name);
-    expect(names).toContain("02 - Corte Qui. - Sáb.");
+    expect(names).toContain("Corte premium");
     expect(names).toContain("Sobrancelha");
-    expect(names).not.toContain("01 - Corte Seg. - Qua.");
+    expect(names).not.toContain("Corte");
     expect(result.priceBand).toBe("qui_sab");
     expect(result.weekday).toBe(5);
   });
@@ -300,6 +320,15 @@ describe("buildBookingCatalog", () => {
     });
     expect(result.services[0]).not.toHaveProperty("photoUrl");
     expect(result.services[0]).not.toHaveProperty("description");
+  });
+
+  it("retorna o preço do dia correto", () => {
+    const monday = buildBookingCatalog(catalog, { date: "2026-07-06" });
+    const friday = buildBookingCatalog(catalog, { date: "2026-07-10" });
+    const mondayCorte = monday.services.find((s) => s.id === "s1");
+    const fridayCorte = friday.services.find((s) => s.id === "s2");
+    expect(mondayCorte?.priceCents).toBe(6000);
+    expect(fridayCorte?.priceCents).toBe(6500);
   });
 
   it("retorna todos os profissionais quando professionalId não é informado", () => {

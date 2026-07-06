@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatShopAddress, formatTime, WEEKDAYS } from "@/lib/format";
+import { minWeekdayPrice } from "@/lib/service-weekday-prices";
 
 export type ShopProfile = {
   name: string;
@@ -26,6 +27,7 @@ export type PublicService = {
   photoUrl: string | null;
   durationMinutes: number;
   priceCents: number;
+  weekdayPrices: { weekday: number; priceCents: number }[];
 };
 
 export type BusinessHourRow = {
@@ -75,6 +77,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
       { data: services },
       { data: links },
       { data: businessHours },
+      { data: weekdayPrices },
     ] = await Promise.all([
       supabase.from("shop_settings").select("*").single(),
       supabase
@@ -89,7 +92,15 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
         .order("name"),
       supabase.from("professional_services").select("professional_id, service_id"),
       supabase.from("business_hours").select("*").order("weekday"),
+      supabase.from("service_weekday_prices").select("service_id, weekday, price_cents"),
     ]);
+
+    const weekdayPricesByService = new Map<string, { weekday: number; priceCents: number }[]>();
+    for (const row of weekdayPrices ?? []) {
+      const list = weekdayPricesByService.get(row.service_id) ?? [];
+      list.push({ weekday: row.weekday, priceCents: row.price_cents });
+      weekdayPricesByService.set(row.service_id, list);
+    }
 
     const serviceIdsByProfessional = new Map<string, string[]>();
     for (const link of links ?? []) {
@@ -124,14 +135,20 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
         photoUrl: p.photo_url,
         serviceIds: serviceIdsByProfessional.get(p.id) ?? [],
       })),
-      services: (services ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description ?? "",
-        photoUrl: s.photo_url,
-        durationMinutes: s.duration_minutes,
-        priceCents: s.price_cents,
-      })),
+      services: (services ?? []).map((s) => {
+        const prices = (weekdayPricesByService.get(s.id) ?? []).sort(
+          (a, b) => a.weekday - b.weekday
+        );
+        return {
+          id: s.id,
+          name: s.name,
+          description: s.description ?? "",
+          photoUrl: s.photo_url,
+          durationMinutes: s.duration_minutes,
+          priceCents: prices.length > 0 ? minWeekdayPrice(prices) : s.price_cents,
+          weekdayPrices: prices,
+        };
+      }),
       businessHours: (businessHours ?? []).map((b) => ({
         weekday: b.weekday,
         label: WEEKDAYS[b.weekday],
