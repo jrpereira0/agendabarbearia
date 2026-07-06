@@ -103,7 +103,6 @@ export function AppointmentActionsDialog({
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [comandaClosed, setComandaClosed] = useState(false);
-  const [loadingComanda, setLoadingComanda] = useState(false);
 
   useEffect(() => {
     if (!open || !appointment) return;
@@ -113,17 +112,8 @@ export function AppointmentActionsDialog({
     setFirstName(appointment.customerFirstName);
     setLastName(appointment.customerLastName);
     setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
-    setComandaClosed(false);
-    setLoadingComanda(true);
-
-    void loadComandaForAppointment(appointment.id)
-      .then((result) => {
-        if (result.ok) {
-          setComandaClosed(result.comanda.status === "closed");
-        }
-      })
-      .finally(() => setLoadingComanda(false));
-  }, [open, appointment?.id, appointment]);
+    setComandaClosed(appointment.status === "done");
+  }, [open, appointment?.id, appointment?.status, appointment]);
 
   if (!appointment) return null;
 
@@ -330,7 +320,7 @@ export function AppointmentActionsDialog({
                   type="button"
                   size="sm"
                   className="h-9"
-                  disabled={loadingComanda}
+                  disabled={busy}
                   onClick={() => {
                     onOpenChange(false);
                     onOpenComanda();
@@ -346,7 +336,7 @@ export function AppointmentActionsDialog({
                     variant="outline"
                     size="sm"
                     className="h-9"
-                    disabled={busy || loadingComanda}
+                    disabled={busy}
                     onClick={() => void handleReopenComanda()}
                   >
                     <RotateCcw className="size-4" />

@@ -62,6 +62,7 @@ type DbComandaRow = {
     squeeze_appointment_id: string | null;
     appointment_id: string | null;
     professional_id: string | null;
+    is_tip: boolean;
     professionals:
       | { nickname: string }
       | { nickname: string }[]
@@ -106,6 +107,7 @@ const COMANDA_SELECT = `
     squeeze_appointment_id,
     appointment_id,
     professional_id,
+    is_tip,
     professionals ( nickname )
   ),
   comanda_payments (
@@ -161,6 +163,7 @@ function mapComandaRow(
         appointmentId: item.appointment_id,
         professionalId: item.professional_id,
         professionalNickname: itemPro?.nickname ?? "—",
+        isTip: item.is_tip,
       };
     });
 
@@ -347,7 +350,7 @@ export async function getComandaForAppointment(
     return existing;
   }
 
-  return getOrCreateComandaForAppointment(admin, appointmentId);
+  return getComandaById(admin, comandaId, { sync: false });
 }
 
 async function pruneStaleEncaixeComandaItems(
@@ -1011,7 +1014,7 @@ export async function getOrCreateComandaForAppointment(
     })
     .eq("id", resolvedComandaId);
 
-  return getComandaById(admin, resolvedComandaId);
+  return getComandaById(admin, resolvedComandaId, { sync: false });
 }
 
 async function recalculateComandaTotals(
@@ -1020,7 +1023,7 @@ async function recalculateComandaTotals(
 ): Promise<{ totalCents: number; commissionCents: number }> {
   const { data: items } = await admin
     .from("comanda_items")
-    .select("charged_price_cents, professional_id")
+    .select("charged_price_cents, professional_id, is_tip")
     .eq("comanda_id", comandaId);
 
   const professionalIds = [
@@ -1036,14 +1039,21 @@ async function recalculateComandaTotals(
     (items ?? []).map((item) => ({
       chargedPriceCents: item.charged_price_cents,
       professionalId: item.professional_id,
+      isTip: item.is_tip,
     })),
     commissions
   );
 }
 
+export type ComandaLoadOptions = {
+  /** Sincroniza encaixes e recalcula totais (lento). Só use ao criar ou salvar. */
+  sync?: boolean;
+};
+
 export async function getComandaById(
   admin: SupabaseClient,
-  comandaId: string
+  comandaId: string,
+  options: ComandaLoadOptions = {}
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
   const { data } = await admin
     .from("comandas")
@@ -1055,7 +1065,7 @@ export async function getComandaById(
     return { ok: false, error: "Comanda não encontrada.", status: 404 };
   }
 
-  if (data.status === "open") {
+  if (data.status === "open" && options.sync) {
     await syncManualEncaixeItemsToComanda(
       admin,
       comandaId,
@@ -1134,6 +1144,7 @@ export function flagComandaItemsNeedingSqueeze(
   }
 
   return items.map((item) => {
+    if (!item.serviceId) return true;
     const remaining = pool.get(item.serviceId) ?? 0;
     if (remaining > 0) {
       pool.set(item.serviceId, remaining - 1);
@@ -1155,7 +1166,20 @@ async function loadServiceDurationsForSync(
     }
   | { ok: false; error: string; status: number }
 > {
-  const uniqueIds = [...new Set(items.map((item) => item.serviceId))];
+  const uniqueIds = [
+    ...new Set(
+      items
+        .map((item) => item.serviceId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  if (uniqueIds.length === 0) {
+    return {
+      ok: true,
+      durations: new Map<string, number>(),
+      catalogPrices: new Map<string, number>(),
+    };
+  }
   const { data: foundServices } = await admin
     .from("services")
     .select("id, duration_minutes, price_cents, active")
@@ -1179,6 +1203,7 @@ async function loadServiceDurationsForSync(
 
   const checksByProfessional = new Map<string, Set<string>>();
   for (const item of items) {
+    if (!item.serviceId) continue;
     const proId = item.professionalId ?? fallbackProfessionalId;
     const set = checksByProfessional.get(proId) ?? new Set<string>();
     set.add(item.serviceId);
@@ -1499,6 +1524,7 @@ async function syncComandaItemAgendaMoves(
 
   for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
     const item = items[itemIndex];
+    if (!item.serviceId) continue;
     const previous = resolvePreviousComandaItem(
       item,
       itemIndex,
@@ -1701,6 +1727,7 @@ async function syncComandaAddonAppointments(
 
   for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
     const item = items[itemIndex];
+    if (!item.serviceId) continue;
     const previous = resolvePreviousComandaItem(
       item,
       itemIndex,
@@ -1810,6 +1837,7 @@ async function restoreComandaItems(
         squeeze_appointment_id: item.squeezeAppointmentId,
         appointment_id: item.appointmentId,
         professional_id: item.professionalId,
+        is_tip: item.isTip,
       }))
     );
   }
@@ -1831,7 +1859,7 @@ export async function updateComandaItems(
   comandaId: string,
   items: ComandaItemInput[]
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
-  const current = await getComandaById(admin, comandaId);
+  const current = await getComandaById(admin, comandaId, { sync: false });
   if (!current.ok) return current;
 
   if (current.comanda.status !== "open") {
@@ -1842,7 +1870,10 @@ export async function updateComandaItems(
     };
   }
 
-  if (items.length === 0) {
+  const serviceItems = items.filter((item) => !item.isTip);
+  const tipItems = items.filter((item) => item.isTip);
+
+  if (serviceItems.length === 0) {
     return {
       ok: false,
       error: "Informe ao menos um serviço na comanda.",
@@ -1856,11 +1887,28 @@ export async function updateComandaItems(
     }
   }
 
+  for (const tip of tipItems) {
+    if (!tip.professionalId) {
+      return {
+        ok: false,
+        error: "Escolha o barbeiro que recebe a gorjeta.",
+        status: 400,
+      };
+    }
+    if (tip.chargedPriceCents < 1) {
+      return {
+        ok: false,
+        error: "Informe um valor de gorjeta válido.",
+        status: 400,
+      };
+    }
+  }
+
   const previousItems = current.comanda.items;
 
   const durationsResult = await loadServiceDurationsForSync(
     admin,
-    items,
+    serviceItems,
     current.comanda.professionalId
   );
   if (!durationsResult.ok) return durationsResult;
@@ -1868,13 +1916,13 @@ export async function updateComandaItems(
   const agendaMoveResult = await syncComandaItemAgendaMoves(
     admin,
     comandaId,
-    items,
-    previousItems,
+    serviceItems,
+    previousItems.filter((item) => !item.isTip),
     durationsResult.durations
   );
   if (!agendaMoveResult.ok) return agendaMoveResult;
 
-  const itemsForAgendaSync = items.map((item, index) => ({
+  const itemsForAgendaSync = serviceItems.map((item, index) => ({
     ...item,
     appointmentId:
       agendaMoveResult.appointmentIdsForItems[index] ??
@@ -1884,7 +1932,7 @@ export async function updateComandaItems(
   const syncResult = await syncComandaAddonAppointments(
     admin,
     itemsForAgendaSync,
-    previousItems,
+    previousItems.filter((item) => !item.isTip),
     durationsResult.durations
   );
 
@@ -1896,22 +1944,21 @@ export async function updateComandaItems(
 
   const previousById = new Map(previousItems.map((item) => [item.id, item]));
 
-  const insertRows = items.map((item, index) => {
+  const serviceInsertRows = serviceItems.map((item, index) => {
     const previous =
       (item.id ? previousById.get(item.id) : undefined) ??
-      previousItems[index];
+      previousItems.filter((row) => !row.isTip)[index];
     return {
       id: item.id ?? crypto.randomUUID(),
       comanda_id: comandaId,
-      service_id: item.serviceId,
+      service_id: item.serviceId ?? null,
       service_name: item.serviceName,
-      // Preço de catálogo sempre vem do banco (nunca do cliente), para que
-      // a comparação com o valor cobrado reflita o preço real do serviço.
       catalog_price_cents:
-        durationsResult.catalogPrices.get(item.serviceId) ??
+        durationsResult.catalogPrices.get(item.serviceId ?? "") ??
         item.catalogPriceCents,
       charged_price_cents: item.chargedPriceCents,
       sort_order: index,
+      is_tip: false,
       squeeze_appointment_id:
         syncResult.squeezeIdsForItems[index] ??
         previous?.squeezeAppointmentId ??
@@ -1924,6 +1971,22 @@ export async function updateComandaItems(
       professional_id: item.professionalId ?? null,
     };
   });
+
+  const tipInsertRows = tipItems.map((item, index) => ({
+    id: item.id ?? crypto.randomUUID(),
+    comanda_id: comandaId,
+    service_id: null,
+    service_name: item.serviceName,
+    catalog_price_cents: item.chargedPriceCents,
+    charged_price_cents: item.chargedPriceCents,
+    sort_order: serviceItems.length + index,
+    is_tip: true,
+    squeeze_appointment_id: null,
+    appointment_id: null,
+    professional_id: item.professionalId ?? null,
+  }));
+
+  const insertRows = [...serviceInsertRows, ...tipInsertRows];
 
   const { error: insertError } = await admin
     .from("comanda_items")
@@ -1955,7 +2018,7 @@ export async function updateComandaItems(
     })
     .eq("id", comandaId);
 
-  return getComandaById(admin, comandaId);
+  return getComandaById(admin, comandaId, { sync: false });
 }
 
 function validatePayments(
@@ -2102,7 +2165,7 @@ export async function closeComanda(
       .eq("is_squeeze_in", true);
   }
 
-  return getComandaById(admin, comandaId);
+  return getComandaById(admin, comandaId, { sync: false });
 }
 
 /** Remove comandas abertas duplicadas do mesmo cliente/dia antes de reabrir. */
@@ -2250,5 +2313,5 @@ export async function reopenComanda(
       .eq("is_squeeze_in", true);
   }
 
-  return getComandaById(admin, comandaId);
+  return getComandaById(admin, comandaId, { sync: false });
 }

@@ -22,6 +22,7 @@ export type ComandaItem = {
   appointmentId: string | null;
   professionalId: string | null;
   professionalNickname: string;
+  isTip: boolean;
 };
 
 export type ComandaPayment = {
@@ -73,7 +74,7 @@ export type ComandaDetail = {
 
 export type ComandaItemInput = {
   id?: string;
-  serviceId: string;
+  serviceId?: string;
   serviceName: string;
   catalogPriceCents: number;
   chargedPriceCents: number;
@@ -83,6 +84,8 @@ export type ComandaItemInput = {
   startTime?: string;
   /** Serviço adicionado na comanda com barbeiro e horário próprios. */
   isComandaExtra?: boolean;
+  /** Gorjeta: barbeiro recebe 100% do valor. */
+  isTip?: boolean;
 };
 
 export type ComandaPaymentInput = {
@@ -105,10 +108,28 @@ export function calculateComandaTotals(
   return { totalCents, commissionCents };
 }
 
+export function calculateItemCommissionCents(
+  item: {
+    chargedPriceCents: number;
+    professionalId: string | null;
+    isTip?: boolean;
+  },
+  commissionByProfessional: Map<string, number>
+): number {
+  if (item.isTip) {
+    return item.chargedPriceCents;
+  }
+  const pct = item.professionalId
+    ? (commissionByProfessional.get(item.professionalId) ?? 50)
+    : 50;
+  return Math.round((item.chargedPriceCents * pct) / 100);
+}
+
 export function calculateComandaTotalsByProfessional(
   items: {
     chargedPriceCents: number;
     professionalId: string | null;
+    isTip?: boolean;
   }[],
   commissionByProfessional: Map<string, number>
 ): { totalCents: number; commissionCents: number } {
@@ -116,10 +137,10 @@ export function calculateComandaTotalsByProfessional(
   let commissionCents = 0;
   for (const item of items) {
     totalCents += item.chargedPriceCents;
-    const pct = item.professionalId
-      ? (commissionByProfessional.get(item.professionalId) ?? 50)
-      : 50;
-    commissionCents += Math.round((item.chargedPriceCents * pct) / 100);
+    commissionCents += calculateItemCommissionCents(
+      item,
+      commissionByProfessional
+    );
   }
   return { totalCents, commissionCents };
 }

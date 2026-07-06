@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateComandaTotals, sumPayments } from "@/lib/comanda-types";
+import { calculateComandaTotals, calculateComandaTotalsByProfessional, sumPayments } from "@/lib/comanda-types";
 
 describe("calculateComandaTotals", () => {
   it("soma valores e calcula comissão por item", () => {
@@ -20,6 +20,25 @@ describe("calculateComandaTotals", () => {
   it("comissão zero quando percentual é zero", () => {
     const result = calculateComandaTotals([{ chargedPriceCents: 5000 }], 0);
     expect(result.commissionCents).toBe(0);
+  });
+});
+
+describe("calculateComandaTotalsByProfessional", () => {
+  it("gorjeta vai 100% para o barbeiro", () => {
+    const commissions = new Map([["pro-1", 50]]);
+    const result = calculateComandaTotalsByProfessional(
+      [
+        { chargedPriceCents: 6000, professionalId: "pro-1" },
+        {
+          chargedPriceCents: 1000,
+          professionalId: "pro-1",
+          isTip: true,
+        },
+      ],
+      commissions
+    );
+    expect(result.totalCents).toBe(7000);
+    expect(result.commissionCents).toBe(4000);
   });
 });
 

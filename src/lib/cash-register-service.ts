@@ -103,6 +103,26 @@ export async function getCashRegisterSession(
   return enrichSession(admin, data as DbSessionRow);
 }
 
+export type OpenCashRegisterBasic = {
+  id: string;
+  serviceDate: string;
+};
+
+/** Caixa aberto sem totais do dia (rápido — só checagem de data). */
+export async function getOpenCashRegisterSessionBasic(
+  admin: SupabaseClient
+): Promise<OpenCashRegisterBasic | null> {
+  const { data } = await admin
+    .from("cash_register_sessions")
+    .select("id, service_date")
+    .eq("status", "open")
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+  return { id: data.id, serviceDate: data.service_date };
+}
+
 /** Retorna o único caixa aberto no sistema, se existir. */
 export async function getOpenCashRegisterSession(
   admin: SupabaseClient
@@ -175,7 +195,7 @@ export async function assertComandaClosableInOpenCashRegister(
   admin: SupabaseClient,
   comandaServiceDate: string
 ): Promise<ComandaCashRegisterCheck> {
-  const openSession = await getOpenCashRegisterSession(admin);
+  const openSession = await getOpenCashRegisterSessionBasic(admin);
 
   if (!openSession) {
     return {
@@ -202,13 +222,14 @@ export async function assertComandaClosableInOpenCashRegister(
 
 export async function canCloseComandaInOpenCashRegister(
   admin: SupabaseClient,
-  comandaServiceDate: string
+  comandaServiceDate: string,
+  openSession?: OpenCashRegisterBasic | null
 ): Promise<boolean> {
-  const check = await assertComandaClosableInOpenCashRegister(
-    admin,
-    comandaServiceDate
-  );
-  return check.ok;
+  const session =
+    openSession === undefined
+      ? await getOpenCashRegisterSessionBasic(admin)
+      : openSession;
+  return session !== null && session.serviceDate === comandaServiceDate;
 }
 
 export async function openCashRegister(

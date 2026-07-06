@@ -86,7 +86,9 @@ type EditableItem = ComandaItemInput & {
 function mapComandaItemsToEditable(
   comandaItems: ComandaDetail["items"]
 ): EditableItem[] {
-  return comandaItems.map((item) => ({
+  return comandaItems
+    .filter((item) => !item.isTip)
+    .map((item) => ({
     localKey: item.id,
     id: item.id,
     serviceId: item.serviceId ?? "",
@@ -98,6 +100,24 @@ function mapComandaItemsToEditable(
     professionalId: item.professionalId ?? undefined,
     professionalNickname: item.professionalNickname,
   }));
+}
+
+function buildPersistItems(
+  serviceItems: EditableItem[],
+  tipCents: number,
+  tipProfessionalId: string
+): ComandaItemInput[] {
+  const payload = serviceItems.map(stripEditableItem);
+  if (tipCents > 0) {
+    payload.push({
+      serviceName: "Gorjeta",
+      catalogPriceCents: tipCents,
+      chargedPriceCents: tipCents,
+      professionalId: tipProfessionalId,
+      isTip: true,
+    });
+  }
+  return payload;
 }
 
 function stripEditableItem(item: EditableItem): ComandaItemInput {
@@ -182,6 +202,8 @@ export function ComandaDialog({
     useState<ServiceOption | null>(null);
   const [extraProfessionalId, setExtraProfessionalId] = useState("");
   const [extraStartTime, setExtraStartTime] = useState("");
+  const [tipCents, setTipCents] = useState(0);
+  const [tipProfessionalId, setTipProfessionalId] = useState("");
 
   const load = useCallback(async () => {
     if (!appointment) return;
@@ -196,7 +218,15 @@ export function ComandaDialog({
       setIsOwner(result.isOwner);
       setCashRegisterOpen(result.cashRegisterOpen);
       setOpenCashRegisterDate(result.openCashRegisterDate);
+      const tipItem = result.comanda.items.find((item) => item.isTip);
       setItems(mapComandaItemsToEditable(result.comanda.items));
+      setTipCents(tipItem?.chargedPriceCents ?? 0);
+      setTipProfessionalId(
+        tipItem?.professionalId ??
+          appointment.professionalId ??
+          sessionProfessionalId ??
+          ""
+      );
       if (result.comanda.status === "closed") {
         setPayments(
           result.comanda.payments.map((p) => ({
@@ -241,6 +271,8 @@ export function ComandaDialog({
       setPendingExtraService(null);
       setExtraProfessionalId("");
       setExtraStartTime("");
+      setTipCents(0);
+      setTipProfessionalId("");
     }
   }, [open, appointment?.id, load]);
 
@@ -274,13 +306,24 @@ export function ComandaDialog({
       };
     }
     return calculateComandaTotalsByProfessional(
-      items.map((item) => ({
-        chargedPriceCents: item.chargedPriceCents,
-        professionalId: item.professionalId ?? null,
-      })),
+      [
+        ...items.map((item) => ({
+          chargedPriceCents: item.chargedPriceCents,
+          professionalId: item.professionalId ?? null,
+        })),
+        ...(tipCents > 0 && tipProfessionalId
+          ? [
+              {
+                chargedPriceCents: tipCents,
+                professionalId: tipProfessionalId,
+                isTip: true as const,
+              },
+            ]
+          : []),
+      ],
       commissionByProfessional
     );
-  }, [items, comanda, commissionByProfessional]);
+  }, [items, comanda, commissionByProfessional, tipCents, tipProfessionalId]);
 
   const paymentsSum = useMemo(
     () => payments.reduce((s, p) => s + p.amountCents, 0),
@@ -482,18 +525,50 @@ export function ComandaDialog({
     ? canCancelLinkedAppointment(appointmentToCancel)
     : false;
 
+  const tipEligibleProfessionals = useMemo(() => {
+    const linkedProIds = new Set(
+      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
+    );
+    return professionals.filter((pro) => linkedProIds.has(pro.id));
+  }, [linkedAppointmentsForMemo, professionals]);
+
   const paymentMismatch = canEdit && paymentsSum !== totals.totalCents;
 
+  function syncSinglePaymentToTotal(nextTotal: number) {
+    setPayments((prev) =>
+      prev.length === 1 ? [{ ...prev[0], amountCents: nextTotal }] : prev
+    );
+  }
+
+  function handleTipCentsChange(value: string) {
+    const cents = parsePriceInput(value);
+    setTipCents(cents);
+    if (canEdit) {
+      const servicesTotal = items.reduce(
+        (sum, item) => sum + item.chargedPriceCents,
+        0
+      );
+      syncSinglePaymentToTotal(servicesTotal + cents);
+    }
+  }
+
   const persistItems = async (
-    nextItems: EditableItem[]
+    nextItems: EditableItem[],
+    nextTipCents = tipCents,
+    nextTipProfessionalId = tipProfessionalId
   ): Promise<boolean> => {
     if (!comanda || !canEdit) return false;
+
+    if (nextTipCents > 0 && !nextTipProfessionalId) {
+      toast.error("Escolha o barbeiro que recebe a gorjeta.");
+      return false;
+    }
 
     setBusy(true);
     try {
       const result = await saveComandaItems(
         comanda.id,
-        nextItems.map(stripEditableItem)
+        buildPersistItems(nextItems, nextTipCents, nextTipProfessionalId)
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -501,13 +576,15 @@ export function ComandaDialog({
       }
 
       setComanda(result.comanda);
+      const savedTip = result.comanda.items.find((item) => item.isTip);
       setItems(mapComandaItemsToEditable(result.comanda.items));
+      setTipCents(savedTip?.chargedPriceCents ?? 0);
+      setTipProfessionalId(savedTip?.professionalId ?? nextTipProfessionalId);
       setPayments((prev) =>
         prev.length === 1
           ? [{ ...prev[0], amountCents: result.comanda.totalCents }]
           : prev
       );
-      router.refresh();
       return true;
     } finally {
       setBusy(false);
@@ -628,7 +705,7 @@ export function ComandaDialog({
     setBusy(true);
     const saved = await saveComandaItems(
       comanda.id,
-      items.map(stripEditableItem)
+      buildPersistItems(items, tipCents, tipProfessionalId)
     );
     if (!saved.ok) {
       toast.error(saved.error);
@@ -1069,6 +1146,56 @@ export function ComandaDialog({
 
               {(canEdit || isClosed) && (
                 <div className="grid gap-4 lg:grid-cols-3">
+                  {canEdit && (
+                    <DialogSection icon={Coins} title="Gorjeta">
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        Opcional. O barbeiro recebe 100% do valor.
+                      </p>
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="tip-amount">Valor</Label>
+                          <Input
+                            id="tip-amount"
+                            className="h-9 tabular-nums bg-background"
+                            value={tipCents > 0 ? formatPriceBRL(tipCents) : ""}
+                            onChange={(e) => handleTipCentsChange(e.target.value)}
+                            onBlur={() => {
+                              if (tipCents > 0) {
+                                void persistItems(items, tipCents, tipProfessionalId);
+                              }
+                            }}
+                            placeholder="R$ 0,00"
+                            disabled={busy}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Barbeiro</Label>
+                          <Select
+                            value={tipProfessionalId}
+                            onValueChange={(value) => {
+                              setTipProfessionalId(value);
+                              if (tipCents > 0) {
+                                void persistItems(items, tipCents, value);
+                              }
+                            }}
+                            disabled={busy || tipEligibleProfessionals.length === 0}
+                          >
+                            <SelectTrigger className="h-9 bg-background">
+                              <SelectValue placeholder="Quem recebe" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {tipEligibleProfessionals.map((pro) => (
+                                <SelectItem key={pro.id} value={pro.id}>
+                                  {pro.nickname}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </DialogSection>
+                  )}
+
                   <DialogSection icon={Wallet} title="Formas de pagamento">
                     <div className="space-y-2">
                         {payments.map((row) => (
@@ -1191,6 +1318,19 @@ export function ComandaDialog({
                             {formatPriceBRL(paymentsSum)}
                           </dd>
                         </div>
+                        {tipCents > 0 && (
+                          <div className="flex justify-between gap-4 text-muted-foreground">
+                            <dt>
+                              Gorjeta
+                              {tipProfessionalId
+                                ? ` (${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"})`
+                                : ""}
+                            </dt>
+                            <dd className="tabular-nums">
+                              {formatPriceBRL(tipCents)}
+                            </dd>
+                          </div>
+                        )}
                         <div className="flex justify-between gap-4 border-t pt-2 text-muted-foreground">
                           <dt>Comissão</dt>
                           <dd className="tabular-nums">

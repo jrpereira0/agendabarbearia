@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+  calculateItemCommissionCents,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type PaymentMethod,
@@ -420,6 +421,7 @@ type ComandaCommissionRow = {
   comanda_items: {
     charged_price_cents: number;
     professional_id: string | null;
+    is_tip: boolean;
     professionals:
       | { nickname: string; commission_percent: number }
       | { nickname: string; commission_percent: number }[]
@@ -500,6 +502,7 @@ export async function getCommissionReport(
       comanda_items (
         charged_price_cents,
         professional_id,
+        is_tip,
         professionals ( nickname, commission_percent )
       ),
       comanda_payments ( payment_method, amount_cents )
@@ -558,7 +561,14 @@ export async function getCommissionReport(
         };
 
       const pct = pro?.commission_percent ?? entry.commissionPercent;
-      const itemCommission = Math.round((item.charged_price_cents * pct) / 100);
+      const itemCommission = calculateItemCommissionCents(
+        {
+          chargedPriceCents: item.charged_price_cents,
+          professionalId: item.professional_id,
+          isTip: item.is_tip,
+        },
+        new Map([[item.professional_id, pct]])
+      );
       entry.summary.servicesGrossCents += item.charged_price_cents;
       entry.summary.commissionCents += itemCommission;
       entry.summary.itemCount += 1;

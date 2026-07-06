@@ -18,27 +18,45 @@ import {
 import { barberCanAccessComanda } from "@/lib/comanda-barber-access";
 import {
   canCloseComandaInOpenCashRegister,
-  getOpenCashRegisterSession,
+  getOpenCashRegisterSessionBasic,
 } from "@/lib/cash-register-service";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
-const itemSchema = z.object({
-  id: z.uuid().optional(),
-  serviceId: z.uuid(),
-  serviceName: z.string().trim().min(1),
-  catalogPriceCents: z.number().int().min(0),
-  chargedPriceCents: z.number().int().min(0),
-  appointmentId: z.uuid().optional(),
-  professionalId: z.uuid().optional(),
-  startTime: z
-    .string()
-    .regex(/^\d{2}:\d{2}$/, "Horário inválido.")
-    .optional(),
-  isComandaExtra: z.boolean().optional(),
-});
+const itemSchema = z
+  .object({
+    id: z.uuid().optional(),
+    serviceId: z.uuid().optional(),
+    serviceName: z.string().trim().min(1),
+    catalogPriceCents: z.number().int().min(0),
+    chargedPriceCents: z.number().int().min(0),
+    appointmentId: z.uuid().optional(),
+    professionalId: z.uuid().optional(),
+    startTime: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Horário inválido.")
+      .optional(),
+    isComandaExtra: z.boolean().optional(),
+    isTip: z.boolean().optional(),
+  })
+  .superRefine((item, ctx) => {
+    if (!item.isTip && !item.serviceId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Serviço inválido.",
+        path: ["serviceId"],
+      });
+    }
+    if (item.isTip && !item.professionalId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Escolha o barbeiro da gorjeta.",
+        path: ["professionalId"],
+      });
+    }
+  });
 
 const paymentSchema = z.object({
   paymentMethod: z.enum(PAYMENT_METHODS),
@@ -79,7 +97,7 @@ export async function loadComandaForAppointment(
     }
   }
 
-  const openCashRegister = await getOpenCashRegisterSession(admin);
+  const openCashRegister = await getOpenCashRegisterSessionBasic(admin);
 
   return {
     ok: true,
@@ -87,7 +105,8 @@ export async function loadComandaForAppointment(
     isOwner: session.isOwner,
     cashRegisterOpen: await canCloseComandaInOpenCashRegister(
       admin,
-      result.comanda.serviceDate
+      result.comanda.serviceDate,
+      openCashRegister
     ),
     openCashRegisterDate: openCashRegister?.serviceDate ?? null,
   };
@@ -106,9 +125,14 @@ export async function saveComandaItems(
       : { ok: false, error: "Sem permissão." };
   }
 
-  const parsed = z.array(itemSchema).min(1).safeParse(items);
+  const parsed = z.array(itemSchema).safeParse(items);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const serviceItems = parsed.data.filter((item) => !item.isTip);
+  if (serviceItems.length === 0) {
+    return { ok: false, error: "Informe ao menos um serviço na comanda." };
   }
 
   const admin = requireAdminClient();

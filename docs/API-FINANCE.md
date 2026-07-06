@@ -14,6 +14,7 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Encaixes na comanda | Encaixes manuais do mesmo cliente no dia entram na comanda automaticamente (serviços + lista de atendimentos) |
 | Extras na comanda | Serviço adicionado na comanda além dos do agendamento vira **encaixe** na agenda |
 | Comissão | % sobre o valor **cobrado** de cada serviço na comanda (configurável por barbeiro) |
+| Gorjeta | Opcional ao fechar; linha `is_tip` na comanda — o barbeiro escolhido recebe **100%** (entra no total e no caixa) |
 | Quem fecha | Somente o **dono** (painel ou API com chave com `comandas:write`) |
 | Taxa de cartão | **Não** entra no cálculo da comissão |
 | Pagamento misto | Várias formas na mesma comanda (ex.: R$ 50 Pix + R$ 50 dinheiro) |
