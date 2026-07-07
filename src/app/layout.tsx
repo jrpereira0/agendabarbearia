@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
 import { getShopSeo } from "@/lib/get-shop-seo";
 import "./globals.css";
 
@@ -15,14 +16,18 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { description } = await getShopSeo();
+  const { name, description } = await getShopSeo();
 
   return {
     title: {
-      default: "Agenda Barbearia",
-      template: "%s | Agenda Barbearia",
+      default: name,
+      template: `%s | ${name}`,
     },
     description,
+    icons: {
+      icon: BRAND_ICON_PATH,
+      apple: BRAND_ICON_PATH,
+    },
   };
 }
 

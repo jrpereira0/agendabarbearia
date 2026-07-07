@@ -1,4 +1,4 @@
-# Arquitetura — Agenda Barbearia
+# Arquitetura — Dinho Barber Coffee
 
 Atualizado por fase, conforme o sistema evolui.
 

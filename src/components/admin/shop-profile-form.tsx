@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { compressImage } from "@/lib/compress-image";
+import { BRAND_ICON_PATH } from "@/lib/brand";
 import { formatCep, formatWhatsapp } from "@/lib/format";
 import { fetchAddressByCep } from "@/lib/viacep";
 import { saveShopProfile } from "@/app/admin/(panel)/configuracoes/actions";
@@ -38,7 +39,9 @@ type ShopProfileFormProps = {
 export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(initialValues.logoUrl);
+  const [preview, setPreview] = useState<string | null>(
+    initialValues.logoUrl ?? BRAND_ICON_PATH
+  );
   const [whatsapp, setWhatsapp] = useState(
     initialValues.whatsapp ? formatWhatsapp(initialValues.whatsapp) : ""
   );
@@ -128,16 +131,16 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-muted transition-colors hover:bg-muted/80"
+              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-black transition-opacity hover:opacity-90"
             >
               {preview ? (
                 <Image
                   src={preview}
-                  alt=""
+                  alt="Logo da barbearia"
                   fill
-                  className="object-cover"
+                  className="object-contain p-1"
                   sizes="80px"
-                  unoptimized
+                  unoptimized={preview.startsWith("/")}
                 />
               ) : (
                 <Camera className="size-6 text-muted-foreground" />
@@ -159,7 +162,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
                   id="shopName"
                   name="shopName"
                   defaultValue={initialValues.shopName}
-                  placeholder="Ex: Barbearia do João"
+                  placeholder="Ex: Dinho Barber Coffee"
                   required
                 />
               </div>

@@ -1,9 +1,10 @@
+import { BRAND_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 const DEFAULT_SEO = {
-  name: "Barbearia",
-  description: "Agende seu horário online de forma rápida e prática.",
+  name: BRAND_NAME,
+  description: `Agende seu horário na ${BRAND_NAME}.`,
 };
 
 export async function getShopSeo() {

@@ -41,6 +41,14 @@ export function AdminCustomerFields({
   const [lookupLoading, setLookupLoading] = useState(false);
   const [customerFound, setCustomerFound] = useState<boolean | null>(null);
   const lastLookupDigitsRef = useRef("");
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   function resetLookup() {
     lastLookupDigitsRef.current = "";
@@ -88,6 +96,7 @@ export function AdminCustomerFields({
       if (current === lastLookupDigitsRef.current) return;
 
       lastLookupDigitsRef.current = current;
+      if (!mountedRef.current) return;
       setLookupLoading(true);
 
       fetch(`/api/v1/customers/lookup?whatsapp=${encodeURIComponent(current)}`)
@@ -95,7 +104,7 @@ export function AdminCustomerFields({
           const body = (await res.json()) as CustomerLookupResponse & {
             error?: string;
           };
-          if (cancelled) return;
+          if (cancelled || !mountedRef.current) return;
 
           if (!res.ok) {
             lastLookupDigitsRef.current = "";
@@ -114,13 +123,13 @@ export function AdminCustomerFields({
           }
         })
         .catch(() => {
-          if (!cancelled) {
+          if (!cancelled && mountedRef.current) {
             lastLookupDigitsRef.current = "";
             toast.error("Não foi possível buscar o cliente. Tente de novo.");
           }
         })
         .finally(() => {
-          if (!cancelled) setLookupLoading(false);
+          if (!cancelled && mountedRef.current) setLookupLoading(false);
         });
     }, delay);
 
@@ -147,13 +156,13 @@ export function AdminCustomerFields({
           onChange={(e) => handleWhatsappChange(e.target.value)}
           autoComplete="tel"
         />
-        <p className="text-xs text-muted-foreground">
+        <div className="text-xs text-muted-foreground" aria-live="polite">
           {lookupLoading ? (
-            <Skeleton className="inline-block h-3 w-40" />
+            <Skeleton className="inline-block h-3 w-40" aria-hidden />
           ) : (
             "Digite o número completo para identificar o cliente."
           )}
-        </p>
+        </div>
       </div>
 
       {customerFound === true && (

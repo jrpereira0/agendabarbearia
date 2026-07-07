@@ -1,3 +1,4 @@
+import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatShopAddress, formatTime, WEEKDAYS } from "@/lib/format";
@@ -51,12 +52,12 @@ export type ShopCatalog = {
 function emptyShopCatalog(): ShopCatalog {
   return {
     shop: {
-      name: "Barbearia",
+      name: BRAND_NAME,
       bio: "",
       address: "",
       whatsapp: "",
       instagram: null,
-      logoUrl: null,
+      logoUrl: BRAND_ICON_PATH,
       slotStepMinutes: 15,
     },
     professionals: [],
@@ -116,7 +117,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
 
     return {
       shop: {
-        name: settings?.shop_name?.trim() || "Barbearia",
+        name: settings?.shop_name?.trim() || BRAND_NAME,
         bio: settings?.bio?.trim() ?? "",
         address:
           formatShopAddress({
@@ -131,7 +132,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
           "",
         whatsapp: settings?.whatsapp?.replace(/\D/g, "") ?? "",
         instagram: settings?.instagram?.trim() || null,
-        logoUrl: settings?.logo_url ?? null,
+        logoUrl: settings?.logo_url?.trim() || BRAND_ICON_PATH,
         slotStepMinutes: settings?.slot_step_minutes ?? 15,
       },
       professionals: (professionals ?? []).map((p) => ({

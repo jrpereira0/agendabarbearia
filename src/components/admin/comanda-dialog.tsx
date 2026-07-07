@@ -329,13 +329,16 @@ export function ComandaDialog({
     } finally {
       setLoading(false);
     }
-  }, [appointment]);
+  }, [appointment, sessionProfessionalId]);
 
   useEffect(() => {
     if (open && appointment) {
       setFocusAppointmentId(appointment.id);
       void load();
-    } else {
+      return;
+    }
+
+    if (!open) {
       setComanda(null);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);

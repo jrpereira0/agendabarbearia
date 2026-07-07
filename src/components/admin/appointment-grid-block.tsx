@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { agendaAppointmentClass } from "@/lib/agenda-colors";
 import { STATUS_LABELS } from "@/lib/appointment-status";
@@ -85,6 +86,7 @@ export function AppointmentGridBlock({
   columnIndex = 0,
   columnCount = 1,
 }: AppointmentGridBlockProps) {
+  const isMobile = useIsMobile();
   const [statusMenu, setStatusMenu] = useState<{
     x: number;
     y: number;
@@ -95,66 +97,73 @@ export function AppointmentGridBlock({
   const endTime = formatTime(apt.endTime);
   const sideBySide = columnCount > 1;
   const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
+
+  const blockButton = (
+    <button
+      type="button"
+      className={cn(
+        "z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left shadow-sm transition-[opacity,box-shadow,z-index] hover:z-50 hover:opacity-100 hover:shadow-md focus-visible:z-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        sideBySide ? "mx-0.5" : "mx-1",
+        tight ? "px-0.5 py-0" : "px-1 py-0.5 sm:px-1.5",
+        agendaAppointmentClass(apt)
+      )}
+      style={{
+        gridColumn,
+        gridRow,
+        zIndex: 20 + columnIndex,
+        ...(sideBySide
+          ? {
+              width: `calc(${100 / columnCount}% - 6px)`,
+              marginLeft: `calc(${(columnIndex / columnCount) * 100}% + 3px)`,
+            }
+          : {}),
+      }}
+      onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setStatusMenu({ x: event.clientX, y: event.clientY });
+      }}
+    >
+      <div className="flex min-h-0 w-full flex-col justify-center gap-px">
+        <p
+          className={cn(
+            "truncate font-medium leading-none",
+            tight ? "text-[10px]" : "text-[11px] sm:text-xs"
+          )}
+        >
+          {name}
+        </p>
+        <p
+          className={cn(
+            "truncate leading-none tabular-nums opacity-85",
+            tight ? "text-[9px]" : "text-[10px]"
+          )}
+        >
+          {startTime} – {endTime}
+        </p>
+      </div>
+    </button>
+  );
+
   return (
     <>
-      <Tooltip delayDuration={150}>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className={cn(
-              "z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left shadow-sm transition-[opacity,box-shadow,z-index] hover:z-50 hover:opacity-100 hover:shadow-md focus-visible:z-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              sideBySide ? "mx-0.5" : "mx-1",
-              tight ? "px-0.5 py-0" : "px-1 py-0.5 sm:px-1.5",
-              agendaAppointmentClass(apt)
-            )}
-            style={{
-              gridColumn,
-              gridRow,
-              zIndex: 20 + columnIndex,
-              ...(sideBySide
-                ? {
-                    width: `calc(${100 / columnCount}% - 6px)`,
-                    marginLeft: `calc(${(columnIndex / columnCount) * 100}% + 3px)`,
-                  }
-                : {}),
-            }}
-            onClick={onClick}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              setStatusMenu({ x: event.clientX, y: event.clientY });
-            }}
-          >
-            <div className="flex min-h-0 w-full flex-col justify-center gap-px">
-              <p
-                className={cn(
-                  "truncate font-medium leading-none",
-                  tight ? "text-[10px]" : "text-[11px] sm:text-xs"
-                )}
-              >
-                {name}
-              </p>
-              <p
-                className={cn(
-                  "truncate leading-none tabular-nums opacity-85",
-                  tight ? "text-[9px]" : "text-[10px]"
-                )}
-              >
-                {startTime} – {endTime}
-              </p>
-            </div>
-          </button>
-        </TooltipTrigger>
+      {isMobile ? (
+        blockButton
+      ) : (
+        <Tooltip delayDuration={150}>
+          <TooltipTrigger asChild>{blockButton}</TooltipTrigger>
 
-        <TooltipContent
-          side="right"
-          align="start"
-          sideOffset={6}
-          className="max-w-[240px] items-start p-3 text-xs"
-        >
-          <AppointmentTooltipContent appointment={apt} />
-        </TooltipContent>
-      </Tooltip>
+          <TooltipContent
+            side="right"
+            align="start"
+            sideOffset={6}
+            className="max-w-[240px] items-start p-3 text-xs"
+          >
+            <AppointmentTooltipContent appointment={apt} />
+          </TooltipContent>
+        </Tooltip>
+      )}
 
       <AppointmentStatusMenu
         appointmentId={apt.id}

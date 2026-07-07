@@ -102,14 +102,14 @@ export function ShopHero({
       <div className="relative mx-auto w-full max-w-lg px-5 pb-10 pt-14 sm:px-6 sm:pb-12 sm:pt-16">
         <div className="flex flex-col items-center text-center">
           {shop.logoUrl ? (
-            <div className="relative size-24 overflow-hidden rounded-2xl border border-background/15 sm:size-28">
+            <div className="relative size-24 overflow-hidden rounded-2xl border border-background/15 bg-black sm:size-28">
               <Image
                 src={shop.logoUrl}
-                alt=""
+                alt={shop.name}
                 fill
-                className="object-cover"
+                className="object-contain p-1.5"
                 sizes="112px"
-                unoptimized
+                unoptimized={shop.logoUrl.startsWith("/")}
                 priority
               />
             </div>

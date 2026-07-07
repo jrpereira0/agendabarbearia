@@ -4,10 +4,10 @@ import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 const iconSizes = {
-  sm: 28,
-  md: 32,
-  lg: 40,
-  xl: 56,
+  sm: "size-7",
+  md: "size-8",
+  lg: "size-10",
+  xl: "size-14",
 } as const;
 
 type BrandLogoProps = {
@@ -20,6 +20,32 @@ type BrandLogoProps = {
   href?: string;
 };
 
+function BrandImage({
+  size,
+  priority = false,
+}: {
+  size: keyof typeof iconSizes;
+  priority?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "relative shrink-0 overflow-hidden rounded-xl bg-black",
+        iconSizes[size]
+      )}
+    >
+      <Image
+        src={BRAND_ICON_PATH}
+        alt={BRAND_NAME}
+        fill
+        className="object-contain p-0.5"
+        sizes={size === "xl" ? "56px" : size === "lg" ? "40px" : "32px"}
+        priority={priority}
+      />
+    </div>
+  );
+}
+
 export function BrandLogo({
   showName = true,
   subtitle,
@@ -29,18 +55,9 @@ export function BrandLogo({
   subtitleClassName,
   href,
 }: BrandLogoProps) {
-  const iconPx = iconSizes[size];
-
   const content = (
     <>
-      <Image
-        src={BRAND_ICON_PATH}
-        alt=""
-        width={iconPx}
-        height={iconPx}
-        className="shrink-0 rounded-[min(22%,10px)]"
-        priority={size === "xl"}
-      />
+      <BrandImage size={size} priority={size === "xl"} />
       {showName && (
         <div className="grid min-w-0 flex-1 text-left leading-tight">
           <span
@@ -87,15 +104,15 @@ export function BrandMark({ className }: BrandMarkProps) {
   return (
     <div
       className={cn(
-        "relative size-14 shrink-0 overflow-hidden rounded-2xl border border-background/15",
+        "relative shrink-0 overflow-hidden rounded-2xl border border-background/15 bg-black",
         className
       )}
     >
       <Image
         src={BRAND_ICON_PATH}
-        alt=""
+        alt={BRAND_NAME}
         fill
-        className="object-cover"
+        className="object-contain p-1"
         sizes="112px"
         priority
       />

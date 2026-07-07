@@ -843,13 +843,13 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   autoComplete="tel"
                   required
                 />
-                <p className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground" aria-live="polite">
                   {lookupLoading ? (
-                    <Skeleton className="inline-block h-3 w-44" />
+                    <Skeleton className="inline-block h-3 w-44" aria-hidden />
                   ) : (
                     "Assim que você terminar de digitar, a gente identifica você."
                   )}
-                </p>
+                </div>
               </div>
             )}
 

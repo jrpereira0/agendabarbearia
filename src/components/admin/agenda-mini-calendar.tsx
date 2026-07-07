@@ -11,6 +11,8 @@ type AgendaMiniCalendarProps = {
   today: string;
   onSelectDate: (date: string) => void;
   compact?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
 };
 
 function parseIso(iso: string) {
@@ -39,6 +41,8 @@ export function AgendaMiniCalendar({
   today,
   onSelectDate,
   compact = false,
+  disabled = false,
+  loading = false,
 }: AgendaMiniCalendarProps) {
   const { year, month } = parseIso(selectedDate);
   const firstWeekday = new Date(year, month, 1).getDay();
@@ -48,14 +52,30 @@ export function AgendaMiniCalendar({
     ...Array.from({ length: totalDays }, (_, i) => i + 1),
   ];
 
+  function handleSelectDate(iso: string) {
+    if (disabled || loading || iso === selectedDate) return;
+    onSelectDate(iso);
+  }
+
   function shiftMonth(delta: number) {
+    if (disabled || loading) return;
     const d = new Date(year, month + delta, 1);
-    const day = Math.min(parseIso(selectedDate).day, daysInMonth(d.getFullYear(), d.getMonth()));
-    onSelectDate(toIso(d.getFullYear(), d.getMonth(), day));
+    const day = Math.min(
+      parseIso(selectedDate).day,
+      daysInMonth(d.getFullYear(), d.getMonth())
+    );
+    handleSelectDate(toIso(d.getFullYear(), d.getMonth(), day));
   }
 
   return (
-    <div className={cn("flex flex-col", compact ? "gap-2" : "gap-3")}>
+    <div
+      className={cn(
+        "flex flex-col transition-opacity duration-200",
+        compact ? "gap-2" : "gap-3",
+        disabled && "pointer-events-none opacity-50"
+      )}
+      aria-busy={loading}
+    >
       <div className="flex items-center justify-between">
         <Button
           type="button"
@@ -63,6 +83,7 @@ export function AgendaMiniCalendar({
           size="icon"
           className={compact ? "size-6" : "size-7"}
           onClick={() => shiftMonth(-1)}
+          disabled={disabled || loading}
           aria-label="Mês anterior"
         >
           <ChevronLeft className="size-4" />
@@ -76,6 +97,7 @@ export function AgendaMiniCalendar({
           size="icon"
           className={compact ? "size-6" : "size-7"}
           onClick={() => shiftMonth(1)}
+          disabled={disabled || loading}
           aria-label="Próximo mês"
         >
           <ChevronRight className="size-4" />
@@ -107,13 +129,29 @@ export function AgendaMiniCalendar({
             <button
               key={iso}
               type="button"
-              onClick={() => onSelectDate(iso)}
+              onClick={() => handleSelectDate(iso)}
+              disabled={disabled || loading}
+              aria-current={isSelected ? "date" : undefined}
+              aria-label={
+                isToday
+                  ? `Hoje, dia ${day}`
+                  : isSelected
+                    ? `Dia ${day}, selecionado`
+                    : `Dia ${day}`
+              }
               className={cn(
-                "flex items-center justify-center rounded-full transition-colors",
+                "flex items-center justify-center rounded-full font-medium tabular-nums transition-colors duration-150",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "active:scale-[0.97] motion-reduce:active:scale-100",
                 compact ? "size-7 text-xs" : "size-8 text-sm",
-                isSelected && "bg-foreground text-background font-semibold",
-                !isSelected && isToday && "ring-1 ring-foreground",
-                !isSelected && !isToday && "hover:bg-muted"
+                isSelected &&
+                  "cursor-default bg-foreground text-background shadow-sm",
+                !isSelected &&
+                  isToday &&
+                  "bg-background text-foreground ring-1 ring-foreground [@media(hover:hover)]:hover:bg-foreground/6",
+                !isSelected &&
+                  !isToday &&
+                  "text-muted-foreground [@media(hover:hover)]:hover:bg-foreground/8 [@media(hover:hover)]:hover:text-foreground"
               )}
             >
               {day}
@@ -131,7 +169,8 @@ export function AgendaMiniCalendar({
             "h-auto p-0 text-muted-foreground",
             compact && "text-xs"
           )}
-          onClick={() => onSelectDate(today)}
+          disabled={disabled || loading}
+          onClick={() => handleSelectDate(today)}
         >
           Ir para hoje
         </Button>

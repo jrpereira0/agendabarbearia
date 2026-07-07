@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AgendaGrid } from "@/components/admin/agenda-grid";
+import { AgendaGridSkeleton } from "@/components/admin/agenda-grid-skeleton";
 import { AgendaSidebar } from "@/components/admin/agenda-sidebar";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { ComandaDialog } from "@/components/admin/comanda-dialog";
@@ -24,6 +25,7 @@ import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
 import type { ProfessionalPermissions } from "@/lib/professional-permissions";
+import { cn } from "@/lib/utils";
 
 type AgendaCashRegisterData = {
   cash: CashRegisterSummary;
@@ -44,9 +46,23 @@ type AgendaViewProps = {
   cashRegister?: AgendaCashRegisterData;
 };
 
+function AgendaNavProgress() {
+  return (
+    <div
+      className="h-px w-full overflow-hidden bg-border"
+      role="progressbar"
+      aria-hidden
+    >
+      <div className="h-full w-1/4 bg-foreground/25 [animation:agenda-indeterminate_1.1s_ease-in-out_infinite] motion-reduce:animate-none" />
+    </div>
+  );
+}
+
 function AgendaToolbar({
   date,
   isToday,
+  isNavigating,
+  isRefreshing,
   canBookNormal,
   canBookEncaixe,
   onPrevDay,
@@ -59,6 +75,8 @@ function AgendaToolbar({
 }: {
   date: string;
   isToday: boolean;
+  isNavigating: boolean;
+  isRefreshing: boolean;
   canBookNormal: boolean;
   canBookEncaixe: boolean;
   onPrevDay: () => void;
@@ -69,6 +87,9 @@ function AgendaToolbar({
   onBookEncaixe: () => void;
   mobile?: boolean;
 }) {
+  const busy = isNavigating || isRefreshing;
+  const dateLabel = formatAgendaHeaderDate(date);
+
   if (mobile) {
     return (
       <div className="shrink-0 border-b bg-background">
@@ -78,11 +99,17 @@ function AgendaToolbar({
             size="icon"
             className="size-8"
             onClick={onPrevDay}
+            disabled={busy}
             aria-label="Dia anterior"
           >
             <ChevronLeft />
           </Button>
-          <Button variant="outline" size="sm" onClick={onToday} disabled={isToday}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToday}
+            disabled={isToday || busy}
+          >
             Hoje
           </Button>
           <Button
@@ -90,27 +117,38 @@ function AgendaToolbar({
             size="icon"
             className="size-8"
             onClick={onNextDay}
+            disabled={busy}
             aria-label="Próximo dia"
           >
             <ChevronRight />
           </Button>
-          <p className="min-w-0 flex-1 truncate text-center text-sm font-medium">
-            {formatAgendaHeaderDate(date)}
+          <p
+            className="min-w-0 flex-1 truncate text-center text-sm font-medium"
+            aria-live="polite"
+          >
+            {dateLabel}
           </p>
           <Button
             variant="ghost"
             size="icon"
             className="size-8 shrink-0"
             onClick={onRefresh}
+            disabled={busy}
             aria-label="Atualizar"
           >
-            <RefreshCw />
+            <RefreshCw className={cn(isRefreshing && "animate-spin")} />
           </Button>
         </div>
+        {isNavigating ? <AgendaNavProgress /> : null}
         {(canBookNormal || canBookEncaixe) && (
           <div className="flex gap-2 border-t px-4 py-2">
             {canBookNormal && (
-              <Button size="sm" className="flex-1" onClick={onBookNormal}>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={onBookNormal}
+                disabled={busy}
+              >
                 + Agendar
               </Button>
             )}
@@ -120,6 +158,7 @@ function AgendaToolbar({
                 variant="outline"
                 className="flex-1"
                 onClick={onBookEncaixe}
+                disabled={busy}
               >
                 + Encaixe
               </Button>
@@ -131,55 +170,74 @@ function AgendaToolbar({
   }
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-background px-4 py-3 md:px-6">
-      <div className="flex items-center gap-1">
+    <div className="shrink-0 border-b bg-background">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 px-4 py-3 md:px-6">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={onPrevDay}
+            disabled={busy}
+            aria-label="Dia anterior"
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToday}
+            disabled={isToday || busy}
+          >
+            Hoje
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={onNextDay}
+            disabled={busy}
+            aria-label="Próximo dia"
+          >
+            <ChevronRight />
+          </Button>
+        </div>
+
+        {canBookNormal && (
+          <Button size="sm" onClick={onBookNormal} disabled={busy}>
+            + Agendar
+          </Button>
+        )}
+        {canBookEncaixe && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onBookEncaixe}
+            disabled={busy}
+          >
+            + Encaixe
+          </Button>
+        )}
+
+        <p
+          className="min-w-0 flex-1 text-center text-sm font-medium sm:text-base"
+          aria-live="polite"
+        >
+          {dateLabel}
+        </p>
+
         <Button
-          variant="outline"
+          variant="ghost"
           size="icon"
           className="size-8"
-          onClick={onPrevDay}
-          aria-label="Dia anterior"
+          onClick={onRefresh}
+          disabled={busy}
+          aria-label="Atualizar"
         >
-          <ChevronLeft />
-        </Button>
-        <Button variant="outline" size="sm" onClick={onToday} disabled={isToday}>
-          Hoje
-        </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-8"
-          onClick={onNextDay}
-          aria-label="Próximo dia"
-        >
-          <ChevronRight />
+          <RefreshCw className={cn(isRefreshing && "animate-spin")} />
         </Button>
       </div>
-
-      {canBookNormal && (
-        <Button size="sm" onClick={onBookNormal}>
-          + Agendar
-        </Button>
-      )}
-      {canBookEncaixe && (
-        <Button size="sm" variant="outline" onClick={onBookEncaixe}>
-          + Encaixe
-        </Button>
-      )}
-
-      <p className="flex-1 text-center text-sm font-medium sm:text-base">
-        {formatAgendaHeaderDate(date)}
-      </p>
-
-      <Button
-        variant="ghost"
-        size="icon"
-        className="size-8"
-        onClick={onRefresh}
-        aria-label="Atualizar"
-      >
-        <RefreshCw />
-      </Button>
+      {isNavigating ? <AgendaNavProgress /> : null}
     </div>
   );
 }
@@ -234,6 +292,9 @@ export function AgendaView({
   cashRegister,
 }: AgendaViewProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [pendingDate, setPendingDate] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [newOpen, setNewOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentItem | null>(null);
@@ -249,6 +310,13 @@ export function AgendaView({
   );
 
   const isToday = date === today;
+  const displayDate = pendingDate ?? date;
+  const isNavigating =
+    isPending || (pendingDate !== null && pendingDate !== date);
+
+  useEffect(() => {
+    setPendingDate(null);
+  }, [date]);
 
   const professionals: ProfessionalOption[] = useMemo(
     () =>
@@ -269,8 +337,23 @@ export function AgendaView({
   const canBookEncaixe = canBookBase && permissions.canCreateSqueezeIn;
 
   function goToDate(next: string) {
-    router.push(`/admin?date=${next}`);
+    if (next === displayDate && !isNavigating) return;
+    setPendingDate(next);
+    startTransition(() => {
+      router.push(`/admin?date=${next}`, { scroll: false });
+    });
   }
+
+  function handleRefresh() {
+    setIsRefreshing(true);
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  useEffect(() => {
+    if (!isPending) setIsRefreshing(false);
+  }, [isPending]);
 
   function openBooking(
     mode: BookingMode,
@@ -315,7 +398,9 @@ export function AgendaView({
 
   const sidebarProps = {
     date,
+    displayDate,
     today,
+    isNavigating,
     canBookNormal,
     canBookEncaixe,
     isOwner,
@@ -333,14 +418,16 @@ export function AgendaView({
   };
 
   const toolbarProps = {
-    date,
-    isToday,
+    date: displayDate,
+    isToday: displayDate === today,
+    isNavigating,
+    isRefreshing,
     canBookNormal,
     canBookEncaixe,
-    onPrevDay: () => goToDate(shiftDate(date, -1)),
+    onPrevDay: () => goToDate(shiftDate(displayDate, -1)),
     onToday: () => goToDate(today),
-    onNextDay: () => goToDate(shiftDate(date, 1)),
-    onRefresh: () => router.refresh(),
+    onNextDay: () => goToDate(shiftDate(displayDate, 1)),
+    onRefresh: handleRefresh,
     onBookNormal: () => openBooking("normal"),
     onBookEncaixe: () => openBooking("encaixe"),
   };
@@ -354,21 +441,31 @@ export function AgendaView({
     onAppointmentClick: handleAppointmentClick,
   };
 
+  const gridSkeleton = (
+    <AgendaGridSkeleton
+      professionalCount={Math.max(dayContext.professionals.length, 1)}
+    />
+  );
+
   return (
     <div className="-m-4 md:-m-8">
-      {/* Mobile: grade em destaque; calendário e extras colapsáveis */}
-      <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:hidden">
+      {/* Mobile: grade com altura fixa e scroll próprio; calendário e extras rolam com a página */}
+      <div className="flex flex-col lg:hidden">
         <AgendaToolbar {...toolbarProps} mobile />
 
-        <div className="shrink-0 px-4 pt-3">
+        <div className="px-4 pt-3">
           <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="date" />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3">
-          <AgendaMainContent {...mainContentProps} />
+        <div className="h-[min(58dvh,calc(100dvh-15rem))] min-h-[220px] shrink-0 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] touch-pan-y">
+          {isNavigating ? (
+            gridSkeleton
+          ) : (
+            <AgendaMainContent {...mainContentProps} />
+          )}
         </div>
 
-        <div className="shrink-0 border-t bg-muted/15 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="border-t bg-muted/15 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="tools" />
         </div>
       </div>
@@ -378,7 +475,11 @@ export function AgendaView({
         <section className="sticky top-0 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
           <AgendaToolbar {...toolbarProps} />
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-4">
-            <AgendaMainContent {...mainContentProps} />
+            {isNavigating ? (
+              gridSkeleton
+            ) : (
+              <AgendaMainContent {...mainContentProps} />
+            )}
           </div>
         </section>
 

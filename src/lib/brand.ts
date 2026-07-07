@@ -1,2 +1,2 @@
-export const BRAND_NAME = "Agenda Barbearia";
-export const BRAND_ICON_PATH = "/brand-icon.svg";
+export const BRAND_NAME = "Dinho Barber Coffee";
+export const BRAND_ICON_PATH = "/logodinho.png";

@@ -27,6 +27,8 @@ type AgendaSidebarProps = {
   onEncaixe: () => void;
   layout?: "desktop" | "mobile";
   mobileSection?: "date" | "tools";
+  displayDate?: string;
+  isNavigating?: boolean;
 };
 
 const LEGEND_ITEMS = [
@@ -115,11 +117,17 @@ function LegendGrid({ compact }: { compact?: boolean }) {
 
 function AgendaMobileDateSection({
   date,
+  displayDate,
   today,
   onDateChange,
-}: Pick<AgendaSidebarProps, "date" | "today" | "onDateChange">) {
+  isNavigating = false,
+}: Pick<
+  AgendaSidebarProps,
+  "date" | "displayDate" | "today" | "onDateChange" | "isNavigating"
+>) {
   const [open, setOpen] = useState(false);
-  const isToday = date === today;
+  const shownDate = displayDate ?? date;
+  const isToday = shownDate === today;
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
@@ -131,7 +139,7 @@ function AgendaMobileDateSection({
       >
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium leading-tight">
-            {formatDateBR(date)}
+            {formatDateBR(shownDate)}
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {isToday
@@ -150,8 +158,9 @@ function AgendaMobileDateSection({
       {open && (
         <div className="border-t px-3.5 pb-3.5 pt-3">
           <AgendaMiniCalendar
-            selectedDate={date}
+            selectedDate={shownDate}
             today={today}
+            loading={isNavigating}
             onSelectDate={(nextDate) => {
               onDateChange(nextDate);
               setOpen(false);
@@ -234,16 +243,21 @@ export function AgendaSidebar({
   onEncaixe,
   layout = "desktop",
   mobileSection,
+  displayDate,
+  isNavigating = false,
 }: AgendaSidebarProps) {
   const [legendOpen, setLegendOpen] = useState(false);
+  const shownDate = displayDate ?? date;
 
   if (layout === "mobile") {
     if (mobileSection === "date") {
       return (
         <AgendaMobileDateSection
           date={date}
+          displayDate={displayDate}
           today={today}
           onDateChange={onDateChange}
+          isNavigating={isNavigating}
         />
       );
     }
@@ -267,8 +281,9 @@ export function AgendaSidebar({
     <aside className="flex w-full flex-col gap-4 lg:w-56 lg:shrink-0">
       <div className="rounded-lg border p-4">
         <AgendaMiniCalendar
-          selectedDate={date}
+          selectedDate={shownDate}
           today={today}
+          loading={isNavigating}
           onSelectDate={onDateChange}
         />
       </div>

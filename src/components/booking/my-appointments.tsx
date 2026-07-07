@@ -343,13 +343,13 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
               autoComplete="tel"
             />
-            <p className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground" aria-live="polite">
               {lookupLoading || loadingList ? (
-                <Skeleton className="inline-block h-3 w-48" />
+                <Skeleton className="inline-block h-3 w-48" aria-hidden />
               ) : (
                 "Assim que você terminar de digitar, a gente busca."
               )}
-            </p>
+            </div>
           </div>
         </div>
       </div>

@@ -51,7 +51,7 @@ export default async function AdminLayout({
         <SidebarInset className="flex min-h-svh flex-col">
           <AdminSidebarToggle />
           <AdminMobileMenu />
-          <div className="flex-1 overflow-y-auto p-4 md:p-8">
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-8">
             {children}
           </div>
         </SidebarInset>
