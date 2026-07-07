@@ -121,7 +121,12 @@ export function CashRegisterHistoryView({
     );
   }, [sessions, search]);
 
-  const periodTotalCents = useMemo(
+  const periodCashInflowCents = useMemo(
+    () => filtered.reduce((sum, row) => sum + row.cashInflowCents, 0),
+    [filtered]
+  );
+
+  const periodServiceCents = useMemo(
     () => filtered.reduce((sum, row) => sum + row.totalCents, 0),
     [filtered]
   );
@@ -135,8 +140,10 @@ export function CashRegisterHistoryView({
 
   const avgPerSession = useMemo(
     () =>
-      filtered.length > 0 ? Math.round(periodTotalCents / filtered.length) : 0,
-    [filtered.length, periodTotalCents]
+      filtered.length > 0
+        ? Math.round(periodCashInflowCents / filtered.length)
+        : 0,
+    [filtered.length, periodCashInflowCents]
   );
 
   const defaultResponsibleId = dialogSession
@@ -299,9 +306,13 @@ export function CashRegisterHistoryView({
       {filtered.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-3">
           <MetricCard
-            label="Faturamento"
-            value={formatPriceBRL(periodTotalCents)}
-            hint={`${filtered.length} caixa${filtered.length === 1 ? "" : "s"}`}
+            label="Entradas no caixa"
+            value={formatPriceBRL(periodCashInflowCents)}
+            hint={
+              periodServiceCents < periodCashInflowCents
+                ? `${formatPriceBRL(periodServiceCents)} em serviços · ${filtered.length} caixa${filtered.length === 1 ? "" : "s"}`
+                : `${filtered.length} caixa${filtered.length === 1 ? "" : "s"}`
+            }
           />
           <MetricCard
             label="Média por caixa"
@@ -399,7 +410,12 @@ export function CashRegisterHistoryView({
                         {operator}
                       </td>
                       <td className="px-4 py-3.5 text-right font-semibold tabular-nums">
-                        {formatPriceBRL(session.totalCents)}
+                        <div>{formatPriceBRL(session.cashInflowCents)}</div>
+                        {session.creditDepositsCents > 0 && (
+                          <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                            +{formatPriceBRL(session.creditDepositsCents)} crédito
+                          </p>
+                        )}
                       </td>
                       <td className="hidden px-4 py-3.5 whitespace-nowrap text-xs text-muted-foreground md:table-cell">
                         {session.openedAt

@@ -22,6 +22,10 @@ import {
   resolveCustomerIdByWhatsapp,
   reverseComandaCreditTransactions,
 } from "@/lib/customer-credit-service";
+import {
+  loadServicePricingContext,
+  resolvePriceCentsOrFallback,
+} from "@/lib/service-prices-for-date";
 
 type DbComandaRow = {
   id: string;
@@ -264,13 +268,11 @@ async function loadCustomerDayEncaixes(
     .sort((a, b) => a.startTime.localeCompare(b.startTime, "pt-BR"));
 }
 
-async function findComandaIdForAppointment(
+async function findExplicitComandaIdForAppointment(
   admin: SupabaseClient,
-  appointmentId: string,
-  customerWhatsapp: string,
-  serviceDate: string
+  appointmentId: string
 ): Promise<string | null> {
-  const [bySqueezeItem, byAptItem, byLink, byCustomerDay] = await Promise.all([
+  const [bySqueezeItem, byAptItem, byLink] = await Promise.all([
     admin
       .from("comanda_items")
       .select("comanda_id")
@@ -289,23 +291,32 @@ async function findComandaIdForAppointment(
       .eq("appointment_id", appointmentId)
       .limit(1)
       .maybeSingle(),
-    admin
-      .from("comandas")
-      .select("id")
-      .eq("customer_whatsapp", customerWhatsapp)
-      .eq("service_date", serviceDate)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
   return (
     bySqueezeItem.data?.comanda_id ??
     byAptItem.data?.comanda_id ??
     byLink.data?.comanda_id ??
-    byCustomerDay.data?.id ??
     null
   );
+}
+
+async function findOpenComandaIdForCustomerDay(
+  admin: SupabaseClient,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<string | null> {
+  const { data } = await admin
+    .from("comandas")
+    .select("id")
+    .eq("customer_whatsapp", customerWhatsapp)
+    .eq("service_date", serviceDate)
+    .eq("status", "open")
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.id ?? null;
 }
 
 export async function getComandaForAppointment(
@@ -332,28 +343,28 @@ export async function getComandaForAppointment(
     };
   }
 
-  const comandaId = await findComandaIdForAppointment(
-    admin,
-    appointmentId,
-    trigger.customer_whatsapp,
-    trigger.date
-  );
-
-  if (!comandaId) {
-    if (trigger.status === "done") {
+  // Atendimento já finalizado: só reabre a comanda em que ele foi fechado.
+  if (trigger.status === "done") {
+    const comandaId = await findExplicitComandaIdForAppointment(
+      admin,
+      appointmentId
+    );
+    if (!comandaId) {
       return {
         ok: false,
         error: "Comanda não encontrada para este atendimento.",
         status: 404,
       };
     }
-    return getOrCreateComandaForAppointment(admin, appointmentId);
+
+    const existing = await getComandaById(admin, comandaId);
+    if (!existing.ok) return existing;
+    return existing;
   }
 
-  const existing = await getComandaById(admin, comandaId);
-  if (!existing.ok) return existing;
-
-  return existing;
+  // Atendimento em aberto: une todos os horários ativos do cliente no dia
+  // numa única comanda aberta (ou cria uma nova se a anterior já foi fechada).
+  return getOrCreateComandaForAppointment(admin, appointmentId);
 }
 
 async function pruneStaleEncaixeComandaItems(
@@ -477,10 +488,12 @@ async function syncManualEncaixeItemsToComanda(
         ) + 1
       : 0;
 
+  const pricing = await loadServicePricingContext(admin, serviceDate);
+
   for (const apt of squeezeApts) {
     const { data: services } = await admin
       .from("appointment_services")
-      .select("service_id, services ( name, price_cents )")
+      .select("service_id, services ( id, name, price_cents )")
       .eq("appointment_id", apt.id);
 
     for (const link of services ?? []) {
@@ -491,7 +504,14 @@ async function syncManualEncaixeItemsToComanda(
       const service = Array.isArray(link.services)
         ? link.services[0]
         : link.services;
-      const price = service?.price_cents ?? 0;
+      const price = resolvePriceCentsOrFallback(
+        {
+          id: link.service_id,
+          name: service?.name ?? "Serviço",
+          price_cents: service?.price_cents ?? 0,
+        },
+        pricing
+      );
 
       await admin.from("comanda_items").insert({
         comanda_id: comandaId,
@@ -644,22 +664,45 @@ async function seedItemsFromAppointment(
 ): Promise<number> {
   const { data: appointment } = await admin
     .from("appointments")
-    .select("professional_id")
+    .select("professional_id, date")
     .eq("id", appointmentId)
     .maybeSingle();
 
   const { data: links } = await admin
     .from("appointment_services")
-    .select("service_id, services ( name, price_cents )")
+    .select("service_id, services ( id, name, price_cents )")
     .eq("appointment_id", appointmentId);
 
   if (!links?.length || !appointment) return sortOrderStart;
+
+  const serviceRows = links.map((link) => {
+    const service = Array.isArray(link.services)
+      ? link.services[0]
+      : link.services;
+    return {
+      id: link.service_id,
+      name: service?.name ?? "Serviço",
+      price_cents: service?.price_cents ?? 0,
+    };
+  });
+  const pricing = await loadServicePricingContext(
+    admin,
+    appointment.date,
+    serviceRows.map((service) => service.id)
+  );
 
   const rows = links.map((link, index) => {
     const service = Array.isArray(link.services)
       ? link.services[0]
       : link.services;
-    const price = service?.price_cents ?? 0;
+    const price = resolvePriceCentsOrFallback(
+      {
+        id: link.service_id,
+        name: service?.name ?? "Serviço",
+        price_cents: service?.price_cents ?? 0,
+      },
+      pricing
+    );
     return {
       comanda_id: comandaId,
       service_id: link.service_id,
@@ -774,6 +817,15 @@ async function syncItemsFromLinkedAppointments(
   comandaId: string,
   validAppointmentIds: Set<string>
 ): Promise<void> {
+  const { data: comanda } = await admin
+    .from("comandas")
+    .select("service_date")
+    .eq("id", comandaId)
+    .maybeSingle();
+  if (!comanda) return;
+
+  const pricing = await loadServicePricingContext(admin, comanda.service_date);
+
   const { data: links } = await admin
     .from("comanda_appointments")
     .select("appointment_id")
@@ -816,7 +868,7 @@ async function syncItemsFromLinkedAppointments(
 
     const { data: services } = await admin
       .from("appointment_services")
-      .select("service_id, services ( name, price_cents )")
+      .select("service_id, services ( id, name, price_cents )")
       .eq("appointment_id", appointmentId);
 
     for (const link of services ?? []) {
@@ -826,7 +878,14 @@ async function syncItemsFromLinkedAppointments(
       const service = Array.isArray(link.services)
         ? link.services[0]
         : link.services;
-      const price = service?.price_cents ?? 0;
+      const price = resolvePriceCentsOrFallback(
+        {
+          id: link.service_id,
+          name: service?.name ?? "Serviço",
+          price_cents: service?.price_cents ?? 0,
+        },
+        pricing
+      );
 
       await admin.from("comanda_items").insert({
         comanda_id: comandaId,
@@ -841,6 +900,52 @@ async function syncItemsFromLinkedAppointments(
       existingKeys.add(key);
       sortOrder += 1;
     }
+  }
+}
+
+async function refreshLinkedAppointmentItemPrices(
+  admin: SupabaseClient,
+  comandaId: string,
+  serviceDate: string
+): Promise<void> {
+  const pricing = await loadServicePricingContext(admin, serviceDate);
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select(
+      "id, service_id, catalog_price_cents, charged_price_cents, services ( name, price_cents )"
+    )
+    .eq("comanda_id", comandaId)
+    .not("appointment_id", "is", null)
+    .eq("is_tip", false);
+
+  for (const item of items ?? []) {
+    if (!item.service_id) continue;
+    if (item.charged_price_cents !== item.catalog_price_cents) continue;
+
+    const service = Array.isArray(item.services)
+      ? item.services[0]
+      : item.services;
+    if (!service) continue;
+
+    const resolved = resolvePriceCentsOrFallback(
+      {
+        id: item.service_id,
+        name: service.name,
+        price_cents: service.price_cents,
+      },
+      pricing
+    );
+
+    if (resolved === item.charged_price_cents) continue;
+
+    await admin
+      .from("comanda_items")
+      .update({
+        catalog_price_cents: resolved,
+        charged_price_cents: resolved,
+      })
+      .eq("id", item.id);
   }
 }
 
@@ -932,6 +1037,14 @@ export async function getOrCreateComandaForAppointment(
   );
 
   if (!comandaId) {
+    comandaId = await findOpenComandaIdForCustomerDay(
+      admin,
+      trigger.customer_whatsapp,
+      trigger.date
+    );
+  }
+
+  if (!comandaId) {
     const { data: byAppointment } = await admin
       .from("comandas")
       .select("id")
@@ -991,6 +1104,12 @@ export async function getOrCreateComandaForAppointment(
     admin,
     resolvedComandaId,
     validDayAppointmentIds
+  );
+
+  await refreshLinkedAppointmentItemPrices(
+    admin,
+    resolvedComandaId,
+    trigger.date
   );
 
   await unlinkSqueezeAppointmentsFromComanda(admin, resolvedComandaId);
@@ -1068,6 +1187,11 @@ export async function getComandaById(
       admin,
       comandaId,
       data.customer_whatsapp,
+      data.service_date
+    );
+    await refreshLinkedAppointmentItemPrices(
+      admin,
+      comandaId,
       data.service_date
     );
     const totals = await recalculateComandaTotals(admin, comandaId);
@@ -1155,7 +1279,8 @@ export function flagComandaItemsNeedingSqueeze(
 async function loadServiceDurationsForSync(
   admin: SupabaseClient,
   items: Pick<ComandaItemInput, "serviceId" | "professionalId">[],
-  fallbackProfessionalId: string
+  fallbackProfessionalId: string,
+  serviceDate: string
 ): Promise<
   | {
       ok: true;
@@ -1180,7 +1305,7 @@ async function loadServiceDurationsForSync(
   }
   const { data: foundServices } = await admin
     .from("services")
-    .select("id, duration_minutes, price_cents, active")
+    .select("id, name, duration_minutes, price_cents, active")
     .in("id", uniqueIds);
 
   if (!foundServices || foundServices.length !== uniqueIds.length) {
@@ -1225,13 +1350,22 @@ async function loadServiceDurationsForSync(
     }
   }
 
+  const pricing = await loadServicePricingContext(
+    admin,
+    serviceDate,
+    foundServices.map((service) => service.id)
+  );
+
   return {
     ok: true,
     durations: new Map(
       foundServices.map((service) => [service.id, service.duration_minutes])
     ),
     catalogPrices: new Map(
-      foundServices.map((service) => [service.id, service.price_cents])
+      foundServices.map((service) => [
+        service.id,
+        resolvePriceCentsOrFallback(service, pricing),
+      ])
     ),
   };
 }
@@ -1907,7 +2041,8 @@ export async function updateComandaItems(
   const durationsResult = await loadServiceDurationsForSync(
     admin,
     serviceItems,
-    current.comanda.professionalId
+    current.comanda.professionalId,
+    current.comanda.serviceDate
   );
   if (!durationsResult.ok) return durationsResult;
 
@@ -2170,14 +2305,8 @@ export async function closeComanda(
   );
 
   if (payError) {
-    if (deductedStoreCredit && customerId) {
-      await addCustomerCredit(admin, {
-        customerId,
-        amountCents: storeCreditCents,
-        comandaId,
-        description: "Estorno automático — falha ao fechar comanda",
-        createdBy: closedBy,
-      });
+    if (deductedStoreCredit) {
+      await reverseComandaCreditTransactions(admin, comandaId);
     }
     return {
       ok: false,
@@ -2202,14 +2331,8 @@ export async function closeComanda(
 
   if (comandaError) {
     await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
-    if (deductedStoreCredit && customerId) {
-      await addCustomerCredit(admin, {
-        customerId,
-        amountCents: storeCreditCents,
-        comandaId,
-        description: "Estorno automático — falha ao fechar comanda",
-        createdBy: closedBy,
-      });
+    if (deductedStoreCredit) {
+      await reverseComandaCreditTransactions(admin, comandaId);
     }
     return {
       ok: false,
@@ -2240,6 +2363,10 @@ export async function closeComanda(
       .eq("is_squeeze_in", true);
   }
 
+  // A comanda já está fechada neste ponto (não há mais como desfazer o
+  // fechamento). Falha ao registrar o depósito de crédito não deve fazer
+  // a função retornar erro — isso faria a tela achar que o fechamento
+  // falhou, quando na verdade a comanda já foi fechada normalmente.
   if (creditDeposits.length > 0 && customerId) {
     for (const deposit of creditDeposits) {
       const addResult = await addCustomerCredit(admin, {
@@ -2251,7 +2378,10 @@ export async function closeComanda(
         createdBy: closedBy,
       });
       if (!addResult.ok) {
-        return { ok: false, error: addResult.error, status: 500 };
+        console.error(
+          `Falha ao registrar depósito de crédito da comanda ${comandaId}:`,
+          addResult.error
+        );
       }
     }
   }
@@ -2354,7 +2484,11 @@ export async function reopenComanda(
     comanda.serviceDate
   );
 
-  await reverseComandaCreditTransactions(admin, comandaId);
+  const creditReverse = await reverseComandaCreditTransactions(admin, comandaId);
+  if (!creditReverse.ok) {
+    return { ok: false, error: creditReverse.error, status: 400 };
+  }
+
   await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
 
   const totals = await recalculateComandaTotals(admin, comandaId);

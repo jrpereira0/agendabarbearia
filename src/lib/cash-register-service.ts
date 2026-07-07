@@ -14,7 +14,11 @@ export type CashRegisterSession = {
   closedAt: string | null;
   openedByName: string | null;
   closedByName: string | null;
+  /** Valor dos serviços fechados neste caixa (base das comissões). */
   totalCents: number;
+  /** Dinheiro que entrou no caixa (pagamentos + depósitos de crédito). */
+  cashInflowCents: number;
+  creditDepositsCents: number;
   comandaCount: number;
 };
 
@@ -73,6 +77,8 @@ async function enrichSessions(
           ?? (row.opened_by ? names.get(row.opened_by) ?? null : null),
         closedByName: row.closed_by ? names.get(row.closed_by) ?? null : null,
         totalCents: summary.totalCents,
+        cashInflowCents: summary.cashInflowCents,
+        creditDepositsCents: summary.creditDepositsCents,
         comandaCount: summary.comandaCount,
       };
     })

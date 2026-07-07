@@ -12,6 +12,7 @@ import {
 } from "@/lib/get-availability";
 import { requireAdmin, type AdminSession } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
+import { assertPermission } from "@/lib/professional-permissions";
 import { upsertCustomer } from "@/lib/upsert-customer";
 import {
   normalizeWhatsapp,
@@ -310,6 +311,9 @@ export async function createNormalAppointment(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const denied = assertPermission(session, "canBookClients");
+  if (denied) return denied;
+
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
@@ -384,6 +388,9 @@ export async function createSqueezeInAppointment(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const denied = assertPermission(session, "canCreateSqueezeIn");
+  if (denied) return denied;
+
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
@@ -431,6 +438,9 @@ export async function updateAppointment(input: {
 }): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
+
+  const denied = assertPermission(session, "canEditAppointments");
+  if (denied) return denied;
 
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!whatsapp) {
@@ -588,6 +598,9 @@ export async function createScheduleBlock(input: {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const denied = assertPermission(session, "canManageScheduleBlocks");
+  if (denied) return denied;
+
   const parsed = blockSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -641,6 +654,9 @@ export async function deleteScheduleBlock(
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
+  const denied = assertPermission(session, "canManageScheduleBlocks");
+  if (denied) return denied;
+
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
   const { data: block } = await admin
@@ -681,6 +697,9 @@ export async function cancelAppointment(input: {
 }): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
+
+  const denied = assertPermission(session, "canCancelAppointments");
+  if (denied) return denied;
 
   const parsed = cancelAppointmentSchema.safeParse(input);
   if (!parsed.success) {
@@ -1128,6 +1147,9 @@ export async function updateAppointmentStatus(
 ): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
+
+  const denied = assertPermission(session, "canEditAppointments");
+  if (denied) return denied;
 
   const parsed = workflowStatusSchema.safeParse(status);
   if (!parsed.success) {

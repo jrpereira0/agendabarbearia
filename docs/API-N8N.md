@@ -196,7 +196,17 @@ Cada profissional tem `serviceIds`: lista de serviços que ele realiza (no catá
 
 ### Serviços
 
-Os preços **variam por dia da semana** (cadastrados no painel). No catálogo completo, cada serviço traz `weekdayPrices`; o campo `priceCents` é o **menor** preço da semana. Consulte sempre a API — a tabela abaixo é só referência histórica.
+Os preços **variam por dia da semana** (cadastrados no painel). No catálogo completo, cada serviço traz `weekdayPrices`; o campo `priceCents` é o **menor** preço da semana (referência). Consulte sempre a API — a tabela abaixo é só referência histórica.
+
+**Como o site `/agenda` mostra isso:**
+
+| Momento do fluxo | O que o cliente vê |
+| --- | --- |
+| Escolha de serviços (antes da data) | Faixa por serviço, ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`. Total: **“a partir de …”** se houver variação |
+| Data/horário e confirmação | Valor **exato** do dia escolhido (mesma regra de `GET /catalog?date=...&mode=booking` e de `POST /appointments`) |
+| Meus horários | Total do agendamento pelo preço do **dia do horário** |
+
+O bot pode seguir a mesma lógica: mostrar `prices` agrupados no início e, depois que o cliente escolher a data, usar `priceCents` do catálogo com `date` ou somar os preços do dia antes de confirmar.
 
 | Nome | serviceId | Duração | Preço (ex.) |
 | --- | --- | --- | --- |
@@ -280,7 +290,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 
 **Uso no bot (menus fixos):** montar menus numerados (1, 2, 3…) com `nickname` e `name`. Guardar os `id` escolhidos no estado da conversa.
 
-**`weekdayPrices`:** `weekday` 0=domingo … 6=sábado; só aparecem dias em que o serviço é oferecido. `priceCents` no catálogo completo é o **menor** preço da semana.
+**`weekdayPrices`:** `weekday` 0=domingo … 6=sábado; só aparecem dias em que o serviço é oferecido. `priceCents` no catálogo completo é o **menor** preço da semana. **`bookingCount`:** quantas vezes o serviço entrou em agendamentos normais (não cancelados); o site usa isso para ordenar a seção **“Mais agendados”**.
 
 #### Catálogo enxuto (`mode=booking`)
 

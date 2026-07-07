@@ -13,6 +13,7 @@ import {
 import {
   closeComanda,
   getComandaForAppointment,
+  getComandaById,
   reopenComanda,
   updateComandaItems,
   type CreditDepositInput,
@@ -30,6 +31,7 @@ import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
+import { assertPermission } from "@/lib/professional-permissions";
 
 const itemSchema = z
   .object({
@@ -74,6 +76,27 @@ const creditDepositSchema = z.object({
   paymentMethod: z.enum(CASH_INFLOW_PAYMENT_METHODS),
 });
 
+async function assertBarberComandaAccess(
+  comandaId: string,
+  session: Awaited<ReturnType<typeof requireAdmin>>
+): Promise<ActionResult | null> {
+  if (!("userId" in session) || session.isOwner) return null;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const result = await getComandaById(admin, comandaId);
+  if (!result.ok) return { ok: false, error: result.error };
+  if (
+    !session.professionalId ||
+    !barberCanAccessComanda(result.comanda, session.professionalId)
+  ) {
+    return { ok: false, error: "Você não pode alterar esta comanda." };
+  }
+
+  return null;
+}
+
 export async function loadComandaForAppointment(
   appointmentId: string
 ): Promise<
@@ -106,10 +129,13 @@ export async function loadComandaForAppointment(
   ]);
 
   if (!session.isOwner) {
-    if (
-      !session.professionalId ||
-      !barberCanAccessComanda(result.comanda, session.professionalId)
-    ) {
+    if (!session.professionalId) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
+    if (!session.permissions.canOpenComanda) {
+      return { ok: false, error: "Você não pode abrir comandas." };
+    }
+    if (!barberCanAccessComanda(result.comanda, session.professionalId)) {
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
   }
@@ -134,12 +160,13 @@ export async function saveComandaItems(
 ): Promise<
   { ok: true; comanda: ComandaDetail } | { ok: false; error: string }
 > {
-  const denied = await requireOwner();
-  if (denied !== null) {
-    return denied.ok === false
-      ? { ok: false, error: denied.error }
-      : { ok: false, error: "Sem permissão." };
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
   }
+
+  const denied = assertPermission(session, "canEditComanda");
+  if (denied && !denied.ok) return { ok: false, error: denied.error };
 
   const parsed = z.array(itemSchema).safeParse(items);
   if (!parsed.success) {
@@ -154,6 +181,11 @@ export async function saveComandaItems(
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return { ok: false, error: admin.error };
+  }
+
+  const accessDenied = await assertBarberComandaAccess(comandaId, session);
+  if (accessDenied && !accessDenied.ok) {
+    return { ok: false, error: accessDenied.error };
   }
 
   const result = await updateComandaItems(admin, comandaId, parsed.data);
@@ -174,7 +206,8 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: "error" in session ? session.error : "Erro." };
   }
   if (!session.isOwner) {
-    return { ok: false, error: "Apenas o dono pode fechar comandas." };
+    const denied = assertPermission(session, "canCloseComanda");
+    if (denied && !denied.ok) return { ok: false, error: denied.error };
   }
 
   const parsedItems = z.array(itemSchema).safeParse(items);
@@ -205,6 +238,11 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: admin.error };
   }
 
+  const accessDenied = await assertBarberComandaAccess(comandaId, session);
+  if (accessDenied && !accessDenied.ok) {
+    return { ok: false, error: accessDenied.error };
+  }
+
   const itemsResult = await updateComandaItems(admin, comandaId, parsedItems.data);
   if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
 
@@ -233,7 +271,8 @@ export async function closeComandaAction(
     return { ok: false, error: "error" in session ? session.error : "Erro." };
   }
   if (!session.isOwner) {
-    return { ok: false, error: "Apenas o dono pode fechar comandas." };
+    const denied = assertPermission(session, "canCloseComanda");
+    if (denied && !denied.ok) return { ok: false, error: denied.error };
   }
 
   const parsed = z.array(paymentSchema).min(1).safeParse(payments);
@@ -244,6 +283,11 @@ export async function closeComandaAction(
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return { ok: false, error: admin.error };
+  }
+
+  const accessDenied = await assertBarberComandaAccess(comandaId, session);
+  if (accessDenied && !accessDenied.ok) {
+    return { ok: false, error: accessDenied.error };
   }
 
   const result = await closeComanda(
@@ -281,6 +325,7 @@ export async function reopenComandaAction(
 
   revalidatePath("/admin");
   revalidatePath("/admin/financeiro");
+  revalidatePath("/admin/clientes");
   return { ok: true, comanda: result.comanda };
 }
 

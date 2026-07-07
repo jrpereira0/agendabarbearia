@@ -1,7 +1,9 @@
+import { redirect } from "next/navigation";
 import { Percent } from "lucide-react";
-import { assertOwnerPage } from "@/lib/require-owner";
+import { getAdminSession } from "@/lib/require-admin";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
+import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getCommissionReport } from "@/lib/finance-reports";
 import { shiftDate } from "@/lib/date-range";
@@ -15,7 +17,8 @@ type PageProps = {
 };
 
 export default async function ComissoesPage({ searchParams }: PageProps) {
-  await assertOwnerPage();
+  const session = await getAdminSession();
+  if (!session) redirect(LOGIN_PATH);
 
   const { from: fromParam, to: toParam, professionalId } = await searchParams;
   const today = todayInTimezone();
@@ -29,6 +32,16 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
     [from, to] = [to, from];
   }
 
+  if (!session.isOwner && !session.professionalId) {
+    return (
+      <EmptyState
+        icon={Percent}
+        title="Perfil sem vínculo"
+        description="Seu login ainda não está ligado a um barbeiro. Peça ao dono da barbearia para conferir o cadastro."
+      />
+    );
+  }
+
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return (
@@ -40,11 +53,17 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
     );
   }
 
-  const { data: professionalsData } = await admin
+  let professionalsQuery = admin
     .from("professionals")
     .select("id, nickname, commission_percent")
     .eq("active", true)
     .order("nickname");
+
+  if (!session.isOwner && session.professionalId) {
+    professionalsQuery = professionalsQuery.eq("id", session.professionalId);
+  }
+
+  const { data: professionalsData } = await professionalsQuery;
 
   const professionals = (professionalsData ?? []).map((row) => ({
     id: row.id,
@@ -52,16 +71,17 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
     commissionPercent: row.commission_percent ?? 50,
   }));
 
-  const validProfessionalId =
-    professionalId && professionals.some((p) => p.id === professionalId)
+  const scopedProfessionalId = session.isOwner
+    ? professionalId && professionals.some((p) => p.id === professionalId)
       ? professionalId
-      : undefined;
+      : undefined
+    : session.professionalId ?? undefined;
 
   const report = await getCommissionReport(
     admin,
     from,
     to,
-    validProfessionalId
+    scopedProfessionalId
   );
 
   return (
@@ -69,9 +89,10 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
       from={from}
       to={to}
       today={today}
-      professionalId={validProfessionalId ?? null}
+      professionalId={scopedProfessionalId ?? null}
       report={report}
       professionals={professionals}
+      isOwner={session.isOwner}
     />
   );
 }

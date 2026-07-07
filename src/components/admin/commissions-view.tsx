@@ -25,11 +25,12 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { SearchInput } from "@/components/admin/search-input";
+import { CommissionBarberDetail } from "@/components/admin/commission-barber-detail";
+import { CommissionBarberSelfView } from "@/components/admin/commission-barber-self-view";
 import {
-  formatPaymentMethodLabel,
+  commissionServiceRevenueCents,
   type CommissionReport,
 } from "@/lib/finance-reports";
-import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL } from "@/lib/format";
 import { shiftDate, monthStart, formatPeriodLabel } from "@/lib/date-range";
 import { matchesSearch } from "@/lib/text";
@@ -48,6 +49,7 @@ type CommissionsViewProps = {
   professionalId: string | null;
   report: CommissionReport;
   professionals: CommissionProfessionalOption[];
+  isOwner?: boolean;
 };
 
 function MetricCard({
@@ -72,41 +74,6 @@ function MetricCard({
   );
 }
 
-function BarRow({
-  label,
-  value,
-  max,
-  suffix,
-}: {
-  label: string;
-  value: number;
-  max: number;
-  suffix?: string;
-}) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="truncate text-muted-foreground">{label}</span>
-        <span className="shrink-0 font-medium tabular-nums">
-          {formatPriceBRL(value)}
-          {suffix && (
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
-              {suffix}
-            </span>
-          )}
-        </span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-foreground/80"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function buildQuery(
   from: string,
   to: string,
@@ -124,11 +91,14 @@ export function CommissionsView({
   professionalId,
   report,
   professionals,
+  isOwner = true,
 }: CommissionsViewProps) {
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
-  const [selectedPro, setSelectedPro] = useState(professionalId ?? "all");
+  const [selectedPro, setSelectedPro] = useState(
+    professionalId ?? (isOwner ? "all" : professionals[0]?.id ?? "all")
+  );
   const [search, setSearch] = useState("");
 
   const activeProfessional =
@@ -136,7 +106,9 @@ export function CommissionsView({
       ? report.professionals.find((row) => row.professionalId === professionalId)
       : null;
 
-  const showDetail = professionalId != null && activeProfessional != null;
+  const showDetail =
+    !isOwner ||
+    (professionalId != null && activeProfessional != null);
   const isSingleDay = from === to;
   const isToday = isSingleDay && from === today;
   const hasData = report.professionals.length > 0;
@@ -165,35 +137,21 @@ export function CommissionsView({
     [report.professionals]
   );
 
-  const paymentRows = showDetail
-    ? activeProfessional!.byPaymentMethod
-    : report.byPaymentMethod;
-
-  const activePaymentMethods = useMemo(
-    () => PAYMENT_METHODS.filter((method) => paymentRows[method] > 0),
-    [paymentRows]
-  );
-
-  const paymentTotal = useMemo(
-    () =>
-      activePaymentMethods.reduce((sum, method) => sum + paymentRows[method], 0),
-    [activePaymentMethods, paymentRows]
-  );
-
   const dayRows = useMemo(() => {
-    const rows = showDetail ? activeProfessional!.byDay : report.byDay;
-    return rows.filter((row) => row.comandaCount > 0);
-  }, [showDetail, activeProfessional, report.byDay]);
+    const rows = report.byDay;
+    return rows.filter((row) => row.serviceItemCount > 0);
+  }, [report.byDay]);
 
-  const maxDayCommission = useMemo(
-    () => Math.max(...dayRows.map((day) => day.commissionCents), 0),
-    [dayRows]
+  const serviceRevenueCents = useMemo(
+    () => commissionServiceRevenueCents(report.summary),
+    [report.summary]
   );
 
   const commissionRate =
-    report.summary.servicesGrossCents > 0
+    serviceRevenueCents > 0
       ? Math.round(
-          (report.summary.commissionCents / report.summary.servicesGrossCents) *
+          ((report.summary.commissionCents - report.summary.tipCents) /
+            serviceRevenueCents) *
             100
         )
       : 0;
@@ -204,7 +162,7 @@ export function CommissionsView({
       buildQuery(
         fromDate,
         toDate,
-        selectedPro !== "all" ? selectedPro : null
+        isOwner && selectedPro !== "all" ? selectedPro : professionalId
       )
     );
   }
@@ -224,16 +182,22 @@ export function CommissionsView({
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        title="Comissões"
-        description="Quanto cada barbeiro tem a receber pelos serviços no período."
+        title={isOwner ? "Comissões" : "Minhas comissões"}
+        description={
+          isOwner
+            ? "Quanto cada barbeiro tem a receber pelos serviços no período."
+            : "Acompanhe sua comissão, serviços e desempenho no período."
+        }
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin/financeiro?from=${from}&to=${to}`}>
-                <Wallet className="size-4" />
-                Financeiro
-              </Link>
-            </Button>
+            {isOwner && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/admin/financeiro?from=${from}&to=${to}`}>
+                  <Wallet className="size-4" />
+                  Financeiro
+                </Link>
+              </Button>
+            )}
             <Button variant="outline" size="sm" asChild>
               <Link href={`/admin?date=${to}`}>
                 <CalendarDays className="size-4" />
@@ -258,7 +222,9 @@ export function CommissionsView({
                     : isSingleDay
                       ? "Um dia · "
                       : ""}
-                  Pelo dia do atendimento (caixa)
+                  {isOwner
+                    ? "Pelo dia do atendimento (caixa)"
+                    : "Pelo dia em que você atendeu"}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -289,7 +255,14 @@ export function CommissionsView({
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+            <div
+              className={cn(
+                "grid gap-4 sm:grid-cols-2",
+                isOwner
+                  ? "lg:grid-cols-[1fr_1fr_1fr_auto]"
+                  : "lg:grid-cols-[1fr_1fr_auto]"
+              )}
+            >
               <div className="space-y-2">
                 <Label htmlFor="comm-from">Data inicial</Label>
                 <Input
@@ -308,22 +281,24 @@ export function CommissionsView({
                   onChange={(e) => setToDate(e.target.value)}
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="comm-pro">Barbeiro</Label>
-                <Select value={selectedPro} onValueChange={setSelectedPro}>
-                  <SelectTrigger id="comm-pro" className="w-full">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os barbeiros</SelectItem>
-                    {professionals.map((pro) => (
-                      <SelectItem key={pro.id} value={pro.id}>
-                        {pro.nickname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isOwner && (
+                <div className="space-y-2">
+                  <Label htmlFor="comm-pro">Barbeiro</Label>
+                  <Select value={selectedPro} onValueChange={setSelectedPro}>
+                    <SelectTrigger id="comm-pro" className="w-full">
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os barbeiros</SelectItem>
+                      {professionals.map((pro) => (
+                        <SelectItem key={pro.id} value={pro.id}>
+                          {pro.nickname}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="flex items-end">
                 <Button type="submit" className="w-full sm:w-auto">
                   Analisar
@@ -337,175 +312,41 @@ export function CommissionsView({
       {!hasData ? (
         <EmptyState
           icon={Percent}
-          title="Nenhuma comissão no período"
-          description="Não há serviços finalizados neste intervalo. Ajuste as datas ou feche comandas na agenda."
+          title={isOwner ? "Nenhuma comissão no período" : "Nada a receber neste período"}
+          description={
+            isOwner
+              ? "Não há serviços finalizados neste intervalo. Ajuste as datas ou finalize atendimentos na agenda."
+              : "Você não teve atendimentos finalizados neste intervalo. Tente outras datas ou confira sua agenda."
+          }
           action={
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin?date=${to}`}>Abrir agenda</Link>
+              <Link href={`/admin?date=${to}`}>
+                {isOwner ? "Abrir agenda" : "Ver minha agenda"}
+              </Link>
             </Button>
           }
         />
       ) : showDetail && activeProfessional ? (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <Button variant="ghost" size="sm" className="-ml-2" asChild>
-              <Link href={buildQuery(from, to)}>
-                <ArrowLeft className="size-4" />
-                Todos os barbeiros
-              </Link>
-            </Button>
-          </div>
+          {isOwner && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="ghost" size="sm" className="-ml-2" asChild>
+                <Link href={buildQuery(from, to)}>
+                  <ArrowLeft className="size-4" />
+                  Todos os barbeiros
+                </Link>
+              </Button>
+            </div>
+          )}
 
-          <div className="rounded-xl border px-5 py-4">
-            <p className="text-lg font-semibold">
-              {activeProfessional.professionalNickname}
-            </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              {activeProfessional.commissionPercent}% de comissão ·{" "}
-              {activeProfessional.summary.comandaCount} comanda
-              {activeProfessional.summary.comandaCount === 1 ? "" : "s"} ·{" "}
-              {activeProfessional.summary.itemCount} serviço
-              {activeProfessional.summary.itemCount === 1 ? "" : "s"}
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-3">
-            <MetricCard
-              label="Comissão a pagar"
-              value={formatPriceBRL(activeProfessional.summary.commissionCents)}
-              hint="Valor do repasse no período"
-            />
-            <MetricCard
-              label="Faturamento dos serviços"
-              value={formatPriceBRL(activeProfessional.summary.servicesGrossCents)}
-              hint={`${activeProfessional.commissionPercent}% sobre os serviços`}
-            />
-            <MetricCard
-              label="Ticket médio"
-              value={formatPriceBRL(
-                activeProfessional.summary.comandaCount > 0
-                  ? Math.round(
-                      activeProfessional.summary.commissionCents /
-                        activeProfessional.summary.comandaCount
-                    )
-                  : 0
-              )}
-              hint="Comissão por comanda"
-            />
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <section className="flex flex-col gap-3">
-              <div>
-                <h2 className="text-sm font-medium">Dia a dia</h2>
-                <p className="text-xs text-muted-foreground">
-                  Comissão por dia do caixa
-                </p>
-              </div>
-              <Card>
-                <CardContent className="p-0">
-                  {dayRows.length === 0 ? (
-                    <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                      Sem movimentação diária.
-                    </p>
-                  ) : (
-                    <div className="max-h-[20rem] overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead className="sticky top-0 z-10 border-b bg-background">
-                          <tr className="text-left text-xs text-muted-foreground">
-                            <th className="px-4 py-2.5 font-medium">Dia</th>
-                            <th className="hidden px-4 py-2.5 font-medium sm:table-cell">
-                              Comandas
-                            </th>
-                            <th className="px-4 py-2.5 font-medium text-right">
-                              Comissão
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dayRows.map((row) => (
-                            <tr
-                              key={row.date}
-                              className="border-b last:border-b-0"
-                            >
-                              <td className="px-4 py-3">
-                                <p className="font-medium">
-                                  {formatDateBR(row.date)}
-                                </p>
-                                <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-muted">
-                                  <div
-                                    className="h-full rounded-full bg-foreground/70"
-                                    style={{
-                                      width: `${
-                                        maxDayCommission > 0
-                                          ? Math.round(
-                                              (row.commissionCents /
-                                                maxDayCommission) *
-                                                100
-                                            )
-                                          : 0
-                                      }%`,
-                                    }}
-                                  />
-                                </div>
-                              </td>
-                              <td className="hidden px-4 py-3 tabular-nums text-muted-foreground sm:table-cell">
-                                {row.comandaCount}
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                                {formatPriceBRL(row.commissionCents)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </section>
-
-            <section className="flex flex-col gap-3">
-              <div>
-                <h2 className="text-sm font-medium">Pagamentos proporcionais</h2>
-                <p className="text-xs text-muted-foreground">
-                  Parte dos recebimentos atribuída a este barbeiro
-                </p>
-              </div>
-              <Card>
-                <CardContent className="flex flex-col gap-4 pt-6">
-                  {activePaymentMethods.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Sem dados de pagamento.
-                    </p>
-                  ) : (
-                    activePaymentMethods.map((method) => {
-                      const amount = paymentRows[method];
-                      const pct =
-                        paymentTotal > 0
-                          ? Math.round((amount / paymentTotal) * 100)
-                          : 0;
-                      return (
-                        <BarRow
-                          key={method}
-                          label={formatPaymentMethodLabel(method)}
-                          value={amount}
-                          max={paymentTotal}
-                          suffix={`${pct}%`}
-                        />
-                      );
-                    })
-                  )}
-                </CardContent>
-              </Card>
-              <p className="text-xs text-muted-foreground">
-                A comissão é calculada sobre o valor do serviço, não sobre a
-                forma de pagamento. Os valores acima são apenas informativos.
-              </p>
-            </section>
-          </div>
+          <CommissionBarberSelfView
+            professional={activeProfessional}
+            from={from}
+            to={to}
+            buildDayHref={(date) => buildQuery(date, date, professionalId)}
+          />
         </>
-      ) : (
+      ) : isOwner ? (
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
@@ -514,19 +355,23 @@ export function CommissionsView({
               hint={`${report.professionals.length} barbeiro${report.professionals.length === 1 ? "" : "s"}`}
             />
             <MetricCard
-              label="Faturamento serviços"
-              value={formatPriceBRL(report.summary.servicesGrossCents)}
-              hint={`${report.summary.comandaCount} comandas`}
+              label="Faturamento"
+              value={formatPriceBRL(serviceRevenueCents)}
+              hint={
+                report.summary.tipCents > 0
+                  ? `+ ${formatPriceBRL(report.summary.tipCents)} em gorjetas`
+                  : `${report.summary.serviceItemCount} serviços no período`
+              }
             />
             <MetricCard
-              label="Serviços realizados"
-              value={String(report.summary.itemCount)}
-              hint="Itens nas comandas"
+              label="Serviços"
+              value={String(report.summary.serviceItemCount)}
+              hint="Cortes, barbas e demais serviços"
             />
             <MetricCard
               label="Taxa média"
               value={`${commissionRate}%`}
-              hint="Comissão sobre faturamento"
+              hint="Comissão sobre serviços (gorjeta à parte)"
             />
           </div>
 
@@ -538,7 +383,7 @@ export function CommissionsView({
                   Por barbeiro
                 </h2>
                 <p className="text-xs text-muted-foreground">
-                  Clique em detalhar para ver o dia a dia de cada um
+                  Serviços, faturamento e comissão de cada um
                 </p>
               </div>
               <div className="w-full sm:max-w-xs">
@@ -552,22 +397,18 @@ export function CommissionsView({
 
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-sm">
+                <table className="w-full min-w-[480px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
                       <th className="px-4 py-3 font-medium">Barbeiro</th>
-                      <th className="px-4 py-3 font-medium text-right">%</th>
-                      <th className="hidden px-4 py-3 font-medium text-right sm:table-cell">
-                        Comandas
+                      <th className="px-4 py-3 font-medium text-right">
+                        Serviços
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         Faturamento
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         Comissão
-                      </th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        Part.
                       </th>
                       <th className="px-4 py-3" />
                     </tr>
@@ -576,7 +417,7 @@ export function CommissionsView({
                     {filteredProfessionals.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={5}
                           className="px-4 py-10 text-center text-muted-foreground"
                         >
                           Nenhum barbeiro para &ldquo;{search}&rdquo;.
@@ -584,14 +425,9 @@ export function CommissionsView({
                       </tr>
                     ) : (
                       filteredProfessionals.map((row) => {
-                        const share =
-                          report.summary.commissionCents > 0
-                            ? Math.round(
-                                (row.summary.commissionCents /
-                                  report.summary.commissionCents) *
-                                  100
-                              )
-                            : 0;
+                        const serviceRevenue = commissionServiceRevenueCents(
+                          row.summary
+                        );
                         return (
                           <tr
                             key={row.professionalId}
@@ -600,6 +436,11 @@ export function CommissionsView({
                             <td className="px-4 py-3.5">
                               <p className="font-medium">
                                 {row.professionalNickname}
+                              </p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">
+                                {row.commissionPercent}% nos serviços
+                                {row.summary.tipCents > 0 &&
+                                  ` · gorjeta ${formatPriceBRL(row.summary.tipCents)}`}
                               </p>
                               <div className="mt-1.5 h-1 w-full max-w-[10rem] overflow-hidden rounded-full bg-muted">
                                 <div
@@ -620,20 +461,14 @@ export function CommissionsView({
                                 />
                               </div>
                             </td>
-                            <td className="px-4 py-3.5 text-right tabular-nums text-muted-foreground">
-                              {row.commissionPercent}%
-                            </td>
-                            <td className="hidden px-4 py-3.5 text-right tabular-nums sm:table-cell">
-                              {row.summary.comandaCount}
+                            <td className="px-4 py-3.5 text-right tabular-nums">
+                              {row.summary.serviceItemCount}
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums">
-                              {formatPriceBRL(row.summary.servicesGrossCents)}
+                              {formatPriceBRL(serviceRevenue)}
                             </td>
                             <td className="px-4 py-3.5 text-right font-semibold tabular-nums">
                               {formatPriceBRL(row.summary.commissionCents)}
-                            </td>
-                            <td className="px-4 py-3.5 text-right tabular-nums text-muted-foreground">
-                              {share}%
                             </td>
                             <td className="px-4 py-3.5 text-right">
                               <Button
@@ -661,19 +496,16 @@ export function CommissionsView({
                   </tbody>
                   <tfoot>
                     <tr className="bg-muted/20 font-semibold">
-                      <td className="px-4 py-3" colSpan={2}>
-                        Total
-                      </td>
-                      <td className="hidden px-4 py-3 text-right tabular-nums sm:table-cell">
-                        {report.summary.comandaCount}
+                      <td className="px-4 py-3">Total</td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {report.summary.serviceItemCount}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {formatPriceBRL(report.summary.servicesGrossCents)}
+                        {formatPriceBRL(serviceRevenueCents)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {formatPriceBRL(report.summary.commissionCents)}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums">100%</td>
                       <td />
                     </tr>
                   </tfoot>
@@ -693,12 +525,12 @@ export function CommissionsView({
               <Card>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[480px] text-sm">
+                    <table className="w-full min-w-[400px] text-sm">
                       <thead>
                         <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
                           <th className="px-4 py-3 font-medium">Dia</th>
                           <th className="px-4 py-3 font-medium text-right">
-                            Comandas
+                            Serviços
                           </th>
                           <th className="px-4 py-3 font-medium text-right">
                             Faturamento
@@ -718,10 +550,12 @@ export function CommissionsView({
                               {formatDateBR(row.date)}
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums">
-                              {row.comandaCount}
+                              {row.serviceItemCount}
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums text-muted-foreground">
-                              {formatPriceBRL(row.servicesGrossCents)}
+                              {formatPriceBRL(
+                                row.servicesGrossCents - row.tipCents
+                              )}
                             </td>
                             <td className="px-4 py-3.5 text-right font-semibold tabular-nums">
                               {formatPriceBRL(row.commissionCents)}
@@ -736,7 +570,7 @@ export function CommissionsView({
             </section>
           )}
         </>
-      )}
+      ) : null}
     </div>
   );
 }

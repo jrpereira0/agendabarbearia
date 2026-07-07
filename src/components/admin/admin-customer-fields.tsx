@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatWhatsapp } from "@/lib/format";
 import {
   normalizeWhatsapp,
@@ -147,9 +148,11 @@ export function AdminCustomerFields({
           autoComplete="tel"
         />
         <p className="text-xs text-muted-foreground">
-          {lookupLoading
-            ? "Buscando cadastro..."
-            : "Digite o número completo para identificar o cliente."}
+          {lookupLoading ? (
+            <Skeleton className="inline-block h-3 w-40" />
+          ) : (
+            "Digite o número completo para identificar o cliente."
+          )}
         </p>
       </div>
 

@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import {
   ArrowLeft,
   CalendarDays,
-  Loader2,
   Pencil,
   Phone,
   Trash2,
@@ -14,8 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { BookingDatePicker } from "@/components/booking/booking-date-picker";
+import { AppointmentCardsSkeleton } from "@/components/skeletons/appointment-cards-skeleton";
+import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,12 @@ import {
   formatPriceBRL,
   formatWhatsapp,
 } from "@/lib/format";
+import {
+  formatPublicServicePriceLabel,
+  formatPublicServicesTotalLabel,
+  sumPublicServicesPriceCents,
+} from "@/lib/public-service-prices";
+import { sortServicesByPopularity } from "@/lib/booking-service-groups";
 import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
 import type { PublicAppointmentItem } from "@/lib/manage-public-appointment";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
@@ -86,9 +94,9 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   const availableServices = useMemo(() => {
     const allowed = new Set(editingProfessional?.serviceIds ?? []);
-    return catalog.services
-      .filter((s) => allowed.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    return sortServicesByPopularity(
+      catalog.services.filter((s) => allowed.has(s.id))
+    );
   }, [catalog.services, editingProfessional]);
 
   const selectedServices = catalog.services.filter((s) =>
@@ -98,9 +106,10 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     (sum, s) => sum + s.durationMinutes,
     0
   );
-  const editTotalPrice = selectedServices.reduce(
-    (sum, s) => sum + s.priceCents,
-    0
+  const editTotalPrice = sumPublicServicesPriceCents(selectedServices, editDate);
+  const editTotalPriceLabel = formatPublicServicesTotalLabel(
+    selectedServices,
+    editDate
   );
 
   const fetchAppointments = useCallback(async (canonical: string) => {
@@ -335,9 +344,11 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               autoComplete="tel"
             />
             <p className="text-xs text-muted-foreground">
-              {lookupLoading || loadingList
-                ? "Buscando seus agendamentos..."
-                : "Assim que você terminar de digitar, a gente busca."}
+              {lookupLoading || loadingList ? (
+                <Skeleton className="inline-block h-3 w-48" />
+              ) : (
+                "Assim que você terminar de digitar, a gente busca."
+              )}
             </p>
           </div>
         </div>
@@ -397,7 +408,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                         <p className="font-medium">{svc.name}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDuration(svc.durationMinutes)} ·{" "}
-                          {formatPriceBRL(svc.priceCents)}
+                          {formatPublicServicePriceLabel(svc, editDate)}
                         </p>
                       </div>
                     </label>
@@ -420,9 +431,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           {editServiceIds.length > 0 && (
             <>
               {loadingSlots ? (
-                <p className="py-3 text-center text-sm text-muted-foreground">
-                  Carregando horários...
-                </p>
+                <SlotGridSkeleton />
               ) : slotsError ? (
                 <p className="rounded-xl bg-muted/40 px-4 py-5 text-center text-sm text-muted-foreground">
                   {slotsError}
@@ -447,7 +456,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               {editStartTime && (
                 <p className="text-center text-xs text-muted-foreground">
                   Total: {formatDuration(editTotalMinutes)} ·{" "}
-                  {formatPriceBRL(editTotalPrice)}
+                  {editTotalPriceLabel}
                 </p>
               )}
             </>
@@ -499,10 +508,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
         <div className="px-5 py-5 sm:px-6 sm:py-6">
           {loadingList ? (
-            <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
-              Atualizando...
-            </div>
+            <AppointmentCardsSkeleton />
           ) : appointments.length === 0 ? (
             <div className="rounded-xl border border-dashed px-4 py-10 text-center">
               <CalendarDays className="mx-auto size-8 text-muted-foreground" />

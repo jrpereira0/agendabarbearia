@@ -10,7 +10,8 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 
 | Regra | Detalhe |
 | --- | --- |
-| Comanda por cliente/dia | Uma comanda **aberta** por WhatsApp + data; agrupa atendimentos do mesmo cliente naquele dia |
+| Comanda por cliente/dia | Uma comanda **aberta** por WhatsApp + data; agrupa todos os agendamentos **ativos** do mesmo cliente naquele dia (ex.: 12h com um barbeiro e 15h com outro) |
+| Nova comanda no mesmo dia | Depois de **fechar** a comanda, um novo agendamento do cliente naquele dia abre **outra** comanda — não mistura com a já finalizada |
 | Encaixes na comanda | Encaixes manuais do mesmo cliente no dia entram na comanda automaticamente (serviços + lista de atendimentos) |
 | Extras na comanda | Serviço adicionado na comanda além dos do agendamento vira **encaixe** na agenda |
 | Comissão | % sobre o valor **cobrado** de cada serviço na comanda (configurável por barbeiro) |
@@ -26,12 +27,22 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Caixa do dia | Precisa estar **aberto** para finalizar comandas daquele dia |
 | Um caixa por vez | Só pode haver **um** caixa aberto; feche o atual antes de abrir outro dia |
 | Comanda no caixa | Só fecha comanda do **mesmo dia** do caixa aberto; fica vinculada à sessão |
-| Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável |
+| Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável; **estorna** depósitos e usos de crédito ligados à comanda (bloqueia se o cliente já tiver gasto esse crédito em outro lugar) |
 | Cancelar horário | Motivo obrigatório; some da agenda; **bloqueado** se a comanda estiver fechada (reabra antes) |
 
 Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`, `store_credit`.
 
 **Crédito do cliente:** depósitos (troco ou valor extra ao fechar comanda) entram no caixa do dia pelo método informado. Pagamentos com `store_credit` não somam nas entradas do caixa.
+
+No painel **Financeiro**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento em serviços** é só o valor dos atendimentos (base das comissões).
+
+O painel **Financeiro** (`/admin/financeiro`, só dono) consolida o período com:
+
+- KPIs: entradas no caixa, faturamento, **quantidade de serviços**, valor médio por serviço, comissões e comparativo com o período anterior (mesma duração)
+- Gráficos: evolução diária, divisão barbearia vs comissões, faturamento por dia da semana, mix de pagamento e ranking de serviços
+- Tabela de performance por barbeiro (por **serviço realizado**, não por comanda)
+
+No menu lateral, a ordem é: Agenda → Caixas → Comissões → Financeiro.
 
 ---
 
@@ -317,6 +328,8 @@ Authorization: Bearer <chave>
 
 Parâmetro opcional: `professionalId` (UUID).
 
+Os valores por barbeiro somam **cada item da comanda** pelo `professional_id` do serviço (não o barbeiro “principal” da comanda). Gorjetas entram no faturamento e vão 100% para o barbeiro escolhido na hora de fechar.
+
 Resposta (`200`):
 
 ```json
@@ -331,7 +344,10 @@ Resposta (`200`):
         "commissionPercent": 50,
         "comandaCount": 12,
         "totalCents": 48000,
-        "commissionCents": 24000
+        "commissionCents": 24000,
+        "shopCents": 24000,
+        "tipCents": 0,
+        "serviceItemCount": 14
       }
     ],
     "totals": {
@@ -377,7 +393,7 @@ Somente o **dono** vê as rotas abaixo (menu **Dia a dia** na sidebar).
 | `/admin` (aba **CAIXA**) | Operar o caixa do dia na agenda: abrir/fechar, comandas fechadas, entradas, comissões e barbearia |
 | `/admin/financeiro` | Dashboard de métricas por período: KPIs, evolução diária, pagamentos e barbeiros (comparação com período anterior) |
 | `/admin/financeiro/caixas` | Histórico de sessões de caixa: filtro por período, busca, abrir/fechar/reabrir, links para agenda e comissões |
-| `/admin/financeiro/comissoes` | Comissões por barbeiro no período (`service_date`), com detalhamento por profissional |
+| `/admin/financeiro/comissoes` | Comissões por barbeiro no período (`service_date`). Ao **detalhar** um barbeiro: resumo com **faturamento**, **comissão** e **serviços**, **dia a dia**, ranking de serviços, lista de **atendimentos** (cliente, itens, valores e pagamentos) e formas de pagamento. Clique em um dia para filtrar só aquele dia |
 
 - **Agenda:** clique no horário → modal de comanda (fechar, reabrir, pagamento misto)
 - **Profissionais:** campo **% de comissão** no cadastro de cada barbeiro

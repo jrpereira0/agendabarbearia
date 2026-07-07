@@ -55,6 +55,7 @@ function makeFixtureCatalog(): ShopCatalog {
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 6000,
+        bookingCount: 0,
         weekdayPrices: [
           { weekday: 1, priceCents: 6000 },
           { weekday: 2, priceCents: 6000 },
@@ -68,6 +69,7 @@ function makeFixtureCatalog(): ShopCatalog {
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 6500,
+        bookingCount: 0,
         weekdayPrices: [
           { weekday: 4, priceCents: 6500 },
           { weekday: 5, priceCents: 6500 },
@@ -81,6 +83,7 @@ function makeFixtureCatalog(): ShopCatalog {
         photoUrl: null,
         durationMinutes: 15,
         priceCents: 2000,
+        bookingCount: 0,
         weekdayPrices: [1, 2, 3, 4, 5, 6].map((weekday) => ({
           weekday,
           priceCents: 2000,
@@ -93,6 +96,7 @@ function makeFixtureCatalog(): ShopCatalog {
         photoUrl: null,
         durationMinutes: 30,
         priceCents: 7000,
+        bookingCount: 0,
         weekdayPrices: [
           { weekday: 1, priceCents: 7000 },
           { weekday: 2, priceCents: 7000 },

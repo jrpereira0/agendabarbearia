@@ -32,6 +32,7 @@ type AgendaGridProps = {
   professionals: AgendaProfessionalColumn[];
   appointments: AppointmentItem[];
   isOwner: boolean;
+  canBookClients: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
   onAppointmentClick: (appointment: AppointmentItem) => void;
 };
@@ -54,6 +55,7 @@ export function AgendaGrid({
   professionals,
   appointments,
   isOwner,
+  canBookClients,
   onSlotClick,
   onAppointmentClick,
 }: AgendaGridProps) {
@@ -163,6 +165,7 @@ export function AgendaGrid({
               professionals={professionals}
               appointmentsByPro={appointmentsByPro}
               isOwner={isOwner}
+              canBookClients={canBookClients}
               onSlotClick={onSlotClick}
             />
           );
@@ -238,6 +241,7 @@ type TimeSlotCellsProps = {
   professionals: AgendaProfessionalColumn[];
   appointmentsByPro: Map<string, AppointmentItem[]>;
   isOwner: boolean;
+  canBookClients: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
 };
 
@@ -250,6 +254,7 @@ function TimeSlotCells({
   professionals,
   appointmentsByPro,
   isOwner,
+  canBookClients,
   onSlotClick,
 }: TimeSlotCellsProps) {
   return (
@@ -317,7 +322,7 @@ function TimeSlotCells({
             )}
             style={{ gridRow: row, gridColumn: i + 2 }}
           >
-            {available && (
+            {available && canBookClients && (
               <button
                 type="button"
                 className={cn(

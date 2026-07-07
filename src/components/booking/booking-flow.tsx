@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
 import { BookingDatePicker } from "@/components/booking/booking-date-picker";
@@ -18,7 +19,14 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
+import {
+  formatPublicServicePriceLabel,
+  formatPublicServicesTotalLabel,
+  sumPublicServicesPriceCents,
+} from "@/lib/public-service-prices";
+import { groupServicesForBooking } from "@/lib/booking-service-groups";
 import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
+import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import { cn } from "@/lib/utils";
 import type {
   PublicProfessional,
@@ -42,7 +50,7 @@ const stepMeta: Record<
   },
   services: {
     title: "Escolha os serviços",
-    description: "Pode marcar mais de um.",
+    description: "Pode marcar mais de um. O valor pode mudar conforme o dia.",
   },
   datetime: {
     title: "Escolha data e horário",
@@ -77,6 +85,70 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function ServicePickerRow({
+  service,
+  checked,
+  onToggle,
+}: {
+  service: PublicService;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
+        checked
+          ? "border-foreground bg-muted/40"
+          : "border-transparent bg-muted/30 hover:bg-muted/50"
+      )}
+    >
+      <Checkbox
+        checked={checked}
+        onCheckedChange={(value) => onToggle(value === true)}
+        className="shrink-0"
+      />
+      <ServiceThumbnail photoUrl={service.photoUrl} name={service.name} />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium leading-snug">{service.name}</p>
+        {service.description && (
+          <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+            {service.description}
+          </p>
+        )}
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatDuration(service.durationMinutes)} ·{" "}
+          {formatPublicServicePriceLabel(service)}
+        </p>
+      </div>
+    </label>
+  );
+}
+
+function ServicePickerList({
+  services,
+  serviceIds,
+  onToggle,
+}: {
+  services: PublicService[];
+  serviceIds: string[];
+  onToggle: (id: string, checked: boolean) => void;
+}) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {services.map((svc) => (
+        <li key={svc.id}>
+          <ServicePickerRow
+            service={svc}
+            checked={serviceIds.includes(svc.id)}
+            onToggle={(checked) => onToggle(svc.id, checked)}
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function StepProgress({ current }: { current: number }) {
   return (
     <div className="flex items-center gap-1">
@@ -103,14 +175,14 @@ function SelectionSummary({
   date,
   startTime,
   totalMinutes,
-  totalPrice,
+  totalPriceLabel,
 }: {
   professional: PublicProfessional;
   services: PublicService[];
   date?: string;
   startTime?: string | null;
   totalMinutes: number;
-  totalPrice: number;
+  totalPriceLabel: string;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
@@ -131,7 +203,7 @@ function SelectionSummary({
           )}
         </p>
         <p>
-          {formatDuration(totalMinutes)} · {formatPriceBRL(totalPrice)}
+          {formatDuration(totalMinutes)} · {totalPriceLabel}
         </p>
       </div>
     </div>
@@ -223,9 +295,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
   const availableServices = useMemo(() => {
     const allowed = new Set(selectedProfessional?.serviceIds ?? []);
-    return services
-      .filter((s) => allowed.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    return services.filter((s) => allowed.has(s.id));
   }, [selectedProfessional, services]);
 
   const filteredServices = useMemo(() => {
@@ -233,14 +303,25 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     return availableServices.filter((s) => matchesSearch(s.name, serviceSearch));
   }, [availableServices, serviceSearch]);
 
+  const serviceGroups = useMemo(
+    () =>
+      groupServicesForBooking(filteredServices, {
+        searching: Boolean(serviceSearch.trim()),
+      }),
+    [filteredServices, serviceSearch]
+  );
+
   const selectedServices = services.filter((s) => serviceIds.includes(s.id));
+  const priceDate =
+    step === "datetime" || step === "confirm" ? date : undefined;
   const totalMinutes = selectedServices.reduce(
     (sum, s) => sum + s.durationMinutes,
     0
   );
-  const totalPrice = selectedServices.reduce(
-    (sum, s) => sum + s.priceCents,
-    0
+  const totalPrice = sumPublicServicesPriceCents(selectedServices, priceDate);
+  const totalPriceLabel = formatPublicServicesTotalLabel(
+    selectedServices,
+    priceDate
   );
 
   useEffect(() => {
@@ -639,7 +720,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               professional={selectedProfessional}
               services={selectedServices}
               totalMinutes={totalMinutes}
-              totalPrice={totalPrice}
+              totalPriceLabel={totalPriceLabel}
             />
 
             {availableServices.length === 0 ? (
@@ -656,52 +737,44 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   />
                 )}
 
-                <ul className="flex flex-col gap-2">
-                  {filteredServices.map((svc) => {
-                    const checked = serviceIds.includes(svc.id);
-                    return (
-                      <li key={svc.id}>
-                        <label
-                          className={cn(
-                            "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
-                            checked
-                              ? "border-foreground bg-muted/40"
-                              : "border-transparent bg-muted/30 hover:bg-muted/50"
-                          )}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            onCheckedChange={(c) =>
-                              toggleService(svc.id, c === true)
-                            }
-                            className="shrink-0"
-                          />
-                          <ServiceThumbnail
-                            photoUrl={svc.photoUrl}
-                            name={svc.name}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium leading-snug">{svc.name}</p>
-                            {svc.description && (
-                              <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
-                                {svc.description}
-                              </p>
-                            )}
-                            <p className="mt-0.5 text-xs text-muted-foreground">
-                              {formatDuration(svc.durationMinutes)} ·{" "}
-                              {formatPriceBRL(svc.priceCents)}
-                            </p>
-                          </div>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
+                {serviceGroups.popular.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Mais agendados
+                    </p>
+                    <ServicePickerList
+                      services={serviceGroups.popular}
+                      serviceIds={serviceIds}
+                      onToggle={toggleService}
+                    />
+                  </div>
+                )}
+
+                {serviceGroups.others.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {serviceGroups.popular.length > 0 && (
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Outros serviços
+                      </p>
+                    )}
+                    <ServicePickerList
+                      services={serviceGroups.others}
+                      serviceIds={serviceIds}
+                      onToggle={toggleService}
+                    />
+                  </div>
+                )}
+
+                {serviceGroups.popular.length === 0 &&
+                  serviceGroups.others.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum serviço encontrado.
+                    </p>
+                  )}
 
                 {serviceIds.length > 0 && (
                   <p className="text-center text-xs text-muted-foreground">
-                    Total: {formatDuration(totalMinutes)} ·{" "}
-                    {formatPriceBRL(totalPrice)}
+                    Total: {formatDuration(totalMinutes)} · {totalPriceLabel}
                   </p>
                 )}
               </>
@@ -715,7 +788,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               professional={selectedProfessional}
               services={selectedServices}
               totalMinutes={totalMinutes}
-              totalPrice={totalPrice}
+              totalPriceLabel={totalPriceLabel}
             />
 
             <BookingDatePicker
@@ -726,9 +799,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             />
 
             {loadingSlots ? (
-              <p className="py-3 text-center text-sm text-muted-foreground">
-                Carregando horários...
-              </p>
+              <SlotGridSkeleton />
             ) : slotsError ? (
               <p className="rounded-xl bg-muted/40 px-4 py-5 text-center text-sm text-muted-foreground">
                 {slotsError}
@@ -755,7 +826,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               date={date}
               startTime={startTime}
               totalMinutes={totalMinutes}
-              totalPrice={totalPrice}
+              totalPriceLabel={totalPriceLabel}
             />
 
             {customerSubstep === "whatsapp" && (
@@ -773,9 +844,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   required
                 />
                 <p className="text-xs text-muted-foreground">
-                  {lookupLoading
-                    ? "Buscando seu cadastro..."
-                    : "Assim que você terminar de digitar, a gente identifica você."}
+                  {lookupLoading ? (
+                    <Skeleton className="inline-block h-3 w-44" />
+                  ) : (
+                    "Assim que você terminar de digitar, a gente identifica você."
+                  )}
                 </p>
               </div>
             )}

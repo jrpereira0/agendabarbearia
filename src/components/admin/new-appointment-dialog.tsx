@@ -19,6 +19,7 @@ import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
+import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
   formatDateBR,
@@ -734,9 +735,7 @@ export function NewAppointmentDialog({
               )}
 
               {!isEncaixe && !ownerFreeMode && loadingSlots ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  Carregando horários...
-                </p>
+                <SlotGridSkeleton />
               ) : !isEncaixe && !ownerFreeMode && slotsError ? (
                 <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
                   {slotsError}

@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ProfessionalForm } from "@/components/admin/professional-form";
 import type { DayRanges } from "@/lib/week-schedule";
 import { formatTime } from "@/lib/format";
+import { mapProfessionalPermissionsRow } from "@/lib/professional-permissions";
 import { updateProfessional } from "../actions";
 
 export const metadata = { title: "Editar profissional" };
@@ -24,7 +25,7 @@ export default async function EditProfessionalPage({
       supabase
         .from("professionals")
         .select(
-          "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, commission_percent, professional_services(service_id), working_hours(weekday, start_time, end_time)"
+          "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, commission_percent, can_book_clients, can_create_squeeze_in, can_open_comanda, can_edit_comanda, can_close_comanda, can_edit_appointments, can_cancel_appointments, can_manage_schedule_blocks, professional_services(service_id), working_hours(weekday, start_time, end_time)"
         )
         .eq("id", id)
         .single(),
@@ -87,6 +88,7 @@ export default async function EditProfessionalPage({
             (ps) => ps.service_id
           ),
           schedule,
+          permissions: mapProfessionalPermissionsRow(professional),
         }}
         onSubmit={updateWithId}
         submitLabel="Salvar alterações"

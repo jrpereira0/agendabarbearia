@@ -6,6 +6,10 @@ import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { uploadPublicPhoto } from "@/lib/upload-photo";
+import {
+  parsePermissionsFormData,
+  permissionsToDbRow,
+} from "@/lib/professional-permissions";
 
 const professionalSchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
@@ -158,6 +162,7 @@ export async function createProfessional(
   }
 
   const data = parsed.data;
+  const permissions = parsePermissionsFormData(formData);
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
@@ -191,6 +196,7 @@ export async function createProfessional(
       instagram: data.instagram || null,
       commission_percent: data.commissionPercent,
       profile_id: created.user.id,
+      ...permissionsToDbRow(permissions),
     })
     .select("id")
     .single();
@@ -237,6 +243,7 @@ export async function updateProfessional(
   if ("error" in schedule) return { ok: false, error: schedule.error };
 
   const data = parsed.data;
+  const permissions = parsePermissionsFormData(formData);
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
@@ -281,6 +288,7 @@ export async function updateProfessional(
     email: data.email,
     instagram: data.instagram || null,
     commission_percent: data.commissionPercent,
+    ...permissionsToDbRow(permissions),
   };
 
   const photo = formData.get("photo");

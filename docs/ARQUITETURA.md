@@ -16,7 +16,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/app/agenda` | Página do cliente: perfil da barbearia e agendamento |
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
-| `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais |
+| `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais (inclui permissões no painel por barbeiro) |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
 | `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
 | `src/app/admin/(panel)/comandas` | Server actions da comanda (sem página própria — a UI é o `ComandaDialog`, aberto a partir da agenda) |
@@ -32,6 +32,10 @@ Atualizado por fase, conforme o sistema evolui.
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
 | `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices`, `db:reset-shop` e `create-admin` |
 | `src/lib/catalog-booking.ts` | Catálogo enxuto `mode=booking` (preços agrupados por dia para n8n/IA) |
+| `src/lib/public-service-prices.ts` | Exibição de preços no site do cliente (faixa antes da data, valor exato depois) |
+| `src/lib/service-booking-stats.ts` | Contagem de agendamentos por serviço (catálogo público) |
+| `src/lib/booking-service-groups.ts` | Ordenação e seções “Mais agendados” no site |
+| `src/lib/service-prices-for-date.ts` | Resolve preço de serviço por data (painel admin e comanda) |
 | `src/lib/service-weekday-prices.ts` | Preço por dia da semana (cadastro, API e validação de agendamento) |
 
 ## Banco de dados
@@ -63,12 +67,13 @@ Regras importantes no banco:
 ## Papéis e permissões
 
 - **Dono (`owner`)**: vê e gerencia tudo (profissionais, serviços, horários, agendamentos)
-- **Barbeiro (`barber`)**: entra com e-mail/senha criados pelo dono; vê a própria agenda. Em **Minha conta** (`/admin/minha-conta`) consulta a grade e altera a senha. Páginas só do dono redirecionam para a agenda ou para Minha conta (`/admin/configuracoes` → Minha conta)
+- **Barbeiro (`barber`)**: entra com e-mail/senha criados pelo dono; vê a própria agenda e **Minhas comissões** (`/admin/financeiro/comissoes`) — só os dados dele, sem ver outros barbeiros nem o financeiro geral. Em **Minha conta** (`/admin/minha-conta`) consulta a grade e altera a senha. Páginas só do dono redirecionam para a agenda ou para Minha conta (`/admin/configuracoes` → Minha conta)
 - O painel admin (`/admin`) usa `noindex` para não aparecer em buscadores
 
 ## Profissionais
 
 - Cadastro cria automaticamente o **login do barbeiro** (e-mail + senha)
+- Seção **Permissões no painel**: o dono liga/desliga por barbeiro — marcar cliente, encaixe, abrir/editar/fechar comanda, editar/cancelar agendamento e bloquear horários
 - Excluir um profissional apaga também o login; se houver agendamentos no histórico, o sistema bloqueia a exclusão e sugere **desativar**
 - Foto vai pro bucket `photos` do Supabase Storage (pasta `professionals/`)
 
@@ -108,14 +113,15 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`). Encaixes do **mesmo cliente no mesmo dia** entram automaticamente na comanda aberta dele
 - **Cancelar** horário: motivo obrigatório; o card **some da agenda** (não fica visível como cancelado)
 - Ações no horário: ao **clicar no card**, abre um modal com resumo e opções (abrir comanda, editar, trocar cliente, cancelar, WhatsApp); a comanda abre só quando escolher essa opção
-- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais do dia e os encaixes manuais desse cliente; ao **adicionar serviço na comanda**, o dono escolhe barbeiro e horário — vira **serviço extra** na agenda (borda tracejada cinza; encaixe manual continua vermelho)
+- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais **ainda ativos** do dia (vários barbeiros/horários) e os encaixes manuais desse cliente; ao **finalizar**, essa comanda fecha de vez — se o cliente marcar de novo no mesmo dia, abre uma **nova** comanda só com os novos atendimentos
+- Ao **adicionar serviço na comanda**, o dono escolhe barbeiro e horário — vira **serviço extra** na agenda (borda tracejada cinza; encaixe manual continua vermelho)
 - Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
 - Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
 - Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)
 - **Caixa lateral na agenda** (aba **CAIXA** à direita): abrir/fechar o caixa do dia, ver comandas fechadas, entradas, comissões e repasse da barbearia; link para métricas do dia
 - **Financeiro** (`/admin/financeiro`): painel de **análise** por período (`from` / `to`) — faturamento, comissões, evolução diária, formas de pagamento e ranking por barbeiro; não é onde se abre/fecha caixa
 - **Caixas** (`/admin/financeiro/caixas`): histórico de sessões de caixa no período — abrir, fechar, reabrir, KPIs e atalhos para agenda/comissões do dia
-- **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual
+- **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual. O dono vê todos; o barbeiro vê só as próprias (**Minhas comissões** no menu)
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres
@@ -131,7 +137,10 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 - Mostra o **perfil da barbearia** (nome, bio, endereço, horários, WhatsApp, Instagram, logo) e o fluxo de agendamento
 - Passos: barbeiro → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
-- Aba **Meus horários**: cliente digita WhatsApp, vê agendamentos futuros, pode **remarcar** (data, horário, serviços) ou **cancelar**
+- **Preços na escolha de serviços:** como o dia ainda não foi escolhido, cada serviço mostra a **faixa de preço** (ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`). O total aparece como **“a partir de …”** quando há variação por dia
+- **Serviços mais agendados:** no topo da lista aparece a seção **“Mais agendados”** (até 5 serviços com histórico de marcações); o restante fica em **“Outros serviços”**, ordenado pela mesma contagem
+- **Preços após escolher a data:** na etapa de data/horário e na confirmação, o total passa a usar o **valor exato** do dia selecionado (mesma regra da API ao gravar)
+- Aba **Meus horários**: cliente digita WhatsApp, vê agendamentos futuros (total já pelo preço do dia do horário), pode **remarcar** (data, horário, serviços) ou **cancelar**
 - Se o número já existir e não for a pessoa, o cliente troca o WhatsApp (não edita o nome de outro cadastro)
 - Usa a mesma regra de horários livres da API (`GET /api/v1/availability`)
 - Confirmação via `POST /api/v1/appointments` (servidor valida de novo antes de gravar)

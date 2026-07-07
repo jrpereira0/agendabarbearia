@@ -21,6 +21,7 @@ import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-a
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { DialogSection } from "@/components/admin/dialog-section";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
+import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
   formatDateBR,
@@ -507,9 +508,7 @@ export function EditAppointmentDialog({
               )}
 
               {!isEncaixe && !ownerFreeMode && loadingSlots ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  Carregando horários...
-                </p>
+                <SlotGridSkeleton />
               ) : !isEncaixe && !ownerFreeMode && slotsError ? (
                 <p className="rounded-lg border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">
                   {slotsError}

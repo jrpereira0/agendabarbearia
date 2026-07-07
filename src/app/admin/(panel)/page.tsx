@@ -5,6 +5,11 @@ import { isActionResult } from "@/lib/is-action-result";
 import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getAgendaDayContext } from "@/lib/get-agenda-day";
+import {
+  buildAdminServicesCatalogForDate,
+  loadServicePricingContext,
+  resolvePriceCentsOrFallback,
+} from "@/lib/service-prices-for-date";
 import { getCashRegisterSummary } from "@/lib/finance-reports";
 import {
   getCashRegisterSession,
@@ -78,7 +83,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     );
   }
 
-  const [dayContext, { data: services }, { data: rawAppointments }] =
+  const [dayContext, { data: services }, { data: rawAppointments }, pricingContext] =
     await Promise.all([
       getAgendaDayContext(date, professionalIds),
       supabase
@@ -87,6 +92,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         .eq("active", true)
         .order("name"),
       appointmentsQuery,
+      loadServicePricingContext(supabase, date),
     ]);
 
   let cashRegister:
@@ -108,8 +114,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
           loadCashRegisterResponsibleOptions(admin, session.userId),
         ]);
       const cash = await getCashRegisterSummary(admin, date, {
-        cashRegisterSessionId:
-          cashSession?.status === "open" ? cashSession.id : undefined,
+        cashRegisterSessionId: cashSession?.id,
       });
       cashRegister = {
         cash,
@@ -152,7 +157,14 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         id: s.id,
         name: s.name,
         durationMinutes: s.duration_minutes,
-        priceCents: s.price_cents,
+        priceCents: resolvePriceCentsOrFallback(
+          {
+            id: s.id,
+            name: s.name,
+            price_cents: s.price_cents,
+          },
+          pricingContext
+        ),
       }));
     }),
   };
@@ -164,14 +176,10 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       today={today}
       isOwner={session.isOwner}
       professionalId={session.professionalId}
+      permissions={session.permissions}
       dayContext={dayContext}
       appointments={appointments}
-      services={(services ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        durationMinutes: s.duration_minutes,
-        priceCents: s.price_cents,
-      }))}
+      services={buildAdminServicesCatalogForDate(services ?? [], pricingContext)}
       cashRegister={cashRegister}
     />
   );

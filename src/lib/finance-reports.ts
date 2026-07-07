@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { weekdayOf } from "@/lib/availability";
+import { WEEKDAYS } from "@/lib/format";
 import {
   calculateItemCommissionCents,
   CASH_INFLOW_PAYMENT_METHODS,
@@ -16,6 +18,7 @@ export type CashRegisterSummary = {
   shopCents: number;
   byPaymentMethod: Record<PaymentMethod, number>;
   creditDepositsByMethod: Record<CashInflowPaymentMethod, number>;
+  creditDepositsByDay: Record<string, number>;
   creditDepositsCents: number;
   cashInflowCents: number;
   comandaCount: number;
@@ -37,8 +40,12 @@ export type CommissionSummaryRow = {
   professionalNickname: string;
   commissionPercent: number;
   comandaCount: number;
+  /** Soma dos itens do barbeiro (serviços + gorjetas dele). */
   totalCents: number;
   commissionCents: number;
+  shopCents: number;
+  tipCents: number;
+  serviceItemCount: number;
 };
 
 export type CommissionSummary = {
@@ -50,8 +57,94 @@ export type CommissionSummary = {
     commissionCents: number;
     shopCents: number;
     comandaCount: number;
+    serviceItemCount: number;
   };
 };
+
+function applyCreditDepositRow(
+  row: {
+    amount_cents: number;
+    payment_method: string | null;
+    comanda_id: string | null;
+  },
+  creditDepositsByMethod: Record<CashInflowPaymentMethod, number>,
+  creditDepositsByDay: Map<string, number>,
+  comandaDateById: Map<string, string>
+): void {
+  const method = row.payment_method as CashInflowPaymentMethod | null;
+  if (!method || !(method in creditDepositsByMethod)) return;
+
+  creditDepositsByMethod[method] += row.amount_cents;
+
+  if (!row.comanda_id) return;
+  const serviceDate = comandaDateById.get(row.comanda_id);
+  if (!serviceDate) return;
+
+  creditDepositsByDay.set(
+    serviceDate,
+    (creditDepositsByDay.get(serviceDate) ?? 0) + row.amount_cents
+  );
+}
+
+async function loadCreditDepositsForPeriod(
+  admin: SupabaseClient,
+  params: {
+    from: string;
+    to: string;
+    cashRegisterSessionId?: string;
+    comandaDateById: Map<string, string>;
+  }
+): Promise<{
+  byMethod: Record<CashInflowPaymentMethod, number>;
+  byDay: Map<string, number>;
+}> {
+  const byMethod = emptyCashInflowMap();
+  const byDay = new Map<string, number>();
+
+  if (params.cashRegisterSessionId) {
+    const { data } = await admin
+      .from("customer_credit_transactions")
+      .select(
+        "amount_cents, payment_method, comanda_id, comandas ( service_date )"
+      )
+      .eq("type", "add")
+      .eq("cash_register_session_id", params.cashRegisterSessionId);
+
+    for (const row of data ?? []) {
+      const comanda = Array.isArray(row.comandas)
+        ? row.comandas[0]
+        : row.comandas;
+      if (row.comanda_id && comanda?.service_date) {
+        params.comandaDateById.set(row.comanda_id, comanda.service_date);
+      }
+      applyCreditDepositRow(row, byMethod, byDay, params.comandaDateById);
+    }
+
+    return { byMethod, byDay };
+  }
+
+  const { data } = await admin
+    .from("customer_credit_transactions")
+    .select(
+      "amount_cents, payment_method, comanda_id, comandas!inner ( service_date )"
+    )
+    .eq("type", "add")
+    .not("cash_register_session_id", "is", null)
+    .gte("comandas.service_date", params.from)
+    .lte("comandas.service_date", params.to);
+
+  for (const row of data ?? []) {
+    const comanda = Array.isArray(row.comandas)
+      ? row.comandas[0]
+      : row.comandas;
+    if (row.comanda_id && comanda?.service_date) {
+      params.comandaDateById.set(row.comanda_id, comanda.service_date);
+    }
+    applyCreditDepositRow(row, byMethod, byDay, params.comandaDateById);
+  }
+
+  return { byMethod, byDay };
+}
 
 export async function getFinancePeriodSummary(
   admin: SupabaseClient,
@@ -93,7 +186,6 @@ export async function getFinancePeriodSummary(
   const { data } = await query;
 
   const byPaymentMethod = emptyPaymentMap();
-  const creditDepositsByMethod = emptyCashInflowMap();
 
   let totalCents = 0;
   let commissionCents = 0;
@@ -132,19 +224,16 @@ export async function getFinancePeriodSummary(
     };
   });
 
-  if (options.cashRegisterSessionId) {
-    const { data: creditDeposits } = await admin
-      .from("customer_credit_transactions")
-      .select("amount_cents, payment_method")
-      .eq("cash_register_session_id", options.cashRegisterSessionId)
-      .eq("type", "add");
-
-    for (const row of creditDeposits ?? []) {
-      const method = row.payment_method as CashInflowPaymentMethod | null;
-      if (!method || !(method in creditDepositsByMethod)) continue;
-      creditDepositsByMethod[method] += row.amount_cents;
-    }
-  }
+  const comandaDateById = new Map(
+    comandas.map((comanda) => [comanda.id, comanda.serviceDate])
+  );
+  const { byMethod: creditDepositsByMethod, byDay: creditDepositsByDay } =
+    await loadCreditDepositsForPeriod(admin, {
+      from,
+      to,
+      cashRegisterSessionId: options.cashRegisterSessionId,
+      comandaDateById,
+    });
 
   const creditDepositsCents = CASH_INFLOW_PAYMENT_METHODS.reduce(
     (sum, method) => sum + creditDepositsByMethod[method],
@@ -164,6 +253,7 @@ export async function getFinancePeriodSummary(
     shopCents: totalCents - commissionCents,
     byPaymentMethod,
     creditDepositsByMethod,
+    creditDepositsByDay: Object.fromEntries(creditDepositsByDay),
     creditDepositsCents,
     cashInflowCents,
     comandaCount: comandas.length,
@@ -185,61 +275,105 @@ export async function getCommissionSummary(
   to: string,
   professionalId?: string
 ): Promise<CommissionSummary> {
-  let query = admin
+  const { data } = await admin
     .from("comandas")
     .select(
       `
-      professional_id,
-      total_cents,
-      commission_cents,
-      professionals ( nickname, commission_percent )
+      id,
+      comanda_items (
+        charged_price_cents,
+        professional_id,
+        is_tip,
+        professionals ( nickname, commission_percent )
+      )
     `
     )
     .eq("status", "closed")
     .gte("service_date", from)
     .lte("service_date", to);
 
-  if (professionalId) {
-    query = query.eq("professional_id", professionalId);
-  }
-
-  const { data } = await query;
-
-  const map = new Map<string, CommissionSummaryRow>();
+  const map = new Map<
+    string,
+    CommissionSummaryRow & { comandaIds: Set<string> }
+  >();
+  const allComandaIds = new Set<string>();
 
   for (const row of data ?? []) {
-    const pro = Array.isArray(row.professionals)
-      ? row.professionals[0]
-      : row.professionals;
-    const pid = row.professional_id as string;
-    const existing = map.get(pid) ?? {
-      professionalId: pid,
-      professionalNickname: pro?.nickname ?? "—",
-      commissionPercent: pro?.commission_percent ?? 50,
-      comandaCount: 0,
-      totalCents: 0,
-      commissionCents: 0,
-    };
-    existing.comandaCount += 1;
-    existing.totalCents += row.total_cents;
-    existing.commissionCents += row.commission_cents;
-    map.set(pid, existing);
+    const items = (row.comanda_items ?? []).filter((item) =>
+      professionalId ? item.professional_id === professionalId : true
+    );
+    if (items.length === 0) continue;
+    allComandaIds.add(row.id);
+
+    for (const item of items) {
+      if (!item.professional_id) continue;
+
+      const pro = Array.isArray(item.professionals)
+        ? item.professionals[0]
+        : item.professionals;
+      const pid = item.professional_id;
+      const existing = map.get(pid) ?? {
+        professionalId: pid,
+        professionalNickname: pro?.nickname ?? "—",
+        commissionPercent: pro?.commission_percent ?? 50,
+        comandaCount: 0,
+        totalCents: 0,
+        commissionCents: 0,
+        shopCents: 0,
+        tipCents: 0,
+        serviceItemCount: 0,
+        comandaIds: new Set<string>(),
+      };
+
+      const pct = pro?.commission_percent ?? existing.commissionPercent;
+      const itemCommission = calculateItemCommissionCents(
+        {
+          chargedPriceCents: item.charged_price_cents,
+          professionalId: pid,
+          isTip: item.is_tip,
+        },
+        new Map([[pid, pct]])
+      );
+
+      existing.totalCents += item.charged_price_cents;
+      existing.commissionCents += itemCommission;
+      existing.comandaIds.add(row.id);
+      if (item.is_tip) {
+        existing.tipCents += item.charged_price_cents;
+      } else {
+        existing.serviceItemCount += 1;
+        existing.shopCents += item.charged_price_cents - itemCommission;
+      }
+      map.set(pid, existing);
+    }
   }
 
-  const rows = [...map.values()].sort((a, b) =>
-    a.professionalNickname.localeCompare(b.professionalNickname, "pt-BR")
-  );
+  const rows = [...map.values()]
+    .map(({ comandaIds, ...row }) => ({
+      ...row,
+      comandaCount: comandaIds.size,
+    }))
+    .sort((a, b) =>
+      a.professionalNickname.localeCompare(b.professionalNickname, "pt-BR")
+    );
 
   const totals = rows.reduce(
     (acc, row) => ({
       totalCents: acc.totalCents + row.totalCents,
       commissionCents: acc.commissionCents + row.commissionCents,
-      shopCents: 0,
-      comandaCount: acc.comandaCount + row.comandaCount,
+      shopCents: acc.shopCents + row.shopCents,
+      comandaCount: acc.comandaCount,
+      serviceItemCount: acc.serviceItemCount + row.serviceItemCount,
     }),
-    { totalCents: 0, commissionCents: 0, shopCents: 0, comandaCount: 0 }
+    {
+      totalCents: 0,
+      commissionCents: 0,
+      shopCents: 0,
+      comandaCount: 0,
+      serviceItemCount: 0,
+    }
   );
-  totals.shopCents = totals.totalCents - totals.commissionCents;
+  totals.comandaCount = allComandaIds.size;
 
   return { from, to, rows, totals };
 }
@@ -247,17 +381,40 @@ export async function getCommissionSummary(
 export type FinanceDayMetric = {
   date: string;
   totalCents: number;
+  cashInflowCents: number;
+  creditDepositsCents: number;
   commissionCents: number;
   shopCents: number;
-  comandaCount: number;
+  serviceItemCount: number;
 };
 
 export type FinancePeriodComparison = {
   previousFrom: string;
   previousTo: string;
   totalCents: number;
-  comandaCount: number;
+  cashInflowCents: number;
+  commissionCents: number;
+  serviceItemCount: number;
+  /** @deprecated use totalChangePercent */
   changePercent: number | null;
+  totalChangePercent: number | null;
+  cashInflowChangePercent: number | null;
+  serviceChangePercent: number | null;
+};
+
+export type FinanceServiceRow = {
+  serviceName: string;
+  isTip: boolean;
+  quantity: number;
+  grossCents: number;
+};
+
+export type FinanceWeekdayRow = {
+  weekday: number;
+  label: string;
+  grossCents: number;
+  cashInflowCents: number;
+  serviceItemCount: number;
 };
 
 export type FinanceMetricsReport = {
@@ -265,18 +422,26 @@ export type FinanceMetricsReport = {
   to: string;
   totals: {
     totalCents: number;
+    cashInflowCents: number;
+    creditDepositsCents: number;
     commissionCents: number;
     shopCents: number;
-    comandaCount: number;
+    serviceItemCount: number;
+    servicesGrossCents: number;
   };
-  averageTicketCents: number;
+  averageServiceCents: number;
+  averageServicesPerActiveDay: number;
   commissionRatePercent: number;
   shopRatePercent: number;
   activeDays: number;
+  idleDays: number;
   periodDayCount: number;
   byDay: FinanceDayMetric[];
   byPaymentMethod: Record<PaymentMethod, number>;
+  cashInflowByPaymentMethod: Record<PaymentMethod, number>;
   professionals: CommissionSummaryRow[];
+  serviceBreakdown: FinanceServiceRow[];
+  weekdayBreakdown: FinanceWeekdayRow[];
   comparison: FinancePeriodComparison | null;
 };
 
@@ -302,8 +467,118 @@ function listDatesInRange(from: string, to: string): string[] {
   return dates;
 }
 
+function percentChange(current: number, previous: number): number | null {
+  if (previous > 0) {
+    return Math.round(((current - previous) / previous) * 100);
+  }
+  if (current > 0) return 100;
+  return null;
+}
+
+async function loadFinanceServiceBreakdown(
+  admin: SupabaseClient,
+  comandaIds: string[]
+): Promise<FinanceServiceRow[]> {
+  if (comandaIds.length === 0) return [];
+
+  const { data } = await admin
+    .from("comanda_items")
+    .select("service_name, charged_price_cents, is_tip")
+    .in("comanda_id", comandaIds);
+
+  const map = new Map<string, FinanceServiceRow>();
+  for (const row of data ?? []) {
+    const key = `${row.is_tip ? "tip" : "svc"}:${row.service_name}`;
+    const existing = map.get(key) ?? {
+      serviceName: row.service_name,
+      isTip: row.is_tip,
+      quantity: 0,
+      grossCents: 0,
+    };
+    existing.quantity += 1;
+    existing.grossCents += row.charged_price_cents;
+    map.set(key, existing);
+  }
+
+  return [...map.values()].sort((a, b) => b.grossCents - a.grossCents);
+}
+
+async function loadFinanceServiceVolume(
+  admin: SupabaseClient,
+  from: string,
+  to: string
+): Promise<{
+  totalServiceItemCount: number;
+  byDay: Map<string, number>;
+}> {
+  const { data } = await admin
+    .from("comanda_items")
+    .select("is_tip, comandas!inner(service_date, status)")
+    .eq("comandas.status", "closed")
+    .eq("is_tip", false)
+    .gte("comandas.service_date", from)
+    .lte("comandas.service_date", to);
+
+  const byDay = new Map<string, number>();
+  let totalServiceItemCount = 0;
+
+  for (const row of data ?? []) {
+    const comanda = Array.isArray(row.comandas)
+      ? row.comandas[0]
+      : row.comandas;
+    const date = comanda?.service_date;
+    if (!date) continue;
+    totalServiceItemCount += 1;
+    byDay.set(date, (byDay.get(date) ?? 0) + 1);
+  }
+
+  return { totalServiceItemCount, byDay };
+}
+
+function sumServicesGrossCents(serviceBreakdown: FinanceServiceRow[]): number {
+  return serviceBreakdown
+    .filter((row) => !row.isTip)
+    .reduce((sum, row) => sum + row.grossCents, 0);
+}
+
+function buildWeekdayBreakdown(byDay: FinanceDayMetric[]): FinanceWeekdayRow[] {
+  const map = new Map<number, FinanceWeekdayRow>();
+  for (let weekday = 0; weekday <= 6; weekday++) {
+    map.set(weekday, {
+      weekday,
+      label: WEEKDAYS[weekday],
+      grossCents: 0,
+      cashInflowCents: 0,
+      serviceItemCount: 0,
+    });
+  }
+
+  for (const day of byDay) {
+    const weekday = weekdayOf(day.date);
+    const entry = map.get(weekday)!;
+    entry.grossCents += day.totalCents;
+    entry.cashInflowCents += day.cashInflowCents;
+    entry.serviceItemCount += day.serviceItemCount;
+  }
+
+  return [...map.values()];
+}
+
+function buildCashInflowByPaymentMethod(
+  byPaymentMethod: Record<PaymentMethod, number>,
+  creditDepositsByMethod: Record<CashInflowPaymentMethod, number>
+): Record<PaymentMethod, number> {
+  const merged = { ...byPaymentMethod };
+  for (const method of CASH_INFLOW_PAYMENT_METHODS) {
+    merged[method] += creditDepositsByMethod[method];
+  }
+  return merged;
+}
+
 function buildDayMetrics(
   comandas: CashRegisterSummary["comandas"],
+  creditDepositsByDay: Map<string, number>,
+  servicesByDay: Map<string, number>,
   from: string,
   to: string
 ): FinanceDayMetric[] {
@@ -313,9 +588,11 @@ function buildDayMetrics(
     map.set(date, {
       date,
       totalCents: 0,
+      cashInflowCents: 0,
+      creditDepositsCents: 0,
       commissionCents: 0,
       shopCents: 0,
-      comandaCount: 0,
+      serviceItemCount: servicesByDay.get(date) ?? 0,
     });
   }
 
@@ -325,15 +602,38 @@ function buildDayMetrics(
       {
         date: comanda.serviceDate,
         totalCents: 0,
+        cashInflowCents: 0,
+        creditDepositsCents: 0,
         commissionCents: 0,
         shopCents: 0,
-        comandaCount: 0,
+        serviceItemCount: servicesByDay.get(comanda.serviceDate) ?? 0,
       };
     entry.totalCents += comanda.totalCents;
     entry.commissionCents += comanda.commissionCents;
     entry.shopCents += comanda.totalCents - comanda.commissionCents;
-    entry.comandaCount += 1;
+    entry.cashInflowCents += comanda.payments
+      .filter((payment) =>
+        (CASH_INFLOW_PAYMENT_METHODS as readonly string[]).includes(payment.method)
+      )
+      .reduce((sum, payment) => sum + payment.amountCents, 0);
     map.set(comanda.serviceDate, entry);
+  }
+
+  for (const [date, creditDepositsCents] of creditDepositsByDay) {
+    const entry =
+      map.get(date) ??
+      {
+        date,
+        totalCents: 0,
+        cashInflowCents: 0,
+        creditDepositsCents: 0,
+        commissionCents: 0,
+        shopCents: 0,
+        serviceItemCount: servicesByDay.get(date) ?? 0,
+      };
+    entry.creditDepositsCents += creditDepositsCents;
+    entry.cashInflowCents += creditDepositsCents;
+    map.set(date, entry);
   }
 
   return [...map.values()];
@@ -344,17 +644,40 @@ export async function getFinanceMetricsReport(
   from: string,
   to: string
 ): Promise<FinanceMetricsReport> {
-  const [summary, commissions] = await Promise.all([
+  const [summary, commissions, serviceVolume] = await Promise.all([
     getFinancePeriodSummary(admin, from, to),
     getCommissionSummary(admin, from, to),
+    loadFinanceServiceVolume(admin, from, to),
   ]);
 
-  const byDay = buildDayMetrics(summary.comandas, from, to);
-  const activeDays = byDay.filter((day) => day.comandaCount > 0).length;
+  const serviceBreakdown = await loadFinanceServiceBreakdown(
+    admin,
+    summary.comandas.map((comanda) => comanda.id)
+  );
+  const servicesGrossCents = sumServicesGrossCents(serviceBreakdown);
+  const serviceItemCount = serviceVolume.totalServiceItemCount;
+
+  const byDay = buildDayMetrics(
+    summary.comandas,
+    new Map(Object.entries(summary.creditDepositsByDay)),
+    serviceVolume.byDay,
+    from,
+    to
+  );
+  const cashInflowByPaymentMethod = buildCashInflowByPaymentMethod(
+    summary.byPaymentMethod,
+    summary.creditDepositsByMethod
+  );
+  const activeDays = byDay.filter((day) => day.serviceItemCount > 0).length;
   const periodDayCount = inclusiveDayCount(from, to);
-  const averageTicketCents =
-    summary.comandaCount > 0
-      ? Math.round(summary.totalCents / summary.comandaCount)
+  const idleDays = periodDayCount - activeDays;
+  const averageServiceCents =
+    serviceItemCount > 0
+      ? Math.round(servicesGrossCents / serviceItemCount)
+      : 0;
+  const averageServicesPerActiveDay =
+    activeDays > 0
+      ? Math.round((serviceItemCount / activeDays) * 10) / 10
       : 0;
   const commissionRatePercent =
     summary.totalCents > 0
@@ -368,41 +691,58 @@ export async function getFinanceMetricsReport(
   const previousFrom = shiftIsoDate(previousTo, -(periodDayCount - 1));
 
   if (previousFrom <= previousTo) {
-    const previous = await getFinancePeriodSummary(admin, previousFrom, previousTo);
+    const [previous, previousServiceVolume] = await Promise.all([
+      getFinancePeriodSummary(admin, previousFrom, previousTo),
+      loadFinanceServiceVolume(admin, previousFrom, previousTo),
+    ]);
+    const totalChangePercent = percentChange(summary.totalCents, previous.totalCents);
     comparison = {
       previousFrom,
       previousTo,
       totalCents: previous.totalCents,
-      comandaCount: previous.comandaCount,
-      changePercent:
-        previous.totalCents > 0
-          ? Math.round(
-              ((summary.totalCents - previous.totalCents) / previous.totalCents) *
-                100
-            )
-          : summary.totalCents > 0
-            ? 100
-            : null,
+      cashInflowCents: previous.cashInflowCents,
+      commissionCents: previous.commissionCents,
+      serviceItemCount: previousServiceVolume.totalServiceItemCount,
+      changePercent: totalChangePercent,
+      totalChangePercent,
+      cashInflowChangePercent: percentChange(
+        summary.cashInflowCents,
+        previous.cashInflowCents
+      ),
+      serviceChangePercent: percentChange(
+        serviceItemCount,
+        previousServiceVolume.totalServiceItemCount
+      ),
     };
   }
+
+  const weekdayBreakdown = buildWeekdayBreakdown(byDay);
 
   return {
     from,
     to,
     totals: {
       totalCents: summary.totalCents,
+      cashInflowCents: summary.cashInflowCents,
+      creditDepositsCents: summary.creditDepositsCents,
       commissionCents: summary.commissionCents,
       shopCents: summary.shopCents,
-      comandaCount: summary.comandaCount,
+      serviceItemCount,
+      servicesGrossCents,
     },
-    averageTicketCents,
+    averageServiceCents,
+    averageServicesPerActiveDay,
     commissionRatePercent,
     shopRatePercent,
     activeDays,
+    idleDays,
     periodDayCount,
     byDay,
     byPaymentMethod: summary.byPaymentMethod,
+    cashInflowByPaymentMethod,
     professionals: commissions.rows,
+    serviceBreakdown,
+    weekdayBreakdown,
     comparison,
   };
 }
@@ -411,11 +751,22 @@ export function formatPaymentMethodLabel(method: PaymentMethod): string {
   return PAYMENT_METHOD_LABELS[method];
 }
 
+/** Faturamento só de serviços (sem gorjeta). */
+export function commissionServiceRevenueCents(summary: {
+  servicesGrossCents: number;
+  tipCents: number;
+}): number {
+  return summary.servicesGrossCents - summary.tipCents;
+}
+
 export type CommissionReportSummary = {
   servicesGrossCents: number;
   commissionCents: number;
   itemCount: number;
   comandaCount: number;
+  tipCents: number;
+  serviceItemCount: number;
+  shopCents: number;
 };
 
 export type CommissionDayRow = {
@@ -423,6 +774,45 @@ export type CommissionDayRow = {
   servicesGrossCents: number;
   commissionCents: number;
   comandaCount: number;
+  itemCount: number;
+  tipCents: number;
+  serviceItemCount: number;
+  shopCents: number;
+};
+
+export type CommissionServiceBreakdownRow = {
+  serviceName: string;
+  isTip: boolean;
+  quantity: number;
+  grossCents: number;
+  commissionCents: number;
+};
+
+export type CommissionComandaItemDetail = {
+  serviceName: string;
+  isTip: boolean;
+  chargedPriceCents: number;
+  commissionCents: number;
+};
+
+export type CommissionComandaPaymentDetail = {
+  method: PaymentMethod;
+  amountCents: number;
+  professionalShareCents: number;
+};
+
+export type CommissionComandaDetail = {
+  comandaId: string;
+  serviceDate: string;
+  closedAt: string | null;
+  customerWhatsapp: string;
+  customerName: string | null;
+  grossCents: number;
+  commissionCents: number;
+  tipCents: number;
+  serviceItemCount: number;
+  items: CommissionComandaItemDetail[];
+  payments: CommissionComandaPaymentDetail[];
 };
 
 export type CommissionProfessionalReport = {
@@ -432,6 +822,8 @@ export type CommissionProfessionalReport = {
   summary: CommissionReportSummary;
   byPaymentMethod: Record<PaymentMethod, number>;
   byDay: CommissionDayRow[];
+  serviceBreakdown: CommissionServiceBreakdownRow[];
+  comandas: CommissionComandaDetail[];
 };
 
 export type CommissionReport = {
@@ -448,7 +840,10 @@ type ComandaCommissionRow = {
   id: string;
   service_date: string;
   total_cents: number;
+  customer_whatsapp: string;
+  closed_at: string | null;
   comanda_items: {
+    service_name: string;
     charged_price_cents: number;
     professional_id: string | null;
     is_tip: boolean;
@@ -463,46 +858,146 @@ type ComandaCommissionRow = {
   }[];
 };
 
-function emptyDayMap(): Map<
-  string,
-  { servicesGrossCents: number; commissionCents: number; comandaIds: Set<string> }
-> {
+type DayAccumulator = {
+  servicesGrossCents: number;
+  commissionCents: number;
+  comandaIds: Set<string>;
+  itemCount: number;
+  tipCents: number;
+  serviceItemCount: number;
+  shopCents: number;
+};
+
+function emptySummary(): Omit<CommissionReportSummary, "comandaCount"> {
+  return {
+    servicesGrossCents: 0,
+    commissionCents: 0,
+    itemCount: 0,
+    tipCents: 0,
+    serviceItemCount: 0,
+    shopCents: 0,
+  };
+}
+
+function emptyDayMap(): Map<string, DayAccumulator> {
   return new Map();
 }
 
 function bumpDay(
-  map: Map<
-    string,
-    { servicesGrossCents: number; commissionCents: number; comandaIds: Set<string> }
-  >,
+  map: Map<string, DayAccumulator>,
   date: string,
   grossCents: number,
   commissionCents: number,
-  comandaId: string
+  comandaId: string,
+  isTip: boolean
 ) {
-  const entry =
-    map.get(date) ??
-    { servicesGrossCents: 0, commissionCents: 0, comandaIds: new Set<string>() };
+  const entry = map.get(date) ?? {
+    servicesGrossCents: 0,
+    commissionCents: 0,
+    comandaIds: new Set<string>(),
+    itemCount: 0,
+    tipCents: 0,
+    serviceItemCount: 0,
+    shopCents: 0,
+  };
   entry.servicesGrossCents += grossCents;
   entry.commissionCents += commissionCents;
   entry.comandaIds.add(comandaId);
+  entry.itemCount += 1;
+  if (isTip) {
+    entry.tipCents += grossCents;
+  } else {
+    entry.serviceItemCount += 1;
+    entry.shopCents += grossCents - commissionCents;
+  }
   map.set(date, entry);
 }
 
-function dayMapToRows(
-  map: Map<
-    string,
-    { servicesGrossCents: number; commissionCents: number; comandaIds: Set<string> }
-  >
-): CommissionDayRow[] {
+function dayMapToRows(map: Map<string, DayAccumulator>): CommissionDayRow[] {
   return [...map.entries()]
     .map(([date, entry]) => ({
       date,
       servicesGrossCents: entry.servicesGrossCents,
       commissionCents: entry.commissionCents,
       comandaCount: entry.comandaIds.size,
+      itemCount: entry.itemCount,
+      tipCents: entry.tipCents,
+      serviceItemCount: entry.serviceItemCount,
+      shopCents: entry.shopCents,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function bumpServiceBreakdown(
+  map: Map<string, CommissionServiceBreakdownRow>,
+  serviceName: string,
+  isTip: boolean,
+  grossCents: number,
+  commissionCents: number
+) {
+  const key = `${isTip ? "tip" : "svc"}:${serviceName}`;
+  const existing = map.get(key) ?? {
+    serviceName,
+    isTip,
+    quantity: 0,
+    grossCents: 0,
+    commissionCents: 0,
+  };
+  existing.quantity += 1;
+  existing.grossCents += grossCents;
+  existing.commissionCents += commissionCents;
+  map.set(key, existing);
+}
+
+type ComandaAccumulator = {
+  comandaId: string;
+  serviceDate: string;
+  closedAt: string | null;
+  customerWhatsapp: string;
+  comandaTotalCents: number;
+  grossCents: number;
+  commissionCents: number;
+  tipCents: number;
+  serviceItemCount: number;
+  items: CommissionComandaItemDetail[];
+  payments: ComandaCommissionRow["comanda_payments"];
+};
+
+function finalizeComandaPayments(
+  comanda: ComandaAccumulator,
+  payments: ComandaCommissionRow["comanda_payments"]
+): CommissionComandaPaymentDetail[] {
+  if (comanda.comandaTotalCents <= 0 || comanda.grossCents <= 0) return [];
+  const share = comanda.grossCents / comanda.comandaTotalCents;
+  return (payments ?? [])
+    .map((payment) => {
+      const method = payment.payment_method as PaymentMethod;
+      if (!PAYMENT_METHODS.includes(method)) return null;
+      return {
+        method,
+        amountCents: payment.amount_cents,
+        professionalShareCents: Math.round(payment.amount_cents * share),
+      };
+    })
+    .filter((row): row is CommissionComandaPaymentDetail => row !== null);
+}
+
+async function loadCustomerNamesByWhatsapp(
+  admin: SupabaseClient,
+  whatsapps: string[]
+): Promise<Map<string, string>> {
+  if (whatsapps.length === 0) return new Map();
+  const { data } = await admin
+    .from("customers")
+    .select("whatsapp, first_name, last_name")
+    .in("whatsapp", whatsapps);
+
+  const map = new Map<string, string>();
+  for (const row of data ?? []) {
+    const name = `${row.first_name} ${row.last_name}`.trim();
+    if (name) map.set(row.whatsapp, name);
+  }
+  return map;
 }
 
 function emptyPaymentMap(): Record<PaymentMethod, number> {
@@ -539,7 +1034,10 @@ export async function getCommissionReport(
       id,
       service_date,
       total_cents,
+      customer_whatsapp,
+      closed_at,
       comanda_items (
+        service_name,
         charged_price_cents,
         professional_id,
         is_tip,
@@ -557,10 +1055,12 @@ export async function getCommissionReport(
     {
       professionalNickname: string;
       commissionPercent: number;
-      summary: CommissionReportSummary;
+      summary: Omit<CommissionReportSummary, "comandaCount">;
       byPaymentMethod: Record<PaymentMethod, number>;
       byDay: ReturnType<typeof emptyDayMap>;
       comandaIds: Set<string>;
+      serviceBreakdown: Map<string, CommissionServiceBreakdownRow>;
+      comandas: Map<string, ComandaAccumulator>;
     }
   >();
   const allComandaIds = new Set<string>();
@@ -577,10 +1077,14 @@ export async function getCommissionReport(
     const comandaTotal =
       row.total_cents > 0
         ? row.total_cents
-        : items.reduce((sum, item) => sum + item.charged_price_cents, 0);
+        : (row.comanda_items ?? []).reduce(
+            (sum, item) => sum + item.charged_price_cents,
+            0
+          );
 
     const grossByPro = new Map<string, number>();
     const commissionByPro = new Map<string, number>();
+
     for (const item of items) {
       if (!item.professional_id) continue;
       const pro = firstPro(item.professionals);
@@ -589,15 +1093,12 @@ export async function getCommissionReport(
         {
           professionalNickname: pro?.nickname ?? "—",
           commissionPercent: pro?.commission_percent ?? 50,
-          summary: {
-            servicesGrossCents: 0,
-            commissionCents: 0,
-            itemCount: 0,
-            comandaCount: 0,
-          },
+          summary: emptySummary(),
           byPaymentMethod: emptyPaymentMap(),
           byDay: emptyDayMap(),
           comandaIds: new Set<string>(),
+          serviceBreakdown: new Map(),
+          comandas: new Map(),
         };
 
       const pct = pro?.commission_percent ?? entry.commissionPercent;
@@ -609,17 +1110,65 @@ export async function getCommissionReport(
         },
         new Map([[item.professional_id, pct]])
       );
+
       entry.summary.servicesGrossCents += item.charged_price_cents;
       entry.summary.commissionCents += itemCommission;
       entry.summary.itemCount += 1;
+      if (item.is_tip) {
+        entry.summary.tipCents += item.charged_price_cents;
+      } else {
+        entry.summary.serviceItemCount += 1;
+        entry.summary.shopCents += item.charged_price_cents - itemCommission;
+      }
       entry.comandaIds.add(row.id);
+
       bumpDay(
         entry.byDay,
         serviceDate,
         item.charged_price_cents,
         itemCommission,
-        row.id
+        row.id,
+        item.is_tip
       );
+      bumpServiceBreakdown(
+        entry.serviceBreakdown,
+        item.service_name,
+        item.is_tip,
+        item.charged_price_cents,
+        itemCommission
+      );
+
+      const comandaKey = row.id;
+      const comandaAcc =
+        entry.comandas.get(comandaKey) ??
+        {
+          comandaId: row.id,
+          serviceDate,
+          closedAt: row.closed_at,
+          customerWhatsapp: row.customer_whatsapp,
+          comandaTotalCents: comandaTotal,
+          grossCents: 0,
+          commissionCents: 0,
+          tipCents: 0,
+          serviceItemCount: 0,
+          items: [],
+          payments: row.comanda_payments ?? [],
+        };
+      comandaAcc.items.push({
+        serviceName: item.service_name,
+        isTip: item.is_tip,
+        chargedPriceCents: item.charged_price_cents,
+        commissionCents: itemCommission,
+      });
+      comandaAcc.grossCents += item.charged_price_cents;
+      comandaAcc.commissionCents += itemCommission;
+      if (item.is_tip) {
+        comandaAcc.tipCents += item.charged_price_cents;
+      } else {
+        comandaAcc.serviceItemCount += 1;
+      }
+      entry.comandas.set(comandaKey, comandaAcc);
+
       grossByPro.set(
         item.professional_id,
         (grossByPro.get(item.professional_id) ?? 0) + item.charged_price_cents
@@ -631,9 +1180,28 @@ export async function getCommissionReport(
       proMap.set(item.professional_id, entry);
     }
 
-    const rowGross = items.reduce((sum, item) => sum + item.charged_price_cents, 0);
-    const rowCommission = [...commissionByPro.values()].reduce((sum, v) => sum + v, 0);
-    bumpDay(reportByDay, serviceDate, rowGross, rowCommission, row.id);
+    for (const item of items) {
+      bumpDay(
+        reportByDay,
+        serviceDate,
+        item.charged_price_cents,
+        calculateItemCommissionCents(
+          {
+            chargedPriceCents: item.charged_price_cents,
+            professionalId: item.professional_id,
+            isTip: item.is_tip,
+          },
+          new Map([
+            [
+              item.professional_id ?? "",
+              firstPro(item.professionals)?.commission_percent ?? 50,
+            ],
+          ])
+        ),
+        row.id,
+        item.is_tip
+      );
+    }
 
     if (comandaTotal <= 0) continue;
 
@@ -649,6 +1217,15 @@ export async function getCommissionReport(
     }
   }
 
+  const whatsapps = [
+    ...new Set(
+      [...proMap.values()].flatMap((entry) =>
+        [...entry.comandas.values()].map((comanda) => comanda.customerWhatsapp)
+      )
+    ),
+  ];
+  const customerNames = await loadCustomerNamesByWhatsapp(admin, whatsapps);
+
   const professionals: CommissionProfessionalReport[] = [...proMap.entries()]
     .map(([id, entry]) => ({
       professionalId: id,
@@ -660,6 +1237,28 @@ export async function getCommissionReport(
       },
       byPaymentMethod: entry.byPaymentMethod,
       byDay: dayMapToRows(entry.byDay),
+      serviceBreakdown: [...entry.serviceBreakdown.values()].sort(
+        (a, b) => b.grossCents - a.grossCents
+      ),
+      comandas: [...entry.comandas.values()]
+        .map((comanda) => ({
+          comandaId: comanda.comandaId,
+          serviceDate: comanda.serviceDate,
+          closedAt: comanda.closedAt,
+          customerWhatsapp: comanda.customerWhatsapp,
+          customerName: customerNames.get(comanda.customerWhatsapp) ?? null,
+          grossCents: comanda.grossCents,
+          commissionCents: comanda.commissionCents,
+          tipCents: comanda.tipCents,
+          serviceItemCount: comanda.serviceItemCount,
+          items: comanda.items,
+          payments: finalizeComandaPayments(comanda, comanda.payments),
+        }))
+        .sort((a, b) => {
+          const closedA = a.closedAt ?? "";
+          const closedB = b.closedAt ?? "";
+          return closedB.localeCompare(closedA);
+        }),
     }))
     .sort((a, b) =>
       a.professionalNickname.localeCompare(b.professionalNickname, "pt-BR")
@@ -670,8 +1269,11 @@ export async function getCommissionReport(
       servicesGrossCents: acc.servicesGrossCents + row.summary.servicesGrossCents,
       commissionCents: acc.commissionCents + row.summary.commissionCents,
       itemCount: acc.itemCount + row.summary.itemCount,
+      tipCents: acc.tipCents + row.summary.tipCents,
+      serviceItemCount: acc.serviceItemCount + row.summary.serviceItemCount,
+      shopCents: acc.shopCents + row.summary.shopCents,
     }),
-    { servicesGrossCents: 0, commissionCents: 0, itemCount: 0 }
+    emptySummary()
   );
 
   const reportSummary: CommissionReportSummary = {

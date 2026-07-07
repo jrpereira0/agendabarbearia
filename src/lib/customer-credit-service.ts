@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CashInflowPaymentMethod } from "@/lib/comanda-types";
+import { formatPriceBRL } from "@/lib/format";
 
 export type CustomerCreditTransaction = {
   id: string;
@@ -10,6 +11,73 @@ export type CustomerCreditTransaction = {
   comandaId: string | null;
   createdAt: string;
 };
+
+type CreditTxRow = {
+  id: string;
+  customer_id: string;
+  amount_cents: number;
+  type: "add" | "use";
+};
+
+function sortTransactionsForReversal(
+  transactions: CreditTxRow[]
+): CreditTxRow[] {
+  return [...transactions].sort((a, b) => {
+    if (a.type === "use" && b.type === "add") return -1;
+    if (a.type === "add" && b.type === "use") return 1;
+    return 0;
+  });
+}
+
+export async function canReverseComandaCreditTransactions(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: transactions } = await admin
+    .from("customer_credit_transactions")
+    .select("id, customer_id, amount_cents, type")
+    .eq("comanda_id", comandaId);
+
+  if (!transactions?.length) return { ok: true };
+
+  const balanceByCustomer = new Map<string, number>();
+
+  for (const tx of transactions) {
+    if (!balanceByCustomer.has(tx.customer_id)) {
+      const { data: customer } = await admin
+        .from("customers")
+        .select("credit_balance_cents")
+        .eq("id", tx.customer_id)
+        .maybeSingle();
+
+      if (!customer) {
+        return { ok: false, error: "Cliente não encontrado para estornar o crédito." };
+      }
+
+      balanceByCustomer.set(tx.customer_id, customer.credit_balance_cents);
+    }
+  }
+
+  for (const tx of sortTransactionsForReversal(transactions)) {
+    const balance = balanceByCustomer.get(tx.customer_id) ?? 0;
+    const nextBalance = balance - tx.amount_cents;
+
+    if (nextBalance < 0) {
+      const shortfallCents = tx.amount_cents - balance;
+      return {
+        ok: false,
+        error:
+          tx.type === "add"
+            ? `Não dá para reabrir: o cliente já usou ${formatPriceBRL(shortfallCents)} deste crédito em outro lugar. Ajuste o saldo no cadastro do cliente antes de reabrir.`
+            : "Saldo de crédito inconsistente para reabrir esta comanda.",
+      };
+    }
+
+    balanceByCustomer.set(tx.customer_id, nextBalance);
+  }
+
+  return { ok: true };
+}
 
 export async function getCustomerCreditBalance(
   admin: SupabaseClient,
@@ -186,16 +254,51 @@ export async function deductCustomerCredit(
 export async function reverseComandaCreditTransactions(
   admin: SupabaseClient,
   comandaId: string
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const canReverse = await canReverseComandaCreditTransactions(admin, comandaId);
+  if (!canReverse.ok) return canReverse;
+
   const { data: transactions } = await admin
     .from("customer_credit_transactions")
-    .select("id, customer_id, amount_cents")
+    .select("id, customer_id, amount_cents, type")
     .eq("comanda_id", comandaId);
 
-  if (!transactions?.length) return;
+  if (!transactions?.length) return { ok: true };
 
-  for (const tx of transactions) {
-    await admin.from("customer_credit_transactions").delete().eq("id", tx.id);
-    await applyCreditDelta(admin, tx.customer_id, -tx.amount_cents);
+  const appliedDeltas: Array<{ customerId: string; deltaCents: number }> = [];
+
+  for (const tx of sortTransactionsForReversal(transactions)) {
+    const deltaCents = -tx.amount_cents;
+    const balanceResult = await applyCreditDelta(admin, tx.customer_id, deltaCents);
+    if (!balanceResult.ok) {
+      for (const applied of [...appliedDeltas].reverse()) {
+        await applyCreditDelta(admin, applied.customerId, -applied.deltaCents);
+      }
+      return {
+        ok: false,
+        error:
+          "Não foi possível estornar o crédito desta comanda. Tente de novo.",
+      };
+    }
+
+    const { error: deleteError } = await admin
+      .from("customer_credit_transactions")
+      .delete()
+      .eq("id", tx.id);
+
+    if (deleteError) {
+      await applyCreditDelta(admin, tx.customer_id, -deltaCents);
+      for (const applied of [...appliedDeltas].reverse()) {
+        await applyCreditDelta(admin, applied.customerId, -applied.deltaCents);
+      }
+      return {
+        ok: false,
+        error: "Não foi possível estornar o crédito desta comanda.",
+      };
+    }
+
+    appliedDeltas.push({ customerId: tx.customer_id, deltaCents });
   }
+
+  return { ok: true };
 }

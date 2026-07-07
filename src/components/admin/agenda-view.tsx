@@ -23,6 +23,7 @@ import type { AgendaDayContext } from "@/lib/get-agenda-day";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
+import type { ProfessionalPermissions } from "@/lib/professional-permissions";
 
 type AgendaCashRegisterData = {
   cash: CashRegisterSummary;
@@ -36,6 +37,7 @@ type AgendaViewProps = {
   today: string;
   isOwner: boolean;
   professionalId: string | null;
+  permissions: ProfessionalPermissions;
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
   services: ServiceOption[];
@@ -45,24 +47,89 @@ type AgendaViewProps = {
 function AgendaToolbar({
   date,
   isToday,
-  canBook,
+  canBookNormal,
+  canBookEncaixe,
   onPrevDay,
   onToday,
   onNextDay,
   onRefresh,
   onBookNormal,
   onBookEncaixe,
+  mobile = false,
 }: {
   date: string;
   isToday: boolean;
-  canBook: boolean;
+  canBookNormal: boolean;
+  canBookEncaixe: boolean;
   onPrevDay: () => void;
   onToday: () => void;
   onNextDay: () => void;
   onRefresh: () => void;
   onBookNormal: () => void;
   onBookEncaixe: () => void;
+  mobile?: boolean;
 }) {
+  if (mobile) {
+    return (
+      <div className="shrink-0 border-b bg-background">
+        <div className="flex items-center gap-1 px-4 py-2.5">
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={onPrevDay}
+            aria-label="Dia anterior"
+          >
+            <ChevronLeft />
+          </Button>
+          <Button variant="outline" size="sm" onClick={onToday} disabled={isToday}>
+            Hoje
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="size-8"
+            onClick={onNextDay}
+            aria-label="Próximo dia"
+          >
+            <ChevronRight />
+          </Button>
+          <p className="min-w-0 flex-1 truncate text-center text-sm font-medium">
+            {formatAgendaHeaderDate(date)}
+          </p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0"
+            onClick={onRefresh}
+            aria-label="Atualizar"
+          >
+            <RefreshCw />
+          </Button>
+        </div>
+        {(canBookNormal || canBookEncaixe) && (
+          <div className="flex gap-2 border-t px-4 py-2">
+            {canBookNormal && (
+              <Button size="sm" className="flex-1" onClick={onBookNormal}>
+                + Agendar
+              </Button>
+            )}
+            {canBookEncaixe && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={onBookEncaixe}
+              >
+                + Encaixe
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-background px-4 py-3 md:px-6">
       <div className="flex items-center gap-1">
@@ -89,15 +156,15 @@ function AgendaToolbar({
         </Button>
       </div>
 
-      {canBook && (
-        <>
-          <Button size="sm" onClick={onBookNormal}>
-            + Agendar
-          </Button>
-          <Button size="sm" variant="outline" onClick={onBookEncaixe}>
-            + Encaixe
-          </Button>
-        </>
+      {canBookNormal && (
+        <Button size="sm" onClick={onBookNormal}>
+          + Agendar
+        </Button>
+      )}
+      {canBookEncaixe && (
+        <Button size="sm" variant="outline" onClick={onBookEncaixe}>
+          + Encaixe
+        </Button>
       )}
 
       <p className="flex-1 text-center text-sm font-medium sm:text-base">
@@ -121,12 +188,14 @@ function AgendaMainContent({
   dayContext,
   appointments,
   isOwner,
+  canBookClients,
   onSlotClick,
   onAppointmentClick,
 }: {
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
   isOwner: boolean;
+  canBookClients: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
   onAppointmentClick: (apt: AppointmentItem) => void;
 }) {
@@ -145,6 +214,7 @@ function AgendaMainContent({
         professionals={dayContext.professionals}
         appointments={appointments}
         isOwner={isOwner}
+        canBookClients={canBookClients}
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
       />
@@ -157,6 +227,7 @@ export function AgendaView({
   today,
   isOwner,
   professionalId,
+  permissions,
   dayContext,
   appointments,
   services,
@@ -190,10 +261,12 @@ export function AgendaView({
     [dayContext.professionals]
   );
 
-  const canBook =
+  const canBookBase =
     professionals.length > 0 &&
     services.length > 0 &&
     (isOwner || professionalId !== null);
+  const canBookNormal = canBookBase && permissions.canBookClients;
+  const canBookEncaixe = canBookBase && permissions.canCreateSqueezeIn;
 
   function goToDate(next: string) {
     router.push(`/admin?date=${next}`);
@@ -204,6 +277,9 @@ export function AgendaView({
     proId?: string,
     startTime?: string
   ) {
+    if (mode === "normal" && !canBookNormal) return;
+    if (mode === "encaixe" && !canBookEncaixe) return;
+
     setBookingMode(mode);
     setBookingProfessionalId(
       proId ?? (isOwner ? null : professionalId ?? professionals[0]?.id ?? null)
@@ -240,9 +316,11 @@ export function AgendaView({
   const sidebarProps = {
     date,
     today,
-    canBook,
+    canBookNormal,
+    canBookEncaixe,
     isOwner,
     professionalId,
+    canManageScheduleBlocks: permissions.canManageScheduleBlocks,
     slotStepMinutes: dayContext.slotStepMinutes,
     scheduleBlocks: dayContext.scheduleBlocks,
     professionals: professionals.map((p) => ({
@@ -257,7 +335,8 @@ export function AgendaView({
   const toolbarProps = {
     date,
     isToday,
-    canBook,
+    canBookNormal,
+    canBookEncaixe,
     onPrevDay: () => goToDate(shiftDate(date, -1)),
     onToday: () => goToDate(today),
     onNextDay: () => goToDate(shiftDate(date, 1)),
@@ -270,22 +349,27 @@ export function AgendaView({
     dayContext,
     appointments,
     isOwner,
+    canBookClients: permissions.canBookClients,
     onSlotClick: handleSlotClick,
     onAppointmentClick: handleAppointmentClick,
   };
 
   return (
     <div className="-m-4 md:-m-8">
-      {/* Mobile: barra no topo, calendário rola com a página, grade com scroll próprio */}
-      <div className="flex flex-col lg:hidden">
-        <AgendaToolbar {...toolbarProps} />
+      {/* Mobile: grade em destaque; calendário e extras colapsáveis */}
+      <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col lg:hidden">
+        <AgendaToolbar {...toolbarProps} mobile />
 
-        <div className="p-4">
-          <AgendaSidebar {...sidebarProps} />
+        <div className="shrink-0 px-4 pt-3">
+          <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="date" />
         </div>
 
-        <div className="h-[55dvh] min-h-[240px] shrink-0 overflow-y-auto overscroll-y-contain px-4 pb-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3">
           <AgendaMainContent {...mainContentProps} />
+        </div>
+
+        <div className="shrink-0 border-t bg-muted/15 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="tools" />
         </div>
       </div>
 
@@ -299,7 +383,7 @@ export function AgendaView({
         </section>
 
         <aside className="w-56 shrink-0 pb-6">
-          <AgendaSidebar {...sidebarProps} />
+          <AgendaSidebar {...sidebarProps} layout="desktop" />
         </aside>
       </div>
 
@@ -326,6 +410,7 @@ export function AgendaView({
         open={actionsOpen}
         onOpenChange={setActionsOpen}
         isOwner={isOwner}
+        permissions={permissions}
         sessionProfessionalId={professionalId}
         onOpenComanda={handleOpenComanda}
         onEditAppointment={() => handleEditAppointment()}
@@ -335,6 +420,7 @@ export function AgendaView({
         appointment={selectedAppointment}
         open={comandaOpen}
         onOpenChange={setComandaOpen}
+        permissions={permissions}
         servicesCatalog={services}
         sessionProfessionalId={professionalId}
         slotStepMinutes={dayContext.slotStepMinutes}

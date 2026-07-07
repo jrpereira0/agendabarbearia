@@ -25,6 +25,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import {
+  appendPermissionsToFormData,
+  ProfessionalPermissionsFields,
+} from "@/components/admin/professional-permissions-fields";
+import {
   WeekGridEditor,
   fillWeek,
   type DayRanges,
@@ -33,6 +37,10 @@ import type { BusinessDay } from "@/components/admin/business-hours-form";
 import { compressImage } from "@/lib/compress-image";
 import { formatWhatsapp } from "@/lib/format";
 import type { ActionResult } from "@/lib/require-owner";
+import {
+  DEFAULT_BARBER_PERMISSIONS,
+  type ProfessionalPermissions,
+} from "@/lib/professional-permissions";
 
 export type ServiceOption = { id: string; name: string };
 
@@ -47,6 +55,7 @@ export type ProfessionalFormValues = {
   commissionPercent: number;
   serviceIds: string[];
   schedule: DayRanges[];
+  permissions: ProfessionalPermissions;
 };
 
 type ProfessionalFormProps = {
@@ -80,6 +89,9 @@ export function ProfessionalForm({
   const [schedule, setSchedule] = useState<DayRanges[]>(() =>
     fillWeek(initialValues?.schedule ?? [])
   );
+  const [permissions, setPermissions] = useState<ProfessionalPermissions>(
+    initialValues?.permissions ?? { ...DEFAULT_BARBER_PERMISSIONS }
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -98,6 +110,7 @@ export function ProfessionalForm({
       formData.set("photo", await compressImage(photo));
     }
     formData.set("schedule", JSON.stringify(schedule));
+    appendPermissionsToFormData(formData, permissions);
 
     const result = await onSubmit(formData);
 
@@ -355,6 +368,13 @@ export function ProfessionalForm({
               />
             )}
           </section>
+
+          <Separator />
+
+          <ProfessionalPermissionsFields
+            value={permissions}
+            onChange={setPermissions}
+          />
 
           <Separator />
 

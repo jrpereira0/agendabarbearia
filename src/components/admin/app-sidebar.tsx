@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   CalendarDays,
   Contact,
   ExternalLink,
@@ -12,7 +13,6 @@ import {
   Scissors,
   Settings,
   Users,
-  Wallet,
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,7 +42,12 @@ import { BOOKING_PATH } from "@/lib/booking-path";
 
 const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
-  { title: "Financeiro", url: "/admin/financeiro", icon: Wallet, ownerOnly: true },
+  {
+    title: "Comissões",
+    url: "/admin/financeiro/comissoes",
+    icon: Percent,
+    barberTitle: "Minhas comissões",
+  },
   {
     title: "Caixas",
     url: "/admin/financeiro/caixas",
@@ -50,9 +55,9 @@ const dayToDayItems = [
     ownerOnly: true,
   },
   {
-    title: "Comissões",
-    url: "/admin/financeiro/comissoes",
-    icon: Percent,
+    title: "Financeiro",
+    url: "/admin/financeiro",
+    icon: BarChart3,
     ownerOnly: true,
   },
 ];
@@ -82,11 +87,20 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
     .toUpperCase();
 
   function renderItems(
-    items: { title: string; url: string; icon: typeof CalendarDays; ownerOnly?: boolean }[]
+    items: {
+      title: string;
+      url: string;
+      icon: typeof CalendarDays;
+      ownerOnly?: boolean;
+      barberTitle?: string;
+    }[]
   ) {
     return items
       .filter((item) => !item.ownerOnly || isOwner)
-      .map((item) => (
+      .map((item) => {
+        const label =
+          !isOwner && item.barberTitle ? item.barberTitle : item.title;
+        return (
       <SidebarMenuItem key={item.url}>
         <SidebarMenuButton
           asChild
@@ -97,16 +111,17 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                 ? pathname === "/admin/financeiro"
                 : pathname === item.url || pathname.startsWith(`${item.url}/`)
           }
-          tooltip={item.title}
+          tooltip={label}
           onClick={() => setOpenMobile(false)}
         >
           <Link href={item.url}>
             <item.icon />
-            <span>{item.title}</span>
+            <span>{label}</span>
           </Link>
         </SidebarMenuButton>
       </SidebarMenuItem>
-    ));
+        );
+      });
   }
 
   return (

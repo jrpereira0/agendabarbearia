@@ -10,6 +10,10 @@ import { formatTime } from "@/lib/format";
 import { getAvailability } from "@/lib/get-availability";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 import {
+  loadServicePricingContext,
+  resolvePriceCentsOrFallback,
+} from "@/lib/service-prices-for-date";
+import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
   whatsappLookupKeys,
@@ -60,7 +64,33 @@ type AppointmentServiceLink = {
     | null;
 };
 
-function mapAppointmentServices(links: AppointmentServiceLink[]): {
+function sumAppointmentServicesPrice(
+  links: AppointmentServiceLink[],
+  pricing: Awaited<ReturnType<typeof loadServicePricingContext>>
+): number {
+  let totalPriceCents = 0;
+
+  for (const link of links) {
+    const svc = link.services;
+    const service = Array.isArray(svc) ? svc[0] : svc;
+    if (!service) continue;
+    totalPriceCents += resolvePriceCentsOrFallback(
+      {
+        id: link.service_id,
+        name: service.name,
+        price_cents: service.price_cents,
+      },
+      pricing
+    );
+  }
+
+  return totalPriceCents;
+}
+
+function mapAppointmentServices(
+  links: AppointmentServiceLink[],
+  pricing: Awaited<ReturnType<typeof loadServicePricingContext>>
+): {
   serviceIds: string[];
   serviceNames: string[];
   totalMinutes: number;
@@ -69,7 +99,6 @@ function mapAppointmentServices(links: AppointmentServiceLink[]): {
   const serviceIds: string[] = [];
   const serviceNames: string[] = [];
   let totalMinutes = 0;
-  let totalPriceCents = 0;
 
   for (const link of links) {
     serviceIds.push(link.service_id);
@@ -78,10 +107,14 @@ function mapAppointmentServices(links: AppointmentServiceLink[]): {
     if (!service) continue;
     serviceNames.push(service.name);
     totalMinutes += service.duration_minutes;
-    totalPriceCents += service.price_cents;
   }
 
-  return { serviceIds, serviceNames, totalMinutes, totalPriceCents };
+  return {
+    serviceIds,
+    serviceNames,
+    totalMinutes,
+    totalPriceCents: sumAppointmentServicesPrice(links, pricing),
+  };
 }
 
 function isUpcoming(date: string, startTime: string): boolean {
@@ -174,6 +207,28 @@ export async function listPublicAppointmentsByWhatsapp(
     };
   }
 
+  const pricingByDate = new Map<
+    string,
+    Awaited<ReturnType<typeof loadServicePricingContext>>
+  >();
+  const uniqueDates = [...new Set((rows ?? []).map((row) => row.date))];
+  const serviceIds = [
+    ...new Set(
+      (rows ?? []).flatMap((row) =>
+        ((row.appointment_services ?? []) as AppointmentServiceLink[]).map(
+          (link) => link.service_id
+        )
+      )
+    ),
+  ];
+
+  for (const appointmentDate of uniqueDates) {
+    pricingByDate.set(
+      appointmentDate,
+      await loadServicePricingContext(admin, appointmentDate, serviceIds)
+    );
+  }
+
   const appointments = (rows ?? [])
     .map((row) => {
       const startTime = formatTime(row.start_time);
@@ -186,8 +241,11 @@ export async function listPublicAppointmentsByWhatsapp(
       const professional = Array.isArray(pro) ? pro[0] : pro;
 
       const links = (row.appointment_services ?? []) as AppointmentServiceLink[];
+      const pricing = pricingByDate.get(row.date);
+      if (!pricing) return null;
+
       const { serviceIds, serviceNames, totalMinutes, totalPriceCents } =
-        mapAppointmentServices(links);
+        mapAppointmentServices(links, pricing);
 
       return {
         id: row.id,
@@ -260,7 +318,12 @@ export async function getLastCompletedAppointmentByWhatsapp(
     | null;
   const professional = Array.isArray(pro) ? pro[0] : pro;
   const links = (row.appointment_services ?? []) as AppointmentServiceLink[];
-  const { serviceIds, serviceNames } = mapAppointmentServices(links);
+  const pricing = await loadServicePricingContext(
+    admin,
+    row.date,
+    links.map((link) => link.service_id)
+  );
+  const { serviceIds, serviceNames } = mapAppointmentServices(links, pricing);
 
   return {
     ok: true,

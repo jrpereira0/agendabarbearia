@@ -1,11 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { ActionResult } from "@/lib/require-owner";
+import {
+  mapProfessionalPermissionsRow,
+  OWNER_PERMISSIONS,
+  type ProfessionalPermissions,
+} from "@/lib/professional-permissions";
 
 export type AdminSession = {
   userId: string;
   isOwner: boolean;
   professionalId: string | null;
+  permissions: ProfessionalPermissions;
 };
 
 export async function getAdminSession(): Promise<AdminSession | null> {
@@ -30,20 +36,28 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     return null;
   }
 
-  let professionalId: string | null = null;
-  if (profile.role === "barber") {
-    const { data: pro } = await supabase
-      .from("professionals")
-      .select("id")
-      .eq("profile_id", user.id)
-      .maybeSingle();
-    professionalId = pro?.id ?? null;
+  if (profile.role === "owner") {
+    return {
+      userId: user.id,
+      isOwner: true,
+      professionalId: null,
+      permissions: OWNER_PERMISSIONS,
+    };
   }
+
+  const { data: pro } = await supabase
+    .from("professionals")
+    .select(
+      "id, can_book_clients, can_create_squeeze_in, can_open_comanda, can_edit_comanda, can_close_comanda, can_edit_appointments, can_cancel_appointments, can_manage_schedule_blocks"
+    )
+    .eq("profile_id", user.id)
+    .maybeSingle();
 
   return {
     userId: user.id,
-    isOwner: profile.role === "owner",
-    professionalId,
+    isOwner: false,
+    professionalId: pro?.id ?? null,
+    permissions: mapProfessionalPermissionsRow(pro),
   };
 }
 

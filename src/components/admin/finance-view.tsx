@@ -8,6 +8,8 @@ import {
   BarChart3,
   CalendarDays,
   Percent,
+  Receipt,
+  Scissors,
   TrendingDown,
   TrendingUp,
   Users,
@@ -19,6 +21,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
+import {
+  DonutChart,
+  HorizontalBarChart,
+  SparklineBars,
+  VerticalBarChart,
+} from "@/components/admin/finance-charts";
 import {
   formatPaymentMethodLabel,
   type FinanceMetricsReport,
@@ -83,64 +91,48 @@ function MetricCard({
   );
 }
 
-function BarRow({
-  label,
-  value,
-  max,
-  suffix,
+function SectionTitle({
+  icon: Icon,
+  title,
+  description,
+  action,
 }: {
-  label: string;
-  value: number;
-  max: number;
-  suffix?: string;
+  icon?: typeof BarChart3;
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
 }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between gap-2 text-sm">
-        <span className="truncate text-muted-foreground">{label}</span>
-        <span className="shrink-0 font-medium tabular-nums">
-          {formatPriceBRL(value)}
-          {suffix && (
-            <span className="ml-1 text-xs font-normal text-muted-foreground">
-              {suffix}
-            </span>
-          )}
-        </span>
+    <div className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 className="flex items-center gap-2 text-sm font-medium">
+          {Icon && <Icon className="size-4" />}
+          {title}
+        </h2>
+        {description && (
+          <p className="text-xs text-muted-foreground">{description}</p>
+        )}
       </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-foreground/80 transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+      {action}
     </div>
   );
 }
 
-export function FinanceView({
-  from,
-  to,
-  today,
-  report,
-}: FinanceViewProps) {
+export function FinanceView({ from, to, today, report }: FinanceViewProps) {
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
 
   const isSingleDay = from === to;
   const isToday = isSingleDay && from === today;
-  const hasData = report.totals.comandaCount > 0;
+  const hasData = report.totals.serviceItemCount > 0;
 
   const activePaymentMethods = useMemo(
     () =>
-      PAYMENT_METHODS.filter((method) => report.byPaymentMethod[method] > 0),
-    [report.byPaymentMethod]
-  );
-
-  const maxDayTotal = useMemo(
-    () => Math.max(...report.byDay.map((day) => day.totalCents), 0),
-    [report.byDay]
+      PAYMENT_METHODS.filter(
+        (method) => report.cashInflowByPaymentMethod[method] > 0
+      ),
+    [report.cashInflowByPaymentMethod]
   );
 
   const topProfessional = useMemo(() => {
@@ -149,9 +141,53 @@ export function FinanceView({
   }, [report.professionals]);
 
   const daysWithSales = useMemo(
-    () => report.byDay.filter((day) => day.comandaCount > 0),
+    () => report.byDay.filter((day) => day.cashInflowCents > 0),
     [report.byDay]
   );
+
+  const dailySparkline = useMemo(
+    () => report.byDay.map((day) => day.cashInflowCents),
+    [report.byDay]
+  );
+
+  const weekdayChartItems = useMemo(() => {
+    const ordered = [1, 2, 3, 4, 5, 6, 0];
+    return ordered.map((weekday) => {
+      const row = report.weekdayBreakdown.find((r) => r.weekday === weekday)!;
+      return {
+        label: row.label.slice(0, 3),
+        value: row.grossCents,
+        sublabel:
+          row.serviceItemCount > 0 ? `${row.serviceItemCount} serv.` : undefined,
+      };
+    });
+  }, [report.weekdayBreakdown]);
+
+  const serviceItems = useMemo(
+    () =>
+      report.serviceBreakdown
+        .filter((row) => !row.isTip)
+        .slice(0, 8)
+        .map((row) => ({
+          label: row.serviceName,
+          value: row.grossCents,
+          sublabel: `${row.quantity}x`,
+        })),
+    [report.serviceBreakdown]
+  );
+
+  const tipTotal = useMemo(
+    () =>
+      report.serviceBreakdown
+        .filter((row) => row.isTip)
+        .reduce((sum, row) => sum + row.grossCents, 0),
+    [report.serviceBreakdown]
+  );
+
+  const cashInflowHint =
+    report.totals.creditDepositsCents > 0
+      ? `${formatPriceBRL(report.totals.totalCents)} em serviços + ${formatPriceBRL(report.totals.creditDepositsCents)} em créditos`
+      : `${report.totals.serviceItemCount} serviços realizados`;
 
   function applyFilter(e: React.FormEvent) {
     e.preventDefault();
@@ -162,16 +198,14 @@ export function FinanceView({
   function applyPreset(presetFrom: string, presetTo: string) {
     setFromDate(presetFrom);
     setToDate(presetTo);
-    router.push(
-      `/admin/financeiro?from=${presetFrom}&to=${presetTo}`
-    );
+    router.push(`/admin/financeiro?from=${presetFrom}&to=${presetTo}`);
   }
 
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
         title="Financeiro"
-        description="Métricas e indicadores para analisar o desempenho da barbearia."
+        description="Painel para estudar faturamento, comissões, mix de pagamento e desempenho por dia e por serviço."
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -211,6 +245,7 @@ export function FinanceView({
                       ? "Um dia · "
                       : `${report.periodDayCount} dias · `}
                   {report.activeDays} com movimentação
+                  {report.idleDays > 0 && ` · ${report.idleDays} sem vendas`}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -274,7 +309,7 @@ export function FinanceView({
         <EmptyState
           icon={BarChart3}
           title="Sem dados no período"
-          description="Não há comandas fechadas entre essas datas. Ajuste o período ou feche atendimentos na agenda."
+          description="Não há serviços finalizados entre essas datas. Ajuste o período ou feche atendimentos na agenda."
           action={
             <Button variant="outline" size="sm" asChild>
               <Link href={`/admin?date=${to}`}>Abrir agenda</Link>
@@ -285,105 +320,114 @@ export function FinanceView({
         <>
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
-              label="Faturamento"
-              value={formatPriceBRL(report.totals.totalCents)}
-              hint={`${report.totals.comandaCount} comandas`}
-              change={report.comparison?.changePercent ?? null}
+              label="Entradas no caixa"
+              value={formatPriceBRL(report.totals.cashInflowCents)}
+              hint={cashInflowHint}
+              change={report.comparison?.cashInflowChangePercent ?? null}
             />
             <MetricCard
-              label="Ticket médio"
-              value={formatPriceBRL(report.averageTicketCents)}
-              hint="Por comanda fechada"
+              label="Faturamento em serviços"
+              value={formatPriceBRL(report.totals.servicesGrossCents)}
+              hint={`${report.totals.serviceItemCount} serviços realizados`}
+              change={report.comparison?.totalChangePercent ?? null}
+            />
+            <MetricCard
+              label="Valor médio por serviço"
+              value={formatPriceBRL(report.averageServiceCents)}
+              hint={`${report.averageServicesPerActiveDay} serviços/dia ativo`}
+              change={report.comparison?.serviceChangePercent ?? null}
             />
             <MetricCard
               label="Comissões"
               value={formatPriceBRL(report.totals.commissionCents)}
-              hint={`${report.commissionRatePercent}% do faturamento`}
-            />
-            <MetricCard
-              label="Barbearia"
-              value={formatPriceBRL(report.totals.shopCents)}
-              hint={`${report.shopRatePercent}% do faturamento`}
+              hint={`${report.commissionRatePercent}% dos serviços · barbearia ${report.shopRatePercent}%`}
             />
           </div>
 
           {report.comparison && (
-            <p className="text-xs text-muted-foreground">
-              Período anterior ({formatPeriodLabel(
-                report.comparison.previousFrom,
-                report.comparison.previousTo
-              )}
-              ): {formatPriceBRL(report.comparison.totalCents)} em{" "}
-              {report.comparison.comandaCount} comandas.
-            </p>
+            <Card>
+              <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Comparativo com período anterior
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatPeriodLabel(
+                      report.comparison.previousFrom,
+                      report.comparison.previousTo
+                    )}
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3 sm:gap-6">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Caixa</p>
+                    <p className="font-medium tabular-nums">
+                      {formatPriceBRL(report.comparison.cashInflowCents)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatChange(report.comparison.cashInflowChangePercent)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Faturamento</p>
+                    <p className="font-medium tabular-nums">
+                      {formatPriceBRL(report.comparison.totalCents)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatChange(report.comparison.totalChangePercent)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Qtd. serviços</p>
+                    <p className="font-medium tabular-nums">
+                      {report.comparison.serviceItemCount}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatChange(report.comparison.serviceChangePercent)}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Evolução diária */}
             <section className="flex flex-col gap-3">
-              <div>
-                <h2 className="text-sm font-medium">Evolução diária</h2>
-                <p className="text-xs text-muted-foreground">
-                  Faturamento por dia do caixa
-                </p>
-              </div>
+              <SectionTitle
+                icon={BarChart3}
+                title="Evolução no período"
+                description="Entradas no caixa dia a dia"
+              />
               <Card>
-                <CardContent className="p-0">
-                  <div className="max-h-[22rem] overflow-y-auto">
+                <CardContent className="flex flex-col gap-4 pt-6">
+                  <SparklineBars values={dailySparkline} height={56} />
+                  <div className="max-h-[18rem] overflow-y-auto">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 z-10 border-b bg-background">
                         <tr className="text-left text-xs text-muted-foreground">
-                          <th className="px-4 py-2.5 font-medium">Dia</th>
-                          <th className="hidden px-4 py-2.5 font-medium sm:table-cell">
-                            Comandas
+                          <th className="py-2 font-medium">Dia</th>
+                          <th className="hidden py-2 font-medium sm:table-cell">
+                            Serviços
                           </th>
-                          <th className="px-4 py-2.5 font-medium text-right">
-                            Faturamento
+                          <th className="py-2 font-medium text-right">
+                            Entradas
                           </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {daysWithSales.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={3}
-                              className="px-4 py-8 text-center text-muted-foreground"
-                            >
-                              Nenhum dia com vendas.
+                        {daysWithSales.map((day) => (
+                          <tr key={day.date} className="border-b last:border-b-0">
+                            <td className="py-2.5 font-medium">
+                              {formatDateBR(day.date)}
+                            </td>
+                            <td className="hidden py-2.5 tabular-nums text-muted-foreground sm:table-cell">
+                              {day.serviceItemCount}
+                            </td>
+                            <td className="py-2.5 text-right font-semibold tabular-nums">
+                              {formatPriceBRL(day.cashInflowCents)}
                             </td>
                           </tr>
-                        ) : (
-                          daysWithSales.map((day) => (
-                            <tr key={day.date} className="border-b last:border-b-0">
-                              <td className="px-4 py-3">
-                                <p className="font-medium">
-                                  {formatDateBR(day.date)}
-                                </p>
-                                <div className="mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted sm:max-w-none">
-                                  <div
-                                    className="h-full rounded-full bg-foreground/70"
-                                    style={{
-                                      width: `${
-                                        maxDayTotal > 0
-                                          ? Math.round(
-                                              (day.totalCents / maxDayTotal) *
-                                                100
-                                            )
-                                          : 0
-                                      }%`,
-                                    }}
-                                  />
-                                </div>
-                              </td>
-                              <td className="hidden px-4 py-3 tabular-nums text-muted-foreground sm:table-cell">
-                                {day.comandaCount}
-                              </td>
-                              <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                                {formatPriceBRL(day.totalCents)}
-                              </td>
-                            </tr>
-                          ))
-                        )}
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -391,48 +435,40 @@ export function FinanceView({
               </Card>
             </section>
 
-            {/* Mix de pagamentos */}
             <section className="flex flex-col gap-3">
-              <div>
-                <h2 className="text-sm font-medium">Formas de pagamento</h2>
-                <p className="text-xs text-muted-foreground">
-                  Distribuição do faturamento no período
-                </p>
-              </div>
+              <SectionTitle
+                title="Divisão do faturamento"
+                description="Quanto ficou com barbeiros e com a barbearia"
+              />
               <Card>
-                <CardContent className="flex flex-col gap-4 pt-6">
-                  {activePaymentMethods.map((method: PaymentMethod) => {
-                    const amount = report.byPaymentMethod[method];
-                    const pct =
-                      report.totals.totalCents > 0
-                        ? Math.round((amount / report.totals.totalCents) * 100)
-                        : 0;
-                    return (
-                      <BarRow
-                        key={method}
-                        label={formatPaymentMethodLabel(method)}
-                        value={amount}
-                        max={report.totals.totalCents}
-                        suffix={`${pct}%`}
-                      />
-                    );
-                  })}
+                <CardContent className="pt-6">
+                  <DonutChart
+                    slices={[
+                      {
+                        label: "Comissões",
+                        value: report.totals.commissionCents,
+                        className: "text-foreground/45",
+                      },
+                      {
+                        label: "Barbearia",
+                        value: report.totals.shopCents,
+                        className: "text-foreground",
+                      },
+                    ]}
+                    centerValue={formatPriceBRL(report.totals.servicesGrossCents)}
+                    centerLabel="em serviços"
+                  />
                 </CardContent>
               </Card>
 
-              {topProfessional && (
+              {tipTotal > 0 && (
                 <Card>
                   <CardContent className="pt-5">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      Destaque do período
+                      Gorjetas no período
                     </p>
-                    <p className="mt-2 text-sm font-medium">
-                      {topProfessional.professionalNickname}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      Maior faturamento ·{" "}
-                      {formatPriceBRL(topProfessional.totalCents)} ·{" "}
-                      {topProfessional.comandaCount} atendimentos
+                    <p className="mt-1 text-lg font-semibold tabular-nums">
+                      {formatPriceBRL(tipTotal)}
                     </p>
                   </CardContent>
                 </Card>
@@ -440,33 +476,90 @@ export function FinanceView({
             </section>
           </div>
 
-          {/* Performance por barbeiro */}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="flex flex-col gap-3">
+              <SectionTitle
+                icon={CalendarDays}
+                title="Por dia da semana"
+                description="Em quais dias a barbearia fatura mais"
+              />
+              <Card>
+                <CardContent className="pt-6">
+                  <VerticalBarChart items={weekdayChartItems} />
+                </CardContent>
+              </Card>
+            </section>
+
+            <section className="flex flex-col gap-3">
+              <SectionTitle
+                icon={Receipt}
+                title="Formas de pagamento"
+                description="Mix de entradas no caixa"
+              />
+              <Card>
+                <CardContent className="pt-6">
+                  <HorizontalBarChart
+                    items={activePaymentMethods.map((method: PaymentMethod) => {
+                      const amount = report.cashInflowByPaymentMethod[method];
+                      const pct =
+                        report.totals.cashInflowCents > 0
+                          ? Math.round(
+                              (amount / report.totals.cashInflowCents) * 100
+                            )
+                          : 0;
+                      return {
+                        label: formatPaymentMethodLabel(method),
+                        value: amount,
+                        sublabel: `${pct}%`,
+                      };
+                    })}
+                    maxValue={report.totals.cashInflowCents}
+                  />
+                </CardContent>
+              </Card>
+            </section>
+          </div>
+
+          {serviceItems.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <SectionTitle
+                icon={Scissors}
+                title="Serviços mais vendidos"
+                description="Ranking por valor faturado no período"
+              />
+              <Card>
+                <CardContent className="pt-6">
+                  <HorizontalBarChart
+                    items={serviceItems}
+                    maxValue={serviceItems[0]?.value ?? 1}
+                  />
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
           <section className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-medium">
-                  <Users className="size-4" />
-                  Performance por barbeiro
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Faturamento, comissão e participação no período
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={`/admin/financeiro/comissoes?from=${from}&to=${to}`}>
-                  Detalhar comissões
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
+            <SectionTitle
+              icon={Users}
+              title="Performance por barbeiro"
+              description="Serviços, faturamento e comissão por barbeiro"
+              action={
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/admin/financeiro/comissoes?from=${from}&to=${to}`}>
+                    Detalhar comissões
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              }
+            />
             <Card className="overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-sm">
+                <table className="w-full min-w-[600px] text-sm">
                   <thead>
                     <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
                       <th className="px-4 py-3 font-medium">Barbeiro</th>
                       <th className="px-4 py-3 font-medium text-right">
-                        Atend.
+                        Serviços
                       </th>
                       <th className="px-4 py-3 font-medium text-right">
                         Faturamento
@@ -477,22 +570,12 @@ export function FinanceView({
                       <th className="px-4 py-3 font-medium text-right">
                         Barbearia
                       </th>
-                      <th className="hidden px-4 py-3 font-medium text-right md:table-cell">
-                        % fat.
-                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...report.professionals]
                       .sort((a, b) => b.totalCents - a.totalCents)
                       .map((row) => {
-                        const shopCents = row.totalCents - row.commissionCents;
-                        const share =
-                          report.totals.totalCents > 0
-                            ? Math.round(
-                                (row.totalCents / report.totals.totalCents) * 100
-                              )
-                            : 0;
                         return (
                           <tr
                             key={row.professionalId}
@@ -503,23 +586,22 @@ export function FinanceView({
                                 {row.professionalNickname}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {row.commissionPercent}% comissão
+                                {row.commissionPercent}% nos serviços
+                                {row.tipCents > 0 &&
+                                  ` · gorjeta ${formatPriceBRL(row.tipCents)}`}
                               </p>
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums">
-                              {row.comandaCount}
+                              {row.serviceItemCount}
                             </td>
                             <td className="px-4 py-3.5 text-right font-medium tabular-nums">
-                              {formatPriceBRL(row.totalCents)}
+                              {formatPriceBRL(row.totalCents - row.tipCents)}
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums text-muted-foreground">
                               {formatPriceBRL(row.commissionCents)}
                             </td>
                             <td className="px-4 py-3.5 text-right tabular-nums">
-                              {formatPriceBRL(shopCents)}
-                            </td>
-                            <td className="hidden px-4 py-3.5 text-right tabular-nums text-muted-foreground md:table-cell">
-                              {share}%
+                              {formatPriceBRL(row.shopCents)}
                             </td>
                           </tr>
                         );
@@ -529,23 +611,41 @@ export function FinanceView({
                     <tr className="bg-muted/20 font-semibold">
                       <td className="px-4 py-3">Total</td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {report.totals.comandaCount}
+                        {report.totals.serviceItemCount}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {formatPriceBRL(report.totals.totalCents)}
+                        {formatPriceBRL(
+                          report.professionals.reduce(
+                            (sum, row) => sum + row.totalCents - row.tipCents,
+                            0
+                          )
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
                         {formatPriceBRL(report.totals.commissionCents)}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {formatPriceBRL(report.totals.shopCents)}
+                        {formatPriceBRL(
+                          report.professionals.reduce(
+                            (sum, row) => sum + row.shopCents,
+                            0
+                          )
+                        )}
                       </td>
-                      <td className="hidden px-4 py-3 md:table-cell" />
                     </tr>
                   </tfoot>
                 </table>
               </div>
             </Card>
+
+            {topProfessional && (
+              <p className="text-xs text-muted-foreground">
+                Destaque: {topProfessional.professionalNickname} liderou com{" "}
+                {formatPriceBRL(topProfessional.totalCents)} em{" "}
+                {topProfessional.serviceItemCount} serviço
+                {topProfessional.serviceItemCount === 1 ? "" : "s"}.
+              </p>
+            )}
           </section>
         </>
       )}

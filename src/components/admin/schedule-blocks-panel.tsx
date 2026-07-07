@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { formatTime } from "@/lib/format";
 import { encaixeTimeSlots } from "@/lib/encaixe";
+import { cn } from "@/lib/utils";
 import {
   createScheduleBlock,
   deleteScheduleBlock,
@@ -38,6 +39,7 @@ type ScheduleBlocksPanelProps = {
   defaultProfessionalId: string | null;
   slotStepMinutes: number;
   canManage?: boolean;
+  compact?: boolean;
 };
 
 export function ScheduleBlocksPanel({
@@ -48,6 +50,7 @@ export function ScheduleBlocksPanel({
   defaultProfessionalId,
   slotStepMinutes,
   canManage = true,
+  compact = false,
 }: ScheduleBlocksPanelProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -115,29 +118,46 @@ export function ScheduleBlocksPanel({
   }
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">Bloqueios do dia</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Ninguém agenda nesse horário, exceto por encaixe.
-          </p>
+    <div className={cn(!compact && "rounded-lg border p-4")}>
+      {!compact && (
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">Bloqueios do dia</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Ninguém agenda nesse horário, exceto por encaixe.
+            </p>
+          </div>
+          {canManage && professionals.length > 0 && (
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setOpen(true)}
+              aria-label="Bloquear horário"
+            >
+              <Plus />
+            </Button>
+          )}
         </div>
-        {canManage && professionals.length > 0 && (
+      )}
+
+      {compact && canManage && professionals.length > 0 && (
+        <div className="mb-3 flex justify-end">
           <Button
             variant="outline"
-            size="icon-sm"
+            size="sm"
             onClick={() => setOpen(true)}
-            aria-label="Bloquear horário"
           >
             <Plus />
+            Bloquear horário
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {blocks.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          Nenhum bloqueio neste dia. Use para almoço, compromisso ou pausa.
+          {compact
+            ? "Nenhum bloqueio neste dia."
+            : "Nenhum bloqueio neste dia. Use para almoço, compromisso ou pausa."}
         </p>
       ) : (
         <ul className="flex flex-col gap-2">

@@ -38,12 +38,15 @@ import {
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/admin/search-input";
 import { DialogSection } from "@/components/admin/dialog-section";
+import { ComandaDialogSkeleton } from "@/components/skeletons/comanda-dialog-skeleton";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import type {
   ProfessionalOption,
   ServiceOption,
 } from "@/components/admin/new-appointment-dialog";
+import type { ProfessionalPermissions } from "@/lib/professional-permissions";
+import { OWNER_PERMISSIONS } from "@/lib/professional-permissions";
 import {
   ACTIVE_APPOINTMENT_STATUSES,
 } from "@/lib/appointment-status";
@@ -146,6 +149,7 @@ type ComandaDialogProps = {
   appointment: AppointmentItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  permissions?: ProfessionalPermissions;
   servicesCatalog: ServiceOption[];
   professionals?: ComandaProfessionalOption[];
   sessionProfessionalId?: string | null;
@@ -236,6 +240,7 @@ export function ComandaDialog({
   appointment,
   open,
   onOpenChange,
+  permissions = OWNER_PERMISSIONS,
   servicesCatalog,
   professionals = [],
   sessionProfessionalId = null,
@@ -425,6 +430,11 @@ export function ComandaDialog({
     [payments]
   );
 
+  const creditRemainingCents = Math.max(
+    0,
+    customerCreditBalanceCents - storeCreditUsedCents
+  );
+
   const filteredServices = useMemo(() => {
     if (!appointment) return [];
 
@@ -538,7 +548,10 @@ export function ComandaDialog({
   const hasActiveLinked = linkedAppointments.some((apt) =>
     (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
   );
-  const canEdit = isOwner && !isClosed && hasActiveLinked;
+  const canEdit =
+    (isOwner || permissions.canEditComanda) && !isClosed && hasActiveLinked;
+  const canFinalize =
+    (isOwner || permissions.canCloseComanda) && !isClosed && hasActiveLinked;
 
   function getItemProfessionalName(item: EditableItem): string {
     if (item.professionalNickname && item.professionalNickname !== "—") {
@@ -554,6 +567,22 @@ export function ComandaDialog({
     }
     return "—";
   }
+
+  function getItemAppointmentTime(item: EditableItem): string | null {
+    const apt = linkedAppointments.find(
+      (linked) =>
+        linked.id === item.appointmentId ||
+        linked.id === item.squeezeAppointmentId
+    );
+    if (!apt) return null;
+    return `${formatTime(apt.startTime)} – ${formatTime(apt.endTime)}`;
+  }
+
+  const scheduledLinkedAppointments = linkedAppointments.filter(
+    (apt) => !apt.isSqueezeIn
+  );
+  const showAppointmentTimes = scheduledLinkedAppointments.length > 1;
+  const serviceTableLabelColSpan = showAppointmentTimes ? 5 : 4;
 
   const focusAppointment =
     linkedAppointments.find((apt) => apt.id === focusAppointmentId) ??
@@ -908,6 +937,116 @@ export function ComandaDialog({
     setBusy(false);
   }
 
+  function removeCustomerCreditPayment() {
+    setPayments((prev) => {
+      const removed = prev.find(
+        (payment) => payment.paymentMethod === "store_credit"
+      );
+      const rest = prev.filter(
+        (payment) => payment.paymentMethod !== "store_credit"
+      );
+      if (!removed) return prev;
+
+      // Devolve o valor do crédito removido para as formas de pagamento
+      // restantes, para não deixar a comanda com falta de pagamento.
+      if (rest.length === 0) {
+        return [
+          {
+            localKey: newLocalKey(),
+            paymentMethod: "pix",
+            amountCents: removed.amountCents,
+          },
+        ];
+      }
+      return rest.map((payment, index) =>
+        index === rest.length - 1
+          ? { ...payment, amountCents: payment.amountCents + removed.amountCents }
+          : payment
+      );
+    });
+  }
+
+  function applyCustomerCredit() {
+    const existingCredit = payments.find(
+      (payment) => payment.paymentMethod === "store_credit"
+    );
+    const otherPayments = payments.filter(
+      (payment) => payment.paymentMethod !== "store_credit"
+    );
+
+    // Primeiro uso: normalmente há só uma forma de pagamento cobrindo o
+    // total inteiro. Nesse caso reduzimos essa forma para abrir espaço
+    // para o crédito, sem mexer em outras formas.
+    if (!existingCredit && otherPayments.length <= 1) {
+      const creditAmount = Math.min(
+        totals.totalCents,
+        customerCreditBalanceCents
+      );
+      if (creditAmount <= 0) {
+        toast.error("Este cliente não tem crédito disponível.");
+        return;
+      }
+
+      const cashDue = totals.totalCents - creditAmount;
+      const creditPayment: PaymentRow = {
+        localKey: newLocalKey(),
+        paymentMethod: "store_credit",
+        amountCents: creditAmount,
+      };
+
+      if (cashDue <= 0) {
+        setPayments([creditPayment]);
+        return;
+      }
+
+      const base = otherPayments[0] ?? {
+        localKey: newLocalKey(),
+        paymentMethod: "pix" as const,
+        amountCents: 0,
+      };
+      setPayments([{ ...base, amountCents: cashDue }, creditPayment]);
+      return;
+    }
+
+    // Demais casos (várias formas já configuradas, ou ajustando um
+    // crédito já aplicado): preenche só o que falta, sem apagar as
+    // formas de pagamento que o usuário já escolheu.
+    const otherSum = otherPayments.reduce(
+      (sum, payment) => sum + payment.amountCents,
+      0
+    );
+    const remainingDue = Math.max(0, totals.totalCents - otherSum);
+    const creditAmount = Math.min(remainingDue, customerCreditBalanceCents);
+
+    if (remainingDue <= 0) {
+      toast.error("As outras formas de pagamento já cobrem o total da comanda.");
+      return;
+    }
+    if (creditAmount <= 0) {
+      toast.error("Este cliente não tem crédito disponível.");
+      return;
+    }
+
+    if (existingCredit) {
+      setPayments((prev) =>
+        prev.map((payment) =>
+          payment.paymentMethod === "store_credit"
+            ? { ...payment, amountCents: creditAmount }
+            : payment
+        )
+      );
+    } else {
+      setPayments([
+        ...otherPayments,
+        {
+          localKey: newLocalKey(),
+          paymentMethod: "store_credit",
+          amountCents: creditAmount,
+        },
+      ]);
+    }
+  }
+
   function openCancelDialog(appointmentId: string, serviceLabel?: string) {
     setCancelTargetId(appointmentId);
     setFocusAppointmentId(appointmentId);
@@ -939,9 +1078,22 @@ export function ComandaDialog({
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Cliente
                 </p>
-                <p className="text-xl font-semibold leading-tight">
-                  {customerName}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xl font-semibold leading-tight">
+                    {customerName}
+                  </p>
+                  {customerCreditBalanceCents > 0 && (
+                    <Badge
+                      variant="outline"
+                      className="gap-1.5 font-normal tabular-nums"
+                    >
+                      <Wallet className="size-3.5" />
+                      {storeCreditUsedCents > 0
+                        ? `${formatPriceBRL(creditRemainingCents)} de crédito restante`
+                        : `${formatPriceBRL(customerCreditBalanceCents)} em crédito`}
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   <a
                     href={whatsappLink}
@@ -957,8 +1109,19 @@ export function ComandaDialog({
                 </div>
                 {linkedAppointments.length > 1 && (
                   <p className="text-xs text-muted-foreground">
-                    {linkedAppointments.length} atendimentos nesta comanda
+                    {linkedAppointments.length} atendimentos nesta comanda — um
+                    pagamento no final do dia
                   </p>
+                )}
+                {showAppointmentTimes && (
+                  <ul className="space-y-1 pt-1 text-xs text-muted-foreground">
+                    {scheduledLinkedAppointments.map((apt) => (
+                      <li key={apt.id} className="tabular-nums">
+                        {formatTime(apt.startTime)} – {formatTime(apt.endTime)}{" "}
+                        · {apt.professionalNickname}
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
 
@@ -985,17 +1148,18 @@ export function ComandaDialog({
                       {formatTime(focusAppointment.endTime)}
                     </p>
                   )}
+                  {showAppointmentTimes && (
+                    <p className="text-sm text-muted-foreground">
+                      {scheduledLinkedAppointments.length} horários no dia
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
           {loading ? (
-            <div className="flex flex-1 items-center justify-center py-16">
-              <p className="text-sm text-muted-foreground">
-                Carregando comanda…
-              </p>
-            </div>
+            <ComandaDialogSkeleton />
           ) : (
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
               <DialogSection
@@ -1070,6 +1234,11 @@ export function ComandaDialog({
                               <span className="text-sm">
                                 {getItemProfessionalName(item)}
                               </span>
+                              {showAppointmentTimes && getItemAppointmentTime(item) && (
+                                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                                  {getItemAppointmentTime(item)}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1169,6 +1338,11 @@ export function ComandaDialog({
                         <th className="hidden px-3 py-2.5 font-medium md:table-cell">
                           Profissional
                         </th>
+                        {showAppointmentTimes && (
+                          <th className="hidden px-3 py-2.5 font-medium lg:table-cell">
+                            Horário
+                          </th>
+                        )}
                         <th className="px-3 py-2.5 text-right font-medium">
                           Preço
                         </th>
@@ -1190,6 +1364,11 @@ export function ComandaDialog({
                           <td className="hidden px-3 py-3 md:table-cell">
                             {getItemProfessionalName(item)}
                           </td>
+                          {showAppointmentTimes && (
+                            <td className="hidden px-3 py-3 tabular-nums text-muted-foreground lg:table-cell">
+                              {getItemAppointmentTime(item) ?? "—"}
+                            </td>
+                          )}
                           <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
                             {formatPriceBRL(item.catalogPriceCents)}
                           </td>
@@ -1249,7 +1428,7 @@ export function ComandaDialog({
                     <tfoot>
                       <tr className="border-t bg-muted/20 font-medium">
                         <td
-                          colSpan={4}
+                          colSpan={serviceTableLabelColSpan}
                           className="px-3 py-2.5 text-right text-sm text-muted-foreground"
                         >
                           Subtotal serviços
@@ -1261,7 +1440,7 @@ export function ComandaDialog({
                       </tr>
                       {tipCents > 0 && (
                         <tr className="border-t text-sm text-muted-foreground">
-                          <td colSpan={4} className="px-3 py-2.5 text-right">
+                          <td colSpan={serviceTableLabelColSpan} className="px-3 py-2.5 text-right">
                             Gorjeta
                             {tipProfessionalId
                               ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
@@ -1275,7 +1454,7 @@ export function ComandaDialog({
                       )}
                       <tr className="bg-muted/30 font-semibold">
                         <td
-                          colSpan={4}
+                          colSpan={serviceTableLabelColSpan}
                           className="px-3 py-3 text-right text-sm"
                         >
                           Total da comanda
@@ -1319,9 +1498,66 @@ export function ComandaDialog({
               {(canEdit || isClosed) && (
                 <div className="grid gap-4 lg:grid-cols-2">
                   <DialogSection icon={Wallet} title="Formas de pagamento">
-                    {customerCreditBalanceCents > 0 && (
+                    {customerCreditBalanceCents > 0 && canEdit && (
+                      <div className="mb-3 flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-muted-foreground">
+                            Crédito do cliente
+                          </p>
+                          <p className="mt-0.5 text-base font-semibold tabular-nums">
+                            {formatPriceBRL(customerCreditBalanceCents)} disponível
+                          </p>
+                          {storeCreditUsedCents > 0 ? (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Usando{" "}
+                              <span className="font-medium text-foreground">
+                                {formatPriceBRL(storeCreditUsedCents)}
+                              </span>{" "}
+                              nesta comanda
+                              {creditRemainingCents > 0 && (
+                                <>
+                                  {" "}
+                                  · restam{" "}
+                                  {formatPriceBRL(creditRemainingCents)}
+                                </>
+                              )}
+                            </p>
+                          ) : (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Aplique o crédito como forma de pagamento.
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={applyCustomerCredit}
+                          >
+                            <Wallet className="size-4" />
+                            {storeCreditUsedCents > 0
+                              ? "Ajustar crédito"
+                              : "Usar crédito"}
+                          </Button>
+                          {storeCreditUsedCents > 0 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={busy}
+                              onClick={removeCustomerCreditPayment}
+                            >
+                              Remover
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {customerCreditBalanceCents > 0 && !canEdit && (
                       <p className="mb-2 text-xs text-muted-foreground">
-                        Saldo de crédito disponível:{" "}
+                        Saldo de crédito do cliente:{" "}
                         <span className="font-medium text-foreground">
                           {formatPriceBRL(customerCreditBalanceCents)}
                         </span>
@@ -1336,18 +1572,41 @@ export function ComandaDialog({
                             <div className="flex min-w-0 flex-1 gap-2">
                               <Select
                               value={row.paymentMethod}
-                              onValueChange={(v) =>
+                              onValueChange={(v) => {
+                                const method = v as PaymentMethod;
                                 setPayments((prev) =>
-                                  prev.map((p) =>
-                                    p.localKey === row.localKey
-                                      ? {
-                                          ...p,
-                                          paymentMethod: v as PaymentMethod,
-                                        }
-                                      : p
-                                  )
-                                )
-                              }
+                                  prev.map((p) => {
+                                    if (p.localKey !== row.localKey) return p;
+                                    const next = {
+                                      ...p,
+                                      paymentMethod: method,
+                                    };
+                                    if (method === "store_credit") {
+                                      const withoutThis = prev
+                                        .filter(
+                                          (payment) =>
+                                            payment.localKey !== row.localKey &&
+                                            payment.paymentMethod !==
+                                              "store_credit"
+                                        )
+                                        .reduce(
+                                          (sum, payment) =>
+                                            sum + payment.amountCents,
+                                          0
+                                        );
+                                      const remainingDue = Math.max(
+                                        0,
+                                        totals.totalCents - withoutThis
+                                      );
+                                      next.amountCents = Math.min(
+                                        remainingDue,
+                                        customerCreditBalanceCents
+                                      );
+                                    }
+                                    return next;
+                                  })
+                                );
+                              }}
                               disabled={!canEdit || busy}
                             >
                               <SelectTrigger className="h-9 min-w-0 flex-1 bg-background">
@@ -1370,12 +1629,29 @@ export function ComandaDialog({
                               }
                               onChange={(e) => {
                                 const cents = parsePriceInput(e.target.value);
-                                const capped =
+                                const withoutThisCredit = payments
+                                  .filter(
+                                    (payment) =>
+                                      payment.localKey !== row.localKey &&
+                                      payment.paymentMethod !== "store_credit"
+                                  )
+                                  .reduce(
+                                    (sum, payment) => sum + payment.amountCents,
+                                    0
+                                  );
+                                const maxForCredit =
                                   row.paymentMethod === "store_credit"
                                     ? Math.min(
-                                        cents,
+                                        Math.max(
+                                          0,
+                                          totals.totalCents - withoutThisCredit
+                                        ),
                                         customerCreditBalanceCents
                                       )
+                                    : cents;
+                                const capped =
+                                  row.paymentMethod === "store_credit"
+                                    ? Math.min(cents, maxForCredit)
                                     : cents;
                                 setPayments((prev) =>
                                   prev.map((p) =>
@@ -1583,7 +1859,7 @@ export function ComandaDialog({
                 </Button>
               )}
 
-              {canEdit && (
+              {canFinalize && (
                 <>
                   <span className="w-full sm:hidden" aria-hidden />
                   <span

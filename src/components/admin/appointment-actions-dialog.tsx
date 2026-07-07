@@ -47,12 +47,14 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { ProfessionalPermissions } from "@/lib/professional-permissions";
 
 type AppointmentActionsDialogProps = {
   appointment: AppointmentItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isOwner: boolean;
+  permissions: ProfessionalPermissions;
   sessionProfessionalId: string | null;
   onOpenComanda: () => void;
   onEditAppointment: () => void;
@@ -91,6 +93,7 @@ export function AppointmentActionsDialog({
   open,
   onOpenChange,
   isOwner,
+  permissions,
   sessionProfessionalId,
   onOpenComanda,
   onEditAppointment,
@@ -125,9 +128,12 @@ export function AppointmentActionsDialog({
     isOwner,
     sessionProfessionalId
   );
-  const canCancel = isActive && canManage;
+  const canCancel =
+    isActive && canManage && (isOwner || permissions.canCancelAppointments);
   const canChangeClient = isActive && canManage;
-  const canEdit = canManage;
+  const canEdit =
+    isActive && canManage && (isOwner || permissions.canEditAppointments);
+  const canOpenComanda = isOwner || permissions.canOpenComanda;
   const totalPrice = appointment.services.reduce(
     (sum, service) => sum + service.priceCents,
     0
@@ -316,6 +322,7 @@ export function AppointmentActionsDialog({
           <div className="border-t bg-muted/20 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap gap-2">
+                {canOpenComanda && (
                 <Button
                   type="button"
                   size="sm"
@@ -329,6 +336,7 @@ export function AppointmentActionsDialog({
                   <Receipt className="size-4" />
                   {comandaClosed ? "Ver comanda fechada" : isActive ? "Abrir comanda" : "Ver comanda"}
                 </Button>
+                )}
 
                 {isOwner && comandaClosed && (
                   <Button

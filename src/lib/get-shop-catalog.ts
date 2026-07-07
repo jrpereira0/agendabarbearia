@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatShopAddress, formatTime, WEEKDAYS } from "@/lib/format";
 import { minWeekdayPrice } from "@/lib/service-weekday-prices";
+import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 
 export type ShopProfile = {
   name: string;
@@ -28,6 +29,8 @@ export type PublicService = {
   durationMinutes: number;
   priceCents: number;
   weekdayPrices: { weekday: number; priceCents: number }[];
+  /** Vezes que o serviço entrou em agendamentos normais (não cancelados). */
+  bookingCount: number;
 };
 
 export type BusinessHourRow = {
@@ -78,6 +81,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
       { data: links },
       { data: businessHours },
       { data: weekdayPrices },
+      bookingCounts,
     ] = await Promise.all([
       supabase.from("shop_settings").select("*").single(),
       supabase
@@ -93,6 +97,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
       supabase.from("professional_services").select("professional_id, service_id"),
       supabase.from("business_hours").select("*").order("weekday"),
       supabase.from("service_weekday_prices").select("service_id, weekday, price_cents"),
+      loadServiceBookingCounts(),
     ]);
 
     const weekdayPricesByService = new Map<string, { weekday: number; priceCents: number }[]>();
@@ -147,6 +152,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
           durationMinutes: s.duration_minutes,
           priceCents: prices.length > 0 ? minWeekdayPrice(prices) : s.price_cents,
           weekdayPrices: prices,
+          bookingCount: bookingCounts.get(s.id) ?? 0,
         };
       }),
       businessHours: (businessHours ?? []).map((b) => ({
