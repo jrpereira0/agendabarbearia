@@ -8,6 +8,7 @@ export type RawAppointmentRow = {
   date: string;
   start_time: string;
   end_time: string;
+  status: string;
   customer_first_name: string;
   customer_last_name: string;
   customer_whatsapp: string;
@@ -50,6 +51,7 @@ export async function loadAppointmentWebhookBaseData(
       date,
       start_time,
       end_time,
+      status,
       customer_first_name,
       customer_last_name,
       customer_whatsapp,

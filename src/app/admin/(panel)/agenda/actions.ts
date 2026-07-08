@@ -26,6 +26,10 @@ import {
 import { detachEncaixeFromOpenComandas } from "@/lib/comanda-service";
 import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
+import {
+  captureAppointmentUpdateSnapshot,
+  notifyAppointmentUpdated,
+} from "@/lib/notifications/appointment-updated-webhook";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -572,6 +576,11 @@ export async function updateAppointment(input: {
     return { ok: false, error: customer.error };
   }
 
+  const previousSnapshot = await captureAppointmentUpdateSnapshot(
+    admin,
+    parsed.data.appointmentId
+  );
+
   const { error } = await admin
     .from("appointments")
     .update({
@@ -610,6 +619,26 @@ export async function updateAppointment(input: {
 
   if (linkError) {
     return { ok: false, error: "Não foi possível salvar os serviços." };
+  }
+
+  // Alteração já salva — a partir daqui, uma falha ao notificar o barbeiro
+  // não pode desfazer a edição nem quebrar a tela do admin.
+  if (previousSnapshot) {
+    const updateSource = existing.is_squeeze_in
+      ? "admin_squeeze_update"
+      : "admin_update";
+    try {
+      await notifyAppointmentUpdated(
+        parsed.data.appointmentId,
+        updateSource,
+        previousSnapshot
+      );
+    } catch (webhookError) {
+      console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
+        appointmentId: parsed.data.appointmentId,
+        error: webhookError,
+      });
+    }
   }
 
   revalidatePath("/admin");

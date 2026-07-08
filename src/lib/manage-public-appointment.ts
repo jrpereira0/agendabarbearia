@@ -21,6 +21,10 @@ import {
   whatsappSchema,
 } from "@/lib/whatsapp";
 import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
+import {
+  captureAppointmentUpdateSnapshot,
+  notifyAppointmentUpdated,
+} from "@/lib/notifications/appointment-updated-webhook";
 
 const updateSchema = z.object({
   whatsapp: whatsappSchema,
@@ -464,6 +468,11 @@ export async function updatePublicAppointment(
     return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
   }
 
+  const previousSnapshot = await captureAppointmentUpdateSnapshot(
+    admin,
+    appointmentId
+  );
+
   const endTime = minutesToTime(endMinutes);
 
   const { error } = await admin
@@ -517,6 +526,23 @@ export async function updatePublicAppointment(
       error: "Não foi possível salvar os serviços.",
       status: 500,
     };
+  }
+
+  // Alteração já salva — a partir daqui, uma falha ao notificar o barbeiro
+  // não pode desfazer a remarcação nem virar erro para o cliente.
+  if (previousSnapshot) {
+    try {
+      await notifyAppointmentUpdated(
+        appointmentId,
+        "api_update",
+        previousSnapshot
+      );
+    } catch (webhookError) {
+      console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
+        appointmentId,
+        error: webhookError,
+      });
+    }
   }
 
   return { ok: true, data: { id: appointmentId } };

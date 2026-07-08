@@ -1027,7 +1027,102 @@ curl -X POST https://SEU-N8N/webhook/agendamento-criado \
   }'
 ```
 
-No n8n, use um nó **IF** ou **Switch** logo após validar o segredo, ramificando por `{{$json.body.event}}` (`appointment.created` vs `appointment.cancelled`) para montar mensagens diferentes no WhatsApp do barbeiro.
+No n8n, use um nó **IF** ou **Switch** logo após validar o segredo, ramificando por `{{$json.body.event}}` (`appointment.created`, `appointment.cancelled` ou `appointment.updated`) para montar mensagens diferentes no WhatsApp do barbeiro.
+
+---
+
+### 6d. Webhook: aviso automático ao barbeiro (`appointment.updated`)
+
+Disparado quando um agendamento é **alterado/remarcado** com sucesso (data, horário, profissional ou serviços). Reaproveita a mesma URL e o mesmo segredo dos outros eventos.
+
+**Cobre todos os pontos de edição do sistema:**
+
+| Origem | `source` | Onde acontece |
+| --- | --- | --- |
+| Site `/agenda` (aba "Meus horários"), bot via n8n | `api_update` | `PATCH /appointments/:id` |
+| Painel admin — editar agendamento normal | `admin_update` | Server action `updateAppointment` |
+| Painel admin — editar encaixe manual | `admin_squeeze_update` | Server action `updateAppointment` (ramo do encaixe) |
+
+**Não dispara** se a edição falhar, se não houver **nenhuma mudança relevante** (data, horário, profissional, serviços ou valor) ou ao mudar apenas o status do fluxo (`scheduled` → `done` etc.).
+
+**Idempotência:** diferente de `appointment.created` e `appointment.cancelled`, **não bloqueia** edições futuras — cada alteração relevante gera um novo webhook (o mesmo agendamento pode ser editado várias vezes).
+
+**Payload** inclui estado **anterior** e **novo**, além de um array `changes` com frases prontas para montar a mensagem no n8n. Se o profissional mudou, o payload traz `professional` (novo) e `previousProfessional` (antigo) — o workflow pode avisar os dois barbeiros.
+
+```json
+{
+  "event": "appointment.updated",
+  "source": "api_update",
+  "appointment": {
+    "id": "uuid",
+    "date": "2026-07-09",
+    "startTime": "14:00",
+    "endTime": "14:30",
+    "status": "scheduled",
+    "totalPriceCents": 6500
+  },
+  "previousAppointment": {
+    "id": "uuid",
+    "date": "2026-07-08",
+    "startTime": "10:00",
+    "endTime": "10:30",
+    "status": "scheduled",
+    "totalPriceCents": 6000
+  },
+  "customer": {
+    "firstName": "Matheus",
+    "lastName": "Silva",
+    "whatsapp": "5513999999999"
+  },
+  "professional": {
+    "id": "uuid-novo",
+    "name": "Querino",
+    "whatsapp": "5513999999999"
+  },
+  "previousProfessional": {
+    "id": "uuid-antigo",
+    "name": "Chico",
+    "whatsapp": "5513888888888"
+  },
+  "services": [
+    { "id": "uuid", "name": "Corte de Cabelo", "priceCents": 6500 }
+  ],
+  "previousServices": [
+    { "id": "uuid", "name": "Barba", "priceCents": 6000 }
+  ],
+  "changes": [
+    "Data alterada de 08/07/2026 para 09/07/2026",
+    "Horário alterado de 10h para 14h",
+    "Profissional alterado de Chico para Querino",
+    "Serviço alterado de Barba para Corte de Cabelo",
+    "Valor alterado de R$ 60,00 para R$ 65,00"
+  ],
+  "shop": {
+    "name": "Dinho Barber Coffee"
+  }
+}
+```
+
+**Testar manualmente:**
+
+```bash
+curl -X POST https://SEU-N8N/webhook/agendamento-criado \
+  -H "Content-Type: application/json" \
+  -H "x-appointment-webhook-secret: SEU_SECRET" \
+  -d '{
+    "event": "appointment.updated",
+    "source": "admin_update",
+    "appointment": { "id": "teste", "date": "2026-07-09", "startTime": "14:00", "endTime": "14:30", "status": "scheduled", "totalPriceCents": 6500 },
+    "previousAppointment": { "id": "teste", "date": "2026-07-08", "startTime": "10:00", "endTime": "10:30", "status": "scheduled", "totalPriceCents": 6000 },
+    "customer": { "firstName": "Teste", "lastName": "Cliente", "whatsapp": "5513999999999" },
+    "professional": { "id": "novo", "name": "Querino", "whatsapp": "5513999999999" },
+    "previousProfessional": { "id": "antigo", "name": "Chico", "whatsapp": "5513888888888" },
+    "services": [{ "id": "s2", "name": "Corte", "priceCents": 6500 }],
+    "previousServices": [{ "id": "s1", "name": "Barba", "priceCents": 6000 }],
+    "changes": ["Data alterada de 08/07/2026 para 09/07/2026", "Horário alterado de 10h para 14h"],
+    "shop": { "name": "Dinho Barber Coffee" }
+  }'
+```
 
 ---
 
