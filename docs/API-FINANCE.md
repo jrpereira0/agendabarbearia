@@ -227,7 +227,7 @@ Corpo:
 - `catalogPriceCents`: preço de tabela no momento (referência)
 - `chargedPriceCents`: valor cobrado (pode ter desconto)
 
-Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original.
+Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original. Cada serviço extra novo (não reatribuição) também dispara o webhook `appointment.created` (`source: "comanda_extra"`) — ver [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated).
 
 Resposta: `{ "comanda": { ... } }` atualizada.
 

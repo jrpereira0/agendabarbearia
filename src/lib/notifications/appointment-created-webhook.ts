@@ -8,8 +8,19 @@ import {
 
 const EVENT_APPOINTMENT_CREATED = "appointment.created";
 
+/**
+ * De onde veio a criação do agendamento — ajuda o workflow do n8n (e o
+ * debug pelos logs) a diferenciar a origem sem precisar adivinhar.
+ */
+export type AppointmentCreatedSource =
+  | "public_api"
+  | "admin_agenda"
+  | "admin_squeeze_in"
+  | "comanda_extra";
+
 export type AppointmentCreatedWebhookPayload = {
   event: "appointment.created";
+  source: AppointmentCreatedSource;
   appointment: {
     id: string;
     date: string;
@@ -57,7 +68,8 @@ function firstOrSelf<T>(value: T | T[] | null | undefined): T | null {
 
 async function buildPayload(
   admin: SupabaseClient,
-  appointmentId: string
+  appointmentId: string,
+  source: AppointmentCreatedSource
 ): Promise<AppointmentCreatedWebhookPayload | null> {
   const { data: appointment, error } = await admin
     .from("appointments")
@@ -117,6 +129,7 @@ async function buildPayload(
 
   return {
     event: EVENT_APPOINTMENT_CREATED,
+    source,
     appointment: {
       id: appointment.id,
       date: appointment.date,
@@ -144,21 +157,25 @@ async function buildPayload(
 /**
  * Avisa o n8n (webhook) que um agendamento foi criado, para notificar o
  * barbeiro no WhatsApp. Chamar depois que o agendamento e os serviços já
- * foram salvos com sucesso no banco.
+ * foram salvos com sucesso no banco — de qualquer ponto de criação do
+ * sistema (site público, painel admin, encaixe, serviço extra da comanda).
+ *
+ * Busca os dados completos pelo appointmentId (não depende de dados
+ * parciais de quem chamou), então funciona igual não importa a origem.
  *
  * Nunca lança erro: qualquer falha aqui é só registrada em log, sem afetar
- * a resposta de sucesso já dada ao cliente (agendamento continua válido).
+ * o fluxo de quem chamou (agendamento continua válido).
  */
 export async function notifyAppointmentCreated(
-  appointmentId: string
+  appointmentId: string,
+  source: AppointmentCreatedSource
 ): Promise<void> {
+  console.log("[appointment-webhook] appointment.created solicitado", {
+    appointmentId,
+    source,
+  });
+
   const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-
-  console.log(
-    "[appointment-webhook] env url existe:",
-    Boolean(process.env.N8N_APPOINTMENT_WEBHOOK_URL)
-  );
-
   if (!webhookUrl) {
     console.warn(
       "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
@@ -170,25 +187,30 @@ export async function notifyAppointmentCreated(
     const admin = createAdminClient();
     if (!admin) {
       console.warn(
-        `[appointment-webhook] Supabase indisponível ao notificar agendamento ${appointmentId}.`
+        `[appointment-webhook] Supabase indisponível ao notificar agendamento ${appointmentId} (${source}).`
       );
       return;
     }
 
-    // Evita reenviar a mesma notificação (retry, chamada duplicada etc.).
+    // Idempotência: só insere se ainda não existir um registro para esse
+    // (appointment_id, event) — a constraint única da tabela garante isso
+    // mesmo em caso de corrida (dois retries ao mesmo tempo, por exemplo).
+    // Se o insert falhar por unique violation, é porque já foi enviado antes.
     const { error: dedupeError } = await admin
       .from("appointment_notifications")
       .insert({
         appointment_id: appointmentId,
         event: EVENT_APPOINTMENT_CREATED,
+        source,
       });
 
     if (dedupeError) {
-      // 23505 = unique_violation: já foi notificado antes, não reenviar.
+      // 23505 = unique_violation: já existe registro para esse agendamento+evento.
       if (dedupeError.code === "23505") {
-        console.warn(
-          `[appointment-webhook] Agendamento ${appointmentId} já tinha sido notificado antes, ignorando.`
-        );
+        console.warn("[appointment-webhook] notificação já enviada, ignorando", {
+          appointmentId,
+          source,
+        });
         return;
       }
       console.warn(
@@ -196,7 +218,7 @@ export async function notifyAppointmentCreated(
       );
     }
 
-    const payload = await buildPayload(admin, appointmentId);
+    const payload = await buildPayload(admin, appointmentId, source);
     if (!payload) return;
 
     if (!payload.professional.whatsapp.trim()) {
@@ -209,11 +231,10 @@ export async function notifyAppointmentCreated(
 
     const secret = process.env.N8N_APPOINTMENT_WEBHOOK_SECRET?.trim();
 
-    console.log(
-      "[appointment-webhook] chamando webhook:",
-      webhookUrl
-    );
-    console.log("[appointment-webhook] payload:", JSON.stringify(payload));
+    console.log("[appointment-webhook] enviando para n8n", {
+      appointmentId,
+      source,
+    });
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -224,17 +245,18 @@ export async function notifyAppointmentCreated(
       body: JSON.stringify(payload),
     });
 
-    console.log("[appointment-webhook] status n8n:", response.status);
-    console.log("[appointment-webhook] resposta n8n:", await response.text());
+    console.log("[appointment-webhook] status n8n", response.status);
 
     if (!response.ok) {
+      const responseText = await response.text();
       console.warn(
-        `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId}.`
+        `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId} (${source}): ${responseText}`
       );
     }
   } catch (error) {
     console.error("[appointment-webhook] erro ao enviar webhook", {
       appointmentId,
+      source,
       error,
     });
   }

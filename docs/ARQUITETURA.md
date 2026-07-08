@@ -37,6 +37,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/lib/booking-service-groups.ts` | Ordenação e seções “Mais agendados” no site |
 | `src/lib/service-prices-for-date.ts` | Resolve preço de serviço por data (painel admin e comanda) |
 | `src/lib/service-weekday-prices.ts` | Preço por dia da semana (cadastro, API e validação de agendamento) |
+| `src/lib/notifications/appointment-created-webhook.ts` | Avisa o n8n (webhook) sempre que um agendamento é criado, para notificar o barbeiro no WhatsApp |
 
 ## Banco de dados
 
@@ -57,6 +58,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
+| `appointment_notifications` | Controle de idempotência do webhook `appointment.created` (evita avisar o barbeiro duas vezes pelo mesmo agendamento); guarda `source` de onde o agendamento veio |
 
 Regras importantes no banco:
 
@@ -184,6 +186,15 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 | `customers/by-whatsapp`, `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
+
+## Aviso automático ao barbeiro (webhook n8n)
+
+Sempre que um agendamento novo é criado — pelo site `/agenda`, pela IA (n8n), pelo painel admin (agendamento normal ou encaixe) ou por serviço extra na comanda — o sistema dispara um webhook (`appointment.created`) para um workflow do n8n avisar o barbeiro no WhatsApp. Cobre todos os pontos de criação de agendamento; não dispara em edição/remarcação nem em reatribuição de serviço já existente na comanda.
+
+- Configuração e comportamento completo: [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated)
+- Função central: `notifyAppointmentCreated(appointmentId, source)` em `src/lib/notifications/appointment-created-webhook.ts`
+- Nunca bloqueia nem desfaz o agendamento se falhar (só loga com prefixo `[appointment-webhook]`)
+- Protegido contra duplicidade pela tabela `appointment_notifications`
 
 ## Clientes
 

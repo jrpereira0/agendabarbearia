@@ -24,6 +24,7 @@ import {
   type AppointmentStatus,
 } from "@/lib/appointment-status";
 import { detachEncaixeFromOpenComandas } from "@/lib/comanda-service";
+import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -153,11 +154,15 @@ async function assertOwnsAppointment(
   };
 }
 
+type InsertAppointmentResult =
+  | ActionResult
+  | { ok: true; appointmentId: string };
+
 async function insertAppointment(
   data: z.infer<typeof createSchema>,
   durationMinutes: number,
   isSqueezeIn: boolean
-): Promise<ActionResult> {
+): Promise<InsertAppointmentResult> {
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
   const startMinutes = timeToMinutes(data.startTime);
@@ -221,8 +226,17 @@ async function insertAppointment(
     return { ok: false, error: "Não foi possível salvar os serviços." };
   }
 
+  // Agendamento e serviços já estão salvos — a partir daqui, uma falha ao
+  // notificar o barbeiro não pode reverter o agendamento. A função abaixo
+  // nunca lança exceção. Cobre tanto "+ Agendar" quanto "+ Encaixe", já que
+  // os dois passam por aqui (o source diferencia qual foi).
+  await notifyAppointmentCreated(
+    appointment.id,
+    isSqueezeIn ? "admin_squeeze_in" : "admin_agenda"
+  );
+
   revalidatePath("/admin");
-  return { ok: true };
+  return { ok: true, appointmentId: appointment.id };
 }
 
 async function validateCreateInput(

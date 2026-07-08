@@ -50,6 +50,8 @@ Opcionais (só quem usa a funcionalidade correspondente):
 |---|---|
 | `DATABASE_URL` | Rodar `npm run db:migrate` (não precisa na Vercel, só localmente) |
 | `API_SECRET_KEY` / chaves geradas em Configurações > Integrações | Automações externas (n8n) |
+| `N8N_APPOINTMENT_WEBHOOK_URL` | Avisa o barbeiro (webhook n8n) a cada novo agendamento — ver [docs/API-N8N.md](docs/API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated) |
+| `N8N_APPOINTMENT_WEBHOOK_SECRET` | Segredo do webhook acima (header `x-appointment-webhook-secret`) |
 
 Marque **Production**, **Preview** e **Development**.
 

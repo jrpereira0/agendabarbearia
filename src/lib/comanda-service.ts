@@ -14,6 +14,7 @@ import {
   PAYMENT_METHODS,
 } from "@/lib/comanda-types";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
+import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 import { assertComandaClosableInOpenCashRegister } from "@/lib/cash-register-service";
 import {
   addCustomerCredit,
@@ -1520,6 +1521,10 @@ async function upsertSqueezeAppointment(
       status: 500,
     };
   }
+
+  // Serviço extra novo na agenda (não é atualização de um encaixe existente)
+  // — avisa o barbeiro. Nunca lança exceção.
+  await notifyAppointmentCreated(created.id, "comanda_extra");
 
   return { ok: true, appointmentId: created.id };
 }
