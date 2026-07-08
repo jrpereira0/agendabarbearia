@@ -163,6 +163,10 @@ async function insertAppointment(
   durationMinutes: number,
   isSqueezeIn: boolean
 ): Promise<InsertAppointmentResult> {
+  console.log("[admin-appointment-create] iniciou criação admin", {
+    isSqueezeIn,
+  });
+
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
   const startMinutes = timeToMinutes(data.startTime);
@@ -226,14 +230,31 @@ async function insertAppointment(
     return { ok: false, error: "Não foi possível salvar os serviços." };
   }
 
+  console.log("[admin-appointment-create] appointment criado:", appointment.id);
+
   // Agendamento e serviços já estão salvos — a partir daqui, uma falha ao
-  // notificar o barbeiro não pode reverter o agendamento. A função abaixo
-  // nunca lança exceção. Cobre tanto "+ Agendar" quanto "+ Encaixe", já que
-  // os dois passam por aqui (o source diferencia qual foi).
-  await notifyAppointmentCreated(
-    appointment.id,
-    isSqueezeIn ? "admin_squeeze_in" : "admin_agenda"
-  );
+  // notificar o barbeiro não pode reverter o agendamento nem quebrar a tela
+  // do admin. Cobre tanto "+ Agendar" quanto "+ Encaixe", já que os dois
+  // passam por aqui (o source diferencia qual foi). O await é obrigatório:
+  // em ambiente serverless (Vercel), a function pode ser encerrada assim
+  // que a action retorna, então "disparar e esquecer" perderia o webhook.
+  const source = isSqueezeIn ? "admin_squeeze_in" : "admin_agenda";
+  try {
+    console.log(
+      "[admin-appointment-create] chamando webhook appointment.created:",
+      appointment.id
+    );
+    await notifyAppointmentCreated(appointment.id, source);
+    console.log(
+      "[admin-appointment-create] webhook finalizado:",
+      appointment.id
+    );
+  } catch (error) {
+    console.error("[admin-appointment-create] erro ao enviar webhook:", {
+      appointmentId: appointment.id,
+      error,
+    });
+  }
 
   revalidatePath("/admin");
   return { ok: true, appointmentId: appointment.id };
