@@ -153,7 +153,18 @@ export async function notifyAppointmentCreated(
   appointmentId: string
 ): Promise<void> {
   const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-  if (!webhookUrl) return;
+
+  console.log(
+    "[appointment-webhook] env url existe:",
+    Boolean(process.env.N8N_APPOINTMENT_WEBHOOK_URL)
+  );
+
+  if (!webhookUrl) {
+    console.warn(
+      "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
+    );
+    return;
+  }
 
   try {
     const admin = createAdminClient();
@@ -174,9 +185,14 @@ export async function notifyAppointmentCreated(
 
     if (dedupeError) {
       // 23505 = unique_violation: já foi notificado antes, não reenviar.
-      if (dedupeError.code === "23505") return;
+      if (dedupeError.code === "23505") {
+        console.warn(
+          `[appointment-webhook] Agendamento ${appointmentId} já tinha sido notificado antes, ignorando.`
+        );
+        return;
+      }
       console.warn(
-        `[appointment-webhook] Não foi possível registrar notificação do agendamento ${appointmentId}: ${dedupeError.message}`
+        `[appointment-webhook] Não foi possível registrar notificação do agendamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
       );
     }
 
@@ -185,12 +201,19 @@ export async function notifyAppointmentCreated(
 
     if (!payload.professional.whatsapp.trim()) {
       console.warn(
-        `[appointment-webhook] Profissional ${payload.professional.id} sem WhatsApp cadastrado; notificação do agendamento ${appointmentId} não enviada.`
+        "[appointment-webhook] profissional sem WhatsApp, não enviando",
+        payload.professional.id
       );
       return;
     }
 
     const secret = process.env.N8N_APPOINTMENT_WEBHOOK_SECRET?.trim();
+
+    console.log(
+      "[appointment-webhook] chamando webhook:",
+      webhookUrl
+    );
+    console.log("[appointment-webhook] payload:", JSON.stringify(payload));
 
     const response = await fetch(webhookUrl, {
       method: "POST",
@@ -201,15 +224,18 @@ export async function notifyAppointmentCreated(
       body: JSON.stringify(payload),
     });
 
+    console.log("[appointment-webhook] status n8n:", response.status);
+    console.log("[appointment-webhook] resposta n8n:", await response.text());
+
     if (!response.ok) {
       console.warn(
         `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId}.`
       );
     }
   } catch (error) {
-    console.error(
-      `[appointment-webhook] Falha ao notificar agendamento ${appointmentId}:`,
-      error
-    );
+    console.error("[appointment-webhook] erro ao enviar webhook", {
+      appointmentId,
+      error,
+    });
   }
 }

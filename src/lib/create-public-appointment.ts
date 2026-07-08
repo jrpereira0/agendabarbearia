@@ -148,6 +148,8 @@ export async function createPublicAppointment(
     };
   }
 
+  console.log("[appointment-webhook] appointment criado:", appointment.id);
+
   // Agendamento e serviços já estão salvos — a partir daqui, uma falha ao
   // notificar o barbeiro não pode reverter o agendamento nem virar erro
   // para o cliente. A função abaixo nunca lança exceção.

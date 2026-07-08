@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
 // POST /api/v1/appointments — agendamento online pelo cliente (público com rate limit)
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
+    console.log("[appointment-webhook] POST /appointments chegou");
     const authResult = await resolveApiAuth(request, "appointments:create");
     if (!authResult.ok) {
       return authResult.response;
