@@ -1,33 +1,29 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import {
-  loadServicePricingContext,
-  resolvePriceCentsOrFallback,
-} from "@/lib/service-prices-for-date";
 import { loadAppointmentWebhookBaseData } from "@/lib/notifications/shared";
 
-const EVENT_APPOINTMENT_CREATED = "appointment.created";
-const LOG_PREFIX = "[appointment-webhook]";
+const EVENT_APPOINTMENT_CANCELLED = "appointment.cancelled";
+const LOG_PREFIX = "[appointment-cancelled-webhook]";
 
 /**
- * De onde veio a criação do agendamento — ajuda o workflow do n8n (e o
- * debug pelos logs) a diferenciar a origem sem precisar adivinhar.
+ * De onde veio o cancelamento — ajuda o workflow do n8n (e o debug pelos
+ * logs) a diferenciar a origem sem precisar adivinhar.
  */
-export type AppointmentCreatedSource =
-  | "public_api"
-  | "admin_agenda"
-  | "admin_squeeze_in"
-  | "comanda_extra";
+export type AppointmentCancelledSource =
+  | "api_cancel"
+  | "admin_cancel"
+  | "admin_squeeze_cancel";
 
-export type AppointmentCreatedWebhookPayload = {
-  event: "appointment.created";
-  source: AppointmentCreatedSource;
+export type AppointmentCancelledWebhookPayload = {
+  event: "appointment.cancelled";
+  source: AppointmentCancelledSource;
   appointment: {
     id: string;
     date: string;
     startTime: string;
     endTime: string;
-    totalPriceCents: number;
+    status: "cancelled";
+    cancelReason: string | null;
   };
   customer: {
     firstName: string;
@@ -46,8 +42,9 @@ export type AppointmentCreatedWebhookPayload = {
 async function buildPayload(
   admin: SupabaseClient,
   appointmentId: string,
-  source: AppointmentCreatedSource
-): Promise<AppointmentCreatedWebhookPayload | null> {
+  source: AppointmentCancelledSource,
+  cancelReason: string | null
+): Promise<AppointmentCancelledWebhookPayload | null> {
   const base = await loadAppointmentWebhookBaseData(
     admin,
     appointmentId,
@@ -57,29 +54,22 @@ async function buildPayload(
 
   const { appointment, professional, rawServices, shopName } = base;
 
-  const pricingContext = await loadServicePricingContext(
-    admin,
-    appointment.date,
-    rawServices.map((s) => s.id)
-  );
-
   const services = rawServices.map((service) => ({
     id: service.id,
     name: service.name,
-    priceCents: resolvePriceCentsOrFallback(service, pricingContext),
+    priceCents: service.price_cents,
   }));
 
-  const totalPriceCents = services.reduce((sum, s) => sum + s.priceCents, 0);
-
   return {
-    event: EVENT_APPOINTMENT_CREATED,
+    event: EVENT_APPOINTMENT_CANCELLED,
     source,
     appointment: {
       id: appointment.id,
       date: appointment.date,
       startTime: appointment.start_time.slice(0, 5),
       endTime: appointment.end_time.slice(0, 5),
-      totalPriceCents,
+      status: "cancelled",
+      cancelReason: cancelReason?.trim() || null,
     },
     customer: {
       firstName: appointment.customer_first_name,
@@ -99,30 +89,36 @@ async function buildPayload(
 }
 
 /**
- * Avisa o n8n (webhook) que um agendamento foi criado, para notificar o
- * barbeiro no WhatsApp. Chamar depois que o agendamento e os serviços já
- * foram salvos com sucesso no banco — de qualquer ponto de criação do
- * sistema (site público, painel admin, encaixe, serviço extra da comanda).
+ * Avisa o n8n (webhook) que um agendamento foi cancelado, para notificar o
+ * barbeiro no WhatsApp. Chamar depois que o status já foi salvo como
+ * "cancelled" no banco — de qualquer ponto de cancelamento do sistema
+ * (API pública, painel admin, encaixe manual).
  *
  * Busca os dados completos pelo appointmentId (não depende de dados
  * parciais de quem chamou), então funciona igual não importa a origem.
  *
  * Nunca lança erro: qualquer falha aqui é só registrada em log, sem afetar
- * o fluxo de quem chamou (agendamento continua válido).
+ * o fluxo de quem chamou (cancelamento continua válido).
  */
-export async function notifyAppointmentCreated(
+export async function notifyAppointmentCancelled(
   appointmentId: string,
-  source: AppointmentCreatedSource
+  source: AppointmentCancelledSource,
+  cancelReason?: string | null
 ): Promise<void> {
-  console.log("[appointment-webhook] appointment.created solicitado", {
+  console.log("[appointment-cancelled-webhook] solicitado", {
     appointmentId,
     source,
   });
 
   const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
+  console.log(
+    "[appointment-cancelled-webhook] env url existe:",
+    Boolean(webhookUrl)
+  );
+
   if (!webhookUrl) {
     console.warn(
-      "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
+      "[appointment-cancelled-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
     );
     return;
   }
@@ -131,43 +127,47 @@ export async function notifyAppointmentCreated(
     const admin = createAdminClient();
     if (!admin) {
       console.warn(
-        `[appointment-webhook] Supabase indisponível ao notificar agendamento ${appointmentId} (${source}).`
+        `[appointment-cancelled-webhook] Supabase indisponível ao notificar cancelamento ${appointmentId} (${source}).`
       );
       return;
     }
 
-    // Idempotência: só insere se ainda não existir um registro para esse
-    // (appointment_id, event) — a constraint única da tabela garante isso
-    // mesmo em caso de corrida (dois retries ao mesmo tempo, por exemplo).
-    // Se o insert falhar por unique violation, é porque já foi enviado antes.
+    // Mesma proteção de idempotência do appointment.created: reaproveita a
+    // tabela appointment_notifications, só muda o "event". A chave única
+    // (appointment_id, event) garante que o mesmo cancelamento não seja
+    // avisado duas vezes.
     const { error: dedupeError } = await admin
       .from("appointment_notifications")
       .insert({
         appointment_id: appointmentId,
-        event: EVENT_APPOINTMENT_CREATED,
+        event: EVENT_APPOINTMENT_CANCELLED,
         source,
       });
 
     if (dedupeError) {
-      // 23505 = unique_violation: já existe registro para esse agendamento+evento.
       if (dedupeError.code === "23505") {
-        console.warn("[appointment-webhook] notificação já enviada, ignorando", {
-          appointmentId,
-          source,
-        });
+        console.warn(
+          "[appointment-cancelled-webhook] notificação já enviada, ignorando",
+          { appointmentId, source }
+        );
         return;
       }
       console.warn(
-        `[appointment-webhook] Não foi possível registrar notificação do agendamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
+        `[appointment-cancelled-webhook] Não foi possível registrar notificação do cancelamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
       );
     }
 
-    const payload = await buildPayload(admin, appointmentId, source);
+    const payload = await buildPayload(
+      admin,
+      appointmentId,
+      source,
+      cancelReason ?? null
+    );
     if (!payload) return;
 
     if (!payload.professional.whatsapp.trim()) {
       console.warn(
-        "[appointment-webhook] profissional sem WhatsApp, não enviando",
+        "[appointment-cancelled-webhook] profissional sem WhatsApp",
         payload.professional.id
       );
       return;
@@ -175,7 +175,7 @@ export async function notifyAppointmentCreated(
 
     const secret = process.env.N8N_APPOINTMENT_WEBHOOK_SECRET?.trim();
 
-    console.log("[appointment-webhook] enviando para n8n", {
+    console.log("[appointment-cancelled-webhook] enviando para n8n", {
       appointmentId,
       source,
     });
@@ -189,16 +189,16 @@ export async function notifyAppointmentCreated(
       body: JSON.stringify(payload),
     });
 
-    console.log("[appointment-webhook] status n8n", response.status);
+    console.log("[appointment-cancelled-webhook] status n8n", response.status);
 
     if (!response.ok) {
       const responseText = await response.text();
       console.warn(
-        `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId} (${source}): ${responseText}`
+        `[appointment-cancelled-webhook] n8n respondeu ${response.status} para o cancelamento ${appointmentId} (${source}): ${responseText}`
       );
     }
   } catch (error) {
-    console.error("[appointment-webhook] erro ao enviar webhook", {
+    console.error("[appointment-cancelled-webhook] erro ao enviar webhook", {
       appointmentId,
       source,
       error,

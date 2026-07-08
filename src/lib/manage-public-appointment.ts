@@ -20,6 +20,7 @@ import {
   whatsappMatches,
   whatsappSchema,
 } from "@/lib/whatsapp";
+import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
 
 const updateSchema = z.object({
   whatsapp: whatsappSchema,
@@ -381,6 +382,18 @@ export async function cancelPublicAppointment(
       error: "Não foi possível cancelar o agendamento.",
       status: 500,
     };
+  }
+
+  // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
+  // o barbeiro não pode desfazer o cancelamento nem virar erro para o
+  // cliente. A função abaixo nunca lança exceção.
+  try {
+    await notifyAppointmentCancelled(appointmentId, "api_cancel");
+  } catch (webhookError) {
+    console.error(
+      "[appointment-cancelled-webhook] erro ao enviar webhook:",
+      { appointmentId, error: webhookError }
+    );
   }
 
   return { ok: true, data: { id: appointmentId } };

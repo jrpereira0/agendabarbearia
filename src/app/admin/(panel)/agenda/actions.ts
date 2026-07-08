@@ -25,6 +25,7 @@ import {
 } from "@/lib/appointment-status";
 import { detachEncaixeFromOpenComandas } from "@/lib/comanda-service";
 import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
+import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -794,6 +795,22 @@ export async function cancelAppointment(input: {
 
     await detachEncaixeFromOpenComandas(admin, appointmentId);
 
+    // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
+    // o barbeiro não pode desfazer o cancelamento nem quebrar a tela do
+    // admin. A função abaixo nunca lança exceção.
+    try {
+      await notifyAppointmentCancelled(
+        appointmentId,
+        "admin_squeeze_cancel",
+        reason
+      );
+    } catch (webhookError) {
+      console.error(
+        "[appointment-cancelled-webhook] erro ao enviar webhook:",
+        { appointmentId, error: webhookError }
+      );
+    }
+
     revalidatePath("/admin");
     revalidatePath("/agenda");
     return { ok: true };
@@ -912,6 +929,33 @@ export async function cancelAppointment(input: {
           updated_at: cancelledAt,
         })
         .eq("id", comanda.id);
+    }
+  }
+
+  // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
+  // o barbeiro não pode desfazer o cancelamento nem quebrar a tela do
+  // admin. As funções abaixo nunca lançam exceção.
+  try {
+    await notifyAppointmentCancelled(appointmentId, "admin_cancel", reason);
+  } catch (webhookError) {
+    console.error("[appointment-cancelled-webhook] erro ao enviar webhook:", {
+      appointmentId,
+      error: webhookError,
+    });
+  }
+
+  for (const squeezeId of squeezeIds) {
+    try {
+      await notifyAppointmentCancelled(
+        squeezeId,
+        "admin_squeeze_cancel",
+        reason
+      );
+    } catch (webhookError) {
+      console.error(
+        "[appointment-cancelled-webhook] erro ao enviar webhook:",
+        { appointmentId: squeezeId, error: webhookError }
+      );
     }
   }
 

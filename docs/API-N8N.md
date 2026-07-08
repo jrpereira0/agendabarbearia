@@ -955,6 +955,82 @@ curl -X POST https://SEU-N8N/webhook/agendamento-criado \
 
 ---
 
+### 6c. Webhook: aviso automático ao barbeiro (`appointment.cancelled`)
+
+Mesma ideia da seção anterior, mas disparado quando um agendamento é **cancelado** (nunca quando é excluído/apagado de vez pelo dono, nem ao remarcar). Reaproveita a mesma URL, o mesmo segredo e a mesma proteção contra duplicidade do `appointment.created`.
+
+**Cobre todos os pontos de cancelamento do sistema:**
+
+| Origem | `source` | Onde acontece |
+| --- | --- | --- |
+| Site público `/agenda` (aba "Meus horários") e bot via n8n | `api_cancel` | `DELETE /appointments/:id` |
+| Painel admin — cancelar agendamento normal | `admin_cancel` | Server action `cancelAppointment` |
+| Painel admin — cancelar encaixe manual | `admin_squeeze_cancel` | Server action `cancelAppointment` (ramo do encaixe) |
+
+Quando um agendamento normal é cancelado e ele tinha **encaixes vinculados** (mesmo cliente/dia), esses encaixes também são cancelados automaticamente — e cada um dispara seu próprio aviso com `source: "admin_squeeze_cancel"`.
+
+**Não dispara** ao **excluir** um agendamento (`deleteAppointment`, exclusão definitiva feita só pelo dono) nem ao **reatribuir um serviço da comanda para outro barbeiro** (troca de barbeiro internamente cancela e recria o registro, mas não é um cancelamento visível pro cliente).
+
+**Variáveis de ambiente:** as mesmas do `appointment.created` — `N8N_APPOINTMENT_WEBHOOK_URL` e `N8N_APPOINTMENT_WEBHOOK_SECRET` (ver seção 6b). Se a URL não estiver configurada, nenhum webhook é enviado e o cancelamento continua funcionando normalmente.
+
+**Regras de comportamento:** as mesmas do `appointment.created` (nunca derruba o cancelamento nem muda a resposta da rota/action, pula se o profissional não tiver WhatsApp, protegido contra duplicidade pela tabela `appointment_notifications` — mesma tabela, `event` diferente).
+
+**Payload:**
+
+```json
+{
+  "event": "appointment.cancelled",
+  "source": "admin_cancel",
+  "appointment": {
+    "id": "uuid",
+    "date": "2026-07-08",
+    "startTime": "10:00",
+    "endTime": "10:30",
+    "status": "cancelled",
+    "cancelReason": "Cliente solicitou cancelamento"
+  },
+  "customer": {
+    "firstName": "Matheus",
+    "lastName": "Silva",
+    "whatsapp": "5513999999999"
+  },
+  "professional": {
+    "id": "uuid",
+    "name": "Chico",
+    "whatsapp": "5513988888888"
+  },
+  "services": [
+    { "id": "uuid", "name": "Corte", "priceCents": 6500 }
+  ],
+  "shop": {
+    "name": "Dinho Barber Coffee"
+  }
+}
+```
+
+`cancelReason` vem `null` quando não há motivo registrado (é o caso do cancelamento pelo site `/agenda` e pela IA, que não pedem motivo — só o painel admin exige). `source` pode ser `"api_cancel"`, `"admin_cancel"` ou `"admin_squeeze_cancel"` (ver tabela acima).
+
+**Testar manualmente:**
+
+```bash
+curl -X POST https://SEU-N8N/webhook/agendamento-criado \
+  -H "Content-Type: application/json" \
+  -H "x-appointment-webhook-secret: SEU_SECRET" \
+  -d '{
+    "event": "appointment.cancelled",
+    "source": "admin_cancel",
+    "appointment": { "id": "teste", "date": "2026-07-08", "startTime": "10:00", "endTime": "10:30", "status": "cancelled", "cancelReason": "Cliente pediu para cancelar" },
+    "customer": { "firstName": "Teste", "lastName": "Cliente", "whatsapp": "5513999999999" },
+    "professional": { "id": "teste", "name": "Chico", "whatsapp": "5513988888888" },
+    "services": [{ "id": "teste", "name": "Corte", "priceCents": 6500 }],
+    "shop": { "name": "Dinho Barber Coffee" }
+  }'
+```
+
+No n8n, use um nó **IF** ou **Switch** logo após validar o segredo, ramificando por `{{$json.body.event}}` (`appointment.created` vs `appointment.cancelled`) para montar mensagens diferentes no WhatsApp do barbeiro.
+
+---
+
 ### 7. Remarcar agendamento
 
 | | |

@@ -38,6 +38,8 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/lib/service-prices-for-date.ts` | Resolve preço de serviço por data (painel admin e comanda) |
 | `src/lib/service-weekday-prices.ts` | Preço por dia da semana (cadastro, API e validação de agendamento) |
 | `src/lib/notifications/appointment-created-webhook.ts` | Avisa o n8n (webhook) sempre que um agendamento é criado, para notificar o barbeiro no WhatsApp |
+| `src/lib/notifications/appointment-cancelled-webhook.ts` | Mesma ideia, para quando um agendamento é cancelado |
+| `src/lib/notifications/shared.ts` | Busca de dados (agendamento, profissional, serviços, loja) compartilhada pelos dois webhooks acima |
 
 ## Banco de dados
 
@@ -58,7 +60,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
-| `appointment_notifications` | Controle de idempotência do webhook `appointment.created` (evita avisar o barbeiro duas vezes pelo mesmo agendamento); guarda `source` de onde o agendamento veio |
+| `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source` de onde veio |
 
 Regras importantes no banco:
 
@@ -189,12 +191,12 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 ## Aviso automático ao barbeiro (webhook n8n)
 
-Sempre que um agendamento novo é criado — pelo site `/agenda`, pela IA (n8n), pelo painel admin (agendamento normal ou encaixe) ou por serviço extra na comanda — o sistema dispara um webhook (`appointment.created`) para um workflow do n8n avisar o barbeiro no WhatsApp. Cobre todos os pontos de criação de agendamento; não dispara em edição/remarcação nem em reatribuição de serviço já existente na comanda.
+Sempre que um agendamento novo é **criado** — pelo site `/agenda`, pela IA (n8n), pelo painel admin (agendamento normal ou encaixe) ou por serviço extra na comanda — ou **cancelado** — pelo site, pela IA ou pelo painel admin —, o sistema dispara um webhook para um workflow do n8n avisar o barbeiro no WhatsApp. Não dispara em edição/remarcação, em exclusão definitiva (só o dono, via `deleteAppointment`) nem em reatribuição de serviço já existente na comanda.
 
-- Configuração e comportamento completo: [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated)
-- Função central: `notifyAppointmentCreated(appointmentId, source)` em `src/lib/notifications/appointment-created-webhook.ts`
-- Nunca bloqueia nem desfaz o agendamento se falhar (só loga com prefixo `[appointment-webhook]`)
-- Protegido contra duplicidade pela tabela `appointment_notifications`
+- Configuração e comportamento completo: criação em [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated), cancelamento em [seção 6c](./API-N8N.md#6c-webhook-aviso-automático-ao-barbeiro-appointmentcancelled)
+- Funções centrais: `notifyAppointmentCreated(appointmentId, source)` e `notifyAppointmentCancelled(appointmentId, source, cancelReason?)`, em `src/lib/notifications/`
+- Nunca bloqueia nem desfaz o agendamento/cancelamento se falhar (logs com prefixo `[appointment-webhook]` e `[appointment-cancelled-webhook]`)
+- Protegido contra duplicidade pela tabela `appointment_notifications` (mesma tabela para os dois eventos, diferenciados pela coluna `event`)
 
 ## Clientes
 
