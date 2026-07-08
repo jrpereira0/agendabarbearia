@@ -1126,6 +1126,130 @@ curl -X POST https://SEU-N8N/webhook/agendamento-criado \
 
 ---
 
+### 6e. Lembretes automáticos para clientes (1h antes)
+
+O sistema **controla** os lembretes na tabela `appointment_reminders`. O n8n **não usa Wait** — consulta periodicamente os lembretes vencidos, envia o WhatsApp e marca o status via API.
+
+**Quando o lembrete é criado/atualizado:**
+- Após `appointment.created` (qualquer origem)
+- Após `appointment.updated` com mudança relevante (data, horário, profissional, serviços ou valor)
+
+**Quando o lembrete é cancelado:**
+- Após `appointment.cancelled`
+- Se o agendamento ficar inativo ou no passado
+
+**Escopos da chave de API:** `appointment_reminders:read` e `appointment_reminders:write` (incluídos no preset **Agenda completa**).
+
+#### GET `/appointment-reminders/due`
+
+| | |
+| --- | --- |
+| **Auth** | `appointment_reminders:read` |
+| **Query** | `limit` (1–100, padrão 50), `now` (ISO opcional — para testes) |
+
+Retorna lembretes com `status = pending`, `scheduled_for <= now`, agendamento ativo e ainda no futuro.
+
+**Resposta:**
+
+```json
+{
+  "ok": true,
+  "reminders": [
+    {
+      "id": "uuid-reminder",
+      "appointmentId": "uuid",
+      "scheduledFor": "2026-07-08T18:00:00.000Z",
+      "appointment": {
+        "id": "uuid",
+        "date": "2026-07-08",
+        "startTime": "19:00",
+        "endTime": "19:30",
+        "totalPriceCents": 6000
+      },
+      "customer": {
+        "firstName": "Matheus",
+        "lastName": "Silva",
+        "whatsapp": "5513999999999"
+      },
+      "professional": {
+        "id": "uuid",
+        "name": "Chico"
+      },
+      "services": [
+        { "id": "uuid", "name": "Corte de Cabelo", "priceCents": 6000 }
+      ],
+      "shop": {
+        "name": "Dinho Barber Coffee",
+        "address": "Rua Paraguai, 173 · Enseada – Guarujá – SP"
+      }
+    }
+  ]
+}
+```
+
+#### POST `/appointment-reminders/:id/mark-sent`
+
+| | |
+| --- | --- |
+| **Auth** | `appointment_reminders:write` |
+| **Body** | `{ "providerMessageId": "opcional" }` |
+
+Marca `status = sent` e `sent_at = now()`. Só aceita lembrete com `status = pending`.
+
+#### GET `/appointment-reminders/pending-response?whatsapp=`
+
+| | |
+| --- | --- |
+| **Auth** | `appointment_reminders:read` |
+
+Busca o lembrete mais recente **enviado** nas últimas 4 horas para o WhatsApp informado, com agendamento ainda ativo e futuro. Usado pelo bot para saber qual agendamento o cliente está confirmando.
+
+**Resposta (encontrou):**
+
+```json
+{
+  "ok": true,
+  "found": true,
+  "reminder": {
+    "id": "uuid-reminder",
+    "appointmentId": "uuid",
+    "appointment": { "id": "uuid", "date": "2026-07-08", "startTime": "19:00", "endTime": "19:30", "totalPriceCents": 6000 },
+    "customer": { "firstName": "Matheus", "lastName": "Silva", "whatsapp": "5513999999999" },
+    "professional": { "id": "uuid", "name": "Chico" },
+    "services": [{ "id": "uuid", "name": "Corte", "priceCents": 6000 }],
+    "shop": { "name": "Dinho Barber Coffee", "address": "..." }
+  }
+}
+```
+
+**Resposta (não encontrou):**
+
+```json
+{
+  "ok": true,
+  "found": false,
+  "reminder": null
+}
+```
+
+#### POST `/appointment-reminders/:id/confirm`
+
+| | |
+| --- | --- |
+| **Auth** | `appointment_reminders:write` |
+
+Marca `status = confirmed` e `confirmed_at = now()`. Se o agendamento ainda estiver `scheduled`, passa para `confirmed`. Só aceita lembrete com `status = sent`.
+
+**Fluxo sugerido no n8n:**
+
+1. **Schedule** (ex.: a cada 5 min) → `GET /appointment-reminders/due`
+2. Para cada lembrete → enviar WhatsApp ao **cliente** (`customer.whatsapp`)
+3. `POST /appointment-reminders/:id/mark-sent`
+4. Quando o cliente responder → `GET /appointment-reminders/pending-response?whatsapp=...`
+5. Se confirmar → `POST /appointment-reminders/:id/confirm`
+
+---
+
 ### 7. Remarcar agendamento
 
 | | |
@@ -1307,7 +1431,7 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 - [ ] Variáveis no painel Vercel: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para **Meus horários** no site (`POST /api/agenda/session`)
 - [ ] **`N8N_APPOINTMENT_WEBHOOK_URL`** e **`N8N_APPOINTMENT_WEBHOOK_SECRET`** — opcionais, só para o aviso automático ao barbeiro (ver [seção 6b](#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated))
-- [ ] Rodar as migrations `0037_appointment_notifications.sql` e `0038_appointment_notifications_add_source.sql` (`npm run db:migrate`) antes de configurar o webhook, para o controle de duplicidade funcionar
+- [ ] Rodar as migrations `0037`–`0039` (`npm run db:migrate`) — `0037`/`0038` para webhooks de barbeiro, `0039` para lembretes de cliente
 - [ ] Redeploy após salvar variáveis
 - [ ] `GET /catalog` retorna JSON com profissionais e serviços
 - [ ] Profissionais e serviços cadastrados e **ativos** no painel

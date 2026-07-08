@@ -5,6 +5,7 @@ import {
   resolvePriceCentsOrFallback,
 } from "@/lib/service-prices-for-date";
 import { loadAppointmentWebhookBaseData } from "@/lib/notifications/shared";
+import { upsertAppointmentReminder } from "@/lib/appointment-reminders";
 
 const EVENT_APPOINTMENT_CREATED = "appointment.created";
 const LOG_PREFIX = "[appointment-webhook]";
@@ -114,6 +115,15 @@ export async function notifyAppointmentCreated(
   appointmentId: string,
   source: AppointmentCreatedSource
 ): Promise<void> {
+  try {
+    await upsertAppointmentReminder(appointmentId);
+  } catch (error) {
+    console.error("[appointment-reminder] erro ao sincronizar lembrete após criação", {
+      appointmentId,
+      error,
+    });
+  }
+
   console.log("[appointment-webhook] appointment.created solicitado", {
     appointmentId,
     source,

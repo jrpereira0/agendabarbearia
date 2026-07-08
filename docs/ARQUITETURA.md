@@ -40,6 +40,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/lib/notifications/appointment-created-webhook.ts` | Avisa o n8n (webhook) sempre que um agendamento é criado, para notificar o barbeiro no WhatsApp |
 | `src/lib/notifications/appointment-cancelled-webhook.ts` | Mesma ideia, para quando um agendamento é cancelado |
 | `src/lib/notifications/appointment-updated-webhook.ts` | Mesma ideia, para quando um agendamento é alterado/remarcado |
+| `src/lib/appointment-reminders.ts` | Lembretes automáticos para clientes (1h antes): criar, cancelar, listar vencidos, marcar enviado e confirmar |
 | `src/lib/notifications/shared.ts` | Busca de dados (agendamento, profissional, serviços, loja) compartilhada pelos webhooks acima |
 
 ## Banco de dados
@@ -62,6 +63,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
+| `appointment_reminders` | Lembretes para clientes (ex.: 1h antes do atendimento); o n8n consulta os vencidos via API e marca envio/confirmação |
 
 Regras importantes no banco:
 

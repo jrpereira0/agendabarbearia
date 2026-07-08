@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAppointmentWebhookBaseData } from "@/lib/notifications/shared";
+import { cancelAppointmentReminder } from "@/lib/appointment-reminders";
 
 const EVENT_APPOINTMENT_CANCELLED = "appointment.cancelled";
 const LOG_PREFIX = "[appointment-cancelled-webhook]";
@@ -105,6 +106,15 @@ export async function notifyAppointmentCancelled(
   source: AppointmentCancelledSource,
   cancelReason?: string | null
 ): Promise<void> {
+  try {
+    await cancelAppointmentReminder(appointmentId, "appointment_cancelled");
+  } catch (error) {
+    console.error("[appointment-reminder] erro ao cancelar lembrete", {
+      appointmentId,
+      error,
+    });
+  }
+
   console.log("[appointment-cancelled-webhook] solicitado", {
     appointmentId,
     source,

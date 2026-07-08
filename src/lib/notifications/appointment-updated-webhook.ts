@@ -9,6 +9,7 @@ import {
   loadAppointmentWebhookBaseData,
   type RawServiceRow,
 } from "@/lib/notifications/shared";
+import { upsertAppointmentReminder } from "@/lib/appointment-reminders";
 
 const EVENT_APPOINTMENT_UPDATED = "appointment.updated";
 const LOG_PREFIX = "[appointment-updated-webhook]";
@@ -313,6 +314,15 @@ export async function notifyAppointmentUpdated(
         { appointmentId, source }
       );
       return;
+    }
+
+    try {
+      await upsertAppointmentReminder(appointmentId);
+    } catch (error) {
+      console.error("[appointment-reminder] erro ao sincronizar lembrete após alteração", {
+        appointmentId,
+        error,
+      });
     }
 
     const payload = await buildPayload(
