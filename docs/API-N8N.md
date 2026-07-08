@@ -855,6 +855,91 @@ O servidor **valida de novo** se o horário está livre antes de gravar. Status 
 
 ---
 
+### 6b. Webhook: aviso automático ao barbeiro (`appointment.created`)
+
+Depois que um agendamento é criado com sucesso em `POST /appointments` (pelo site **ou** pelo bot via n8n, já que os dois usam a mesma rota), o sistema pode disparar um **webhook** para um workflow do n8n avisar o barbeiro no WhatsApp. Isso é separado da API de criação — o cliente nunca vê esse processo nem é afetado se ele falhar.
+
+**Como habilitar:** configure as variáveis de ambiente na Vercel (ver [Checklist Vercel](#checklist-vercel-api-no-ar)):
+
+| Variável | Obrigatória | Descrição |
+| --- | --- | --- |
+| `N8N_APPOINTMENT_WEBHOOK_URL` | Não | URL do webhook do n8n. Se vazia, nenhum webhook é enviado e o agendamento continua funcionando normalmente |
+| `N8N_APPOINTMENT_WEBHOOK_SECRET` | Não (recomendado) | Segredo enviado no header `x-appointment-webhook-secret`, para o n8n validar que a chamada veio do sistema |
+
+**Regras de comportamento:**
+
+- Disparado **só depois** que o agendamento e os serviços já foram salvos no banco com sucesso.
+- **Nunca** derruba o agendamento nem retorna erro para quem chamou `POST /appointments` — a resposta continua `{ "ok": true, "appointmentId": "..." }` mesmo se o webhook falhar.
+- Se o **profissional não tiver WhatsApp cadastrado** (campo vazio no painel > Profissionais), o webhook **não é enviado** — evita chamar o n8n com um número inválido.
+- Falhas de rede, timeout ou erro do n8n geram apenas um `console.warn`/`console.error` nos logs da Vercel (com o `appointmentId`), para debug — nunca uma exceção.
+- Protegido contra **envio duplicado**: cada agendamento só dispara o evento `appointment.created` uma vez (controle na tabela `appointment_notifications`), mesmo em caso de retry.
+
+**Requisição enviada ao n8n:**
+
+```
+POST {{N8N_APPOINTMENT_WEBHOOK_URL}}
+Content-Type: application/json
+x-appointment-webhook-secret: {{N8N_APPOINTMENT_WEBHOOK_SECRET}}
+```
+
+**Payload:**
+
+```json
+{
+  "event": "appointment.created",
+  "appointment": {
+    "id": "uuid",
+    "date": "2026-07-08",
+    "startTime": "10:00",
+    "endTime": "10:30",
+    "totalPriceCents": 6500
+  },
+  "customer": {
+    "firstName": "Matheus",
+    "lastName": "Silva",
+    "whatsapp": "5513999999999"
+  },
+  "professional": {
+    "id": "uuid",
+    "name": "Chico",
+    "whatsapp": "5513988888888"
+  },
+  "services": [
+    { "id": "uuid", "name": "Corte", "priceCents": 6500 }
+  ],
+  "shop": {
+    "name": "Dinho Barber Coffee"
+  }
+}
+```
+
+`professional.whatsapp` e `customer.whatsapp` já vêm normalizados (DDI + DDD + número, sem máscara) — prontos para usar em nós de envio de WhatsApp (Evolution API, Z-API, etc.). `totalPriceCents` já soma o preço de todos os serviços **no dia do agendamento** (considerando preço por dia da semana).
+
+**Configuração do nó Webhook no n8n:**
+
+1. Adicione um nó **Webhook** (método `POST`), copie a URL gerada e coloque em `N8N_APPOINTMENT_WEBHOOK_URL` na Vercel.
+2. No nó **Webhook**, em "Authentication", pode deixar `None` e validar o segredo manualmente num nó **IF** logo em seguida, comparando `{{$json.headers['x-appointment-webhook-secret']}}` com o valor configurado em `N8N_APPOINTMENT_WEBHOOK_SECRET`.
+3. Depois do IF, monte a mensagem de WhatsApp usando `{{$json.body.professional.whatsapp}}`, `{{$json.body.customer.firstName}}`, `{{$json.body.appointment.date}}`, `{{$json.body.appointment.startTime}}` e `{{$json.body.services}}`.
+4. Envie pelo nó do seu provedor de WhatsApp (Evolution API, Z-API, etc.) usando `professional.whatsapp` como destinatário — nunca hardcode o número do barbeiro no workflow.
+
+**Testar manualmente (sem esperar um agendamento real):**
+
+```bash
+curl -X POST https://SEU-N8N/webhook/agendamento-criado \
+  -H "Content-Type: application/json" \
+  -H "x-appointment-webhook-secret: SEU_SECRET" \
+  -d '{
+    "event": "appointment.created",
+    "appointment": { "id": "teste", "date": "2026-07-08", "startTime": "10:00", "endTime": "10:30", "totalPriceCents": 6500 },
+    "customer": { "firstName": "Teste", "lastName": "Cliente", "whatsapp": "5513999999999" },
+    "professional": { "id": "teste", "name": "Chico", "whatsapp": "5513988888888" },
+    "services": [{ "id": "teste", "name": "Corte", "priceCents": 6500 }],
+    "shop": { "name": "Dinho Barber Coffee" }
+  }'
+```
+
+---
+
 ### 7. Remarcar agendamento
 
 | | |
@@ -1035,6 +1120,8 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 
 - [ ] Variáveis no painel Vercel: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para **Meus horários** no site (`POST /api/agenda/session`)
+- [ ] **`N8N_APPOINTMENT_WEBHOOK_URL`** e **`N8N_APPOINTMENT_WEBHOOK_SECRET`** — opcionais, só para o aviso automático ao barbeiro (ver [seção 6b](#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated))
+- [ ] Rodar a migration `0037_appointment_notifications.sql` (`npm run db:migrate`) antes de configurar o webhook, para o controle de duplicidade funcionar
 - [ ] Redeploy após salvar variáveis
 - [ ] `GET /catalog` retorna JSON com profissionais e serviços
 - [ ] Profissionais e serviços cadastrados e **ativos** no painel

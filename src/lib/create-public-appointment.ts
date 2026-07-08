@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { getAvailability } from "@/lib/get-availability";
 import { upsertCustomer } from "@/lib/upsert-customer";
+import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -146,6 +147,11 @@ export async function createPublicAppointment(
       status: 500,
     };
   }
+
+  // Agendamento e serviços já estão salvos — a partir daqui, uma falha ao
+  // notificar o barbeiro não pode reverter o agendamento nem virar erro
+  // para o cliente. A função abaixo nunca lança exceção.
+  await notifyAppointmentCreated(appointment.id);
 
   return { ok: true, appointmentId: appointment.id };
 }
