@@ -13,6 +13,7 @@ export type ServicePriceRow = {
   name: string;
   duration_minutes: number;
   price_cents: number;
+  photo_url?: string | null;
 };
 
 export async function loadServicePricingContext(
@@ -75,11 +76,14 @@ export type AdminServiceCatalogItem = {
   name: string;
   durationMinutes: number;
   priceCents: number;
+  photoUrl: string | null;
+  bookingCount: number;
 };
 
 export function buildAdminServicesCatalogForDate(
   services: ServicePriceRow[],
-  ctx: ServicePricingContext
+  ctx: ServicePricingContext,
+  bookingCounts: Map<string, number> = new Map()
 ): AdminServiceCatalogItem[] {
   return services.flatMap((service) => {
     const priceCents = resolvePriceCentsForServiceOnDate(service, ctx);
@@ -90,6 +94,8 @@ export function buildAdminServicesCatalogForDate(
         name: service.name,
         durationMinutes: service.duration_minutes,
         priceCents,
+        photoUrl: service.photo_url ?? null,
+        bookingCount: bookingCounts.get(service.id) ?? 0,
       },
     ];
   });

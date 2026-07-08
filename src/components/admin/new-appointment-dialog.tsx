@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -13,12 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
+import { ServiceThumbnail } from "@/components/booking/service-thumbnail";
 import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
@@ -35,6 +33,7 @@ import {
   isOutsideProfessionalSchedule,
 } from "@/lib/encaixe";
 import { matchesSearch } from "@/lib/text";
+import { groupServicesForBooking } from "@/lib/booking-service-groups";
 import { cn } from "@/lib/utils";
 import {
   createNormalAppointment,
@@ -55,6 +54,8 @@ export type ServiceOption = {
   name: string;
   durationMinutes: number;
   priceCents: number;
+  photoUrl?: string | null;
+  bookingCount?: number;
 };
 
 type Step = "professional" | "services" | "time" | "client";
@@ -103,23 +104,149 @@ function totalSteps(isOwner: boolean, presetFromGrid: boolean): number {
   return isOwner ? 4 : 3;
 }
 
-function ProfessionalBanner({
+function getStepMeta(
+  step: Step,
+  presetFromGrid: boolean,
+  isEncaixe: boolean
+): { title: string; description: string } {
+  const meta: Record<Step, { title: string; description: string }> = {
+    professional: {
+      title: "Quem vai atender?",
+      description: "Escolha o barbeiro para este agendamento.",
+    },
+    services: {
+      title: presetFromGrid ? "O que vai fazer?" : "Escolha os serviços",
+      description: presetFromGrid
+        ? "O horário já está reservado na grade."
+        : "Pode marcar mais de um serviço.",
+    },
+    time: {
+      title: isEncaixe ? "Horário do encaixe" : "Qual horário?",
+      description: isEncaixe
+        ? "Pode sobrepor outros agendamentos."
+        : "Só aparecem horários livres neste dia.",
+    },
+    client: {
+      title: "Dados do cliente",
+      description: "Nome e WhatsApp para confirmar o agendamento.",
+    },
+  };
+  return meta[step];
+}
+
+function AppointmentContextSummary({
   professional,
+  date,
+  startTime,
+  services,
+  totalMinutes,
+  totalPrice,
 }: {
   professional: ProfessionalOption;
+  date: string;
+  startTime?: string | null;
+  services: ServiceOption[];
+  totalMinutes: number;
+  totalPrice: number;
 }) {
+  const hasServices = services.length > 0;
+
   return (
-    <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4">
+    <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
       <ProfessionalAvatar
         photoUrl={professional.photoUrl}
         name={professional.nickname}
-        size="lg"
+        size="sm"
       />
-      <div className="min-w-0">
-        <p className="truncate font-medium">{professional.nickname}</p>
-        <p className="text-sm text-muted-foreground">Barbeiro</p>
+      <div className="min-w-0 flex-1 text-xs leading-relaxed">
+        <p className="font-medium text-foreground">{professional.nickname}</p>
+        {startTime && (
+          <p className="text-muted-foreground">
+            {formatDateBR(date)} às {formatTime(startTime)}
+          </p>
+        )}
+        {hasServices && (
+          <p className="truncate text-muted-foreground">
+            {services.map((service) => service.name).join(", ")}
+          </p>
+        )}
+        {hasServices && (
+          <p className="text-muted-foreground">
+            {formatDuration(totalMinutes)} · {formatPriceBRL(totalPrice)}
+          </p>
+        )}
       </div>
     </div>
+  );
+}
+
+function ServicePickerRow({
+  service,
+  checked,
+  onToggle,
+}: {
+  service: ServiceOption;
+  checked: boolean;
+  onToggle: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(!checked)}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+        checked
+          ? "border-foreground bg-muted/40"
+          : "border-transparent bg-muted/30 hover:bg-muted/50"
+      )}
+    >
+      <ServiceThumbnail
+        photoUrl={service.photoUrl ?? null}
+        name={service.name}
+        size="sm"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium leading-snug">{service.name}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {formatDuration(service.durationMinutes)} ·{" "}
+          {formatPriceBRL(service.priceCents)}
+        </p>
+      </div>
+      <div
+        className={cn(
+          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+          checked
+            ? "border-foreground bg-foreground text-background"
+            : "border-muted-foreground/30"
+        )}
+      >
+        {checked && <Check className="size-3" />}
+      </div>
+    </button>
+  );
+}
+
+function ServicePickerList({
+  services,
+  serviceIds,
+  onToggle,
+}: {
+  services: ServiceOption[];
+  serviceIds: string[];
+  onToggle: (id: string, checked: boolean) => void;
+}) {
+  return (
+    <ul className="flex flex-col gap-2">
+      {services.map((service) => (
+        <li key={service.id}>
+          <ServicePickerRow
+            service={service}
+            checked={serviceIds.includes(service.id)}
+            onToggle={(checked) => onToggle(service.id, checked)}
+          />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -155,6 +282,7 @@ function ModalActions({
   primaryDisabled = false,
   loading = false,
   formId,
+  summary,
 }: {
   showBack: boolean;
   onBack: () => void;
@@ -165,9 +293,12 @@ function ModalActions({
   primaryDisabled?: boolean;
   loading?: boolean;
   formId?: string;
+  summary?: React.ReactNode;
 }) {
   return (
-    <div className="flex w-full min-w-0 flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+    <div className="flex w-full min-w-0 flex-col gap-3">
+      {summary}
+      <div className="flex w-full min-w-0 flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       {showBack ? (
         <Button
           type="button"
@@ -203,6 +334,7 @@ function ModalActions({
         {loading ? "Salvando..." : primaryLabel}
         {primaryType === "button" && !loading && <ArrowRight />}
       </Button>
+      </div>
     </div>
   );
 }
@@ -246,9 +378,7 @@ export function NewAppointmentDialog({
 
   const availableServices = useMemo(() => {
     const allowed = new Set(selectedProfessional?.serviceIds ?? []);
-    return services
-      .filter((s) => allowed.has(s.id))
-      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    return services.filter((s) => allowed.has(s.id));
   }, [selectedProfessional, services]);
 
   const filteredServices = useMemo(() => {
@@ -257,6 +387,14 @@ export function NewAppointmentDialog({
       matchesSearch(s.name, serviceSearch)
     );
   }, [availableServices, serviceSearch]);
+
+  const serviceGroups = useMemo(
+    () =>
+      groupServicesForBooking(filteredServices, {
+        searching: Boolean(serviceSearch.trim()),
+      }),
+    [filteredServices, serviceSearch]
+  );
 
   const selectedServices = services.filter((s) => serviceIds.includes(s.id));
   const totalMinutes = selectedServices.reduce(
@@ -568,12 +706,16 @@ export function NewAppointmentDialog({
     }
   }
 
-  const stepLabels: Record<Step, string> = {
-    professional: "Barbeiro",
-    services: "Serviços",
-    time: "Horário",
-    client: "Cliente",
-  };
+  const stepMeta = getStepMeta(step, presetFromGrid, isEncaixe);
+
+  const servicesFooterSummary =
+    step === "services" && serviceIds.length > 0 ? (
+      <p className="text-center text-sm text-muted-foreground">
+        {selectedServices.length}{" "}
+        {selectedServices.length === 1 ? "serviço" : "serviços"} ·{" "}
+        {formatDuration(totalMinutes)} · {formatPriceBRL(totalPrice)}
+      </p>
+    ) : null;
 
   const showBack =
     step === "time" ||
@@ -584,66 +726,74 @@ export function NewAppointmentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[min(90dvh,720px)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
-          <div className="space-y-1">
-            <DialogTitle>
-              {isEncaixe ? "Encaixe" : "Novo agendamento"}
-            </DialogTitle>
-            <DialogDescription>
-              {formatDateBR(date)} · {stepLabels[step]}
-            </DialogDescription>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              Passo {currentStep} de {stepsTotal}
+            </span>
+            <span>{formatDateBR(date)}</span>
           </div>
           <StepProgress current={currentStep} total={stepsTotal} />
+          <div className="space-y-1">
+            <DialogTitle className="text-lg tracking-tight">
+              {isEncaixe && step !== "client" ? "Encaixe" : stepMeta.title}
+            </DialogTitle>
+            <DialogDescription>{stepMeta.description}</DialogDescription>
+          </div>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
           {step === "professional" && (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-muted-foreground">
-                Quem vai atender?
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {professionals.map((pro) => {
-                  const selected = professionalId === pro.id;
-                  return (
+            <ul className="flex flex-col gap-2">
+              {professionals.map((pro) => {
+                const selected = professionalId === pro.id;
+                return (
+                  <li key={pro.id}>
                     <button
-                      key={pro.id}
                       type="button"
                       onClick={() => setProfessionalId(pro.id)}
                       className={cn(
-                        "flex items-center gap-3 rounded-lg border p-4 text-left transition-colors hover:bg-muted/50",
-                        selected && "border-primary bg-muted/50"
+                        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+                        selected
+                          ? "border-foreground bg-muted/40"
+                          : "border-transparent bg-muted/30 hover:bg-muted/50"
                       )}
                     >
                       <ProfessionalAvatar
                         photoUrl={pro.photoUrl}
                         name={pro.nickname}
-                        size="lg"
+                        size="md"
                       />
-                      <span className="min-w-0 flex-1 truncate font-medium">
-                        {pro.nickname}
-                      </span>
-                      {selected && (
-                        <Check className="size-4 shrink-0 text-foreground" />
-                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">{pro.nickname}</p>
+                        <p className="text-xs text-muted-foreground">Barbeiro</p>
+                      </div>
+                      <div
+                        className={cn(
+                          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                          selected
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-muted-foreground/30"
+                        )}
+                      >
+                        {selected && <Check className="size-3" />}
+                      </div>
                     </button>
-                  );
-                })}
-              </div>
-            </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
 
           {step === "services" && selectedProfessional && (
-            <div className="flex flex-col gap-5">
-              <ProfessionalBanner professional={selectedProfessional} />
-
-              {presetFromGrid && startTime && (
-                <p className="rounded-lg border bg-muted/20 px-4 py-3 text-sm">
-                  <span className="text-muted-foreground">Horário: </span>
-                  <span className="font-medium tabular-nums">
-                    {formatTime(startTime)}
-                  </span>
-                </p>
-              )}
+            <div className="flex flex-col gap-4">
+              <AppointmentContextSummary
+                professional={selectedProfessional}
+                date={date}
+                startTime={presetFromGrid ? startTime : null}
+                services={selectedServices}
+                totalMinutes={totalMinutes}
+                totalPrice={totalPrice}
+              />
 
               {availableServices.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -651,55 +801,48 @@ export function NewAppointmentDialog({
                 </p>
               ) : (
                 <>
-                  <SearchInput
-                    value={serviceSearch}
-                    onChange={setServiceSearch}
-                    placeholder="Buscar serviço..."
-                  />
+                  {availableServices.length > 4 && (
+                    <SearchInput
+                      value={serviceSearch}
+                      onChange={setServiceSearch}
+                      placeholder="Buscar serviço..."
+                    />
+                  )}
 
                   {filteredServices.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
                       Nenhum serviço encontrado.
                     </p>
                   ) : (
-                    <div className="flex flex-col gap-2.5">
-                      {filteredServices.map((svc) => {
-                        const checked = serviceIds.includes(svc.id);
-                        return (
-                          <label
-                            key={svc.id}
-                            className={cn(
-                              "flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/50",
-                              checked && "border-primary bg-muted/50"
-                            )}
-                          >
-                            <Checkbox
-                              checked={checked}
-                              onCheckedChange={(c) =>
-                                toggleService(svc.id, c === true)
-                              }
-                              className="mt-0.5"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium leading-snug">
-                                {svc.name}
-                              </p>
-                              <p className="mt-0.5 text-sm text-muted-foreground">
-                                {formatDuration(svc.durationMinutes)} ·{" "}
-                                {formatPriceBRL(svc.priceCents)}
-                              </p>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  )}
+                    <>
+                      {serviceGroups.popular.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Mais agendados
+                          </p>
+                          <ServicePickerList
+                            services={serviceGroups.popular}
+                            serviceIds={serviceIds}
+                            onToggle={toggleService}
+                          />
+                        </div>
+                      )}
 
-                  {serviceIds.length > 0 && (
-                    <p className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-                      Total: {formatDuration(totalMinutes)} ·{" "}
-                      {formatPriceBRL(totalPrice)}
-                    </p>
+                      {serviceGroups.others.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          {serviceGroups.popular.length > 0 && (
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                              Outros serviços
+                            </p>
+                          )}
+                          <ServicePickerList
+                            services={serviceGroups.others}
+                            serviceIds={serviceIds}
+                            onToggle={toggleService}
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -707,37 +850,26 @@ export function NewAppointmentDialog({
           )}
 
           {step === "time" && selectedProfessional && (
-            <div className="flex flex-col gap-5">
-              <ProfessionalBanner professional={selectedProfessional} />
+            <div className="flex flex-col gap-4">
+              <AppointmentContextSummary
+                professional={selectedProfessional}
+                date={date}
+                services={selectedServices}
+                totalMinutes={totalMinutes}
+                totalPrice={totalPrice}
+              />
 
-              {serviceIds.length > 0 && (
+              {ownerFreeMode && (
                 <p className="text-sm text-muted-foreground">
-                  {selectedServices.map((s) => s.name).join(", ")} ·{" "}
-                  {formatDuration(totalMinutes)}
-                </p>
-              )}
-
-              {isEncaixe ? (
-                <p className="text-sm text-muted-foreground">
-                  Escolha qualquer horário. Encaixes podem sobrepor outros
-                  agendamentos e ficar fora do expediente.
-                </p>
-              ) : ownerFreeMode ? (
-                <p className="text-sm text-muted-foreground">
-                  Você pode agendar em qualquer horário, inclusive fora do
-                  expediente e em datas passadas. Horários já ocupados precisam
-                  ser encaixe ou serviço extra na comanda.
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Só aparecem horários livres neste dia.
+                  Você pode agendar em qualquer horário. Horários já ocupados
+                  precisam ser encaixe ou serviço extra na comanda.
                 </p>
               )}
 
               {!isEncaixe && !ownerFreeMode && loadingSlots ? (
                 <SlotGridSkeleton />
               ) : !isEncaixe && !ownerFreeMode && slotsError ? (
-                <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
                   {slotsError}
                 </p>
               ) : (
@@ -748,25 +880,30 @@ export function NewAppointmentDialog({
                   isSlotDisabled={(slot) =>
                     ownerFreeMode && blockedSlots.has(slot)
                   }
+                  scrollable={false}
                 />
               )}
 
               {ownerFreeMode && startTime && selectedOutsideSchedule && (
-                <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                   Fora do horário de funcionamento deste barbeiro.
                 </p>
               )}
 
               {isEncaixe && startTime && selectedOutsideSchedule && (
-                <p className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                   Fora do horário de funcionamento deste barbeiro.
                 </p>
               )}
 
               {isEncaixe && startTime && selectedConflicts.length > 0 && (
-                <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
                   <p className="font-medium text-foreground">
-                    Vai sobrepor {selectedConflicts.length === 1 ? "1 agendamento" : `${selectedConflicts.length} agendamentos`}:
+                    Vai sobrepor{" "}
+                    {selectedConflicts.length === 1
+                      ? "1 agendamento"
+                      : `${selectedConflicts.length} agendamentos`}
+                    :
                   </p>
                   <ul className="mt-2 space-y-1">
                     {selectedConflicts.map((c, i) => (
@@ -787,21 +924,17 @@ export function NewAppointmentDialog({
               onSubmit={handleSubmit}
               className="flex flex-col gap-5"
             >
-              <ProfessionalBanner professional={selectedProfessional} />
+              <AppointmentContextSummary
+                professional={selectedProfessional}
+                date={date}
+                startTime={startTime}
+                services={selectedServices}
+                totalMinutes={totalMinutes}
+                totalPrice={totalPrice}
+              />
 
-              <div className="space-y-3">
-                <div className="rounded-lg border bg-muted/20 p-4 text-sm">
-                  <p className="font-medium">
-                    {formatDateBR(date)} às {startTime}
-                  </p>
-                  <p className="mt-1 text-muted-foreground">
-                    {selectedServices.map((s) => s.name).join(", ")} ·{" "}
-                    {formatPriceBRL(totalPrice)}
-                  </p>
-                </div>
-
-                {isEncaixe &&
-                  (selectedOutsideSchedule || selectedConflicts.length > 0) && (
+              {isEncaixe &&
+                (selectedOutsideSchedule || selectedConflicts.length > 0) && (
                   <p className="text-sm text-muted-foreground">
                     Este é um encaixe manual
                     {selectedOutsideSchedule ? ", fora do expediente" : ""}
@@ -811,7 +944,6 @@ export function NewAppointmentDialog({
                     .
                   </p>
                 )}
-              </div>
 
               <AdminCustomerFields
                 firstName={firstName}
@@ -845,6 +977,7 @@ export function NewAppointmentDialog({
               onCancel={() => onOpenChange(false)}
               primaryLabel="Continuar"
               onPrimary={goNext}
+              summary={servicesFooterSummary}
             />
           )}
         </div>

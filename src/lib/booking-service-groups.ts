@@ -1,10 +1,14 @@
-import type { PublicService } from "@/lib/get-shop-catalog";
-
 export const POPULAR_SERVICES_LIMIT = 5;
 
-export function sortServicesByPopularity(
-  services: PublicService[]
-): PublicService[] {
+export type ServiceWithPopularity = {
+  id: string;
+  name: string;
+  bookingCount?: number;
+};
+
+export function sortServicesByPopularity<T extends ServiceWithPopularity>(
+  services: T[]
+): T[] {
   return [...services].sort((a, b) => {
     const diff = (b.bookingCount ?? 0) - (a.bookingCount ?? 0);
     if (diff !== 0) return diff;
@@ -12,10 +16,10 @@ export function sortServicesByPopularity(
   });
 }
 
-export function groupServicesForBooking(
-  services: PublicService[],
+export function groupServicesForBooking<T extends ServiceWithPopularity>(
+  services: T[],
   options: { searching?: boolean } = {}
-): { popular: PublicService[]; others: PublicService[] } {
+): { popular: T[]; others: T[] } {
   const sorted = sortServicesByPopularity(services);
 
   if (options.searching) {

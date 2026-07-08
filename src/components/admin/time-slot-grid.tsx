@@ -15,6 +15,8 @@ type TimeSlotGridProps = {
   buttonSize?: "sm" | "default";
   buttonClassName?: string;
   className?: string;
+  /** Quando false, a grade rola junto com o conteúdo pai (ex.: modal). */
+  scrollable?: boolean;
 };
 
 export function TimeSlotGrid({
@@ -27,6 +29,7 @@ export function TimeSlotGrid({
   buttonSize = "default",
   buttonClassName,
   className,
+  scrollable = true,
 }: TimeSlotGridProps) {
   const groups = useMemo(() => groupTimeSlotsByPeriod(slots), [slots]);
   const showPeriodHeaders = groups.length > 1;
@@ -38,7 +41,9 @@ export function TimeSlotGrid({
   return (
     <div
       className={cn(
-        "max-h-56 space-y-4 overflow-y-auto rounded-lg border p-2 sm:max-h-64",
+        "space-y-4",
+        scrollable &&
+          "max-h-56 overflow-y-auto rounded-lg border p-2 sm:max-h-64",
         className
       )}
     >

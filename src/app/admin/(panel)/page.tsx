@@ -18,6 +18,7 @@ import {
 import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { formatTime } from "@/lib/format";
 import { getAdminSession } from "@/lib/require-admin";
+import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 import { AgendaView } from "@/components/admin/agenda-view";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
@@ -83,16 +84,17 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     );
   }
 
-  const [dayContext, { data: services }, { data: rawAppointments }, pricingContext] =
+  const [dayContext, { data: services }, { data: rawAppointments }, pricingContext, bookingCounts] =
     await Promise.all([
       getAgendaDayContext(date, professionalIds),
       supabase
         .from("services")
-        .select("id, name, duration_minutes, price_cents")
+        .select("id, name, duration_minutes, price_cents, photo_url")
         .eq("active", true)
         .order("name"),
       appointmentsQuery,
       loadServicePricingContext(supabase, date),
+      loadServiceBookingCounts(),
     ]);
 
   let cashRegister:
@@ -179,7 +181,11 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       permissions={session.permissions}
       dayContext={dayContext}
       appointments={appointments}
-      services={buildAdminServicesCatalogForDate(services ?? [], pricingContext)}
+      services={buildAdminServicesCatalogForDate(
+        services ?? [],
+        pricingContext,
+        bookingCounts
+      )}
       cashRegister={cashRegister}
     />
   );
