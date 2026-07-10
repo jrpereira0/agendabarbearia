@@ -8,17 +8,9 @@ type BookingPageProps = {
 };
 
 export function BookingPage({ catalog, today }: BookingPageProps) {
-  const activeProfessionals = catalog.professionals.filter(
-    (p) => p.serviceIds.length > 0
-  );
-
   return (
     <div className="flex min-h-dvh flex-col bg-background">
-      <ShopHero
-        shop={catalog.shop}
-        businessHours={catalog.businessHours}
-        professionals={activeProfessionals}
-      />
+      <ShopHero shop={catalog.shop} businessHours={catalog.businessHours} />
 
       <main
         id="agendar"
