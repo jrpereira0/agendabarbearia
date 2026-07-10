@@ -1,9 +1,7 @@
 "use client";
 
-import { Shield } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { FormSectionTitle } from "@/components/admin/form-section";
 import {
   DEFAULT_BARBER_PERMISSIONS,
   PERMISSION_LABELS,
@@ -54,13 +52,7 @@ export function ProfessionalPermissionsFields({
   const comandaItems = PERMISSION_LABELS.filter((item) => item.group === "comanda");
 
   return (
-    <section className="flex flex-col gap-5">
-      <FormSectionTitle
-        icon={Shield}
-        title="Permissões no painel"
-        description="O que esse profissional pode fazer na agenda e nas comandas. O dono sempre tem acesso total."
-      />
-
+    <div className="flex flex-col gap-5">
       <div className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Agenda
@@ -102,7 +94,7 @@ export function ProfessionalPermissionsFields({
       </div>
 
       <ButtonResetDefaults onReset={() => onChange({ ...DEFAULT_BARBER_PERMISSIONS })} />
-    </section>
+    </div>
   );
 }
 

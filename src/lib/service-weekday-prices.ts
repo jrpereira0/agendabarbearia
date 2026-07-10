@@ -66,6 +66,14 @@ export function minWeekdayPrice(prices: ServiceWeekdayPrice[]): number {
   return Math.min(...prices.map((row) => row.priceCents));
 }
 
+export function hasVariableWeekdayPrices(
+  prices: ServiceWeekdayPrice[]
+): boolean {
+  if (prices.length === 0) return false;
+  const amounts = new Set(prices.map((row) => row.priceCents));
+  return amounts.size > 1;
+}
+
 export function mergeWeekdayPrices(
   groups: ServiceWeekdayPrice[][]
 ): ServiceWeekdayPrice[] {

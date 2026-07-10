@@ -23,6 +23,7 @@ import { shiftDate } from "@/lib/date-range";
 import type { AgendaDayContext } from "@/lib/get-agenda-day";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
+import type { ProductOption } from "@/lib/product-types";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
 import type { ProfessionalPermissions } from "@/lib/professional-permissions";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,7 @@ type AgendaViewProps = {
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
   services: ServiceOption[];
+  productsCatalog?: ProductOption[];
   cashRegister?: AgendaCashRegisterData;
 };
 
@@ -289,6 +291,7 @@ export function AgendaView({
   dayContext,
   appointments,
   services,
+  productsCatalog = [],
   cashRegister,
 }: AgendaViewProps) {
   const router = useRouter();
@@ -523,6 +526,7 @@ export function AgendaView({
         onOpenChange={setComandaOpen}
         permissions={permissions}
         servicesCatalog={services}
+        productsCatalog={productsCatalog}
         sessionProfessionalId={professionalId}
         slotStepMinutes={dayContext.slotStepMinutes}
         appointments={appointments}

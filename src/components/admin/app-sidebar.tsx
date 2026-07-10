@@ -9,6 +9,7 @@ import {
   ExternalLink,
   History,
   LogOut,
+  Package,
   Percent,
   Scissors,
   Settings,
@@ -65,6 +66,7 @@ const dayToDayItems = [
 const managementItems = [
   { title: "Profissionais", url: "/admin/profissionais", icon: Users },
   { title: "Serviços", url: "/admin/servicos", icon: Scissors },
+  { title: "Produtos", url: "/admin/produtos", icon: Package },
   { title: "Clientes", url: "/admin/clientes", icon: Contact },
 ];
 

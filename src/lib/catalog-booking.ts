@@ -50,6 +50,8 @@ export type BookingCatalogService = {
   durationMinutes: number;
   /** Preço na data pedida (só quando `date` informada). */
   priceCents?: number;
+  /** Valor variável no atendimento — referência mínima. */
+  priceFrom?: boolean;
   /** [[centavos, [dias]], ...] — dias = índice em `dayLabels` (0=Dom … 6=Sab). */
   prices: [number, number[]][];
 };
@@ -212,6 +214,7 @@ function mapBookingService(
     displayName: serviceDisplayName(service.name),
     durationMinutes: service.durationMinutes,
     prices,
+    ...(service.priceFrom ? { priceFrom: true } : {}),
     ...(dayPrice !== null ? { priceCents: dayPrice } : {}),
   };
 }

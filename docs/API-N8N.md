@@ -272,6 +272,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
       "photoUrl": "https://...",
       "durationMinutes": 30,
       "priceCents": 6000,
+      "priceFrom": false,
       "weekdayPrices": [
         { "weekday": 1, "priceCents": 6000 },
         { "weekday": 2, "priceCents": 6000 },
@@ -290,7 +291,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/catalog
 
 **Uso no bot (menus fixos):** montar menus numerados (1, 2, 3…) com `nickname` e `name`. Guardar os `id` escolhidos no estado da conversa.
 
-**`weekdayPrices`:** `weekday` 0=domingo … 6=sábado; só aparecem dias em que o serviço é oferecido. `priceCents` no catálogo completo é o **menor** preço da semana. **`bookingCount`:** quantas vezes o serviço entrou em agendamentos normais (não cancelados); o site usa isso para ordenar a seção **“Mais agendados”**.
+**`weekdayPrices`:** `weekday` 0=domingo … 6=sábado; só aparecem dias em que o serviço é oferecido. `priceCents` no catálogo completo é o **menor** preço da semana. **`priceFrom`:** quando `true`, o preço final varia no atendimento (ex.: progressiva por tamanho do cabelo) — mostre ao cliente como **“a partir de”** usando `priceCents` como referência mínima. **`bookingCount`:** quantas vezes o serviço entrou em agendamentos normais (não cancelados); o site usa isso para ordenar a seção **“Mais agendados”**.
 
 #### Catálogo enxuto (`mode=booking`)
 
@@ -356,6 +357,7 @@ Leitura do exemplo: Corte custa **R$ 60,00** (`6000` centavos) seg–qua (índic
 - Cada serviço tem preços por dia em `prices` (cadastrados no painel)
 - Com `date`: só entram serviços oferecidos naquele dia; `priceCents` = preço da data
 - Sem `date`: todos os serviços ativos com `prices` (útil antes do cliente escolher o dia)
+- `priceFrom: true` (quando presente): preço variável no atendimento — exibir como **“a partir de”** o `priceCents`
 - `priceCents` na resposta com data é o preço **daquele dia**; use `prices` + `dayLabels` para explicar outros dias
 - **Domingo:** se a loja estiver fechada (`businessHours[0].active = false`), retorna `shopClosed: true`, `professionals: []`, `services: []`, `priceBand: "sunday"`
 - **Feriados:** não tratados nesta versão — use exceções de agenda no painel se precisar fechar um dia específico

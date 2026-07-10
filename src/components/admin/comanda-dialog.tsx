@@ -8,6 +8,7 @@ import {
   Check,
   Coins,
   MessageCircle,
+  Package,
   Pencil,
   Plus,
   Receipt,
@@ -69,6 +70,7 @@ import {
 import { cn } from "@/lib/utils";
 import { adminWideDialogClassName } from "@/lib/admin-dialog";
 import { matchesSearch } from "@/lib/text";
+import type { ProductOption } from "@/lib/product-types";
 import { encaixeTimeSlots, findAppointmentConflicts } from "@/lib/encaixe";
 import { timeToMinutes } from "@/lib/availability";
 import {
@@ -93,17 +95,24 @@ function mapComandaItemsToEditable(
   return comandaItems
     .filter((item) => !item.isTip)
     .map((item) => ({
-    localKey: item.id,
-    id: item.id,
-    serviceId: item.serviceId ?? "",
-    serviceName: item.serviceName,
-    catalogPriceCents: item.catalogPriceCents,
-    chargedPriceCents: item.chargedPriceCents,
-    appointmentId: item.appointmentId ?? undefined,
-    squeezeAppointmentId: item.squeezeAppointmentId,
-    professionalId: item.professionalId ?? undefined,
-    professionalNickname: item.professionalNickname,
-  }));
+      localKey: item.id,
+      id: item.id,
+      serviceId: item.serviceId ?? undefined,
+      productId: item.productId ?? undefined,
+      serviceName: item.serviceName,
+      catalogPriceCents: item.catalogPriceCents,
+      chargedPriceCents: item.chargedPriceCents,
+      quantity: item.quantity ?? 1,
+      commissionPercent: item.commissionPercentSnapshot ?? undefined,
+      appointmentId: item.appointmentId ?? undefined,
+      squeezeAppointmentId: item.squeezeAppointmentId,
+      professionalId: item.professionalId ?? undefined,
+      professionalNickname: item.professionalNickname,
+    }));
+}
+
+function isProductItem(item: EditableItem): boolean {
+  return Boolean(item.productId);
 }
 
 function buildPersistItems(
@@ -151,6 +160,7 @@ type ComandaDialogProps = {
   onOpenChange: (open: boolean) => void;
   permissions?: ProfessionalPermissions;
   servicesCatalog: ServiceOption[];
+  productsCatalog?: ProductOption[];
   professionals?: ComandaProfessionalOption[];
   sessionProfessionalId?: string | null;
   commissionPercent?: number;
@@ -242,6 +252,7 @@ export function ComandaDialog({
   onOpenChange,
   permissions = OWNER_PERMISSIONS,
   servicesCatalog,
+  productsCatalog = [],
   professionals = [],
   sessionProfessionalId = null,
   commissionPercent = 50,
@@ -274,6 +285,12 @@ export function ComandaDialog({
     useState<ServiceOption | null>(null);
   const [extraProfessionalId, setExtraProfessionalId] = useState("");
   const [extraStartTime, setExtraStartTime] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [pendingProduct, setPendingProduct] = useState<ProductOption | null>(null);
+  const [productQuantity, setProductQuantity] = useState("1");
+  const [productProfessionalId, setProductProfessionalId] = useState("");
+  const productPickerRef = useRef<HTMLDivElement>(null);
   const [tipCents, setTipCents] = useState(0);
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
@@ -372,6 +389,20 @@ export function ComandaDialog({
     return () => document.removeEventListener("mousedown", handlePointerDown);
   }, [servicePickerOpen]);
 
+  useEffect(() => {
+    if (!productPickerOpen) return;
+    function handlePointerDown(event: MouseEvent) {
+      if (
+        productPickerRef.current &&
+        !productPickerRef.current.contains(event.target as Node)
+      ) {
+        setProductPickerOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [productPickerOpen]);
+
   const commissionByProfessional = useMemo(() => {
     const map = new Map<string, number>();
     for (const pro of professionals) {
@@ -392,6 +423,8 @@ export function ComandaDialog({
         ...items.map((item) => ({
           chargedPriceCents: item.chargedPriceCents,
           professionalId: item.professionalId ?? null,
+          productId: item.productId ?? null,
+          commissionPercentSnapshot: item.commissionPercent ?? null,
         })),
         ...(tipCents > 0 && tipProfessionalId
           ? [
@@ -412,10 +445,27 @@ export function ComandaDialog({
     [payments]
   );
 
-  const servicesTotalCents = useMemo(
-    () => items.reduce((sum, item) => sum + item.chargedPriceCents, 0),
+  const serviceItems = useMemo(
+    () => items.filter((item) => !isProductItem(item)),
     [items]
   );
+
+  const productItems = useMemo(
+    () => items.filter((item) => isProductItem(item)),
+    [items]
+  );
+
+  const servicesTotalCents = useMemo(
+    () => serviceItems.reduce((sum, item) => sum + item.chargedPriceCents, 0),
+    [serviceItems]
+  );
+
+  const productsTotalCents = useMemo(
+    () => productItems.reduce((sum, item) => sum + item.chargedPriceCents, 0),
+    [productItems]
+  );
+
+  const itemsSubtotalCents = servicesTotalCents + productsTotalCents;
 
   const paymentShortfallCents = Math.max(0, totals.totalCents - paymentsSum);
   const paymentOverpayCents = Math.max(0, paymentsSum - totals.totalCents);
@@ -471,6 +521,14 @@ export function ComandaDialog({
     serviceSearch,
     professionals,
   ]);
+
+  const filteredProducts = useMemo(() => {
+    const base = productsCatalog;
+    if (!productSearch.trim()) return base;
+    return base.filter((product) =>
+      matchesSearch(`${product.name} ${product.categoryName}`, productSearch)
+    );
+  }, [productsCatalog, productSearch]);
 
   const linkedAppointmentsForMemo = useMemo((): ComandaLinkedAppointment[] => {
     if (!appointment) return [];
@@ -623,7 +681,9 @@ export function ComandaDialog({
   }
 
   function canRemoveItemFromComanda(item: EditableItem): boolean {
-    return canEdit && !getCancelTargetForItem(item) && items.length > 1;
+    if (!canEdit || items.length <= 1) return false;
+    if (isProductItem(item)) return true;
+    return !getCancelTargetForItem(item);
   }
 
   function handleItemTrash(item: EditableItem) {
@@ -675,7 +735,7 @@ export function ComandaDialog({
     }
     setTipCents(tipDraftCents);
     setTipProfessionalId(tipDraftProfessionalId);
-    syncSinglePaymentToTotal(servicesTotalCents + tipDraftCents);
+    syncSinglePaymentToTotal(itemsSubtotalCents + tipDraftCents);
     setTipDialogOpen(false);
   }
 
@@ -684,7 +744,7 @@ export function ComandaDialog({
     setTipProfessionalId("");
     setTipDraftCents(0);
     setTipDraftProfessionalId("");
-    syncSinglePaymentToTotal(servicesTotalCents);
+    syncSinglePaymentToTotal(itemsSubtotalCents);
     setTipDialogOpen(false);
   }
 
@@ -830,6 +890,64 @@ export function ComandaDialog({
     } else {
       setItems(previous);
     }
+  }
+
+  async function confirmAddProduct() {
+    if (!pendingProduct || !canEdit || busy) return;
+
+    if (!productProfessionalId) {
+      toast.error("Escolha o barbeiro que vendeu.");
+      return;
+    }
+
+    const qty = Number.parseInt(productQuantity.replace(/\D/g, "") || "0", 10);
+    if (qty < 1) {
+      toast.error("Informe uma quantidade válida.");
+      return;
+    }
+
+    const pro = professionals.find((p) => p.id === productProfessionalId);
+    const lineTotal = pendingProduct.priceCents * qty;
+    const previous = items;
+    const nextItems: EditableItem[] = [
+      ...items,
+      {
+        localKey: newLocalKey(),
+        productId: pendingProduct.id,
+        serviceName: pendingProduct.name,
+        catalogPriceCents: pendingProduct.priceCents,
+        chargedPriceCents: lineTotal,
+        quantity: qty,
+        commissionPercent: pendingProduct.commissionPercent,
+        professionalId: productProfessionalId,
+        professionalNickname: pro?.nickname,
+      },
+    ];
+
+    setItems(nextItems);
+    const ok = await persistItems(nextItems);
+    if (ok) {
+      setPendingProduct(null);
+      setProductProfessionalId("");
+      setProductQuantity("1");
+      setProductSearch("");
+      toast.success("Produto adicionado.");
+    } else {
+      setItems(previous);
+    }
+  }
+
+  function pickProduct(product: ProductOption) {
+    if (!canEdit || busy) return;
+    const defaultPro =
+      professionals.find((pro) => pro.id === sessionProfessionalId) ??
+      professionals[0];
+
+    setPendingProduct(product);
+    setProductProfessionalId(defaultPro?.id ?? "");
+    setProductQuantity("1");
+    setProductSearch("");
+    setProductPickerOpen(false);
   }
 
   async function finalizeComanda(saveOverpayAsCredit: boolean) {
@@ -1061,7 +1179,7 @@ export function ComandaDialog({
   return (
     <>
       <Dialog
-        open={open && !confirmCancel && !pendingExtraService}
+        open={open && !confirmCancel && !pendingExtraService && !pendingProduct}
         onOpenChange={onOpenChange}
       >
         <DialogContent className={adminWideDialogClassName()}>
@@ -1219,7 +1337,7 @@ export function ComandaDialog({
               >
                 {/* Mobile: cards */}
                 <div className="space-y-3 md:hidden">
-                  {items.map((item) => (
+                  {serviceItems.map((item) => (
                     <div
                       key={item.localKey}
                       className="rounded-lg border bg-background p-4"
@@ -1310,25 +1428,6 @@ export function ComandaDialog({
                       {formatPriceBRL(servicesTotalCents)}
                     </span>
                   </div>
-                  {tipCents > 0 && (
-                    <div className="flex items-center justify-between border-t px-3 py-2.5 text-sm text-muted-foreground">
-                      <span>
-                        Gorjeta
-                        {tipProfessionalId
-                          ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
-                          : ""}
-                      </span>
-                      <span className="tabular-nums">
-                        {formatPriceBRL(tipCents)}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between border-t px-3 py-3 text-sm font-semibold">
-                    <span>Total da comanda</span>
-                    <span className="tabular-nums">
-                      {formatPriceBRL(totals.totalCents)}
-                    </span>
-                  </div>
                 </div>
 
                 {/* Desktop: tabela */}
@@ -1356,7 +1455,7 @@ export function ComandaDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((item) => (
+                      {serviceItems.map((item) => (
                         <tr key={item.localKey} className="border-b last:border-0">
                           <td className="px-3 py-3 text-muted-foreground">
                             <Scissors className="size-4" />
@@ -1441,36 +1540,178 @@ export function ComandaDialog({
                         </td>
                         <td />
                       </tr>
-                      {tipCents > 0 && (
-                        <tr className="border-t text-sm text-muted-foreground">
-                          <td colSpan={serviceTableLabelColSpan} className="px-3 py-2.5 text-right">
-                            Gorjeta
-                            {tipProfessionalId
-                              ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
-                              : ""}
-                          </td>
-                          <td className="px-3 py-2.5 text-right tabular-nums">
-                            {formatPriceBRL(tipCents)}
-                          </td>
-                          <td />
-                        </tr>
-                      )}
-                      <tr className="bg-muted/30 font-semibold">
-                        <td
-                          colSpan={serviceTableLabelColSpan}
-                          className="px-3 py-3 text-right text-sm"
-                        >
-                          Total da comanda
-                        </td>
-                        <td className="px-3 py-3 text-right text-base tabular-nums">
-                          {formatPriceBRL(totals.totalCents)}
-                        </td>
-                        <td />
-                      </tr>
                     </tfoot>
                   </table>
                 </div>
               </DialogSection>
+
+              <DialogSection
+                icon={Package}
+                title="Produtos"
+                description="Itens vendidos na comanda, com barbeiro e quantidade."
+                headerAction={
+                  canEdit ? (
+                    <div
+                      ref={productPickerRef}
+                      className="relative w-full sm:max-w-xs sm:shrink-0"
+                    >
+                      <SearchInput
+                        value={productSearch}
+                        onChange={(value) => {
+                          setProductSearch(value);
+                          setProductPickerOpen(true);
+                        }}
+                        onFocus={() => setProductPickerOpen(true)}
+                        placeholder="Buscar produto para adicionar…"
+                      />
+                      {productPickerOpen && (
+                        <ul
+                          className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border bg-popover py-1 shadow-md"
+                          role="listbox"
+                        >
+                          {filteredProducts.length === 0 ? (
+                            <li className="px-3 py-2 text-sm text-muted-foreground">
+                              Nenhum produto encontrado.
+                            </li>
+                          ) : (
+                            filteredProducts.map((product) => (
+                              <li key={product.id}>
+                                <button
+                                  type="button"
+                                  role="option"
+                                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/60"
+                                  onClick={() => pickProduct(product)}
+                                  disabled={busy}
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block font-medium">
+                                      {product.name}
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground">
+                                      {product.categoryName} · estoque{" "}
+                                      {product.stockQuantity}
+                                    </span>
+                                  </span>
+                                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                                    {formatPriceBRL(product.priceCents)}
+                                  </span>
+                                </button>
+                              </li>
+                            ))
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  ) : undefined
+                }
+              >
+                {productItems.length === 0 ? (
+                  <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                    Nenhum produto nesta comanda.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {productItems.map((item) => (
+                      <div
+                        key={item.localKey}
+                        className="rounded-lg border bg-background p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium leading-snug">
+                              {item.serviceName}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {item.quantity ?? 1}x{" "}
+                              {formatPriceBRL(item.catalogPriceCents)} ·{" "}
+                              {getItemProfessionalName(item)}
+                            </p>
+                          </div>
+                          {!isClosed && canEdit && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 shrink-0 text-destructive"
+                              onClick={() => handleItemTrash(item)}
+                              disabled={isItemTrashDisabled(item)}
+                              title="Remover produto"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Valor cobrado</span>
+                          {canEdit ? (
+                            <Input
+                              className="h-9 w-32 tabular-nums"
+                              value={
+                                item.chargedPriceCents > 0
+                                  ? formatPriceBRL(item.chargedPriceCents)
+                                  : ""
+                              }
+                              onChange={(e) =>
+                                updateItemPrice(item.localKey, e.target.value)
+                              }
+                              onBlur={(e) =>
+                                void commitItemPrice(item.localKey, e.target.value)
+                              }
+                              disabled={busy}
+                            />
+                          ) : (
+                            <span className="font-semibold tabular-nums">
+                              {formatPriceBRL(item.chargedPriceCents)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                      <span>Subtotal produtos</span>
+                      <span className="tabular-nums">
+                        {formatPriceBRL(productsTotalCents)}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </DialogSection>
+
+              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+                {servicesTotalCents > 0 && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Serviços</span>
+                    <span className="tabular-nums">
+                      {formatPriceBRL(servicesTotalCents)}
+                    </span>
+                  </div>
+                )}
+                {productsTotalCents > 0 && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>Produtos</span>
+                    <span className="tabular-nums">
+                      {formatPriceBRL(productsTotalCents)}
+                    </span>
+                  </div>
+                )}
+                {tipCents > 0 && (
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <span>
+                      Gorjeta
+                      {tipProfessionalId
+                        ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
+                        : ""}
+                    </span>
+                    <span className="tabular-nums">{formatPriceBRL(tipCents)}</span>
+                  </div>
+                )}
+                <div className="mt-2 flex items-center justify-between border-t pt-2 font-semibold">
+                  <span>Total da comanda</span>
+                  <span className="tabular-nums">
+                    {formatPriceBRL(totals.totalCents)}
+                  </span>
+                </div>
+              </div>
 
               {canEdit && !cashRegisterOpen && isOwner && (
                 <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
@@ -2180,6 +2421,88 @@ export function ComandaDialog({
                 !extraStartTime ||
                 !pendingExtraService
               }
+            >
+              Adicionar à comanda
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingProduct !== null}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && !busy) {
+            setPendingProduct(null);
+            setProductProfessionalId("");
+            setProductQuantity("1");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Adicionar produto</DialogTitle>
+            <DialogDescription>
+              {pendingProduct?.name} · {formatPriceBRL(pendingProduct?.priceCents ?? 0)} cada
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-1">
+            <div className="space-y-2">
+              <Label htmlFor="product-professional">Barbeiro que vendeu</Label>
+              <Select
+                value={productProfessionalId}
+                onValueChange={setProductProfessionalId}
+                disabled={busy}
+              >
+                <SelectTrigger id="product-professional" className="w-full">
+                  <SelectValue placeholder="Escolha o barbeiro" />
+                </SelectTrigger>
+                <SelectContent>
+                  {professionals.map((pro) => (
+                    <SelectItem key={pro.id} value={pro.id}>
+                      {pro.nickname}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="product-quantity">Quantidade</Label>
+              <Input
+                id="product-quantity"
+                inputMode="numeric"
+                value={productQuantity}
+                onChange={(event) =>
+                  setProductQuantity(event.target.value.replace(/\D/g, ""))
+                }
+                disabled={busy}
+              />
+              {pendingProduct && (
+                <p className="text-xs text-muted-foreground">
+                  Estoque disponível: {pendingProduct.stockQuantity}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setPendingProduct(null);
+                setProductProfessionalId("");
+                setProductQuantity("1");
+              }}
+            >
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmAddProduct()}
+              disabled={busy || !productProfessionalId || !pendingProduct}
             >
               Adicionar à comanda
             </Button>

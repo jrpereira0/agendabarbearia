@@ -20,6 +20,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
 | `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
 | `src/app/admin/(panel)/comandas` | Server actions da comanda (sem página própria — a UI é o `ComandaDialog`, aberto a partir da agenda) |
+| `src/app/admin/(panel)/produtos` | Cadastro de produtos, estoque, comissão por item e categorias |
 | `src/app/api/agenda/session` | Emite o cookie de sessão do cliente (aba "Meus horários") |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
@@ -59,7 +60,9 @@ Atualizado por fase, conforme o sistema evolui.
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
 | `comandas` | Comanda financeira por cliente/dia (`open` ou `closed`); uma comanda aberta por WhatsApp + data |
 | `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia (RLS ativo) |
-| `comanda_items` | Serviços na comanda com preço de tabela e preço cobrado (snapshot); pode referenciar encaixe (`squeeze_appointment_id`) |
+| `comanda_items` | Serviços e produtos na comanda com preço de tabela e preço cobrado (snapshot); serviços podem referenciar encaixe (`squeeze_appointment_id`); produtos usam `product_id`, `quantity` e `commission_percent_snapshot` |
+| `product_categories` | Categorias de produto (ex.: Produtos, Geladeira) |
+| `products` | Produtos: nome, foto, preço, estoque, comissão % por item |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
@@ -121,6 +124,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Cancelar** horário: motivo obrigatório; o card **some da agenda** (não fica visível como cancelado)
 - Ações no horário: ao **clicar no card**, abre um modal com resumo e opções (abrir comanda, editar, trocar cliente, cancelar, WhatsApp); a comanda abre só quando escolher essa opção
 - **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais **ainda ativos** do dia (vários barbeiros/horários) e os encaixes manuais desse cliente; ao **finalizar**, essa comanda fecha de vez — se o cliente marcar de novo no mesmo dia, abre uma **nova** comanda só com os novos atendimentos
+- **Produtos na comanda**: na mesma comanda dos serviços, dá para adicionar produtos (busca, quantidade e barbeiro vendedor obrigatório); a comissão é a % cadastrada no produto; o estoque baixa só no **fechamento** da comanda e volta se reabrir
 - Ao **adicionar serviço na comanda**, o dono escolhe barbeiro e horário — vira **serviço extra** na agenda (borda tracejada cinza; encaixe manual continua vermelho)
 - Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
 - Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores

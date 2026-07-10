@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
+import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { ProfessionalForm } from "@/components/admin/professional-form";
 import type { DayRanges } from "@/lib/week-schedule";
 import { formatTime } from "@/lib/format";
@@ -59,7 +60,7 @@ export default async function EditProfessionalPage({
   }));
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <AdminFormPage>
       <PageHeader
         title="Editar profissional"
         description={`${professional.nickname} — ${professional.first_name} ${professional.last_name}`}
@@ -94,6 +95,6 @@ export default async function EditProfessionalPage({
         submitLabel="Salvar alterações"
         isEdit
       />
-    </div>
+    </AdminFormPage>
   );
 }

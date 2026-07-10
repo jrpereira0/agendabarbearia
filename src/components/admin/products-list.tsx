@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/admin/search-input";
 import {
@@ -18,26 +18,24 @@ import {
   type CatalogFilter,
 } from "@/components/admin/catalog-list";
 import {
-  ServiceListRow,
-  ServiceMobileCard,
-} from "@/components/admin/service-list-row";
+  ProductListRow,
+  ProductMobileCard,
+} from "@/components/admin/product-list-row";
 import { matchesSearch } from "@/lib/text";
-import type { ServiceWeekdayPrice } from "@/lib/service-weekday-prices";
 
-type Service = {
+type Product = {
   id: string;
   name: string;
   description: string;
   priceCents: number;
-  priceFrom: boolean;
-  weekdayPrices: ServiceWeekdayPrice[];
-  durationMinutes: number;
+  commissionPercent: number;
+  stockQuantity: number;
   photoUrl: string | null;
   active: boolean;
-  professionalNames: string[];
+  categoryName: string;
 };
 
-export function ServicesList({ items }: { items: Service[] }) {
+export function ProductsList({ items }: { items: Product[] }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CatalogFilter>("all");
 
@@ -57,7 +55,7 @@ export function ServicesList({ items }: { items: Service[] }) {
       if (
         query &&
         !matchesSearch(
-          `${item.name} ${item.description} ${item.professionalNames.join(" ")}`,
+          `${item.name} ${item.description} ${item.categoryName}`,
           query
         )
       ) {
@@ -74,49 +72,57 @@ export function ServicesList({ items }: { items: Service[] }) {
           <SearchInput
             value={query}
             onChange={setQuery}
-            placeholder="Buscar serviço..."
+            placeholder="Buscar produto..."
           />
         }
         filters={
           <CatalogFilterSegment value={filter} onChange={setFilter} counts={counts} />
         }
         actions={
-          <Button asChild>
-            <Link href="/admin/servicos/novo">
-              <Plus />
-              Novo serviço
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="outline">
+              <Link href="/admin/produtos/categorias">
+                <Tags />
+                Categorias
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href="/admin/produtos/novo">
+                <Plus />
+                Novo produto
+              </Link>
+            </Button>
+          </>
         }
       />
 
       {filtered.length === 0 ? (
         <CatalogListEmpty
-          title="Nenhum serviço encontrado"
-          description="Ajuste a busca ou o filtro, ou cadastre um novo serviço."
+          title="Nenhum produto encontrado"
+          description="Ajuste a busca ou o filtro, ou cadastre um novo produto."
         />
       ) : (
         <>
           <CatalogTable>
             <CatalogTableHead>
-              <CatalogTableHeadCell>Serviço</CatalogTableHeadCell>
-              <CatalogTableHeadCell className="hidden lg:table-cell">
-                Profissionais
-              </CatalogTableHeadCell>
+              <CatalogTableHeadCell>Produto</CatalogTableHeadCell>
               <CatalogTableHeadCell className="text-right">Preço</CatalogTableHeadCell>
-              <CatalogTableHeadCell className="text-right">Duração</CatalogTableHeadCell>
+              <CatalogTableHeadCell className="hidden text-right sm:table-cell">
+                Comissão
+              </CatalogTableHeadCell>
+              <CatalogTableHeadCell className="text-right">Estoque</CatalogTableHeadCell>
               <CatalogTableHeadCell className="w-12" />
             </CatalogTableHead>
             <CatalogTableBody>
-              {filtered.map((service) => (
-                <ServiceListRow key={service.id} service={service} />
+              {filtered.map((product) => (
+                <ProductListRow key={product.id} product={product} />
               ))}
             </CatalogTableBody>
           </CatalogTable>
 
           <CatalogMobileList>
-            {filtered.map((service) => (
-              <ServiceMobileCard key={service.id} service={service} />
+            {filtered.map((product) => (
+              <ProductMobileCard key={product.id} product={product} />
             ))}
           </CatalogMobileList>
         </>

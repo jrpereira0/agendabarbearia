@@ -3,6 +3,7 @@ import { serviceMatchesDateBand } from "@/lib/catalog-booking";
 import { formatPriceBRL } from "@/lib/format";
 import type { PublicService } from "@/lib/get-shop-catalog";
 import { groupWeekdayPrices, priceForWeekday } from "@/lib/service-weekday-prices";
+import type { ServiceWeekdayPrice } from "@/lib/service-weekday-prices";
 
 export function priceOnWeekdayForPublicService(
   service: PublicService,
@@ -44,7 +45,7 @@ export function hasVariablePublicServicePrice(service: PublicService): boolean {
   return amounts.size > 1;
 }
 
-export function formatPublicServicePriceLabel(
+function formatFixedServicePriceLabel(
   service: PublicService,
   date?: string
 ): string {
@@ -80,6 +81,35 @@ export function formatPublicServicePriceLabel(
   return formatPriceBRL(service.priceCents);
 }
 
+export function formatPublicServicePriceLabel(
+  service: PublicService,
+  date?: string
+): string {
+  if (service.priceFrom) {
+    return `a partir de ${formatPriceBRL(publicServicePriceCents(service, date))}`;
+  }
+
+  return formatFixedServicePriceLabel(service, date);
+}
+
+export function formatServiceCatalogPriceLabel(
+  priceCents: number,
+  weekdayPrices: ServiceWeekdayPrice[],
+  priceFrom = false
+): string {
+  return formatPublicServicePriceLabel({
+    id: "catalog",
+    name: "catalog",
+    description: "",
+    photoUrl: null,
+    durationMinutes: 0,
+    priceCents,
+    weekdayPrices,
+    priceFrom,
+    bookingCount: 0,
+  });
+}
+
 export function sumPublicServicesPriceCents(
   services: PublicService[],
   date?: string
@@ -95,6 +125,9 @@ export function formatPublicServicesTotalLabel(
   date?: string
 ): string {
   const total = sumPublicServicesPriceCents(services, date);
+  if (services.some((service) => service.priceFrom)) {
+    return `a partir de ${formatPriceBRL(total)}`;
+  }
   if (!date && services.some(hasVariablePublicServicePrice)) {
     return `a partir de ${formatPriceBRL(total)}`;
   }

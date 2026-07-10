@@ -1,6 +1,7 @@
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
+import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { ProfessionalForm } from "@/components/admin/professional-form";
 import { formatTime } from "@/lib/format";
 import { createProfessional } from "../actions";
@@ -17,7 +18,7 @@ export default async function NewProfessionalPage() {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <AdminFormPage>
       <PageHeader
         title="Novo profissional"
         description="Cadastre o barbeiro e crie o acesso dele ao sistema."
@@ -36,6 +37,6 @@ export default async function NewProfessionalPage() {
         onSubmit={createProfessional}
         submitLabel="Cadastrar profissional"
       />
-    </div>
+    </AdminFormPage>
   );
 }

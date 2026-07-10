@@ -29,6 +29,8 @@ export type PublicService = {
   photoUrl: string | null;
   durationMinutes: number;
   priceCents: number;
+  /** Preço variável no atendimento (ex.: progressiva por tamanho do cabelo). */
+  priceFrom: boolean;
   weekdayPrices: { weekday: number; priceCents: number }[];
   /** Vezes que o serviço entrou em agendamentos normais (não cancelados). */
   bookingCount: number;
@@ -92,7 +94,9 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
         .order("nickname"),
       supabase
         .from("services")
-        .select("id, name, description, photo_url, duration_minutes, price_cents")
+        .select(
+          "id, name, description, photo_url, duration_minutes, price_cents, price_from"
+        )
         .eq("active", true)
         .order("name"),
       supabase.from("professional_services").select("professional_id, service_id"),
@@ -152,6 +156,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
           photoUrl: s.photo_url,
           durationMinutes: s.duration_minutes,
           priceCents: prices.length > 0 ? minWeekdayPrice(prices) : s.price_cents,
+          priceFrom: s.price_from ?? false,
           weekdayPrices: prices,
           bookingCount: bookingCounts.get(s.id) ?? 0,
         };

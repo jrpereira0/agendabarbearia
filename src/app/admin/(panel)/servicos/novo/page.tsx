@@ -1,6 +1,7 @@
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
+import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { ServiceForm } from "@/components/admin/service-form";
 import { createService } from "../actions";
 
@@ -20,7 +21,7 @@ export default async function NewServicePage() {
   ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <AdminFormPage>
       <PageHeader
         title="Novo serviço"
         description="Cadastre o serviço com preço por dia e duração."
@@ -34,6 +35,6 @@ export default async function NewServicePage() {
         onSubmit={createService}
         submitLabel="Cadastrar serviço"
       />
-    </div>
+    </AdminFormPage>
   );
 }

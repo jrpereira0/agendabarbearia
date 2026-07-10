@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { CustomersList } from "@/components/admin/customers-list";
+import { compareAlphabetically } from "@/lib/text";
 
 export const metadata = { title: "Clientes" };
 
@@ -63,10 +64,17 @@ export default async function CustomersPage() {
       appointments (date, status)
     `
     )
-    .order("last_name")
-    .order("first_name");
+    .order("first_name")
+    .order("last_name");
 
-  const list = (customers ?? []).map(mapCustomer);
+  const list = (customers ?? [])
+    .map(mapCustomer)
+    .sort((a, b) =>
+      compareAlphabetically(
+        `${a.firstName} ${a.lastName}`,
+        `${b.firstName} ${b.lastName}`
+      )
+    );
   const withVisits = list.filter((c) => c.appointmentCount > 0).length;
 
   return (

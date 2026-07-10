@@ -1,74 +1,123 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, SearchX } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchInput } from "@/components/admin/search-input";
-import { CustomerCard } from "@/components/admin/customer-card";
+import {
+  CatalogFilterSegment,
+  CatalogListEmpty,
+  CatalogListShell,
+  CatalogListToolbar,
+  CatalogMobileList,
+  CatalogTable,
+  CatalogTableBody,
+  CatalogTableHead,
+  CatalogTableHeadCell,
+  type CatalogFilter,
+} from "@/components/admin/catalog-list";
+import {
+  CustomerListRow,
+  CustomerMobileCard,
+  type CustomerListItem,
+} from "@/components/admin/customer-list-row";
 import { matchesSearch } from "@/lib/text";
 
-type Customer = {
-  id: string;
-  firstName: string;
-  lastName: string;
-  whatsapp: string;
-  appointmentCount: number;
-  lastVisitDate: string | null;
-  memberSince: string;
-};
-
-export function CustomersList({ items }: { items: Customer[] }) {
+export function CustomersList({ items }: { items: CustomerListItem[] }) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<CatalogFilter>("all");
 
-  const filtered = query
-    ? items.filter((c) =>
-        matchesSearch(
-          `${c.firstName} ${c.lastName} ${c.whatsapp}`,
+  const counts = useMemo(
+    () => ({
+      all: items.length,
+      active: items.filter((item) => item.appointmentCount > 0).length,
+      inactive: items.filter((item) => item.appointmentCount === 0).length,
+    }),
+    [items]
+  );
+
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      if (filter === "active" && item.appointmentCount === 0) return false;
+      if (filter === "inactive" && item.appointmentCount > 0) return false;
+      if (
+        query &&
+        !matchesSearch(
+          `${item.firstName} ${item.lastName} ${item.whatsapp}`,
           query
         )
-      )
-    : items;
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [items, filter, query]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-        <SearchInput
-          value={query}
-          onChange={setQuery}
-          placeholder="Buscar cliente por nome ou WhatsApp..."
-        />
-        <Button asChild className="h-10 shrink-0">
-          <Link href="/admin/clientes/novo">
-            <Plus />
-            Novo cliente
-          </Link>
-        </Button>
-      </div>
-
-      {query && (
-        <p className="text-sm text-muted-foreground">
-          {filtered.length === 0
-            ? "Nenhum resultado"
-            : `${filtered.length} resultado${filtered.length === 1 ? "" : "s"}`}{" "}
-          pra <span className="font-medium text-foreground">&quot;{query}&quot;</span>
-        </p>
-      )}
+    <CatalogListShell>
+      <CatalogListToolbar
+        search={
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Buscar cliente..."
+          />
+        }
+        filters={
+          <CatalogFilterSegment
+            value={filter}
+            onChange={setFilter}
+            counts={counts}
+            labels={{
+              all: "Todos",
+              active: "Com visitas",
+              inactive: "Sem visitas",
+            }}
+          />
+        }
+        actions={
+          <Button asChild>
+            <Link href="/admin/clientes/novo">
+              <Plus />
+              Novo cliente
+            </Link>
+          </Button>
+        }
+      />
 
       {filtered.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-12 text-center">
-          <SearchX className="size-5 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Nenhum cliente encontrado. Tente buscar por outro termo.
-          </p>
-        </div>
+        <CatalogListEmpty
+          title="Nenhum cliente encontrado"
+          description="Ajuste a busca ou o filtro, ou cadastre um novo cliente."
+        />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((c) => (
-            <CustomerCard key={c.id} customer={c} />
-          ))}
-        </div>
+        <>
+          <CatalogTable>
+            <CatalogTableHead>
+              <CatalogTableHeadCell>Cliente</CatalogTableHeadCell>
+              <CatalogTableHeadCell className="hidden md:table-cell">
+                WhatsApp
+              </CatalogTableHeadCell>
+              <CatalogTableHeadCell className="hidden lg:table-cell">
+                Visitas
+              </CatalogTableHeadCell>
+              <CatalogTableHeadCell className="w-12" />
+            </CatalogTableHead>
+            <CatalogTableBody>
+              {filtered.map((customer) => (
+                <CustomerListRow key={customer.id} customer={customer} />
+              ))}
+            </CatalogTableBody>
+          </CatalogTable>
+
+          <CatalogMobileList>
+            {filtered.map((customer) => (
+              <CustomerMobileCard key={customer.id} customer={customer} />
+            ))}
+          </CatalogMobileList>
+        </>
       )}
-    </div>
+    </CatalogListShell>
   );
 }

@@ -19,7 +19,7 @@ export default async function ProfessionalsPage() {
     .select(
       "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, active, professional_services(service_id, services(name))"
     )
-    .order("created_at");
+    .order("nickname");
 
   const list = professionals ?? [];
   const activeCount = list.filter((p) => p.active).length;

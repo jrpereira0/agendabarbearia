@@ -17,6 +17,7 @@ function makeService(
     photoUrl: null,
     durationMinutes: 30,
     priceCents: 6000,
+    priceFrom: false,
     weekdayPrices: [],
     bookingCount,
   };

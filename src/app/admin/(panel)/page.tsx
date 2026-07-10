@@ -21,6 +21,7 @@ import { getAdminSession } from "@/lib/require-admin";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 import { AgendaView } from "@/components/admin/agenda-view";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
+import type { ProductOption } from "@/lib/product-types";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
@@ -84,12 +85,19 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     );
   }
 
-  const [dayContext, { data: services }, { data: rawAppointments }, pricingContext, bookingCounts] =
+  const [dayContext, { data: services }, { data: products }, { data: rawAppointments }, pricingContext, bookingCounts] =
     await Promise.all([
       getAgendaDayContext(date, professionalIds),
       supabase
         .from("services")
         .select("id, name, duration_minutes, price_cents, photo_url")
+        .eq("active", true)
+        .order("name"),
+      supabase
+        .from("products")
+        .select(
+          "id, name, price_cents, commission_percent, stock_quantity, photo_url, product_categories ( id, name )"
+        )
         .eq("active", true)
         .order("name"),
       appointmentsQuery,
@@ -172,6 +180,24 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
   };
   });
 
+  const productsCatalog: ProductOption[] = (products ?? []).map((product) => {
+    const category = product.product_categories as
+      | { id: string; name: string }
+      | { id: string; name: string }[]
+      | null;
+    const categoryRow = Array.isArray(category) ? category[0] : category;
+    return {
+      id: product.id,
+      name: product.name,
+      priceCents: product.price_cents,
+      commissionPercent: product.commission_percent,
+      stockQuantity: product.stock_quantity,
+      categoryId: categoryRow?.id ?? "",
+      categoryName: categoryRow?.name ?? "—",
+      photoUrl: product.photo_url,
+    };
+  });
+
   return (
     <AgendaView
       date={date}
@@ -186,6 +212,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         pricingContext,
         bookingCounts
       )}
+      productsCatalog={productsCatalog}
       cashRegister={cashRegister}
     />
   );

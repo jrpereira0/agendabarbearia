@@ -68,9 +68,12 @@ type DbComandaRow = {
   comanda_items: {
     id: string;
     service_id: string | null;
+    product_id: string | null;
     service_name: string;
     catalog_price_cents: number;
     charged_price_cents: number;
+    quantity: number;
+    commission_percent_snapshot: number | null;
     sort_order: number;
     squeeze_appointment_id: string | null;
     appointment_id: string | null;
@@ -113,9 +116,12 @@ const COMANDA_SELECT = `
   comanda_items (
     id,
     service_id,
+    product_id,
     service_name,
     catalog_price_cents,
     charged_price_cents,
+    quantity,
+    commission_percent_snapshot,
     sort_order,
     squeeze_appointment_id,
     appointment_id,
@@ -155,6 +161,7 @@ function mapComandaRow(
   const items: ComandaItem[] = [...(row.comanda_items ?? [])]
     .filter((item) => {
       if (row.status === "closed") return true;
+      if (item.product_id) return true;
       if (item.squeeze_appointment_id) {
         return validSqueezeAppointmentIds.has(item.squeeze_appointment_id);
       }
@@ -168,9 +175,12 @@ function mapComandaRow(
       return {
         id: item.id,
         serviceId: item.service_id,
+        productId: item.product_id,
         serviceName: item.service_name,
         catalogPriceCents: item.catalog_price_cents,
         chargedPriceCents: item.charged_price_cents,
+        quantity: item.quantity ?? 1,
+        commissionPercentSnapshot: item.commission_percent_snapshot,
         sortOrder: item.sort_order,
         squeezeAppointmentId: item.squeeze_appointment_id,
         appointmentId: item.appointment_id,
@@ -1141,7 +1151,9 @@ async function recalculateComandaTotals(
 ): Promise<{ totalCents: number; commissionCents: number }> {
   const { data: items } = await admin
     .from("comanda_items")
-    .select("charged_price_cents, professional_id, is_tip")
+    .select(
+      "charged_price_cents, professional_id, is_tip, product_id, commission_percent_snapshot"
+    )
     .eq("comanda_id", comandaId);
 
   const professionalIds = [
@@ -1158,6 +1170,8 @@ async function recalculateComandaTotals(
       chargedPriceCents: item.charged_price_cents,
       professionalId: item.professional_id,
       isTip: item.is_tip,
+      productId: item.product_id,
+      commissionPercentSnapshot: item.commission_percent_snapshot,
     })),
     commissions
   );
@@ -1967,9 +1981,12 @@ async function restoreComandaItems(
         id: item.id,
         comanda_id: comandaId,
         service_id: item.serviceId,
+        product_id: item.productId,
         service_name: item.serviceName,
         catalog_price_cents: item.catalogPriceCents,
         charged_price_cents: item.chargedPriceCents,
+        quantity: item.quantity,
+        commission_percent_snapshot: item.commissionPercentSnapshot,
         sort_order: index,
         squeeze_appointment_id: item.squeezeAppointmentId,
         appointment_id: item.appointmentId,
@@ -1991,6 +2008,201 @@ async function restoreComandaItems(
     .eq("id", comandaId);
 }
 
+type ProductRowForComanda = {
+  id: string;
+  name: string;
+  price_cents: number;
+  commission_percent: number;
+  active: boolean;
+};
+
+async function loadProductsForComandaItems(
+  admin: SupabaseClient,
+  productItems: ComandaItemInput[]
+): Promise<
+  | { ok: true; products: Map<string, ProductRowForComanda> }
+  | { ok: false; error: string; status: number }
+> {
+  const ids = [
+    ...new Set(
+      productItems
+        .map((item) => item.productId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  if (ids.length === 0) {
+    return { ok: true, products: new Map() };
+  }
+
+  const { data, error } = await admin
+    .from("products")
+    .select("id, name, price_cents, commission_percent, active")
+    .in("id", ids);
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Não foi possível carregar os produtos.",
+      status: 500,
+    };
+  }
+
+  const products = new Map((data ?? []).map((row) => [row.id, row]));
+  for (const id of ids) {
+    const product = products.get(id);
+    if (!product) {
+      return { ok: false, error: "Produto não encontrado.", status: 400 };
+    }
+    if (!product.active) {
+      return {
+        ok: false,
+        error: `O produto "${product.name}" está inativo.`,
+        status: 400,
+      };
+    }
+  }
+
+  return { ok: true, products };
+}
+
+async function listComandaProductQuantities(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<Map<string, number>> {
+  const { data } = await admin
+    .from("comanda_items")
+    .select("product_id, quantity")
+    .eq("comanda_id", comandaId)
+    .not("product_id", "is", null);
+
+  const totals = new Map<string, number>();
+  for (const row of data ?? []) {
+    if (!row.product_id) continue;
+    totals.set(
+      row.product_id,
+      (totals.get(row.product_id) ?? 0) + (row.quantity ?? 1)
+    );
+  }
+  return totals;
+}
+
+async function validateProductStockForClose(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const required = await listComandaProductQuantities(admin, comandaId);
+  if (required.size === 0) return { ok: true };
+
+  const { data: products, error } = await admin
+    .from("products")
+    .select("id, name, stock_quantity")
+    .in("id", [...required.keys()]);
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Não foi possível conferir o estoque.",
+      status: 500,
+    };
+  }
+
+  const stockById = new Map(
+    (products ?? []).map((row) => [row.id, row] as const)
+  );
+
+  for (const [productId, quantity] of required) {
+    const product = stockById.get(productId);
+    if (!product) {
+      return { ok: false, error: "Produto não encontrado.", status: 400 };
+    }
+    if (product.stock_quantity < quantity) {
+      return {
+        ok: false,
+        error: `Estoque insuficiente para "${product.name}" (disponível: ${product.stock_quantity}).`,
+        status: 400,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function deductProductStockForComanda(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const required = await listComandaProductQuantities(admin, comandaId);
+  if (required.size === 0) return { ok: true };
+
+  for (const [productId, quantity] of required) {
+    const { data: product } = await admin
+      .from("products")
+      .select("id, name, stock_quantity")
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (!product) {
+      return { ok: false, error: "Produto não encontrado.", status: 400 };
+    }
+
+    if (product.stock_quantity < quantity) {
+      return {
+        ok: false,
+        error: `Estoque insuficiente para "${product.name}".`,
+        status: 400,
+      };
+    }
+
+    const { data: updated, error } = await admin
+      .from("products")
+      .update({
+        stock_quantity: product.stock_quantity - quantity,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", productId)
+      .eq("stock_quantity", product.stock_quantity)
+      .select("id")
+      .maybeSingle();
+
+    if (error || !updated) {
+      return {
+        ok: false,
+        error: `Não foi possível baixar o estoque de "${product.name}".`,
+        status: 409,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+async function restoreProductStockForComanda(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<void> {
+  const required = await listComandaProductQuantities(admin, comandaId);
+  if (required.size === 0) return;
+
+  for (const [productId, quantity] of required) {
+    const { data: product } = await admin
+      .from("products")
+      .select("stock_quantity")
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (!product) continue;
+
+    await admin
+      .from("products")
+      .update({
+        stock_quantity: product.stock_quantity + quantity,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", productId);
+  }
+}
+
 export async function updateComandaItems(
   admin: SupabaseClient,
   comandaId: string,
@@ -2007,13 +2219,16 @@ export async function updateComandaItems(
     };
   }
 
-  const serviceItems = items.filter((item) => !item.isTip);
+  const serviceItems = items.filter(
+    (item) => !item.isTip && !item.productId
+  );
+  const productItems = items.filter((item) => !item.isTip && item.productId);
   const tipItems = items.filter((item) => item.isTip);
 
-  if (serviceItems.length === 0) {
+  if (serviceItems.length === 0 && productItems.length === 0) {
     return {
       ok: false,
-      error: "Informe ao menos um serviço na comanda.",
+      error: "Informe ao menos um serviço ou produto na comanda.",
       status: 400,
     };
   }
@@ -2021,6 +2236,24 @@ export async function updateComandaItems(
   for (const item of items) {
     if (item.chargedPriceCents < 0) {
       return { ok: false, error: "Valor cobrado inválido.", status: 400 };
+    }
+  }
+
+  for (const product of productItems) {
+    if (!product.professionalId) {
+      return {
+        ok: false,
+        error: "Escolha o barbeiro que vendeu o produto.",
+        status: 400,
+      };
+    }
+    const qty = product.quantity ?? 1;
+    if (qty < 1) {
+      return {
+        ok: false,
+        error: "Quantidade de produto inválida.",
+        status: 400,
+      };
     }
   }
 
@@ -2043,6 +2276,9 @@ export async function updateComandaItems(
 
   const previousItems = current.comanda.items;
 
+  const productsResult = await loadProductsForComandaItems(admin, productItems);
+  if (!productsResult.ok) return productsResult;
+
   const durationsResult = await loadServiceDurationsForSync(
     admin,
     serviceItems,
@@ -2051,11 +2287,15 @@ export async function updateComandaItems(
   );
   if (!durationsResult.ok) return durationsResult;
 
+  const previousServiceItems = previousItems.filter(
+    (item) => !item.isTip && !item.productId
+  );
+
   const agendaMoveResult = await syncComandaItemAgendaMoves(
     admin,
     comandaId,
     serviceItems,
-    previousItems.filter((item) => !item.isTip),
+    previousServiceItems,
     durationsResult.durations
   );
   if (!agendaMoveResult.ok) return agendaMoveResult;
@@ -2070,7 +2310,7 @@ export async function updateComandaItems(
   const syncResult = await syncComandaAddonAppointments(
     admin,
     itemsForAgendaSync,
-    previousItems.filter((item) => !item.isTip),
+    previousServiceItems,
     durationsResult.durations
   );
 
@@ -2085,16 +2325,19 @@ export async function updateComandaItems(
   const serviceInsertRows = serviceItems.map((item, index) => {
     const previous =
       (item.id ? previousById.get(item.id) : undefined) ??
-      previousItems.filter((row) => !row.isTip)[index];
+      previousServiceItems[index];
     return {
       id: item.id ?? crypto.randomUUID(),
       comanda_id: comandaId,
       service_id: item.serviceId ?? null,
+      product_id: null,
       service_name: item.serviceName,
       catalog_price_cents:
         durationsResult.catalogPrices.get(item.serviceId ?? "") ??
         item.catalogPriceCents,
       charged_price_cents: item.chargedPriceCents,
+      quantity: 1,
+      commission_percent_snapshot: null,
       sort_order: index,
       is_tip: false,
       squeeze_appointment_id:
@@ -2110,21 +2353,53 @@ export async function updateComandaItems(
     };
   });
 
+  const productInsertRows = productItems.map((item, index) => {
+    const product = productsResult.products.get(item.productId!)!;
+    const qty = item.quantity ?? 1;
+    const unitPrice = item.catalogPriceCents || product.price_cents;
+    const lineTotal =
+      item.chargedPriceCents > 0 ? item.chargedPriceCents : unitPrice * qty;
+    return {
+      id: item.id ?? crypto.randomUUID(),
+      comanda_id: comandaId,
+      service_id: null,
+      product_id: item.productId,
+      service_name: product.name,
+      catalog_price_cents: unitPrice,
+      charged_price_cents: lineTotal,
+      quantity: qty,
+      commission_percent_snapshot:
+        item.commissionPercent ?? product.commission_percent,
+      sort_order: serviceItems.length + index,
+      is_tip: false,
+      squeeze_appointment_id: null,
+      appointment_id: null,
+      professional_id: item.professionalId ?? null,
+    };
+  });
+
   const tipInsertRows = tipItems.map((item, index) => ({
     id: item.id ?? crypto.randomUUID(),
     comanda_id: comandaId,
     service_id: null,
+    product_id: null,
     service_name: item.serviceName,
     catalog_price_cents: item.chargedPriceCents,
     charged_price_cents: item.chargedPriceCents,
-    sort_order: serviceItems.length + index,
+    quantity: 1,
+    commission_percent_snapshot: null,
+    sort_order: serviceItems.length + productItems.length + index,
     is_tip: true,
     squeeze_appointment_id: null,
     appointment_id: null,
     professional_id: item.professionalId ?? null,
   }));
 
-  const insertRows = [...serviceInsertRows, ...tipInsertRows];
+  const insertRows = [
+    ...serviceInsertRows,
+    ...productInsertRows,
+    ...tipInsertRows,
+  ];
 
   const { error: insertError } = await admin
     .from("comanda_items")
@@ -2138,7 +2413,7 @@ export async function updateComandaItems(
     );
     return {
       ok: false,
-      error: "Não foi possível atualizar os serviços.",
+      error: "Não foi possível atualizar os itens da comanda.",
       status: 500,
     };
   }
@@ -2217,13 +2492,16 @@ export async function closeComanda(
     };
   }
 
-  if (comanda.items.length === 0) {
+  if (comanda.items.filter((item) => !item.isTip).length === 0) {
     return {
       ok: false,
-      error: "Adicione ao menos um serviço antes de fechar.",
+      error: "Adicione ao menos um serviço ou produto antes de fechar.",
       status: 400,
     };
   }
+
+  const stockCheck = await validateProductStockForClose(admin, comandaId);
+  if (!stockCheck.ok) return stockCheck;
 
   const paymentError = validatePayments(payments, comanda.totalCents);
   if (paymentError) {
@@ -2279,6 +2557,9 @@ export async function closeComanda(
       ? Math.round((totals.commissionCents / totals.totalCents) * 100)
       : 50;
 
+  const stockDeduct = await deductProductStockForComanda(admin, comandaId);
+  if (!stockDeduct.ok) return stockDeduct;
+
   const now = new Date().toISOString();
   const closedBy =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -2310,6 +2591,7 @@ export async function closeComanda(
   );
 
   if (payError) {
+    await restoreProductStockForComanda(admin, comandaId);
     if (deductedStoreCredit) {
       await reverseComandaCreditTransactions(admin, comandaId);
     }
@@ -2335,6 +2617,7 @@ export async function closeComanda(
     .eq("id", comandaId);
 
   if (comandaError) {
+    await restoreProductStockForComanda(admin, comandaId);
     await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
     if (deductedStoreCredit) {
       await reverseComandaCreditTransactions(admin, comandaId);
@@ -2493,6 +2776,8 @@ export async function reopenComanda(
   if (!creditReverse.ok) {
     return { ok: false, error: creditReverse.error, status: 400 };
   }
+
+  await restoreProductStockForComanda(admin, comandaId);
 
   await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
 

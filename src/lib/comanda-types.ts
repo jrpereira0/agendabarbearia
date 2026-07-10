@@ -31,9 +31,12 @@ export type ComandaStatus = "open" | "closed";
 export type ComandaItem = {
   id: string;
   serviceId: string | null;
+  productId: string | null;
   serviceName: string;
   catalogPriceCents: number;
   chargedPriceCents: number;
+  quantity: number;
+  commissionPercentSnapshot: number | null;
   sortOrder: number;
   squeezeAppointmentId: string | null;
   appointmentId: string | null;
@@ -92,9 +95,12 @@ export type ComandaDetail = {
 export type ComandaItemInput = {
   id?: string;
   serviceId?: string;
+  productId?: string;
   serviceName: string;
   catalogPriceCents: number;
   chargedPriceCents: number;
+  quantity?: number;
+  commissionPercent?: number;
   appointmentId?: string;
   professionalId?: string;
   /** Horário do serviço extra na agenda (HH:mm). */
@@ -130,11 +136,17 @@ export function calculateItemCommissionCents(
     chargedPriceCents: number;
     professionalId: string | null;
     isTip?: boolean;
+    productId?: string | null;
+    commissionPercentSnapshot?: number | null;
   },
   commissionByProfessional: Map<string, number>
 ): number {
   if (item.isTip) {
     return item.chargedPriceCents;
+  }
+  if (item.productId || item.commissionPercentSnapshot != null) {
+    const pct = item.commissionPercentSnapshot ?? 0;
+    return Math.round((item.chargedPriceCents * pct) / 100);
   }
   const pct = item.professionalId
     ? (commissionByProfessional.get(item.professionalId) ?? 50)
@@ -147,6 +159,8 @@ export function calculateComandaTotalsByProfessional(
     chargedPriceCents: number;
     professionalId: string | null;
     isTip?: boolean;
+    productId?: string | null;
+    commissionPercentSnapshot?: number | null;
   }[],
   commissionByProfessional: Map<string, number>
 ): { totalCents: number; commissionCents: number } {

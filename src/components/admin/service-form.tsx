@@ -2,20 +2,23 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { toast } from "sonner";
-import { CalendarDays, Camera, Clock, Scissors, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { CheckboxGroup } from "@/components/admin/checkbox-group";
-import { FormSectionTitle } from "@/components/admin/form-section";
+import {
+  AdminFormActions,
+  AdminFormFields,
+  AdminFormPhotoUpload,
+  AdminFormSectionCard,
+} from "@/components/admin/admin-form-layout";
 import { compressImage } from "@/lib/compress-image";
 import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
+import { formatServiceCatalogPriceLabel } from "@/lib/public-service-prices";
 import { weekdayPriceInputsFromRows } from "@/lib/service-weekday-prices";
 import type { ActionResult } from "@/lib/require-owner";
 
@@ -33,6 +36,7 @@ export type ServiceFormValues = {
   photoUrl: string | null;
   professionalIds: string[];
   weekdayPrices: { weekday: number; priceCents: number }[];
+  priceFrom: boolean;
 };
 
 type WeekdayRowState = {
@@ -87,6 +91,7 @@ export function ServiceForm({
     )
   );
   const [bulkPriceCents, setBulkPriceCents] = useState(0);
+  const [priceFrom, setPriceFrom] = useState(initialValues?.priceFrom ?? false);
   const [saving, setSaving] = useState(false);
 
   const openWeekdays = useMemo(
@@ -94,13 +99,34 @@ export function ServiceForm({
     [businessHours]
   );
 
-  function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) setPreview(URL.createObjectURL(file));
+  const catalogPriceLabel = useMemo(() => {
+    const prices = weekdayRows
+      .filter((row) => row.shopOpen && row.offered && row.priceCents > 0)
+      .map((row) => ({ weekday: row.weekday, priceCents: row.priceCents }));
+
+    if (prices.length === 0) return null;
+
+    return formatServiceCatalogPriceLabel(
+      Math.min(...prices.map((row) => row.priceCents)),
+      prices,
+      priceFrom
+    );
+  }, [weekdayRows, priceFrom]);
+
+  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const compressed = await compressImage(file);
+    setPreview(URL.createObjectURL(compressed));
+    if (fileInputRef.current) {
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(compressed);
+      fileInputRef.current.files = dataTransfer.files;
+    }
   }
 
-  function handleBulkPriceChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
+  function handleBulkPriceChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
     setBulkPriceCents(Number(digits));
   }
 
@@ -130,15 +156,12 @@ export function ServiceForm({
     );
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setSaving(true);
 
-    const formData = new FormData(e.currentTarget);
-    const photo = formData.get("photo");
-    if (photo instanceof File && photo.size > 0) {
-      formData.set("photo", await compressImage(photo));
-    }
+    const formData = new FormData(event.currentTarget);
+    formData.set("priceFrom", priceFrom ? "on" : "off");
 
     for (const row of weekdayRows) {
       if (!row.shopOpen) continue;
@@ -161,68 +184,20 @@ export function ServiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <Card>
-        <CardContent className="flex flex-col gap-8">
-          <section className="flex flex-col gap-5">
-            <FormSectionTitle
-              icon={Scissors}
-              title="Serviço"
-              description="Nome, foto e descrição que o cliente vê ao escolher."
-            />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <AdminFormSectionCard
+        title="Informações do serviço"
+        description="Nome, foto e descrição que o cliente vê ao escolher."
+      >
+        <div className="flex flex-col gap-6">
+          <AdminFormPhotoUpload
+            preview={preview}
+            inputRef={fileInputRef}
+            onChange={(event) => void handlePhotoChange(event)}
+          />
 
-            <div className="flex items-center gap-5">
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="group relative size-24 shrink-0 overflow-hidden rounded-lg border-2 border-dashed transition-colors hover:border-primary"
-                aria-label="Escolher foto"
-              >
-                {preview ? (
-                  <>
-                    <Image
-                      src={preview}
-                      alt="Foto do serviço"
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Camera className="size-5 text-white" />
-                    </span>
-                  </>
-                ) : (
-                  <span className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted/40 text-muted-foreground">
-                    <Camera className="size-5" />
-                    <span className="text-[11px] font-medium">Foto</span>
-                  </span>
-                )}
-              </button>
-              <div className="flex flex-col gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-fit"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  {preview ? "Trocar foto" : "Enviar foto"}
-                </Button>
-                <span className="text-xs text-muted-foreground">
-                  JPG ou PNG. Aparece na lista de serviços do cliente.
-                </span>
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                name="photo"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handlePhotoChange}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
+          <AdminFormFields columns={1}>
+            <div className="space-y-2">
               <Label htmlFor="name">Nome do serviço</Label>
               <Input
                 id="name"
@@ -230,10 +205,11 @@ export function ServiceForm({
                 placeholder="Ex: Corte degradê"
                 defaultValue={initialValues?.name}
                 required
+                disabled={saving}
               />
             </div>
 
-            <div className="flex flex-col gap-2">
+            <div className="space-y-2">
               <Label htmlFor="description">Descrição (opcional)</Label>
               <Textarea
                 id="description"
@@ -241,171 +217,195 @@ export function ServiceForm({
                 placeholder="Ex: Corte na tesoura e máquina, com acabamento na navalha."
                 defaultValue={initialValues?.description}
                 rows={3}
+                disabled={saving}
               />
             </div>
-          </section>
+          </AdminFormFields>
+        </div>
+      </AdminFormSectionCard>
 
-          <Separator />
-
-          <section className="flex flex-col gap-5">
-            <FormSectionTitle
-              icon={CalendarDays}
-              title="Preço por dia da semana"
-              description="Marque em quais dias o serviço é oferecido e o preço de cada um. Dias em que a barbearia está fechada ficam bloqueados."
-            />
-
-            <div className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-end">
-              <div className="flex flex-1 flex-col gap-2">
-                <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
-                <Input
-                  id="bulkPrice"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="R$ 0,00"
-                  value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
-                  onChange={handleBulkPriceChange}
-                />
-              </div>
-              <Button type="button" variant="outline" onClick={applyBulkPrice}>
-                Aplicar
-              </Button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              {weekdayRows.map((row) => (
-                <div
-                  key={row.weekday}
-                  className={`grid gap-3 rounded-lg border p-3 sm:grid-cols-[1fr_auto_140px] sm:items-center ${
-                    row.shopOpen ? "" : "bg-muted/40 opacity-70"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {row.shopOpen ? (
-                      <Checkbox
-                        id={`weekday-offered-${row.weekday}`}
-                        checked={row.offered}
-                        onCheckedChange={(checked) =>
-                          updateWeekdayRow(row.weekday, {
-                            offered: checked === true,
-                          })
-                        }
-                      />
-                    ) : (
-                      <span className="size-4 shrink-0 rounded-sm border bg-muted" />
-                    )}
-                    <Label
-                      htmlFor={`weekday-offered-${row.weekday}`}
-                      className="font-medium"
-                    >
-                      {WEEKDAYS[row.weekday]}
-                    </Label>
-                  </div>
-
-                  <span className="text-xs text-muted-foreground sm:text-right">
-                    {row.shopOpen ? "Oferece neste dia" : "Barbearia fechada"}
-                  </span>
-
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="R$ 0,00"
-                    disabled={!row.shopOpen || !row.offered}
-                    value={
-                      row.offered && row.priceCents > 0
-                        ? formatPriceBRL(row.priceCents)
-                        : ""
-                    }
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "").slice(0, 8);
-                      updateWeekdayRow(row.weekday, {
-                        priceCents: Number(digits),
-                      });
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-
-            {openWeekdays.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                A barbearia não tem dias abertos cadastrados. Ajuste em
-                Configurações antes de cadastrar serviços.
+      <AdminFormSectionCard
+        title="Preço por dia da semana"
+        description="Marque os dias em que o serviço é oferecido e defina o preço de cada um."
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3.5">
+            <div className="min-w-0 space-y-1">
+              <Label htmlFor="priceFrom" className="text-sm font-medium">
+                Valor a partir de
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Marque quando o preço final varia no atendimento — por exemplo,
+                progressiva conforme o tamanho do cabelo. O valor cadastrado é
+                só referência mínima para o cliente.
               </p>
-            )}
-          </section>
-
-          <Separator />
-
-          <section className="flex flex-col gap-5">
-            <FormSectionTitle
-              icon={Clock}
-              title="Duração"
-              description="Define quais horários aparecem livres na agenda."
+            </div>
+            <Switch
+              id="priceFrom"
+              checked={priceFrom}
+              onCheckedChange={setPriceFrom}
+              disabled={saving}
+              className="shrink-0"
             />
+          </div>
 
-            <div className="flex flex-col gap-2 sm:max-w-xs">
-              <Label htmlFor="durationMinutes">Duração (minutos)</Label>
+          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1 space-y-2">
+              <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
               <Input
-                id="durationMinutes"
-                name="durationMinutes"
-                type="number"
-                min={5}
-                max={480}
-                step={5}
-                placeholder="Ex: 40"
-                defaultValue={initialValues?.durationMinutes || ""}
-                required
+                id="bulkPrice"
+                inputMode="numeric"
+                placeholder="R$ 0,00"
+                value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
+                onChange={handleBulkPriceChange}
+                disabled={saving}
               />
             </div>
-          </section>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={applyBulkPrice}
+              disabled={saving}
+            >
+              Aplicar
+            </Button>
+          </div>
 
-          <Separator />
+          {openWeekdays.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              A barbearia não tem dias abertos cadastrados. Ajuste em
+              Configurações antes de cadastrar serviços.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border">
+              <table className="w-full min-w-[480px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+                    <th className="px-4 py-3 font-medium">Dia</th>
+                    <th className="px-4 py-3 font-medium">Oferece</th>
+                    <th className="px-4 py-3 font-medium">Preço</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weekdayRows.map((row) => (
+                    <tr
+                      key={row.weekday}
+                      className={row.shopOpen ? "border-b last:border-0" : "border-b bg-muted/20 text-muted-foreground last:border-0"}
+                    >
+                      <td className="px-4 py-3 font-medium">
+                        {WEEKDAYS[row.weekday]}
+                        {!row.shopOpen ? (
+                          <span className="ml-2 text-xs font-normal">
+                            (fechado)
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3">
+                        {row.shopOpen ? (
+                          <Checkbox
+                            id={`weekday-offered-${row.weekday}`}
+                            checked={row.offered}
+                            disabled={saving}
+                            onCheckedChange={(checked) =>
+                              updateWeekdayRow(row.weekday, {
+                                offered: checked === true,
+                              })
+                            }
+                          />
+                        ) : (
+                          <span className="text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          inputMode="numeric"
+                          placeholder="R$ 0,00"
+                          disabled={!row.shopOpen || !row.offered || saving}
+                          value={
+                            row.offered && row.priceCents > 0
+                              ? formatPriceBRL(row.priceCents)
+                              : ""
+                          }
+                          onChange={(event) => {
+                            const digits = event.target.value
+                              .replace(/\D/g, "")
+                              .slice(0, 8);
+                            updateWeekdayRow(row.weekday, {
+                              priceCents: Number(digits),
+                            });
+                          }}
+                          className="max-w-[140px]"
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          <section className="flex flex-col gap-5">
-            <FormSectionTitle
-              icon={Users}
-              title="Profissionais que fazem"
-              description="O cliente só vê esse serviço ao agendar com os profissionais marcados."
+          {catalogPriceLabel ? (
+            <p className="text-sm text-muted-foreground">
+              Na listagem aparece como{" "}
+              <span className="font-medium text-foreground">
+                {catalogPriceLabel}
+              </span>
+            </p>
+          ) : null}
+        </div>
+      </AdminFormSectionCard>
+
+      <AdminFormSectionCard
+        title="Agenda"
+        description="Duração do atendimento e quem pode fazer esse serviço."
+      >
+        <AdminFormFields columns={2}>
+          <div className="space-y-2">
+            <Label htmlFor="durationMinutes">Duração (minutos)</Label>
+            <Input
+              id="durationMinutes"
+              name="durationMinutes"
+              type="number"
+              min={5}
+              max={480}
+              step={5}
+              placeholder="Ex: 40"
+              defaultValue={initialValues?.durationMinutes || ""}
+              required
+              disabled={saving}
             />
+            <p className="text-xs text-muted-foreground">
+              Define quais horários aparecem livres na agenda.
+            </p>
+          </div>
 
+          <div className="space-y-3 sm:col-span-2">
+            <Label>Profissionais que fazem</Label>
             {professionals.length === 0 ? (
-              <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                Nenhum profissional cadastrado ainda. Cadastre em{" "}
-                <span className="font-medium text-foreground">
-                  Profissionais
-                </span>{" "}
-                e volte aqui pra marcar.
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Nenhum profissional cadastrado. Cadastre em Profissionais e
+                volte aqui para marcar.
               </div>
             ) : (
               <CheckboxGroup
                 name="professionalIds"
-                options={professionals.map((p) => ({
-                  id: p.id,
-                  label: p.nickname,
+                options={professionals.map((professional) => ({
+                  id: professional.id,
+                  label: professional.nickname,
                 }))}
                 value={professionalIds}
                 onChange={setProfessionalIds}
               />
             )}
-          </section>
-        </CardContent>
-      </Card>
+          </div>
+        </AdminFormFields>
+      </AdminFormSectionCard>
 
-      <div className="sticky bottom-0 z-10 mt-6 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
-        <div className="mx-auto flex w-full max-w-2xl items-center justify-end gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => router.push("/admin/servicos")}
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-          <Button type="submit" disabled={saving} className="min-w-44">
-            {saving ? "Salvando..." : submitLabel}
-          </Button>
-        </div>
-      </div>
+      <AdminFormActions
+        onCancel={() => router.push("/admin/servicos")}
+        submitLabel={submitLabel}
+        saving={saving}
+      />
     </form>
   );
 }

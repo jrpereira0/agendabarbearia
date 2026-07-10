@@ -37,9 +37,12 @@ const itemSchema = z
   .object({
     id: z.uuid().optional(),
     serviceId: z.uuid().optional(),
+    productId: z.uuid().optional(),
     serviceName: z.string().trim().min(1),
     catalogPriceCents: z.number().int().min(0),
     chargedPriceCents: z.number().int().min(0),
+    quantity: z.number().int().min(1).optional(),
+    commissionPercent: z.number().int().min(0).max(100).optional(),
     appointmentId: z.uuid().optional(),
     professionalId: z.uuid().optional(),
     startTime: z
@@ -50,18 +53,31 @@ const itemSchema = z
     isTip: z.boolean().optional(),
   })
   .superRefine((item, ctx) => {
-    if (!item.isTip && !item.serviceId) {
+    if (item.isTip) {
+      if (!item.professionalId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Escolha o barbeiro da gorjeta.",
+          path: ["professionalId"],
+        });
+      }
+      return;
+    }
+    if (item.productId) {
+      if (!item.professionalId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Escolha o barbeiro que vendeu o produto.",
+          path: ["professionalId"],
+        });
+      }
+      return;
+    }
+    if (!item.serviceId) {
       ctx.addIssue({
         code: "custom",
         message: "Serviço inválido.",
         path: ["serviceId"],
-      });
-    }
-    if (item.isTip && !item.professionalId) {
-      ctx.addIssue({
-        code: "custom",
-        message: "Escolha o barbeiro da gorjeta.",
-        path: ["professionalId"],
       });
     }
   });

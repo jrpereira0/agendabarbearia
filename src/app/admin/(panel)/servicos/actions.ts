@@ -21,6 +21,7 @@ const serviceSchema = z.object({
     .min(5, "A duração mínima é de 5 minutos.")
     .max(480, "A duração máxima é de 8 horas."),
   professionalIds: z.array(z.uuid()).default([]),
+  priceFrom: z.boolean().default(false),
 });
 
 async function loadOpenWeekdays(
@@ -38,6 +39,7 @@ function parseServiceForm(formData: FormData, openWeekdays: number[]) {
     description: String(formData.get("description") ?? ""),
     durationMinutes: Number(formData.get("durationMinutes") ?? 0),
     professionalIds: formData.getAll("professionalIds").map(String),
+    priceFrom: formData.get("priceFrom") === "on",
   });
 
   if (!parsed.success) {
@@ -126,6 +128,7 @@ export async function createService(formData: FormData): Promise<ActionResult> {
       description: parsed.data.description,
       price_cents: minWeekdayPrice(parsed.data.weekdayPrices),
       duration_minutes: parsed.data.durationMinutes,
+      price_from: parsed.data.priceFrom,
     })
     .select("id")
     .single();
@@ -168,6 +171,7 @@ export async function updateService(
     description: parsed.data.description,
     price_cents: minWeekdayPrice(parsed.data.weekdayPrices),
     duration_minutes: parsed.data.durationMinutes,
+    price_from: parsed.data.priceFrom,
   };
 
   const photo = formData.get("photo");

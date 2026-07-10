@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
+import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { ServiceForm } from "@/components/admin/service-form";
 import { updateService } from "../actions";
 
@@ -26,7 +27,7 @@ export default async function EditServicePage({
     supabase
       .from("services")
       .select(
-        "id, name, description, price_cents, duration_minutes, photo_url, professional_services(professional_id)"
+        "id, name, description, price_cents, price_from, duration_minutes, photo_url, professional_services(professional_id)"
       )
       .eq("id", id)
       .single(),
@@ -48,7 +49,7 @@ export default async function EditServicePage({
   const updateWithId = updateService.bind(null, service.id);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <AdminFormPage>
       <PageHeader
         title="Editar serviço"
         description={service.name}
@@ -71,11 +72,12 @@ export default async function EditServicePage({
             weekday: row.weekday,
             priceCents: row.price_cents,
           })),
+          priceFrom: service.price_from ?? false,
         }}
         onSubmit={updateWithId}
         submitLabel="Salvar alterações"
         isEdit
       />
-    </div>
+    </AdminFormPage>
   );
 }
