@@ -2,6 +2,7 @@ import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatShopAddress, formatTime, WEEKDAYS } from "@/lib/format";
+import { DEFAULT_PHOTO_POSITION, normalizePhotoPosition } from "@/lib/photo-position";
 import { minWeekdayPrice } from "@/lib/service-weekday-prices";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 
@@ -19,6 +20,7 @@ export type PublicProfessional = {
   id: string;
   nickname: string;
   photoUrl: string | null;
+  photoPosition: string;
   serviceIds: string[];
 };
 
@@ -27,6 +29,7 @@ export type PublicService = {
   name: string;
   description: string;
   photoUrl: string | null;
+  photoPosition: string;
   durationMinutes: number;
   priceCents: number;
   /** Preço variável no atendimento (ex.: progressiva por tamanho do cabelo). */
@@ -89,13 +92,13 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
       supabase.from("shop_settings").select("*").single(),
       supabase
         .from("professionals")
-        .select("id, nickname, photo_url")
+        .select("id, nickname, photo_url, photo_position")
         .eq("active", true)
         .order("nickname"),
       supabase
         .from("services")
         .select(
-          "id, name, description, photo_url, duration_minutes, price_cents, price_from"
+          "id, name, description, photo_url, photo_position, duration_minutes, price_cents, price_from"
         )
         .eq("active", true)
         .order("name"),
@@ -143,6 +146,9 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
         id: p.id,
         nickname: p.nickname,
         photoUrl: p.photo_url,
+        photoPosition: normalizePhotoPosition(
+          p.photo_position ?? DEFAULT_PHOTO_POSITION
+        ),
         serviceIds: serviceIdsByProfessional.get(p.id) ?? [],
       })),
       services: (services ?? []).map((s) => {
@@ -154,6 +160,9 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
           name: s.name,
           description: s.description ?? "",
           photoUrl: s.photo_url,
+          photoPosition: normalizePhotoPosition(
+            s.photo_position ?? DEFAULT_PHOTO_POSITION
+          ),
           durationMinutes: s.duration_minutes,
           priceCents: prices.length > 0 ? minWeekdayPrice(prices) : s.price_cents,
           priceFrom: s.price_from ?? false,

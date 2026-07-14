@@ -1,8 +1,6 @@
 "use client";
 
-import type { ReactNode, RefObject } from "react";
-import Image from "next/image";
-import { Camera } from "lucide-react";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -60,79 +58,6 @@ export function AdminFormFields({
       )}
     >
       {children}
-    </div>
-  );
-}
-
-type AdminFormPhotoUploadProps = {
-  preview: string | null;
-  inputRef: RefObject<HTMLInputElement | null>;
-  onChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  name?: string;
-  accept?: string;
-  shape?: "square" | "circle";
-  hint?: string;
-};
-
-export function AdminFormPhotoUpload({
-  preview,
-  inputRef,
-  onChange,
-  name = "photo",
-  accept = "image/jpeg,image/png,image/webp",
-  shape = "square",
-  hint = "JPG ou PNG. Clique para trocar.",
-}: AdminFormPhotoUploadProps) {
-  return (
-    <div className="flex items-center gap-4">
-      <button
-        type="button"
-        onClick={() => inputRef.current?.click()}
-        className={cn(
-          "group relative shrink-0 overflow-hidden border-2 border-dashed bg-muted/20 transition-colors hover:border-foreground/40",
-          shape === "circle" ? "size-24 rounded-full" : "size-24 rounded-lg"
-        )}
-        aria-label="Escolher foto"
-      >
-        {preview ? (
-          <>
-            <Image
-              src={preview}
-              alt="Prévia da foto"
-              fill
-              className="object-cover"
-              unoptimized
-            />
-            <span className="absolute inset-0 flex items-center justify-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
-              <Camera className="size-5 text-white" />
-            </span>
-          </>
-        ) : (
-          <span className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted-foreground">
-            <Camera className="size-5" />
-            <span className="text-[11px] font-medium">Foto</span>
-          </span>
-        )}
-      </button>
-      <div className="min-w-0">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => inputRef.current?.click()}
-        >
-          {preview ? "Trocar foto" : "Enviar foto"}
-        </Button>
-        <p className="mt-2 text-xs text-muted-foreground">{hint}</p>
-      </div>
-      <input
-        ref={inputRef}
-        type="file"
-        name={name}
-        accept={accept}
-        className="hidden"
-        onChange={onChange}
-      />
     </div>
   );
 }

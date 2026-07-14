@@ -1,6 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatTime } from "@/lib/format";
 import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
+import {
   resolveDayRanges,
   SLOT_STEP_MINUTES,
   timeToMinutes,
@@ -14,6 +18,7 @@ export type AgendaProfessionalColumn = {
   id: string;
   nickname: string;
   photoUrl: string | null;
+  photoPosition: string;
   commissionPercent: number;
   serviceIds: string[];
   availableRanges: MinuteRange[];
@@ -122,7 +127,7 @@ export async function getAgendaDayContext(
     admin
       .from("professionals")
       .select(
-        "id, nickname, photo_url, commission_percent, professional_services(service_id)"
+        "id, nickname, photo_url, photo_position, commission_percent, professional_services(service_id)"
       )
       .in("id", professionalIds)
       .order("nickname"),
@@ -216,6 +221,9 @@ export async function getAgendaDayContext(
       id: pro.id,
       nickname: pro.nickname,
       photoUrl: pro.photo_url,
+      photoPosition: normalizePhotoPosition(
+        pro.photo_position ?? DEFAULT_PHOTO_POSITION
+      ),
       commissionPercent: pro.commission_percent ?? 50,
       serviceIds: (pro.professional_services ?? []).map((ps) => ps.service_id),
       availableRanges,

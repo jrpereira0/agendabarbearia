@@ -46,6 +46,7 @@ export type ProfessionalOption = {
   id: string;
   nickname: string;
   photoUrl: string | null;
+  photoPosition?: string | null;
   serviceIds: string[];
 };
 
@@ -55,6 +56,7 @@ export type ServiceOption = {
   durationMinutes: number;
   priceCents: number;
   photoUrl?: string | null;
+  photoPosition?: string | null;
   bookingCount?: number;
 };
 
@@ -155,6 +157,7 @@ function AppointmentContextSummary({
     <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
       <ProfessionalAvatar
         photoUrl={professional.photoUrl}
+        photoPosition={professional.photoPosition}
         name={professional.nickname}
         size="sm"
       />
@@ -202,6 +205,7 @@ function ServicePickerRow({
     >
       <ServiceThumbnail
         photoUrl={service.photoUrl ?? null}
+        photoPosition={service.photoPosition}
         name={service.name}
         size="sm"
       />
@@ -760,6 +764,7 @@ export function NewAppointmentDialog({
                     >
                       <ProfessionalAvatar
                         photoUrl={pro.photoUrl}
+                        photoPosition={pro.photoPosition}
                         name={pro.nickname}
                         size="md"
                       />

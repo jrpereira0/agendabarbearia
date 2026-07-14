@@ -14,4 +14,5 @@ export type ProductOption = {
   categoryId: string;
   categoryName: string;
   photoUrl: string | null;
+  photoPosition?: string | null;
 };

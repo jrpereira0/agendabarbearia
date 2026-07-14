@@ -1,10 +1,15 @@
 import Image from "next/image";
 import { Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 
 type ServiceThumbnailProps = {
   photoUrl: string | null;
   name: string;
+  photoPosition?: string | null;
   size?: "sm" | "md";
   className?: string;
 };
@@ -22,9 +27,14 @@ const icons = {
 export function ServiceThumbnail({
   photoUrl,
   name,
+  photoPosition,
   size = "md",
   className,
 }: ServiceThumbnailProps) {
+  const position = normalizePhotoPosition(
+    photoPosition ?? DEFAULT_PHOTO_POSITION
+  );
+
   return (
     <div
       className={cn(
@@ -39,6 +49,7 @@ export function ServiceThumbnail({
           alt={name}
           fill
           className="object-cover"
+          style={{ objectPosition: position }}
           sizes={size === "sm" ? "40px" : "48px"}
           unoptimized
         />

@@ -370,6 +370,7 @@ export function EditAppointmentDialog({
                       >
                         <ProfessionalAvatar
                           photoUrl={pro.photoUrl}
+                          photoPosition={pro.photoPosition}
                           name={pro.nickname}
                           size="md"
                         />
@@ -387,6 +388,7 @@ export function EditAppointmentDialog({
                 <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-4">
                   <ProfessionalAvatar
                     photoUrl={selectedProfessional.photoUrl}
+                    photoPosition={selectedProfessional.photoPosition}
                     name={selectedProfessional.nickname}
                     size="lg"
                   />

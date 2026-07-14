@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,12 +13,15 @@ import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import {
   AdminFormActions,
   AdminFormFields,
-  AdminFormPhotoUpload,
   AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
+import { PhotoField } from "@/components/admin/photo-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { compressImage } from "@/lib/compress-image";
 import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 import { formatServiceCatalogPriceLabel } from "@/lib/public-service-prices";
 import { weekdayPriceInputsFromRows } from "@/lib/service-weekday-prices";
 import type { ActionResult } from "@/lib/require-owner";
@@ -35,6 +38,7 @@ export type ServiceFormValues = {
   description: string;
   durationMinutes: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
   professionalIds: string[];
   weekdayPrices: { weekday: number; priceCents: number }[];
   priceFrom: boolean;
@@ -78,9 +82,13 @@ export function ServiceForm({
   isEdit = false,
 }: ServiceFormProps) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(
     initialValues?.photoUrl ?? null
+  );
+  const [photoPosition, setPhotoPosition] = useState(
+    normalizePhotoPosition(
+      initialValues?.photoPosition ?? DEFAULT_PHOTO_POSITION
+    )
   );
   const [name, setName] = useState(initialValues?.name ?? "");
   const [description, setDescription] = useState(
@@ -123,18 +131,6 @@ export function ServiceForm({
       priceFrom
     );
   }, [weekdayRows, priceFrom]);
-
-  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const compressed = await compressImage(file);
-    setPreview(URL.createObjectURL(compressed));
-    if (fileInputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(compressed);
-      fileInputRef.current.files = dataTransfer.files;
-    }
-  }
 
   function handleBulkPriceChange(event: React.ChangeEvent<HTMLInputElement>) {
     const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
@@ -235,10 +231,11 @@ export function ServiceForm({
             description="Nome, foto e descrição que o cliente vê ao escolher."
           >
             <div className="flex flex-col gap-6">
-              <AdminFormPhotoUpload
+              <PhotoField
                 preview={preview}
-                inputRef={fileInputRef}
-                onChange={(event) => void handlePhotoChange(event)}
+                position={photoPosition}
+                onPreviewChange={setPreview}
+                onPositionChange={setPhotoPosition}
               />
 
               <AdminFormFields columns={1}>

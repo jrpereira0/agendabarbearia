@@ -17,7 +17,7 @@ export default async function ProfessionalsPage() {
   const { data: professionals } = await supabase
     .from("professionals")
     .select(
-      "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, active, professional_services(service_id, services(name))"
+      "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, photo_position, active, professional_services(service_id, services(name))"
     )
     .order("nickname");
 
@@ -59,6 +59,7 @@ export default async function ProfessionalsPage() {
             whatsapp: p.whatsapp,
             instagram: p.instagram,
             photoUrl: p.photo_url,
+            photoPosition: p.photo_position,
             active: p.active,
             serviceNames: (p.professional_services ?? [])
               .map((ps) => {

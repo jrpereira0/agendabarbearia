@@ -31,6 +31,7 @@ type Product = {
   commissionPercent: number;
   stockQuantity: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   categoryName: string;
 };

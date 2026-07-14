@@ -327,6 +327,7 @@ export function AgendaView({
         id: p.id,
         nickname: p.nickname,
         photoUrl: p.photoUrl,
+        photoPosition: p.photoPosition,
         serviceIds: p.serviceIds,
       })),
     [dayContext.professionals]

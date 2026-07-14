@@ -31,6 +31,7 @@ type Professional = {
   whatsapp: string;
   instagram: string | null;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   serviceNames: string[];
 };

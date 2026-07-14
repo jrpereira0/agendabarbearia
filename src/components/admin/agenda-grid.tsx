@@ -140,6 +140,7 @@ export function AgendaGrid({
           >
             <ProfessionalAvatar
               photoUrl={pro.photoUrl}
+              photoPosition={pro.photoPosition}
               name={pro.nickname}
               size="md"
             />
@@ -187,6 +188,7 @@ export function AgendaGrid({
           >
             <ProfessionalAvatar
               photoUrl={pro.photoUrl}
+              photoPosition={pro.photoPosition}
               name={pro.nickname}
               size="sm"
             />

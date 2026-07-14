@@ -71,6 +71,7 @@ type Confirmation = {
   professionalId: string;
   professionalName: string;
   professionalPhotoUrl: string | null;
+  professionalPhotoPosition: string;
   date: string;
   startTime: string;
   serviceNames: string[];
@@ -108,7 +109,11 @@ function ServicePickerRow({
         onCheckedChange={(value) => onToggle(value === true)}
         className="shrink-0"
       />
-      <ServiceThumbnail photoUrl={service.photoUrl} name={service.name} />
+      <ServiceThumbnail
+        photoUrl={service.photoUrl}
+        photoPosition={service.photoPosition}
+        name={service.name}
+      />
       <div className="min-w-0 flex-1">
         <p className="font-medium leading-snug">{service.name}</p>
         {service.description && (
@@ -188,6 +193,7 @@ function SelectionSummary({
     <div className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
       <ProfessionalAvatar
         photoUrl={professional.photoUrl}
+        photoPosition={professional.photoPosition}
         name={professional.nickname}
         size="sm"
       />
@@ -547,6 +553,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         professionalId,
         professionalName: selectedProfessional!.nickname,
         professionalPhotoUrl: selectedProfessional!.photoUrl,
+        professionalPhotoPosition: selectedProfessional!.photoPosition,
         date,
         startTime: startTime!,
         serviceNames: selectedServices.map((s) => s.name),
@@ -569,6 +576,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       confirmedProfessional?.photoUrl?.trim() ||
       confirmation.professionalPhotoUrl?.trim() ||
       null;
+    const professionalPhotoPosition =
+      confirmedProfessional?.photoPosition ||
+      confirmation.professionalPhotoPosition;
 
     return (
       <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
@@ -610,6 +620,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             <div className="flex items-center gap-3.5">
               <ProfessionalAvatar
                 photoUrl={professionalPhotoUrl}
+                photoPosition={professionalPhotoPosition}
                 name={confirmation.professionalName}
                 size="xl"
                 className="border-2 border-border shadow-sm"
@@ -690,6 +701,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   >
                     <ProfessionalAvatar
                       photoUrl={pro.photoUrl}
+                      photoPosition={pro.photoPosition}
                       name={pro.nickname}
                       size="md"
                     />

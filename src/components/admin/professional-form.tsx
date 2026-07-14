@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { AtSign, Copy, Eye, EyeOff } from "lucide-react";
@@ -11,9 +11,9 @@ import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import {
   AdminFormActions,
   AdminFormFields,
-  AdminFormPhotoUpload,
   AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
+import { PhotoField } from "@/components/admin/photo-field";
 import {
   appendPermissionsToFormData,
   ProfessionalPermissionsFields,
@@ -26,8 +26,11 @@ import {
 import type { BusinessDay } from "@/components/admin/business-hours-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProfessionalCommissionsPanel } from "@/components/admin/professional-commissions-panel";
-import { compressImage } from "@/lib/compress-image";
 import { formatWhatsapp } from "@/lib/format";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 import type { ActionResult } from "@/lib/require-owner";
 import type { CommissionPayout } from "@/lib/commission-payout-service";
 import {
@@ -45,6 +48,7 @@ export type ProfessionalFormValues = {
   email: string;
   instagram: string;
   photoUrl: string | null;
+  photoPosition?: string | null;
   commissionPercent: number;
   serviceIds: string[];
   schedule: DayRanges[];
@@ -79,9 +83,13 @@ export function ProfessionalForm({
   commissions,
 }: ProfessionalFormProps) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(
     initialValues?.photoUrl ?? null
+  );
+  const [photoPosition, setPhotoPosition] = useState(
+    normalizePhotoPosition(
+      initialValues?.photoPosition ?? DEFAULT_PHOTO_POSITION
+    )
   );
   const [firstName, setFirstName] = useState(initialValues?.firstName ?? "");
   const [lastName, setLastName] = useState(initialValues?.lastName ?? "");
@@ -107,18 +115,6 @@ export function ProfessionalForm({
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState("dados");
   const [saving, setSaving] = useState(false);
-
-  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const compressed = await compressImage(file);
-    setPreview(URL.createObjectURL(compressed));
-    if (fileInputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(compressed);
-      fileInputRef.current.files = dataTransfer.files;
-    }
-  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -216,10 +212,11 @@ export function ProfessionalForm({
               description="Apelido e foto são o que o cliente vê ao agendar."
             >
               <div className="flex flex-col gap-6">
-                <AdminFormPhotoUpload
+                <PhotoField
                   preview={preview}
-                  inputRef={fileInputRef}
-                  onChange={(event) => void handlePhotoChange(event)}
+                  position={photoPosition}
+                  onPreviewChange={setPreview}
+                  onPositionChange={setPhotoPosition}
                   shape="circle"
                 />
 

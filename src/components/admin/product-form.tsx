@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -18,11 +18,14 @@ import {
 import {
   AdminFormActions,
   AdminFormFields,
-  AdminFormPhotoUpload,
   AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
-import { compressImage } from "@/lib/compress-image";
+import { PhotoField } from "@/components/admin/photo-field";
 import { formatPriceBRL } from "@/lib/format";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 import type { ActionResult } from "@/lib/require-owner";
 
 export type ProductCategoryOption = {
@@ -38,6 +41,7 @@ export type ProductFormValues = {
   commissionPercent: number;
   stockQuantity: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
 };
 
 type ProductFormProps = {
@@ -59,9 +63,13 @@ export function ProductForm({
   submitLabel,
 }: ProductFormProps) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(
     initialValues?.photoUrl ?? null
+  );
+  const [photoPosition, setPhotoPosition] = useState(
+    normalizePhotoPosition(
+      initialValues?.photoPosition ?? DEFAULT_PHOTO_POSITION
+    )
   );
   const [categoryId, setCategoryId] = useState(
     initialValues?.categoryId ?? categories[0]?.id ?? ""
@@ -107,18 +115,6 @@ export function ProductForm({
     setBusy(false);
   }
 
-  async function handlePhotoChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const compressed = await compressImage(file);
-    setPreview(URL.createObjectURL(compressed));
-    if (fileInputRef.current) {
-      const dataTransfer = new DataTransfer();
-      dataTransfer.items.add(compressed);
-      fileInputRef.current.files = dataTransfer.files;
-    }
-  }
-
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <AdminFormSectionCard
@@ -126,11 +122,12 @@ export function ProductForm({
         description="Nome, categoria e foto usados na comanda."
       >
         <div className="flex flex-col gap-6">
-          <AdminFormPhotoUpload
+          <PhotoField
             preview={preview}
-            inputRef={fileInputRef}
-            onChange={(event) => void handlePhotoChange(event)}
-            hint="Opcional. A imagem é comprimida antes do envio."
+            position={photoPosition}
+            onPreviewChange={setPreview}
+            onPositionChange={setPhotoPosition}
+            hint="Opcional. Você recorta e depois pode arrastar para posicionar."
           />
 
           <AdminFormFields columns={2}>

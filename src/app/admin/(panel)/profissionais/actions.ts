@@ -6,6 +6,7 @@ import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { uploadPublicPhoto } from "@/lib/upload-photo";
+import { normalizePhotoPosition } from "@/lib/photo-position";
 import {
   parsePermissionsFormData,
   permissionsToDbRow,
@@ -208,14 +209,22 @@ export async function createProfessional(
   }
 
   const photo = formData.get("photo");
+  const photoPosition = normalizePhotoPosition(
+    String(formData.get("photoPosition") ?? "")
+  );
   if (photo instanceof File && photo.size > 0) {
     const url = await uploadPhoto(professional.id, photo);
     if (url) {
       await admin
         .from("professionals")
-        .update({ photo_url: url })
+        .update({ photo_url: url, photo_position: photoPosition })
         .eq("id", professional.id);
     }
+  } else {
+    await admin
+      .from("professionals")
+      .update({ photo_position: photoPosition })
+      .eq("id", professional.id);
   }
 
   await syncServices(professional.id, data.serviceIds);
@@ -288,6 +297,9 @@ export async function updateProfessional(
     email: data.email,
     instagram: data.instagram || null,
     commission_percent: data.commissionPercent,
+    photo_position: normalizePhotoPosition(
+      String(formData.get("photoPosition") ?? "")
+    ),
     ...permissionsToDbRow(permissions),
   };
 

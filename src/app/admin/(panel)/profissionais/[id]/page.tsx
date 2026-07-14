@@ -46,7 +46,7 @@ export default async function EditProfessionalPage({
       supabase
         .from("professionals")
         .select(
-          "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, commission_percent, can_book_clients, can_create_squeeze_in, can_open_comanda, can_edit_comanda, can_close_comanda, can_edit_appointments, can_cancel_appointments, can_manage_schedule_blocks, professional_services(service_id), working_hours(weekday, start_time, end_time)"
+          "id, first_name, last_name, nickname, whatsapp, email, instagram, photo_url, photo_position, commission_percent, can_book_clients, can_create_squeeze_in, can_open_comanda, can_edit_comanda, can_close_comanda, can_edit_appointments, can_cancel_appointments, can_manage_schedule_blocks, professional_services(service_id), working_hours(weekday, start_time, end_time)"
         )
         .eq("id", id)
         .single(),
@@ -119,6 +119,7 @@ export default async function EditProfessionalPage({
           email: professional.email,
           instagram: professional.instagram ?? "",
           photoUrl: professional.photo_url,
+          photoPosition: professional.photo_position,
           commissionPercent: professional.commission_percent ?? 50,
           serviceIds: (professional.professional_services ?? []).map(
             (ps) => ps.service_id

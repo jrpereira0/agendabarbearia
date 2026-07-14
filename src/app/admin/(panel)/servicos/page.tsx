@@ -18,7 +18,7 @@ export default async function ServicesPage() {
     supabase
       .from("services")
       .select(
-        "id, name, description, price_cents, price_from, duration_minutes, photo_url, active, professional_services(professional_id, professionals(nickname))"
+        "id, name, description, price_cents, price_from, duration_minutes, photo_url, photo_position, active, professional_services(professional_id, professionals(nickname))"
       )
       .order("name"),
     supabase
@@ -75,6 +75,7 @@ export default async function ServicesPage() {
             weekdayPrices: weekdayPricesByService.get(s.id) ?? [],
             durationMinutes: s.duration_minutes,
             photoUrl: s.photo_url,
+            photoPosition: s.photo_position,
             active: s.active,
             professionalNames: (s.professional_services ?? [])
               .map((ps) => {

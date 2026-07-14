@@ -49,8 +49,8 @@ Atualizado por fase, conforme o sistema evolui.
 | Tabela | Função |
 | --- | --- |
 | `profiles` | Usuários do painel (papel: `owner` ou `barber`) |
-| `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, **% comissão** |
-| `services` | Serviços: nome, foto, preço mínimo de referência (centavos), duração (minutos) |
+| `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, ponto focal (`photo_position`), **% comissão** |
+| `services` | Serviços: nome, foto, ponto focal (`photo_position`), preço mínimo de referência (centavos), duração (minutos) |
 | `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos. Leitura pública (catálogo e site); policies de escrita só para o dono (migration `0031`) |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
@@ -62,7 +62,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia (RLS ativo) |
 | `comanda_items` | Serviços e produtos na comanda com preço de tabela e preço cobrado (snapshot); serviços podem referenciar encaixe (`squeeze_appointment_id`); produtos usam `product_id`, `quantity` e `commission_percent_snapshot` |
 | `product_categories` | Categorias de produto (ex.: Produtos, Geladeira) |
-| `products` | Produtos: nome, foto, preço, estoque, comissão % por item |
+| `products` | Produtos: nome, foto, ponto focal (`photo_position`), preço, estoque, comissão % por item |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
@@ -214,10 +214,12 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
 - Exclusão só é permitida se o cliente não tiver agendamentos no histórico
 
-## Fotos (profissionais e serviços)
+## Fotos (profissionais, serviços e produtos)
 
-- Toda foto é **comprimida no navegador antes do envio** (`src/lib/compress-image.ts`): redimensionada pra até 1024px e convertida pra WebP
-- Se a compressão falhar, o arquivo original é enviado (limite de 10 MB configurado no `next.config.ts`)
+- No upload: a pessoa **recorta** a foto (quadrado) e depois pode **arrastar** na prévia para ajustar o enquadramento
+- Toda foto é **comprimida no navegador** (`src/lib/compress-image.ts`): até 1024px, WebP
+- O ponto focal fica em `photo_position` (CSS `object-position`, padrão `50% 50%`) nas tabelas `professionals`, `services` e `products`
+- Se a compressão falhar, o arquivo original é enviado (limite de 10 MB no `next.config.ts`)
 
 ## Riscos de segurança conhecidos (aceitos por ora)
 

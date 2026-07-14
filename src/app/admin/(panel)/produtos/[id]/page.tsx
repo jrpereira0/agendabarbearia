@@ -22,7 +22,7 @@ export default async function EditProductPage({ params }: PageProps) {
     supabase
       .from("products")
       .select(
-        "id, name, description, category_id, price_cents, commission_percent, stock_quantity, photo_url"
+        "id, name, description, category_id, price_cents, commission_percent, stock_quantity, photo_url, photo_position"
       )
       .eq("id", id)
       .maybeSingle(),
@@ -59,6 +59,7 @@ export default async function EditProductPage({ params }: PageProps) {
           commissionPercent: product.commission_percent,
           stockQuantity: product.stock_quantity,
           photoUrl: product.photo_url,
+          photoPosition: product.photo_position,
         }}
         onSubmit={updateWithId}
         submitLabel="Salvar alterações"

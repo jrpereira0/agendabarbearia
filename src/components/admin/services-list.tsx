@@ -33,6 +33,7 @@ type Service = {
   weekdayPrices: ServiceWeekdayPrice[];
   durationMinutes: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   professionalNames: string[];
 };

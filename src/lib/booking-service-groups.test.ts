@@ -15,6 +15,7 @@ function makeService(
     name,
     description: "",
     photoUrl: null,
+    photoPosition: "50% 50%",
     durationMinutes: 30,
     priceCents: 6000,
     priceFrom: false,

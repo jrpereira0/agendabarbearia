@@ -46,6 +46,7 @@ export type ProfessionalListItem = {
   whatsapp: string;
   instagram: string | null;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   serviceNames: string[];
 };
@@ -59,6 +60,9 @@ function ProfessionalThumb({ professional }: { professional: ProfessionalListIte
           alt={professional.nickname}
           fill
           className="object-cover"
+          style={{
+            objectPosition: professional.photoPosition ?? "50% 50%",
+          }}
           unoptimized
         />
       ) : (

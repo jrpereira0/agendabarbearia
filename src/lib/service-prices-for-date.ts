@@ -14,6 +14,7 @@ export type ServicePriceRow = {
   duration_minutes: number;
   price_cents: number;
   photo_url?: string | null;
+  photo_position?: string | null;
 };
 
 export async function loadServicePricingContext(
@@ -77,6 +78,7 @@ export type AdminServiceCatalogItem = {
   durationMinutes: number;
   priceCents: number;
   photoUrl: string | null;
+  photoPosition: string | null;
   bookingCount: number;
 };
 
@@ -95,6 +97,7 @@ export function buildAdminServicesCatalogForDate(
         durationMinutes: service.duration_minutes,
         priceCents,
         photoUrl: service.photo_url ?? null,
+        photoPosition: service.photo_position ?? null,
         bookingCount: bookingCounts.get(service.id) ?? 0,
       },
     ];

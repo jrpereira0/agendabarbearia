@@ -49,6 +49,7 @@ export type ServiceListItem = {
   weekdayPrices: ServiceWeekdayPrice[];
   durationMinutes: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   professionalNames: string[];
 };
@@ -70,6 +71,7 @@ function ServiceThumb({ service }: { service: ServiceListItem }) {
           alt={service.name}
           fill
           className="object-cover"
+          style={{ objectPosition: service.photoPosition ?? "50% 50%" }}
           unoptimized
         />
       ) : (

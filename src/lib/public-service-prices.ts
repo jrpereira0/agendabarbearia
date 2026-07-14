@@ -102,6 +102,7 @@ export function formatServiceCatalogPriceLabel(
     name: "catalog",
     description: "",
     photoUrl: null,
+    photoPosition: "50% 50%",
     durationMinutes: 0,
     priceCents,
     weekdayPrices,

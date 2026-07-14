@@ -1,9 +1,14 @@
 import { User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 
 type ProfessionalAvatarProps = {
   photoUrl: string | null;
   name: string;
+  photoPosition?: string | null;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 };
@@ -25,10 +30,14 @@ const ICON = {
 export function ProfessionalAvatar({
   photoUrl,
   name,
+  photoPosition,
   size = "md",
   className,
 }: ProfessionalAvatarProps) {
   const src = photoUrl?.trim() || null;
+  const position = normalizePhotoPosition(
+    photoPosition ?? DEFAULT_PHOTO_POSITION
+  );
 
   return (
     <div
@@ -40,7 +49,12 @@ export function ProfessionalAvatar({
     >
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={name} className="size-full object-cover" />
+        <img
+          src={src}
+          alt={name}
+          className="size-full object-cover"
+          style={{ objectPosition: position }}
+        />
       ) : (
         <div className="flex size-full items-center justify-center">
           <User className={cn("text-muted-foreground", ICON[size])} />

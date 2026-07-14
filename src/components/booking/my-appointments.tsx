@@ -370,6 +370,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
             <ProfessionalAvatar
               photoUrl={editingProfessional.photoUrl}
+              photoPosition={editingProfessional.photoPosition}
               name={editingProfessional.nickname}
               size="md"
             />
@@ -547,6 +548,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                     <div className="flex items-center gap-3">
                       <ProfessionalAvatar
                         photoUrl={a.professionalPhotoUrl}
+                        photoPosition={a.professionalPhotoPosition}
                         name={a.professionalName}
                         size="lg"
                         className="border-2 border-border"
@@ -641,6 +643,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                 <div className="flex items-center gap-3.5">
                   <ProfessionalAvatar
                     photoUrl={cancelTarget.professionalPhotoUrl}
+                    photoPosition={cancelTarget.professionalPhotoPosition}
                     name={cancelTarget.professionalName}
                     size="md"
                   />

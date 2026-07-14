@@ -90,13 +90,13 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       getAgendaDayContext(date, professionalIds),
       supabase
         .from("services")
-        .select("id, name, duration_minutes, price_cents, photo_url")
+        .select("id, name, duration_minutes, price_cents, photo_url, photo_position")
         .eq("active", true)
         .order("name"),
       supabase
         .from("products")
         .select(
-          "id, name, price_cents, commission_percent, stock_quantity, photo_url, product_categories ( id, name )"
+          "id, name, price_cents, commission_percent, stock_quantity, photo_url, photo_position, product_categories ( id, name )"
         )
         .eq("active", true)
         .order("name"),
@@ -195,6 +195,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       categoryId: categoryRow?.id ?? "",
       categoryName: categoryRow?.name ?? "—",
       photoUrl: product.photo_url,
+      photoPosition: product.photo_position,
     };
   });
 

@@ -11,6 +11,7 @@ import {
   type ServiceWeekdayPrice,
 } from "@/lib/service-weekday-prices";
 import { uploadPublicPhoto } from "@/lib/upload-photo";
+import { normalizePhotoPosition } from "@/lib/photo-position";
 
 const serviceSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome do serviço."),
@@ -136,11 +137,22 @@ export async function createService(formData: FormData): Promise<ActionResult> {
   if (error) return { ok: false, error: `Erro ao salvar: ${error.message}` };
 
   const photo = formData.get("photo");
+  const photoPosition = normalizePhotoPosition(
+    String(formData.get("photoPosition") ?? "")
+  );
   if (photo instanceof File && photo.size > 0) {
     const url = await uploadPhoto(service.id, photo);
     if (url) {
-      await admin.from("services").update({ photo_url: url }).eq("id", service.id);
+      await admin
+        .from("services")
+        .update({ photo_url: url, photo_position: photoPosition })
+        .eq("id", service.id);
     }
+  } else {
+    await admin
+      .from("services")
+      .update({ photo_position: photoPosition })
+      .eq("id", service.id);
   }
 
   await syncWeekdayPrices(service.id, parsed.data.weekdayPrices);
@@ -172,6 +184,9 @@ export async function updateService(
     price_cents: minWeekdayPrice(parsed.data.weekdayPrices),
     duration_minutes: parsed.data.durationMinutes,
     price_from: parsed.data.priceFrom,
+    photo_position: normalizePhotoPosition(
+      String(formData.get("photoPosition") ?? "")
+    ),
   };
 
   const photo = formData.get("photo");

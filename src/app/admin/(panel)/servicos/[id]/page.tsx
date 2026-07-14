@@ -27,7 +27,7 @@ export default async function EditServicePage({
     supabase
       .from("services")
       .select(
-        "id, name, description, price_cents, price_from, duration_minutes, photo_url, professional_services(professional_id)"
+        "id, name, description, price_cents, price_from, duration_minutes, photo_url, photo_position, professional_services(professional_id)"
       )
       .eq("id", id)
       .single(),
@@ -65,6 +65,7 @@ export default async function EditServicePage({
           description: service.description,
           durationMinutes: service.duration_minutes,
           photoUrl: service.photo_url,
+          photoPosition: service.photo_position,
           professionalIds: (service.professional_services ?? []).map(
             (ps) => ps.professional_id
           ),

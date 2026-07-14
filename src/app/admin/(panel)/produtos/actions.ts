@@ -6,6 +6,7 @@ import { createAdminClient, requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { uploadPublicPhoto } from "@/lib/upload-photo";
+import { normalizePhotoPosition } from "@/lib/photo-position";
 
 const productSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome do produto."),
@@ -84,11 +85,22 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
   if (error) return { ok: false, error: `Erro ao salvar: ${error.message}` };
 
   const photo = formData.get("photo");
+  const photoPosition = normalizePhotoPosition(
+    String(formData.get("photoPosition") ?? "")
+  );
   if (photo instanceof File && photo.size > 0) {
     const url = await uploadPhoto(product.id, photo);
     if (url) {
-      await admin.from("products").update({ photo_url: url }).eq("id", product.id);
+      await admin
+        .from("products")
+        .update({ photo_url: url, photo_position: photoPosition })
+        .eq("id", product.id);
     }
+  } else {
+    await admin
+      .from("products")
+      .update({ photo_position: photoPosition })
+      .eq("id", product.id);
   }
 
   revalidatePath("/admin/produtos");
@@ -117,6 +129,9 @@ export async function updateProduct(
     price_cents: parsed.data.priceCents,
     commission_percent: parsed.data.commissionPercent,
     stock_quantity: parsed.data.stockQuantity,
+    photo_position: normalizePhotoPosition(
+      String(formData.get("photoPosition") ?? "")
+    ),
     updated_at: new Date().toISOString(),
   };
 

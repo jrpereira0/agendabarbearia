@@ -46,6 +46,7 @@ export type ProductListItem = {
   commissionPercent: number;
   stockQuantity: number;
   photoUrl: string | null;
+  photoPosition?: string | null;
   active: boolean;
   categoryName: string;
 };
@@ -59,6 +60,7 @@ function ProductThumb({ product }: { product: ProductListItem }) {
           alt={product.name}
           fill
           className="object-cover"
+          style={{ objectPosition: product.photoPosition ?? "50% 50%" }}
           unoptimized
         />
       ) : (
