@@ -8,10 +8,10 @@ import {
   Check,
   Coins,
   MessageCircle,
+  MoreHorizontal,
   Package,
   Pencil,
   Plus,
-  Receipt,
   RotateCcw,
   Scissors,
   Trash2,
@@ -27,6 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +45,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/admin/search-input";
-import { DialogSection } from "@/components/admin/dialog-section";
 import { ComandaDialogSkeleton } from "@/components/skeletons/comanda-dialog-skeleton";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
@@ -68,7 +74,7 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { adminWideDialogClassName } from "@/lib/admin-dialog";
+import { adminComandaDialogClassName } from "@/lib/admin-dialog";
 import { matchesSearch } from "@/lib/text";
 import type { ProductOption } from "@/lib/product-types";
 import { encaixeTimeSlots, findAppointmentConflicts } from "@/lib/encaixe";
@@ -643,7 +649,6 @@ export function ComandaDialog({
     (apt) => !apt.isSqueezeIn
   );
   const showAppointmentTimes = scheduledLinkedAppointments.length > 1;
-  const serviceTableLabelColSpan = showAppointmentTimes ? 5 : 4;
 
   const focusAppointment =
     linkedAppointments.find((apt) => apt.id === focusAppointmentId) ??
@@ -711,6 +716,11 @@ export function ComandaDialog({
   const canCancelFocused = appointmentToCancel
     ? canCancelLinkedAppointment(appointmentToCancel)
     : false;
+
+  const hasSecondaryActions =
+    Boolean(canEdit && onEditSchedule) ||
+    canCancelFocused ||
+    Boolean(isOwner && isClosed);
 
   const paymentShortfall = canEdit && paymentShortfallCents > 0;
 
@@ -1182,7 +1192,7 @@ export function ComandaDialog({
         open={open && !confirmCancel && !pendingExtraService && !pendingProduct}
         onOpenChange={onOpenChange}
       >
-        <DialogContent className={adminWideDialogClassName()}>
+        <DialogContent className={adminComandaDialogClassName()}>
           <DialogHeader className="sr-only">
             <DialogTitle>Comanda — {customerName}</DialogTitle>
             <DialogDescription>
@@ -1193,88 +1203,69 @@ export function ComandaDialog({
           </DialogHeader>
 
           {/* Cabeçalho */}
-          <div className="shrink-0 border-b bg-muted/20 px-4 py-4 sm:px-6">
-            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
-              <div className="min-w-0 space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Cliente
-                </p>
+          <div className="shrink-0 border-b px-4 py-3.5 sm:px-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xl font-semibold leading-tight">
+                  <h2 className="truncate text-lg font-semibold tracking-tight sm:text-xl">
                     {customerName}
-                  </p>
-                  {customerCreditBalanceCents > 0 && (
-                    <Badge
-                      variant="outline"
-                      className="gap-1.5 font-normal tabular-nums"
-                    >
-                      <Wallet className="size-3.5" />
-                      {storeCreditUsedCents > 0
-                        ? `${formatPriceBRL(creditRemainingCents)} de crédito restante`
-                        : `${formatPriceBRL(customerCreditBalanceCents)} em crédito`}
-                    </Badge>
-                  )}
+                  </h2>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "shrink-0 font-normal",
+                      isClosed
+                        ? "bg-neutral-800 text-white hover:bg-neutral-800"
+                        : "bg-muted text-foreground"
+                    )}
+                  >
+                    {isClosed ? "Fechada" : "Aberta"}
+                  </Badge>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                   <a
                     href={whatsappLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                    className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                   >
-                    <MessageCircle className="size-4" />
+                    <MessageCircle className="size-3.5" />
                     <span className="tabular-nums">
                       {formatWhatsapp(customerWhatsapp)}
                     </span>
                   </a>
-                </div>
-                {linkedAppointments.length > 1 && (
-                  <p className="text-xs text-muted-foreground">
-                    {linkedAppointments.length} atendimentos nesta comanda — um
-                    pagamento no final do dia
-                  </p>
-                )}
-                {showAppointmentTimes && (
-                  <ul className="space-y-1 pt-1 text-xs text-muted-foreground">
-                    {scheduledLinkedAppointments.map((apt) => (
-                      <li key={apt.id} className="tabular-nums">
-                        {formatTime(apt.startTime)} – {formatTime(apt.endTime)}{" "}
-                        · {apt.professionalNickname}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 sm:items-end sm:text-right">
-                <Badge
-                  variant="secondary"
-                  className={cn(
-                    "w-fit sm:ml-auto",
-                    isClosed
-                      ? "bg-neutral-800 text-white"
-                      : "bg-background text-foreground"
+                  {customerCreditBalanceCents > 0 && (
+                    <span className="inline-flex items-center gap-1 tabular-nums">
+                      <Wallet className="size-3.5" />
+                      {storeCreditUsedCents > 0
+                        ? `${formatPriceBRL(creditRemainingCents)} crédito restante`
+                        : `${formatPriceBRL(customerCreditBalanceCents)} em crédito`}
+                    </span>
                   )}
-                >
-                  {isClosed ? "Comanda fechada" : "Comanda aberta"}
-                </Badge>
-                <div>
-                  <p className="text-xs text-muted-foreground">Dia</p>
-                  <p className="font-semibold tabular-nums">
+                </div>
+                {showAppointmentTimes ? (
+                  <p className="text-xs text-muted-foreground">
+                    {scheduledLinkedAppointments
+                      .map(
+                        (apt) =>
+                          `${formatTime(apt.startTime)} · ${apt.professionalNickname}`
+                      )
+                      .join(" · ")}
+                  </p>
+                ) : focusAppointment ? (
+                  <p className="text-xs tabular-nums text-muted-foreground">
+                    {formatDateBR(serviceDate)} ·{" "}
+                    {formatTime(focusAppointment.startTime)} –{" "}
+                    {formatTime(focusAppointment.endTime)}
+                    {focusAppointment.professionalNickname
+                      ? ` · ${focusAppointment.professionalNickname}`
+                      : ""}
+                  </p>
+                ) : (
+                  <p className="text-xs tabular-nums text-muted-foreground">
                     {formatDateBR(serviceDate)}
                   </p>
-                  {linkedAppointments.length === 1 && focusAppointment && (
-                    <p className="text-sm tabular-nums text-muted-foreground">
-                      {formatTime(focusAppointment.startTime)} –{" "}
-                      {formatTime(focusAppointment.endTime)}
-                    </p>
-                  )}
-                  {showAppointmentTimes && (
-                    <p className="text-sm text-muted-foreground">
-                      {scheduledLinkedAppointments.length} horários no dia
-                    </p>
-                  )}
-                </div>
+                )}
               </div>
             </div>
           </div>
@@ -1282,202 +1273,190 @@ export function ComandaDialog({
           {loading ? (
             <ComandaDialogSkeleton />
           ) : (
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-              <DialogSection
-                icon={Scissors}
-                title="Serviços"
-                description="Itens do atendimento e valores cobrados."
-                headerAction={
-                  canEdit ? (
-                    <div
-                      ref={servicePickerRef}
-                      className="relative w-full sm:max-w-xs sm:shrink-0"
-                    >
-                      <SearchInput
-                        value={serviceSearch}
-                        onChange={(value) => {
-                          setServiceSearch(value);
-                          setServicePickerOpen(true);
-                        }}
-                        onFocus={() => setServicePickerOpen(true)}
-                        placeholder="Buscar serviço para adicionar…"
-                      />
-                      {servicePickerOpen && (
-                        <ul
-                          className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border bg-popover py-1 shadow-md"
-                          role="listbox"
+            <div className="grid min-h-0 flex-1 gap-4 overflow-hidden px-4 py-3 sm:px-6 sm:py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,22rem)] lg:gap-5">
+              {/* Coluna: itens */}
+              <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
+                <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold">Itens da comanda</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Serviços, produtos e gorjeta deste atendimento
+                    </p>
+                  </div>
+                  {canEdit && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={busy}
+                        onClick={openTipDialog}
+                      >
+                        <Coins className="size-4" />
+                        Gorjeta
+                      </Button>
+                      <div ref={servicePickerRef} className="relative">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => {
+                            setServicePickerOpen((open) => !open);
+                            setProductPickerOpen(false);
+                          }}
                         >
-                          {filteredServices.length === 0 ? (
-                            <li className="px-3 py-2 text-sm text-muted-foreground">
-                              Nenhum serviço encontrado.
-                            </li>
-                          ) : (
-                            filteredServices.map((svc) => (
-                              <li key={svc.id}>
-                                <button
-                                  type="button"
-                                  role="option"
-                                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/60"
-                                  onClick={() => pickService(svc)}
-                                  disabled={busy}
-                                >
-                                  <span className="font-medium">{svc.name}</span>
-                                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                                    {formatPriceBRL(svc.priceCents)}
-                                  </span>
-                                </button>
-                              </li>
-                            ))
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ) : undefined
-                }
-              >
-                {/* Mobile: cards */}
-                <div className="space-y-3 md:hidden">
-                  {serviceItems.map((item) => (
-                    <div
-                      key={item.localKey}
-                      className="rounded-lg border bg-background p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium leading-snug">
-                            {item.serviceName}
-                          </p>
-                          <div className="mt-2">
-                            <p className="text-xs text-muted-foreground">
-                              Barbeiro
-                            </p>
-                            <div className="mt-1">
-                              <span className="text-sm">
-                                {getItemProfessionalName(item)}
-                              </span>
-                              {showAppointmentTimes && getItemAppointmentTime(item) && (
-                                <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-                                  {getItemAppointmentTime(item)}
-                                </p>
+                          <Plus className="size-4" />
+                          Serviço
+                        </Button>
+                        {servicePickerOpen && (
+                          <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] rounded-lg border bg-popover p-2 shadow-md sm:w-80">
+                            <SearchInput
+                              value={serviceSearch}
+                              onChange={setServiceSearch}
+                              placeholder="Buscar serviço…"
+                            />
+                            <ul
+                              className="mt-2 max-h-52 overflow-y-auto"
+                              role="listbox"
+                            >
+                              {filteredServices.length === 0 ? (
+                                <li className="px-2 py-3 text-sm text-muted-foreground">
+                                  Nenhum serviço encontrado.
+                                </li>
+                              ) : (
+                                filteredServices.map((svc) => (
+                                  <li key={svc.id}>
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                      onClick={() => void pickService(svc)}
+                                      disabled={busy}
+                                    >
+                                      <span className="min-w-0 truncate font-medium">
+                                        {svc.name}
+                                      </span>
+                                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                                        {formatPriceBRL(svc.priceCents)}
+                                      </span>
+                                    </button>
+                                  </li>
+                                ))
                               )}
-                            </div>
+                            </ul>
                           </div>
-                        </div>
-                        {!isClosed &&
-                          (getCancelTargetForItem(item) || canEdit) && (
+                        )}
+                      </div>
+                      {productsCatalog.length > 0 && (
+                        <div ref={productPickerRef} className="relative">
                           <Button
                             type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="size-8 shrink-0 text-destructive"
-                            onClick={() => handleItemTrash(item)}
-                            disabled={isItemTrashDisabled(item)}
-                            title={
-                              getCancelTargetForItem(item)
-                                ? "Cancelar horário"
-                                : "Remover serviço"
-                            }
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              setProductPickerOpen((open) => !open);
+                              setServicePickerOpen(false);
+                            }}
                           >
-                            <Trash2 className="size-4" />
+                            <Plus className="size-4" />
+                            Produto
                           </Button>
-                        )}
-                      </div>
-                      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Preço</p>
-                          <p className="tabular-nums">
-                            {formatPriceBRL(item.catalogPriceCents)}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground">
-                            Valor cobrado
-                          </p>
-                          {canEdit ? (
-                            <Input
-                              className="mt-1 h-9 w-full tabular-nums"
-                              value={
-                                item.chargedPriceCents > 0
-                                  ? formatPriceBRL(item.chargedPriceCents)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                updateItemPrice(item.localKey, e.target.value)
-                              }
-                              onBlur={(e) =>
-                                void commitItemPrice(
-                                  item.localKey,
-                                  e.target.value
-                                )
-                              }
-                              disabled={busy}
-                              aria-label={`Valor ${item.serviceName}`}
-                            />
-                          ) : (
-                            <p className="font-semibold tabular-nums">
-                              {formatPriceBRL(item.chargedPriceCents)}
-                            </p>
+                          {productPickerOpen && (
+                            <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] rounded-lg border bg-popover p-2 shadow-md sm:w-80">
+                              <SearchInput
+                                value={productSearch}
+                                onChange={setProductSearch}
+                                placeholder="Buscar produto…"
+                              />
+                              <ul
+                                className="mt-2 max-h-52 overflow-y-auto"
+                                role="listbox"
+                              >
+                                {filteredProducts.length === 0 ? (
+                                  <li className="px-2 py-3 text-sm text-muted-foreground">
+                                    Nenhum produto encontrado.
+                                  </li>
+                                ) : (
+                                  filteredProducts.map((product) => (
+                                    <li key={product.id}>
+                                      <button
+                                        type="button"
+                                        role="option"
+                                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                        onClick={() => pickProduct(product)}
+                                        disabled={busy}
+                                      >
+                                        <span className="min-w-0">
+                                          <span className="block truncate font-medium">
+                                            {product.name}
+                                          </span>
+                                          <span className="block text-xs text-muted-foreground">
+                                            {product.categoryName} · estoque{" "}
+                                            {product.stockQuantity}
+                                          </span>
+                                        </span>
+                                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                                          {formatPriceBRL(product.priceCents)}
+                                        </span>
+                                      </button>
+                                    </li>
+                                  ))
+                                )}
+                              </ul>
+                            </div>
                           )}
                         </div>
-                      </div>
+                      )}
                     </div>
-                  ))}
-                  <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                    <span>Subtotal serviços</span>
-                    <span className="tabular-nums">
-                      {formatPriceBRL(servicesTotalCents)}
-                    </span>
-                  </div>
+                  )}
                 </div>
 
-                {/* Desktop: tabela */}
-                <div className="hidden overflow-hidden rounded-lg border md:block">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="w-10 px-3 py-2.5 font-medium" />
-                        <th className="px-3 py-2.5 font-medium">Serviço</th>
-                        <th className="hidden px-3 py-2.5 font-medium md:table-cell">
-                          Profissional
-                        </th>
-                        {showAppointmentTimes && (
-                          <th className="hidden px-3 py-2.5 font-medium lg:table-cell">
-                            Horário
-                          </th>
-                        )}
-                        <th className="px-3 py-2.5 text-right font-medium">
-                          Preço
-                        </th>
-                        <th className="px-3 py-2.5 text-right font-medium">
-                          Valor cobrado
-                        </th>
-                        <th className="w-12 px-2 py-2.5" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {serviceItems.map((item) => (
-                        <tr key={item.localKey} className="border-b last:border-0">
-                          <td className="px-3 py-3 text-muted-foreground">
-                            <Scissors className="size-4" />
-                          </td>
-                          <td className="px-3 py-3 font-medium">
-                            {item.serviceName}
-                          </td>
-                          <td className="hidden px-3 py-3 md:table-cell">
-                            {getItemProfessionalName(item)}
-                          </td>
-                          {showAppointmentTimes && (
-                            <td className="hidden px-3 py-3 tabular-nums text-muted-foreground lg:table-cell">
-                              {getItemAppointmentTime(item) ?? "—"}
-                            </td>
-                          )}
-                          <td className="px-3 py-3 text-right tabular-nums text-muted-foreground">
-                            {formatPriceBRL(item.catalogPriceCents)}
-                          </td>
-                          <td className="px-3 py-3 text-right">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+                  {items.length === 0 && tipCents <= 0 ? (
+                    <p className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
+                      Nenhum item nesta comanda.
+                    </p>
+                  ) : (
+                    <ul className="min-h-0 flex-1 overflow-y-auto divide-y">
+                      {items.map((item) => {
+                        const product = isProductItem(item);
+                        const timeLabel = getItemAppointmentTime(item);
+                        return (
+                          <li
+                            key={item.localKey}
+                            className="flex items-center gap-3 bg-background px-3 py-2.5 sm:px-4"
+                          >
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+                              {product ? (
+                                <Package className="size-4" />
+                              ) : (
+                                <Scissors className="size-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium leading-snug">
+                                {item.serviceName}
+                              </p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {product ? (
+                                  <>
+                                    {item.quantity ?? 1}x{" "}
+                                    {formatPriceBRL(item.catalogPriceCents)} ·{" "}
+                                    {getItemProfessionalName(item)}
+                                  </>
+                                ) : (
+                                  <>
+                                    {getItemProfessionalName(item)}
+                                    {timeLabel ? ` · ${timeLabel}` : ""}
+                                  </>
+                                )}
+                              </p>
+                            </div>
                             {canEdit ? (
                               <Input
-                                className="ml-auto h-9 w-28 tabular-nums"
+                                className="h-9 w-[6.5rem] shrink-0 tabular-nums sm:w-28"
                                 value={
                                   item.chargedPriceCents > 0
                                     ? formatPriceBRL(item.chargedPriceCents)
@@ -1499,280 +1478,156 @@ export function ComandaDialog({
                                 aria-label={`Valor ${item.serviceName}`}
                               />
                             ) : (
-                              <span className="font-semibold tabular-nums">
+                              <span className="shrink-0 font-semibold tabular-nums">
                                 {formatPriceBRL(item.chargedPriceCents)}
                               </span>
                             )}
-                          </td>
-                          <td className="px-2 py-3">
                             {!isClosed &&
                               (getCancelTargetForItem(item) || canEdit) && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-8 text-destructive"
-                                onClick={() => handleItemTrash(item)}
-                                disabled={isItemTrashDisabled(item)}
-                                title={
-                                  getCancelTargetForItem(item)
-                                    ? "Cancelar horário"
-                                    : "Remover serviço"
-                                }
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t bg-muted/20 font-medium">
-                        <td
-                          colSpan={serviceTableLabelColSpan}
-                          className="px-3 py-2.5 text-right text-sm text-muted-foreground"
-                        >
-                          Subtotal serviços
-                        </td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">
-                          {formatPriceBRL(servicesTotalCents)}
-                        </td>
-                        <td />
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </DialogSection>
-
-              <DialogSection
-                icon={Package}
-                title="Produtos"
-                description="Itens vendidos na comanda, com barbeiro e quantidade."
-                headerAction={
-                  canEdit ? (
-                    <div
-                      ref={productPickerRef}
-                      className="relative w-full sm:max-w-xs sm:shrink-0"
-                    >
-                      <SearchInput
-                        value={productSearch}
-                        onChange={(value) => {
-                          setProductSearch(value);
-                          setProductPickerOpen(true);
-                        }}
-                        onFocus={() => setProductPickerOpen(true)}
-                        placeholder="Buscar produto para adicionar…"
-                      />
-                      {productPickerOpen && (
-                        <ul
-                          className="absolute z-50 mt-1 max-h-52 w-full overflow-y-auto rounded-lg border bg-popover py-1 shadow-md"
-                          role="listbox"
-                        >
-                          {filteredProducts.length === 0 ? (
-                            <li className="px-3 py-2 text-sm text-muted-foreground">
-                              Nenhum produto encontrado.
-                            </li>
-                          ) : (
-                            filteredProducts.map((product) => (
-                              <li key={product.id}>
-                                <button
+                                <Button
                                   type="button"
-                                  role="option"
-                                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-muted/60"
-                                  onClick={() => pickProduct(product)}
-                                  disabled={busy}
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-8 shrink-0 text-destructive"
+                                  onClick={() => handleItemTrash(item)}
+                                  disabled={isItemTrashDisabled(item)}
+                                  title={
+                                    getCancelTargetForItem(item)
+                                      ? "Cancelar horário"
+                                      : product
+                                        ? "Remover produto"
+                                        : "Remover serviço"
+                                  }
                                 >
-                                  <span className="min-w-0">
-                                    <span className="block font-medium">
-                                      {product.name}
-                                    </span>
-                                    <span className="block text-xs text-muted-foreground">
-                                      {product.categoryName} · estoque{" "}
-                                      {product.stockQuantity}
-                                    </span>
-                                  </span>
-                                  <span className="shrink-0 tabular-nums text-muted-foreground">
-                                    {formatPriceBRL(product.priceCents)}
-                                  </span>
-                                </button>
-                              </li>
-                            ))
-                          )}
-                        </ul>
-                      )}
-                    </div>
-                  ) : undefined
-                }
-              >
-                {productItems.length === 0 ? (
-                  <p className="rounded-lg border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-                    Nenhum produto nesta comanda.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {productItems.map((item) => (
-                      <div
-                        key={item.localKey}
-                        className="rounded-lg border bg-background p-4"
-                      >
-                        <div className="flex items-start justify-between gap-3">
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              )}
+                          </li>
+                        );
+                      })}
+                      {tipCents > 0 && (
+                        <li className="flex items-center gap-3 bg-background px-3 py-2.5 sm:px-4">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+                            <Coins className="size-4" />
+                          </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium leading-snug">
-                              {item.serviceName}
-                            </p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {item.quantity ?? 1}x{" "}
-                              {formatPriceBRL(item.catalogPriceCents)} ·{" "}
-                              {getItemProfessionalName(item)}
+                            <p className="font-medium leading-snug">Gorjeta</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {tipEligibleProfessionals.find(
+                                (pro) => pro.id === tipProfessionalId
+                              )?.nickname ?? "barbeiro"}
                             </p>
                           </div>
-                          {!isClosed && canEdit && (
+                          <span className="shrink-0 font-semibold tabular-nums">
+                            {formatPriceBRL(tipCents)}
+                          </span>
+                          {canEdit && (
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
                               className="size-8 shrink-0 text-destructive"
-                              onClick={() => handleItemTrash(item)}
-                              disabled={isItemTrashDisabled(item)}
-                              title="Remover produto"
+                              onClick={removeTip}
+                              disabled={busy}
+                              title="Remover gorjeta"
                             >
                               <Trash2 className="size-4" />
                             </Button>
                           )}
-                        </div>
-                        <div className="mt-3 flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">Valor cobrado</span>
-                          {canEdit ? (
-                            <Input
-                              className="h-9 w-32 tabular-nums"
-                              value={
-                                item.chargedPriceCents > 0
-                                  ? formatPriceBRL(item.chargedPriceCents)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                updateItemPrice(item.localKey, e.target.value)
-                              }
-                              onBlur={(e) =>
-                                void commitItemPrice(item.localKey, e.target.value)
-                              }
-                              disabled={busy}
-                            />
-                          ) : (
-                            <span className="font-semibold tabular-nums">
-                              {formatPriceBRL(item.chargedPriceCents)}
-                            </span>
-                          )}
-                        </div>
+                        </li>
+                      )}
+                    </ul>
+                  )}
+
+                  <div className="shrink-0 space-y-1 border-t bg-muted/20 px-4 py-2.5 text-sm">
+                    {servicesTotalCents > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Serviços</span>
+                        <span className="tabular-nums">
+                          {formatPriceBRL(servicesTotalCents)}
+                        </span>
                       </div>
-                    ))}
-                    <div className="flex items-center justify-between border-t bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
-                      <span>Subtotal produtos</span>
+                    )}
+                    {productsTotalCents > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Produtos</span>
+                        <span className="tabular-nums">
+                          {formatPriceBRL(productsTotalCents)}
+                        </span>
+                      </div>
+                    )}
+                    {tipCents > 0 && (
+                      <div className="flex items-center justify-between text-muted-foreground">
+                        <span>Gorjeta</span>
+                        <span className="tabular-nums">
+                          {formatPriceBRL(tipCents)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t pt-1.5 font-medium">
+                      <span>Subtotal</span>
                       <span className="tabular-nums">
-                        {formatPriceBRL(productsTotalCents)}
+                        {formatPriceBRL(totals.totalCents)}
                       </span>
                     </div>
                   </div>
-                )}
-              </DialogSection>
-
-              <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm">
-                {servicesTotalCents > 0 && (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Serviços</span>
-                    <span className="tabular-nums">
-                      {formatPriceBRL(servicesTotalCents)}
-                    </span>
-                  </div>
-                )}
-                {productsTotalCents > 0 && (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>Produtos</span>
-                    <span className="tabular-nums">
-                      {formatPriceBRL(productsTotalCents)}
-                    </span>
-                  </div>
-                )}
-                {tipCents > 0 && (
-                  <div className="flex items-center justify-between text-muted-foreground">
-                    <span>
-                      Gorjeta
-                      {tipProfessionalId
-                        ? ` · ${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"}`
-                        : ""}
-                    </span>
-                    <span className="tabular-nums">{formatPriceBRL(tipCents)}</span>
-                  </div>
-                )}
-                <div className="mt-2 flex items-center justify-between border-t pt-2 font-semibold">
-                  <span>Total da comanda</span>
-                  <span className="tabular-nums">
-                    {formatPriceBRL(totals.totalCents)}
-                  </span>
                 </div>
-              </div>
+              </section>
 
-              {canEdit && !cashRegisterOpen && isOwner && (
-                <div className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground">
-                  {openCashRegisterDate &&
-                  openCashRegisterDate !== serviceDate ? (
-                    <>
-                      O caixa aberto é do dia{" "}
-                      {formatDateBR(openCashRegisterDate)}. Esta comanda é do dia{" "}
-                      {formatDateBR(serviceDate)} — só dá para finalizar comandas do
-                      dia do caixa aberto.
-                    </>
-                  ) : (
-                    <>
-                      Não há caixa aberto para o dia {formatDateBR(serviceDate)}.
-                      Abra o caixa em{" "}
-                      <Link
-                        href={`/admin/financeiro?date=${serviceDate}`}
-                        className="font-medium text-foreground underline-offset-4 hover:underline"
-                      >
-                        Financeiro
-                      </Link>{" "}
-                      antes de finalizar comandas.
-                    </>
-                  )}
+              {/* Coluna: pagamento */}
+              <section className="flex min-h-0 flex-col gap-3 overflow-hidden lg:border-l lg:pl-5">
+                <div className="shrink-0">
+                  <h3 className="text-sm font-semibold">Pagamento</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Formas de pagamento desta comanda
+                  </p>
                 </div>
-              )}
 
-              {(canEdit || isClosed) && (
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <DialogSection icon={Wallet} title="Formas de pagamento">
+                {canEdit && !cashRegisterOpen && isOwner && (
+                  <div className="shrink-0 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                    {openCashRegisterDate &&
+                    openCashRegisterDate !== serviceDate ? (
+                      <>
+                        O caixa aberto é do dia{" "}
+                        {formatDateBR(openCashRegisterDate)}. Esta comanda é do
+                        dia {formatDateBR(serviceDate)}.
+                      </>
+                    ) : (
+                      <>
+                        Sem caixa aberto em {formatDateBR(serviceDate)}. Abra em{" "}
+                        <Link
+                          href={`/admin/financeiro?date=${serviceDate}`}
+                          className="font-medium text-foreground underline-offset-4 hover:underline"
+                        >
+                          Financeiro
+                        </Link>
+                        .
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {(canEdit || isClosed) && (
+                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
                     {customerCreditBalanceCents > 0 && canEdit && (
-                      <div className="mb-3 flex flex-col gap-3 rounded-lg border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0">
+                      <div className="shrink-0 space-y-2 rounded-xl border bg-muted/20 p-3">
+                        <div>
                           <p className="text-xs font-medium text-muted-foreground">
                             Crédito do cliente
                           </p>
-                          <p className="mt-0.5 text-base font-semibold tabular-nums">
-                            {formatPriceBRL(customerCreditBalanceCents)} disponível
+                          <p className="text-sm font-semibold tabular-nums">
+                            {formatPriceBRL(customerCreditBalanceCents)}{" "}
+                            disponível
                           </p>
-                          {storeCreditUsedCents > 0 ? (
+                          {storeCreditUsedCents > 0 && (
                             <p className="mt-1 text-xs text-muted-foreground">
-                              Usando{" "}
-                              <span className="font-medium text-foreground">
-                                {formatPriceBRL(storeCreditUsedCents)}
-                              </span>{" "}
-                              nesta comanda
-                              {creditRemainingCents > 0 && (
-                                <>
-                                  {" "}
-                                  · restam{" "}
-                                  {formatPriceBRL(creditRemainingCents)}
-                                </>
-                              )}
-                            </p>
-                          ) : (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              Aplique o crédito como forma de pagamento.
+                              Usando {formatPriceBRL(storeCreditUsedCents)}
+                              {creditRemainingCents > 0 &&
+                                ` · restam ${formatPriceBRL(creditRemainingCents)}`}
                             </p>
                           )}
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <Button
                             type="button"
                             variant="outline"
@@ -1782,7 +1637,7 @@ export function ComandaDialog({
                           >
                             <Wallet className="size-4" />
                             {storeCreditUsedCents > 0
-                              ? "Ajustar crédito"
+                              ? "Ajustar"
                               : "Usar crédito"}
                           </Button>
                           {storeCreditUsedCents > 0 && (
@@ -1799,22 +1654,24 @@ export function ComandaDialog({
                         </div>
                       </div>
                     )}
+
                     {customerCreditBalanceCents > 0 && !canEdit && (
-                      <p className="mb-2 text-xs text-muted-foreground">
-                        Saldo de crédito do cliente:{" "}
+                      <p className="text-xs text-muted-foreground">
+                        Crédito:{" "}
                         <span className="font-medium text-foreground">
                           {formatPriceBRL(customerCreditBalanceCents)}
                         </span>
                       </p>
                     )}
+
                     <div className="space-y-2">
-                        {payments.map((row) => (
-                          <div
-                            key={row.localKey}
-                            className="flex flex-col gap-2 sm:flex-row sm:items-center"
-                          >
-                            <div className="flex min-w-0 flex-1 gap-2">
-                              <Select
+                      {payments.map((row) => (
+                        <div
+                          key={row.localKey}
+                          className="flex flex-col gap-2 rounded-xl border bg-background p-2.5"
+                        >
+                          <div className="flex min-w-0 gap-2">
+                            <Select
                               value={row.paymentMethod}
                               onValueChange={(v) => {
                                 const method = v as PaymentMethod;
@@ -1853,7 +1710,7 @@ export function ComandaDialog({
                               }}
                               disabled={!canEdit || busy}
                             >
-                              <SelectTrigger className="h-9 min-w-0 flex-1 bg-background">
+                              <SelectTrigger className="h-9 min-w-0 flex-1">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1864,56 +1721,12 @@ export function ComandaDialog({
                                 ))}
                               </SelectContent>
                             </Select>
-                            <Input
-                              className="h-9 w-full shrink-0 tabular-nums bg-background sm:w-[7.5rem]"
-                              value={
-                                row.amountCents > 0
-                                  ? formatPriceBRL(row.amountCents)
-                                  : ""
-                              }
-                              onChange={(e) => {
-                                const cents = parsePriceInput(e.target.value);
-                                const withoutThisCredit = payments
-                                  .filter(
-                                    (payment) =>
-                                      payment.localKey !== row.localKey &&
-                                      payment.paymentMethod !== "store_credit"
-                                  )
-                                  .reduce(
-                                    (sum, payment) => sum + payment.amountCents,
-                                    0
-                                  );
-                                const maxForCredit =
-                                  row.paymentMethod === "store_credit"
-                                    ? Math.min(
-                                        Math.max(
-                                          0,
-                                          totals.totalCents - withoutThisCredit
-                                        ),
-                                        customerCreditBalanceCents
-                                      )
-                                    : cents;
-                                const capped =
-                                  row.paymentMethod === "store_credit"
-                                    ? Math.min(cents, maxForCredit)
-                                    : cents;
-                                setPayments((prev) =>
-                                  prev.map((p) =>
-                                    p.localKey === row.localKey
-                                      ? { ...p, amountCents: capped }
-                                      : p
-                                  )
-                                );
-                              }}
-                              disabled={!canEdit || busy}
-                            />
-                            </div>
                             {canEdit && payments.length > 1 && (
                               <Button
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-8 shrink-0"
+                                className="size-9 shrink-0"
                                 onClick={() =>
                                   setPayments((prev) =>
                                     prev.filter(
@@ -1926,206 +1739,213 @@ export function ComandaDialog({
                               </Button>
                             )}
                           </div>
-                        ))}
-                        {canEdit && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={() =>
-                              setPayments((prev) => [
-                                ...prev,
-                                {
-                                  localKey: newLocalKey(),
-                                  paymentMethod: "cash",
-                                  amountCents: Math.max(
-                                    0,
-                                    totals.totalCents - paymentsSum
-                                  ),
-                                },
-                              ])
+                          <Input
+                            className="h-9 w-full tabular-nums"
+                            value={
+                              row.amountCents > 0
+                                ? formatPriceBRL(row.amountCents)
+                                : ""
                             }
-                          >
-                            <Plus />
-                            Outra forma de pagamento
-                          </Button>
-                        )}
-                      </div>
-                  </DialogSection>
-
-                  <DialogSection
-                    icon={Receipt}
-                    title="Resumo"
-                    headerAction={
-                      canEdit ? (
+                            onChange={(e) => {
+                              const cents = parsePriceInput(e.target.value);
+                              const withoutThisCredit = payments
+                                .filter(
+                                  (payment) =>
+                                    payment.localKey !== row.localKey &&
+                                    payment.paymentMethod !== "store_credit"
+                                )
+                                .reduce(
+                                  (sum, payment) => sum + payment.amountCents,
+                                  0
+                                );
+                              const maxForCredit =
+                                row.paymentMethod === "store_credit"
+                                  ? Math.min(
+                                      Math.max(
+                                        0,
+                                        totals.totalCents - withoutThisCredit
+                                      ),
+                                      customerCreditBalanceCents
+                                    )
+                                  : cents;
+                              const capped =
+                                row.paymentMethod === "store_credit"
+                                  ? Math.min(cents, maxForCredit)
+                                  : cents;
+                              setPayments((prev) =>
+                                prev.map((p) =>
+                                  p.localKey === row.localKey
+                                    ? { ...p, amountCents: capped }
+                                    : p
+                                )
+                              );
+                            }}
+                            disabled={!canEdit || busy}
+                          />
+                        </div>
+                      ))}
+                      {canEdit && (
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="w-full sm:w-auto"
-                          onClick={openTipDialog}
-                          disabled={busy}
+                          className="w-full"
+                          onClick={() =>
+                            setPayments((prev) => [
+                              ...prev,
+                              {
+                                localKey: newLocalKey(),
+                                paymentMethod: "cash",
+                                amountCents: Math.max(
+                                  0,
+                                  totals.totalCents - paymentsSum
+                                ),
+                              },
+                            ])
+                          }
                         >
-                          <Coins className="size-4" />
-                          {tipCents > 0 ? "Editar gorjeta" : "Adicionar gorjeta"}
+                          <Plus className="size-4" />
+                          Outra forma
                         </Button>
-                      ) : undefined
-                    }
-                  >
-                      <dl className="space-y-2.5 text-sm">
-                        <div className="flex justify-between gap-4 text-muted-foreground">
-                          <dt>Subtotal serviços</dt>
-                          <dd className="tabular-nums">
-                            {formatPriceBRL(servicesTotalCents)}
-                          </dd>
-                        </div>
-                        {tipCents > 0 && (
-                          <div className="flex justify-between gap-4 text-muted-foreground">
-                            <dt>
-                              Gorjeta
-                              {tipProfessionalId
-                                ? ` (${tipEligibleProfessionals.find((pro) => pro.id === tipProfessionalId)?.nickname ?? "barbeiro"})`
-                                : ""}
-                            </dt>
-                            <dd className="tabular-nums">
-                              {formatPriceBRL(tipCents)}
-                            </dd>
-                          </div>
-                        )}
-                        <div className="flex justify-between gap-4 border-t pt-2">
-                          <dt className="font-medium text-foreground">
-                            Total da comanda
-                          </dt>
-                          <dd className="font-semibold tabular-nums">
-                            {formatPriceBRL(totals.totalCents)}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                          <dt className="text-muted-foreground">Valor pago</dt>
-                          <dd
-                            className={cn(
-                              "font-semibold tabular-nums",
-                              paymentShortfall && "text-destructive"
-                            )}
-                          >
-                            {formatPriceBRL(paymentsSum)}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4 border-t pt-2 text-muted-foreground">
-                          <dt>Comissão</dt>
-                          <dd className="tabular-nums">
-                            {formatPriceBRL(totals.commissionCents)}
-                          </dd>
-                        </div>
-                        <div className="flex justify-between gap-4 text-muted-foreground">
-                          <dt>Barbearia</dt>
-                          <dd className="tabular-nums">
-                            {formatPriceBRL(
-                              totals.totalCents - totals.commissionCents
-                            )}
-                          </dd>
-                        </div>
-                      </dl>
+                      )}
+                    </div>
+
+                    <div className="mt-auto space-y-1.5 rounded-xl border bg-muted/20 px-3 py-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Valor pago</span>
+                        <span
+                          className={cn(
+                            "font-semibold tabular-nums",
+                            paymentShortfall && "text-destructive"
+                          )}
+                        >
+                          {formatPriceBRL(paymentsSum)}
+                        </span>
+                      </div>
                       {paymentShortfall && (
                         <p className="text-xs text-destructive">
-                          Falta {formatPriceBRL(paymentShortfallCents)} para
-                          fechar.
+                          Falta {formatPriceBRL(paymentShortfallCents)}
                         </p>
                       )}
                       {canEdit && paymentOverpayCents > 0 && (
                         <p className="text-xs text-muted-foreground">
-                          Pagou {formatPriceBRL(paymentOverpayCents)} a mais. Ao
-                          finalizar, você pode guardar esse valor como crédito do
-                          cliente.
+                          {formatPriceBRL(paymentOverpayCents)} a mais — pode
+                          virar crédito ao finalizar.
                         </p>
                       )}
-                  </DialogSection>
-                </div>
-              )}
+                      {(isOwner || canEdit) && (
+                        <p className="text-xs text-muted-foreground">
+                          Comissão {formatPriceBRL(totals.commissionCents)} ·
+                          Casa{" "}
+                          {formatPriceBRL(
+                            totals.totalCents - totals.commissionCents
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           )}
 
           {/* Rodapé */}
-          <div className="shrink-0 border-t bg-muted/20 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                className="w-full sm:w-auto"
+                className="shrink-0"
                 onClick={() => onOpenChange(false)}
                 disabled={busy}
               >
                 Fechar
               </Button>
-              {canEdit && onEditSchedule && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={onEditSchedule}
-                  disabled={busy}
-                >
-                  <Pencil />
-                  Editar agendamento
-                </Button>
-              )}
-              {canCancelFocused && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full text-destructive hover:text-destructive sm:w-auto"
-                  onClick={() =>
-                    openCancelDialog(
-                      cancelTargetId ?? focusAppointmentId ?? appointment.id
-                    )
-                  }
-                  disabled={busy}
-                >
-                  <X />
-                  Cancelar horário
-                </Button>
-              )}
-              {isOwner && isClosed && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  onClick={handleReopen}
-                  disabled={busy}
-                >
-                  <RotateCcw />
-                  Reabrir comanda
-                </Button>
+
+              {hasSecondaryActions && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      disabled={busy}
+                      aria-label="Mais ações"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {canEdit && onEditSchedule && (
+                      <DropdownMenuItem
+                        disabled={busy}
+                        onSelect={() => onEditSchedule()}
+                      >
+                        <Pencil className="size-4" />
+                        Editar agendamento
+                      </DropdownMenuItem>
+                    )}
+                    {canCancelFocused && (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={busy}
+                        onSelect={() =>
+                          openCancelDialog(
+                            cancelTargetId ??
+                              focusAppointmentId ??
+                              appointment.id
+                          )
+                        }
+                      >
+                        <X className="size-4" />
+                        Cancelar horário
+                      </DropdownMenuItem>
+                    )}
+                    {isOwner && isClosed && (
+                      <>
+                        {(canEdit && onEditSchedule) || canCancelFocused ? (
+                          <DropdownMenuSeparator />
+                        ) : null}
+                        <DropdownMenuItem
+                          disabled={busy}
+                          onSelect={() => void handleReopen()}
+                        >
+                          <RotateCcw className="size-4" />
+                          Reabrir comanda
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
 
+              <div className="min-w-0 flex-1 text-right">
+                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Total
+                </p>
+                <p className="text-base font-semibold tabular-nums sm:text-lg">
+                  {formatPriceBRL(totals.totalCents)}
+                </p>
+              </div>
+
               {canFinalize && (
-                <>
-                  <span className="w-full sm:hidden" aria-hidden />
-                  <span
-                    className="hidden min-w-0 flex-1 sm:block"
-                    aria-hidden
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={handleClose}
-                    disabled={
-                      busy ||
-                      loading ||
-                      !cashRegisterOpen ||
-                      paymentShortfallCents > 0
-                    }
-                  >
-                    <Check />
-                    Finalizar comanda
-                  </Button>
-                </>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={handleClose}
+                  disabled={
+                    busy ||
+                    loading ||
+                    !cashRegisterOpen ||
+                    paymentShortfallCents > 0
+                  }
+                >
+                  <Check className="size-4" />
+                  Finalizar comanda
+                </Button>
               )}
             </div>
           </div>

@@ -3,16 +3,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarDays, Contact, Phone, User } from "lucide-react";
+import { Contact, Phone, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { FormSectionTitle } from "@/components/admin/form-section";
-import { formatDateBR, formatTime, formatWhatsapp } from "@/lib/format";
+import { formatWhatsapp } from "@/lib/format";
 import type { ActionResult } from "@/lib/require-owner";
-import { STATUS_LABELS } from "@/lib/appointment-status";
 
 export type CustomerAppointment = {
   id: string;
@@ -34,7 +32,6 @@ type CustomerFormProps = {
     lastName: string;
     whatsapp: string;
   };
-  appointments?: CustomerAppointment[];
   onSubmit: (formData: FormData) => Promise<ActionResult>;
   submitLabel: string;
   isEdit?: boolean;
@@ -42,7 +39,6 @@ type CustomerFormProps = {
 
 export function CustomerForm({
   initialValues,
-  appointments = [],
   onSubmit,
   submitLabel,
   isEdit = false,
@@ -128,59 +124,6 @@ export function CustomerForm({
           </div>
         </CardContent>
       </Card>
-
-      {isEdit && (
-        <Card>
-          <CardContent className="flex flex-col gap-4 pt-6">
-            <FormSectionTitle
-              icon={CalendarDays}
-              title="Histórico de agendamentos"
-              description={
-                appointments.length === 0
-                  ? "Esse cliente ainda não tem visitas registradas."
-                  : `${appointments.length} agendamento${appointments.length === 1 ? "" : "s"} no total`
-              }
-            />
-
-            {appointments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Quando ele agendar de novo, as visitas aparecem aqui.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {appointments.map((a) => (
-                  <li
-                    key={a.id}
-                    className="rounded-xl border bg-muted/20 px-4 py-3 text-sm"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium">
-                        {formatDateBR(a.date)} às {formatTime(a.startTime)}
-                      </p>
-                      <Badge
-                        variant={
-                          a.status === "done"
-                            ? "secondary"
-                            : a.status === "cancelled"
-                              ? "outline"
-                              : "default"
-                        }
-                        className="font-normal"
-                      >
-                        {STATUS_LABELS[a.status]}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-muted-foreground">
-                      {a.professionalName}
-                    </p>
-                    <p className="mt-1">{a.serviceNames.join(", ")}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
         <div className="flex justify-end">

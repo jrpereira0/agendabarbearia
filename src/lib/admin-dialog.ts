@@ -8,3 +8,12 @@ export function adminWideDialogClassName(): string {
     "sm:max-h-[min(94dvh,860px)] sm:w-[calc(100vw-1.5rem)] sm:max-w-[min(96vw,80rem)]"
   );
 }
+
+/** Modal da comanda: quase tela cheia para caber itens + pagamento sem scroll. */
+export function adminComandaDialogClassName(): string {
+  return cn(
+    "flex flex-col gap-0 overflow-hidden p-0",
+    "max-h-[100dvh] w-[calc(100vw-0.5rem)] max-w-[calc(100vw-0.5rem)]",
+    "sm:max-h-[min(96dvh,960px)] sm:w-[calc(100vw-1rem)] sm:max-w-[min(98vw,92rem)]"
+  );
+}

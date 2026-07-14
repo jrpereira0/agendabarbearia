@@ -2,14 +2,11 @@ import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
-import {
-  CustomerForm,
-  type CustomerAppointment,
-} from "@/components/admin/customer-form";
-import {
-  CustomerFinancePanel,
-  type CustomerComandaHistoryItem,
-  type CustomerCreditHistoryItem,
+import { type CustomerAppointment } from "@/components/admin/customer-form";
+import { CustomerDetailTabs } from "@/components/admin/customer-detail-tabs";
+import type {
+  CustomerComandaHistoryItem,
+  CustomerCreditHistoryItem,
 } from "@/components/admin/customer-finance-panel";
 import { formatTime } from "@/lib/format";
 import type { PaymentMethod } from "@/lib/comanda-types";
@@ -166,28 +163,21 @@ export default async function CustomerDetailPage({
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
         title={`${customer.first_name} ${customer.last_name}`}
-        description="Dados, crédito e histórico de visitas"
+        description="Dados, visitas e financeiro do cliente"
         backHref="/admin/clientes"
         backLabel="Clientes"
       />
 
-      <CustomerForm
-        initialValues={{
-          firstName: customer.first_name,
-          lastName: customer.last_name,
-          whatsapp: customer.whatsapp,
-        }}
-        appointments={appointments}
-        onSubmit={updateWithId}
-        submitLabel="Salvar alterações"
-        isEdit
-      />
-
-      <CustomerFinancePanel
+      <CustomerDetailTabs
+        firstName={customer.first_name}
+        lastName={customer.last_name}
+        whatsapp={customer.whatsapp}
         customerId={customer.id}
         creditBalanceCents={customer.credit_balance_cents ?? 0}
+        appointments={appointments}
         comandas={comandaHistory}
         creditTransactions={creditHistory}
+        onSubmit={updateWithId}
       />
     </div>
   );
