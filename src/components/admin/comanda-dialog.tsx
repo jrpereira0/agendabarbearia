@@ -1273,9 +1273,9 @@ export function ComandaDialog({
           {loading ? (
             <ComandaDialogSkeleton />
           ) : (
-            <div className="grid min-h-0 flex-1 gap-4 overflow-hidden px-4 py-3 sm:px-6 sm:py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,22rem)] lg:gap-5">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,22rem)] lg:gap-5 lg:overflow-hidden">
               {/* Coluna: itens */}
-              <section className="flex min-h-0 flex-col gap-3 overflow-hidden">
+              <section className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
                 <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold">Itens da comanda</h3>
@@ -1413,95 +1413,99 @@ export function ComandaDialog({
                   )}
                 </div>
 
-                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+                <div className="flex flex-col overflow-hidden rounded-xl border lg:min-h-0 lg:flex-1">
                   {items.length === 0 && tipCents <= 0 ? (
                     <p className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
                       Nenhum item nesta comanda.
                     </p>
                   ) : (
-                    <ul className="min-h-0 flex-1 overflow-y-auto divide-y">
+                    <ul className="divide-y lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                       {items.map((item) => {
                         const product = isProductItem(item);
                         const timeLabel = getItemAppointmentTime(item);
                         return (
                           <li
                             key={item.localKey}
-                            className="flex items-center gap-3 bg-background px-3 py-2.5 sm:px-4"
+                            className="flex flex-col gap-2 bg-background px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2.5"
                           >
-                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
-                              {product ? (
-                                <Package className="size-4" />
-                              ) : (
-                                <Scissors className="size-4" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-medium leading-snug">
-                                {item.serviceName}
-                              </p>
-                              <p className="truncate text-xs text-muted-foreground">
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground sm:size-8">
                                 {product ? (
-                                  <>
-                                    {item.quantity ?? 1}x{" "}
-                                    {formatPriceBRL(item.catalogPriceCents)} ·{" "}
-                                    {getItemProfessionalName(item)}
-                                  </>
+                                  <Package className="size-4" />
                                 ) : (
-                                  <>
-                                    {getItemProfessionalName(item)}
-                                    {timeLabel ? ` · ${timeLabel}` : ""}
-                                  </>
+                                  <Scissors className="size-4" />
                                 )}
-                              </p>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium leading-snug">
+                                  {item.serviceName}
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {product ? (
+                                    <>
+                                      {item.quantity ?? 1}x{" "}
+                                      {formatPriceBRL(item.catalogPriceCents)} ·{" "}
+                                      {getItemProfessionalName(item)}
+                                    </>
+                                  ) : (
+                                    <>
+                                      {getItemProfessionalName(item)}
+                                      {timeLabel ? ` · ${timeLabel}` : ""}
+                                    </>
+                                  )}
+                                </p>
+                              </div>
                             </div>
-                            {canEdit ? (
-                              <Input
-                                className="h-9 w-[6.5rem] shrink-0 tabular-nums sm:w-28"
-                                value={
-                                  item.chargedPriceCents > 0
-                                    ? formatPriceBRL(item.chargedPriceCents)
-                                    : ""
-                                }
-                                onChange={(e) =>
-                                  updateItemPrice(
-                                    item.localKey,
-                                    e.target.value
-                                  )
-                                }
-                                onBlur={(e) =>
-                                  void commitItemPrice(
-                                    item.localKey,
-                                    e.target.value
-                                  )
-                                }
-                                disabled={busy}
-                                aria-label={`Valor ${item.serviceName}`}
-                              />
-                            ) : (
-                              <span className="shrink-0 font-semibold tabular-nums">
-                                {formatPriceBRL(item.chargedPriceCents)}
-                              </span>
-                            )}
-                            {!isClosed &&
-                              (getCancelTargetForItem(item) || canEdit) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-8 shrink-0 text-destructive"
-                                  onClick={() => handleItemTrash(item)}
-                                  disabled={isItemTrashDisabled(item)}
-                                  title={
-                                    getCancelTargetForItem(item)
-                                      ? "Cancelar horário"
-                                      : product
-                                        ? "Remover produto"
-                                        : "Remover serviço"
+                            <div className="flex items-center justify-end gap-2 pl-12 sm:pl-0">
+                              {canEdit ? (
+                                <Input
+                                  className="h-10 w-full max-w-[9rem] tabular-nums sm:h-9 sm:w-28 sm:max-w-none"
+                                  value={
+                                    item.chargedPriceCents > 0
+                                      ? formatPriceBRL(item.chargedPriceCents)
+                                      : ""
                                   }
-                                >
-                                  <Trash2 className="size-4" />
-                                </Button>
+                                  onChange={(e) =>
+                                    updateItemPrice(
+                                      item.localKey,
+                                      e.target.value
+                                    )
+                                  }
+                                  onBlur={(e) =>
+                                    void commitItemPrice(
+                                      item.localKey,
+                                      e.target.value
+                                    )
+                                  }
+                                  disabled={busy}
+                                  aria-label={`Valor ${item.serviceName}`}
+                                />
+                              ) : (
+                                <span className="shrink-0 font-semibold tabular-nums">
+                                  {formatPriceBRL(item.chargedPriceCents)}
+                                </span>
                               )}
+                              {!isClosed &&
+                                (getCancelTargetForItem(item) || canEdit) && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-10 shrink-0 text-destructive sm:size-8"
+                                    onClick={() => handleItemTrash(item)}
+                                    disabled={isItemTrashDisabled(item)}
+                                    title={
+                                      getCancelTargetForItem(item)
+                                        ? "Cancelar horário"
+                                        : product
+                                          ? "Remover produto"
+                                          : "Remover serviço"
+                                    }
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                )}
+                            </div>
                           </li>
                         );
                       })}
@@ -1575,7 +1579,7 @@ export function ComandaDialog({
               </section>
 
               {/* Coluna: pagamento */}
-              <section className="flex min-h-0 flex-col gap-3 overflow-hidden lg:border-l lg:pl-5">
+              <section className="flex flex-col gap-3 lg:min-h-0 lg:overflow-hidden lg:border-l lg:pl-5">
                 <div className="shrink-0">
                   <h3 className="text-sm font-semibold">Pagamento</h3>
                   <p className="text-xs text-muted-foreground">
@@ -1608,7 +1612,7 @@ export function ComandaDialog({
                 )}
 
                 {(canEdit || isClosed) && (
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+                  <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                     {customerCreditBalanceCents > 0 && canEdit && (
                       <div className="shrink-0 space-y-2 rounded-xl border bg-muted/20 p-3">
                         <div>
@@ -1851,90 +1855,92 @@ export function ComandaDialog({
 
           {/* Rodapé */}
           <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0"
-                onClick={() => onOpenChange(false)}
-                disabled={busy}
-              >
-                Fechar
-              </Button>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center justify-between gap-2 sm:contents">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 sm:h-8"
+                    onClick={() => onOpenChange(false)}
+                    disabled={busy}
+                  >
+                    Fechar
+                  </Button>
 
-              {hasSecondaryActions && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="size-8 shrink-0"
-                      disabled={busy}
-                      aria-label="Mais ações"
-                    >
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {canEdit && onEditSchedule && (
-                      <DropdownMenuItem
-                        disabled={busy}
-                        onSelect={() => onEditSchedule()}
-                      >
-                        <Pencil className="size-4" />
-                        Editar agendamento
-                      </DropdownMenuItem>
-                    )}
-                    {canCancelFocused && (
-                      <DropdownMenuItem
-                        variant="destructive"
-                        disabled={busy}
-                        onSelect={() =>
-                          openCancelDialog(
-                            cancelTargetId ??
-                              focusAppointmentId ??
-                              appointment.id
-                          )
-                        }
-                      >
-                        <X className="size-4" />
-                        Cancelar horário
-                      </DropdownMenuItem>
-                    )}
-                    {isOwner && isClosed && (
-                      <>
-                        {(canEdit && onEditSchedule) || canCancelFocused ? (
-                          <DropdownMenuSeparator />
-                        ) : null}
-                        <DropdownMenuItem
+                  {hasSecondaryActions && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="size-10 shrink-0 sm:size-8"
                           disabled={busy}
-                          onSelect={() => void handleReopen()}
+                          aria-label="Mais ações"
                         >
-                          <RotateCcw className="size-4" />
-                          Reabrir comanda
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {canEdit && onEditSchedule && (
+                          <DropdownMenuItem
+                            disabled={busy}
+                            onSelect={() => onEditSchedule()}
+                          >
+                            <Pencil className="size-4" />
+                            Editar agendamento
+                          </DropdownMenuItem>
+                        )}
+                        {canCancelFocused && (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={busy}
+                            onSelect={() =>
+                              openCancelDialog(
+                                cancelTargetId ??
+                                  focusAppointmentId ??
+                                  appointment.id
+                              )
+                            }
+                          >
+                            <X className="size-4" />
+                            Cancelar horário
+                          </DropdownMenuItem>
+                        )}
+                        {isOwner && isClosed && (
+                          <>
+                            {(canEdit && onEditSchedule) || canCancelFocused ? (
+                              <DropdownMenuSeparator />
+                            ) : null}
+                            <DropdownMenuItem
+                              disabled={busy}
+                              onSelect={() => void handleReopen()}
+                            >
+                              <RotateCcw className="size-4" />
+                              Reabrir comanda
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
 
-              <div className="min-w-0 flex-1 text-right">
-                <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                  Total
-                </p>
-                <p className="text-base font-semibold tabular-nums sm:text-lg">
-                  {formatPriceBRL(totals.totalCents)}
-                </p>
+                <div className="min-w-0 text-right sm:flex-1">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    Total
+                  </p>
+                  <p className="text-lg font-semibold tabular-nums">
+                    {formatPriceBRL(totals.totalCents)}
+                  </p>
+                </div>
               </div>
 
               {canFinalize && (
                 <Button
                   type="button"
-                  size="sm"
-                  className="shrink-0"
+                  className="h-11 w-full shrink-0 sm:h-8 sm:w-auto"
                   onClick={handleClose}
                   disabled={
                     busy ||

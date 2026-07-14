@@ -26,6 +26,7 @@ import type { CashRegisterSummary } from "@/lib/finance-reports";
 import type { ProductOption } from "@/lib/product-types";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
 import type { ProfessionalPermissions } from "@/lib/professional-permissions";
+import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { cn } from "@/lib/utils";
 
 type AgendaCashRegisterData = {
@@ -95,11 +96,11 @@ function AgendaToolbar({
   if (mobile) {
     return (
       <div className="shrink-0 border-b bg-background">
-        <div className="flex items-center gap-1 px-4 py-2.5">
+        <div className="flex items-center gap-2 px-4 pt-3">
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className="size-10"
             onClick={onPrevDay}
             disabled={busy}
             aria-label="Dia anterior"
@@ -108,7 +109,7 @@ function AgendaToolbar({
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            className="h-10 px-3"
             onClick={onToday}
             disabled={isToday || busy}
           >
@@ -117,23 +118,17 @@ function AgendaToolbar({
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className="size-10"
             onClick={onNextDay}
             disabled={busy}
             aria-label="Próximo dia"
           >
             <ChevronRight />
           </Button>
-          <p
-            className="min-w-0 flex-1 truncate text-center text-sm font-medium"
-            aria-live="polite"
-          >
-            {dateLabel}
-          </p>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0"
+            className="ml-auto size-10 shrink-0"
             onClick={onRefresh}
             disabled={busy}
             aria-label="Atualizar"
@@ -141,13 +136,18 @@ function AgendaToolbar({
             <RefreshCw className={cn(isRefreshing && "animate-spin")} />
           </Button>
         </div>
+        <p
+          className="px-4 pb-2.5 pt-1.5 text-center text-base font-semibold capitalize"
+          aria-live="polite"
+        >
+          {dateLabel}
+        </p>
         {isNavigating ? <AgendaNavProgress /> : null}
         {(canBookNormal || canBookEncaixe) && (
-          <div className="flex gap-2 border-t px-4 py-2">
+          <div className="flex gap-2 border-t px-4 py-2.5">
             {canBookNormal && (
               <Button
-                size="sm"
-                className="flex-1"
+                className="h-10 flex-1"
                 onClick={onBookNormal}
                 disabled={busy}
               >
@@ -156,9 +156,8 @@ function AgendaToolbar({
             )}
             {canBookEncaixe && (
               <Button
-                size="sm"
                 variant="outline"
-                className="flex-1"
+                className="h-10 flex-1"
                 onClick={onBookEncaixe}
                 disabled={busy}
               >
@@ -251,6 +250,8 @@ function AgendaMainContent({
   canBookClients,
   onSlotClick,
   onAppointmentClick,
+  mobileLayout = false,
+  focusProfessionalId = null,
 }: {
   dayContext: AgendaDayContext;
   appointments: AppointmentItem[];
@@ -258,7 +259,14 @@ function AgendaMainContent({
   canBookClients: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
   onAppointmentClick: (apt: AppointmentItem) => void;
+  mobileLayout?: boolean;
+  focusProfessionalId?: string | null;
 }) {
+  const professionals =
+    focusProfessionalId == null
+      ? dayContext.professionals
+      : dayContext.professionals.filter((p) => p.id === focusProfessionalId);
+
   return (
     <>
       {dayContext.shopClosed ? (
@@ -271,12 +279,13 @@ function AgendaMainContent({
         gridStart={dayContext.gridStart}
         gridEnd={dayContext.gridEnd}
         slotStepMinutes={dayContext.slotStepMinutes}
-        professionals={dayContext.professionals}
+        professionals={professionals}
         appointments={appointments}
         isOwner={isOwner}
         canBookClients={canBookClients}
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
+        mobileLayout={mobileLayout}
       />
     </>
   );
@@ -311,6 +320,8 @@ export function AgendaView({
   const [bookingStartTime, setBookingStartTime] = useState<string | null>(
     null
   );
+  /** No celular: filtrar a grade por um barbeiro (`null` = todos). */
+  const [mobileProFocus, setMobileProFocus] = useState<string | null>(null);
 
   const isToday = date === today;
   const displayDate = pendingDate ?? date;
@@ -445,6 +456,8 @@ export function AgendaView({
     onAppointmentClick: handleAppointmentClick,
   };
 
+  const showMobileProFilter = dayContext.professionals.length > 1;
+
   const gridSkeleton = (
     <AgendaGridSkeleton
       professionalCount={Math.max(dayContext.professionals.length, 1)}
@@ -461,11 +474,63 @@ export function AgendaView({
           <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="date" />
         </div>
 
-        <div className="h-[min(58dvh,calc(100dvh-15rem))] min-h-[220px] shrink-0 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] touch-pan-y">
+        {showMobileProFilter ? (
+          <div className="flex gap-2 overflow-x-auto px-4 pt-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <button
+              type="button"
+              onClick={() => setMobileProFocus(null)}
+              className={cn(
+                "h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors",
+                mobileProFocus == null
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground"
+              )}
+            >
+              Todos
+            </button>
+            {dayContext.professionals.map((pro) => {
+              const selected = mobileProFocus === pro.id;
+              return (
+                <button
+                  key={pro.id}
+                  type="button"
+                  onClick={() => setMobileProFocus(pro.id)}
+                  className={cn(
+                    "flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors",
+                    selected
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-border bg-background text-foreground"
+                  )}
+                >
+                  <ProfessionalAvatar
+                    photoUrl={pro.photoUrl}
+                    photoPosition={pro.photoPosition}
+                    name={pro.nickname}
+                    size="sm"
+                    className="size-6 border-0"
+                  />
+                  {pro.nickname}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {showMobileProFilter && mobileProFocus == null ? (
+          <p className="px-4 pt-2 text-xs text-muted-foreground">
+            Deslize a grade → para ver todos os barbeiros, ou escolha um acima.
+          </p>
+        ) : null}
+
+        <div className="h-[min(62dvh,calc(100dvh-14rem))] min-h-[240px] shrink-0 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] touch-pan-y">
           {isNavigating ? (
             gridSkeleton
           ) : (
-            <AgendaMainContent {...mainContentProps} />
+            <AgendaMainContent
+              {...mainContentProps}
+              mobileLayout
+              focusProfessionalId={mobileProFocus}
+            />
           )}
         </div>
 

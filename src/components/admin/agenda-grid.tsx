@@ -35,6 +35,8 @@ type AgendaGridProps = {
   canBookClients: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
   onAppointmentClick: (appointment: AppointmentItem) => void;
+  /** Colunas mais largas e linhas mais altas (uso no celular). */
+  mobileLayout?: boolean;
 };
 
 const gridLineHour = "border-neutral-400 dark:border-neutral-500";
@@ -58,8 +60,11 @@ export function AgendaGrid({
   canBookClients,
   onSlotClick,
   onAppointmentClick,
+  mobileLayout = false,
 }: AgendaGridProps) {
-  const rowHeight = rowHeightForStep(slotStepMinutes);
+  const rowHeight = mobileLayout
+    ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
+    : rowHeightForStep(slotStepMinutes);
 
   const timeSlots = useMemo(
     () => buildTimeSlots(gridStart, gridEnd, slotStepMinutes),
@@ -105,8 +110,14 @@ export function AgendaGrid({
 
   const footerRow = timeSlots.length + 2;
 
+  const colMin = mobileLayout
+    ? professionals.length === 1
+      ? "minmax(0, 1fr)"
+      : "minmax(10rem, 1fr)"
+    : "minmax(7.5rem, 1fr)";
+
   const gridStyle = {
-    gridTemplateColumns: `3.25rem repeat(${professionals.length}, minmax(7.5rem, 1fr))`,
+    gridTemplateColumns: `3.25rem repeat(${professionals.length}, ${colMin})`,
     gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 

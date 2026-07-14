@@ -81,21 +81,21 @@ export function AgendaMiniCalendar({
           type="button"
           variant="ghost"
           size="icon"
-          className={compact ? "size-6" : "size-7"}
+          className={compact ? "size-8" : "size-7"}
           onClick={() => shiftMonth(-1)}
           disabled={disabled || loading}
           aria-label="Mês anterior"
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <p className={cn("font-medium", compact ? "text-xs" : "text-sm")}>
+        <p className={cn("font-medium", compact ? "text-sm" : "text-sm")}>
           {monthLabel(year, month)}
         </p>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className={compact ? "size-6" : "size-7"}
+          className={compact ? "size-8" : "size-7"}
           onClick={() => shiftMonth(1)}
           disabled={disabled || loading}
           aria-label="Próximo mês"
@@ -106,8 +106,8 @@ export function AgendaMiniCalendar({
 
       <div
         className={cn(
-          "grid grid-cols-7 gap-0.5 text-center text-muted-foreground",
-          compact ? "text-[10px]" : "gap-1 text-xs"
+          "grid grid-cols-7 text-center text-muted-foreground",
+          compact ? "gap-1 text-xs" : "gap-1 text-xs"
         )}
       >
         {WEEKDAY_LABELS.map((label, i) => (
@@ -143,7 +143,7 @@ export function AgendaMiniCalendar({
                 "flex items-center justify-center rounded-full font-medium tabular-nums transition-colors duration-150",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 "active:scale-[0.97] motion-reduce:active:scale-100",
-                compact ? "size-7 text-xs" : "size-8 text-sm",
+                compact ? "size-9 text-sm" : "size-8 text-sm",
                 isSelected &&
                   "cursor-default bg-foreground text-background shadow-sm",
                 !isSelected &&
