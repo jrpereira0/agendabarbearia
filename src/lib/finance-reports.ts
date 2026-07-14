@@ -9,6 +9,7 @@ import {
   type CashInflowPaymentMethod,
   type PaymentMethod,
 } from "@/lib/comanda-types";
+import { loadPaidComandaItemIds } from "@/lib/commission-payout-service";
 
 export type CashRegisterSummary = {
   from: string;
@@ -273,14 +274,18 @@ export async function getCommissionSummary(
   admin: SupabaseClient,
   from: string,
   to: string,
-  professionalId?: string
+  professionalId?: string,
+  options: { excludePaid?: boolean } = {}
 ): Promise<CommissionSummary> {
+  const excludePaid = options.excludePaid !== false;
+
   const { data } = await admin
     .from("comandas")
     .select(
       `
       id,
       comanda_items (
+        id,
         charged_price_cents,
         professional_id,
         is_tip,
@@ -292,6 +297,15 @@ export async function getCommissionSummary(
     .gte("service_date", from)
     .lte("service_date", to);
 
+  const paidItemIds = excludePaid
+    ? await loadPaidComandaItemIds(
+        admin,
+        (data ?? []).flatMap((row) =>
+          (row.comanda_items ?? []).map((item) => item.id).filter(Boolean)
+        )
+      )
+    : new Set<string>();
+
   const map = new Map<
     string,
     CommissionSummaryRow & { comandaIds: Set<string> }
@@ -299,9 +313,11 @@ export async function getCommissionSummary(
   const allComandaIds = new Set<string>();
 
   for (const row of data ?? []) {
-    const items = (row.comanda_items ?? []).filter((item) =>
-      professionalId ? item.professional_id === professionalId : true
-    );
+    const items = (row.comanda_items ?? []).filter((item) => {
+      if (!item.id) return false;
+      if (excludePaid && paidItemIds.has(item.id)) return false;
+      return professionalId ? item.professional_id === professionalId : true;
+    });
     if (items.length === 0) continue;
     allComandaIds.add(row.id);
 
@@ -646,7 +662,7 @@ export async function getFinanceMetricsReport(
 ): Promise<FinanceMetricsReport> {
   const [summary, commissions, serviceVolume] = await Promise.all([
     getFinancePeriodSummary(admin, from, to),
-    getCommissionSummary(admin, from, to),
+    getCommissionSummary(admin, from, to, undefined, { excludePaid: false }),
     loadFinanceServiceVolume(admin, from, to),
   ]);
 
@@ -843,6 +859,7 @@ type ComandaCommissionRow = {
   customer_whatsapp: string;
   closed_at: string | null;
   comanda_items: {
+    id: string;
     service_name: string;
     charged_price_cents: number;
     professional_id: string | null;
@@ -1037,6 +1054,7 @@ export async function getCommissionReport(
       customer_whatsapp,
       closed_at,
       comanda_items (
+        id,
         service_name,
         charged_price_cents,
         professional_id,
@@ -1049,6 +1067,12 @@ export async function getCommissionReport(
     .eq("status", "closed")
     .gte("service_date", from)
     .lte("service_date", to);
+
+  const rawRows = (data ?? []) as ComandaCommissionRow[];
+  const allItemIds = rawRows.flatMap((row) =>
+    (row.comanda_items ?? []).map((item) => item.id).filter(Boolean)
+  );
+  const paidItemIds = await loadPaidComandaItemIds(admin, allItemIds);
 
   const proMap = new Map<
     string,
@@ -1066,11 +1090,12 @@ export async function getCommissionReport(
   const allComandaIds = new Set<string>();
   const reportByDay = emptyDayMap();
 
-  for (const row of (data ?? []) as ComandaCommissionRow[]) {
+  for (const row of rawRows) {
     const serviceDate = row.service_date;
-    const items = (row.comanda_items ?? []).filter((item) =>
-      professionalId ? item.professional_id === professionalId : true
-    );
+    const items = (row.comanda_items ?? []).filter((item) => {
+      if (!item.id || paidItemIds.has(item.id)) return false;
+      return professionalId ? item.professional_id === professionalId : true;
+    });
     if (items.length === 0) continue;
     allComandaIds.add(row.id);
 

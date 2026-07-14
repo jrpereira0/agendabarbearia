@@ -160,7 +160,7 @@ export default async function CustomerDetailPage({
   const updateWithId = updateCustomer.bind(null, customer.id);
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader
         title={`${customer.first_name} ${customer.last_name}`}
         description="Dados, visitas e financeiro do cliente"

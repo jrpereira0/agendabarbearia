@@ -36,11 +36,7 @@ Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`, `store_credit`.
 
 No painel **Financeiro**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento em serviços** é só o valor dos atendimentos (base das comissões).
 
-O painel **Financeiro** (`/admin/financeiro`, só dono) consolida o período com:
-
-- KPIs: entradas no caixa, faturamento, **quantidade de serviços**, valor médio por serviço, comissões e comparativo com o período anterior (mesma duração)
-- Gráficos: evolução diária, divisão barbearia vs comissões, faturamento por dia da semana, mix de pagamento e ranking de serviços
-- Tabela de performance por barbeiro (por **serviço realizado**, não por comanda)
+O painel **Financeiro** (`/admin/financeiro`, só dono) abre em **visão geral enxuta** (período + faturamento, comissões, serviços, ticket médio + evolução das entradas) e permite **abrir o detalhe de cada métrica** (`?metric=faturamento|caixa|ticket|servicos|comissoes`): dia a dia, dia da semana, ranking e por barbeiro conforme a métrica.
 
 No menu lateral, a ordem é: Agenda → Caixas → Comissões → Financeiro.
 
@@ -329,6 +325,8 @@ Authorization: Bearer <chave>
 Parâmetro opcional: `professionalId` (UUID).
 
 Os valores por barbeiro somam **cada item da comanda** pelo `professional_id` do serviço (não o barbeiro “principal” da comanda). Gorjetas entram no faturamento e vão 100% para o barbeiro escolhido na hora de fechar.
+
+No painel admin, o dono pode **registrar o pagamento** da comissão de um barbeiro no período filtrado. Itens já pagos saem do relatório e desta API — o valor não entra de novo no próximo repasse.
 
 Resposta (`200`):
 

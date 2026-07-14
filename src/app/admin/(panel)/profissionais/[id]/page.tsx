@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
+import { requireAdminClient } from "@/lib/supabase/admin";
+import { isActionResult } from "@/lib/is-action-result";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { AdminFormPage } from "@/components/admin/admin-form-layout";
@@ -7,18 +9,36 @@ import { ProfessionalForm } from "@/components/admin/professional-form";
 import type { DayRanges } from "@/lib/week-schedule";
 import { formatTime } from "@/lib/format";
 import { mapProfessionalPermissionsRow } from "@/lib/professional-permissions";
+import { todayInTimezone } from "@/lib/availability";
+import { shiftDate } from "@/lib/date-range";
+import { getCommissionReport } from "@/lib/finance-reports";
+import { listProfessionalCommissionPayouts } from "@/lib/commission-payout-service";
 import { updateProfessional } from "../actions";
 
 export const metadata = { title: "Editar profissional" };
 
+type PageProps = {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string; to?: string }>;
+};
+
 export default async function EditProfessionalPage({
   params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+  searchParams,
+}: PageProps) {
   await assertOwnerPage();
 
   const { id } = await params;
+  const { from: fromParam, to: toParam } = await searchParams;
+  const today = todayInTimezone();
+  let from =
+    fromParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam)
+      ? fromParam
+      : shiftDate(today, -10);
+  let to =
+    toParam && /^\d{4}-\d{2}-\d{2}$/.test(toParam) ? toParam : today;
+  if (from > to) [from, to] = [to, from];
+
   const supabase = await requireServerClient();
 
   const [{ data: professional }, { data: services }, { data: businessHours }] =
@@ -59,6 +79,21 @@ export default async function EditProfessionalPage({
     ranges: day.ranges.sort((a, b) => a.startTime.localeCompare(b.startTime)),
   }));
 
+  const admin = requireAdminClient();
+  let openCommissionCents = 0;
+  let payouts: Awaited<ReturnType<typeof listProfessionalCommissionPayouts>> =
+    [];
+
+  if (!isActionResult(admin)) {
+    const [report, payoutRows] = await Promise.all([
+      getCommissionReport(admin, from, to, professional.id),
+      listProfessionalCommissionPayouts(admin, professional.id),
+    ]);
+    openCommissionCents =
+      report.professionals[0]?.summary.commissionCents ?? 0;
+    payouts = payoutRows;
+  }
+
   return (
     <AdminFormPage>
       <PageHeader
@@ -94,6 +129,14 @@ export default async function EditProfessionalPage({
         onSubmit={updateWithId}
         submitLabel="Salvar alterações"
         isEdit
+        commissions={{
+          professionalId: professional.id,
+          today,
+          from,
+          to,
+          openCommissionCents,
+          payouts,
+        }}
       />
     </AdminFormPage>
   );

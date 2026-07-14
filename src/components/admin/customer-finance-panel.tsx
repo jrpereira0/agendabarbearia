@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Coins, Receipt, Wallet } from "lucide-react";
+import { Coins, Minus, Plus, Receipt, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,7 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { FormSectionTitle } from "@/components/admin/form-section";
-import { addManualCreditAction } from "@/app/admin/(panel)/clientes/actions";
+import {
+  addManualCreditAction,
+  removeManualCreditAction,
+} from "@/app/admin/(panel)/clientes/actions";
 import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
@@ -45,8 +48,12 @@ type CustomerFinancePanelProps = {
   creditTransactions: CustomerCreditHistoryItem[];
 };
 
-function formatCreditType(type: "add" | "use"): string {
-  return type === "add" ? "Depósito" : "Uso";
+function formatCreditType(
+  type: "add" | "use",
+  comandaId: string | null
+): string {
+  if (type === "add") return "Depósito";
+  return comandaId ? "Uso na comanda" : "Remoção";
 }
 
 export function CustomerFinancePanel({
@@ -60,21 +67,38 @@ export function CustomerFinancePanel({
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function handleAddCredit() {
+  async function handleCreditChange(mode: "add" | "remove") {
     const amountCents = parsePriceBRLInput(amountInput);
     if (amountCents <= 0) {
       toast.error("Informe um valor maior que zero.");
       return;
     }
 
+    if (mode === "remove" && amountCents > creditBalanceCents) {
+      toast.error(
+        `Saldo insuficiente. Disponível: ${formatPriceBRL(creditBalanceCents)}.`
+      );
+      return;
+    }
+
     setSaving(true);
-    const result = await addManualCreditAction(
-      customerId,
-      amountCents,
-      description.trim() || undefined
-    );
+    const result =
+      mode === "add"
+        ? await addManualCreditAction(
+            customerId,
+            amountCents,
+            description.trim() || undefined
+          )
+        : await removeManualCreditAction(
+            customerId,
+            amountCents,
+            description.trim() || undefined
+          );
+
     if (result.ok) {
-      toast.success("Crédito adicionado.");
+      toast.success(
+        mode === "add" ? "Crédito adicionado." : "Crédito removido."
+      );
       setAmountInput("");
       setDescription("");
       router.refresh();
@@ -105,9 +129,9 @@ export function CustomerFinancePanel({
           </Badge>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <div className="grid gap-3 sm:grid-cols-[1fr_1fr] sm:items-end">
           <div className="space-y-1.5">
-            <Label htmlFor="credit-amount">Adicionar crédito</Label>
+            <Label htmlFor="credit-amount">Valor</Label>
             <Input
               id="credit-amount"
               className="tabular-nums"
@@ -127,13 +151,25 @@ export function CustomerFinancePanel({
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            onClick={() => void handleAddCredit()}
+            onClick={() => void handleCreditChange("add")}
             disabled={saving}
           >
-            <Coins />
+            <Plus className="size-4" />
             {saving ? "Salvando..." : "Adicionar"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void handleCreditChange("remove")}
+            disabled={saving || creditBalanceCents <= 0}
+          >
+            <Minus className="size-4" />
+            Remover
           </Button>
         </div>
 
@@ -209,7 +245,7 @@ export function CustomerFinancePanel({
 
         {creditTransactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Depósitos e usos de crédito aparecem aqui.
+            Depósitos, remoções e usos de crédito aparecem aqui.
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
@@ -224,7 +260,7 @@ export function CustomerFinancePanel({
                       variant={tx.type === "add" ? "secondary" : "outline"}
                       className="font-normal"
                     >
-                      {formatCreditType(tx.type)}
+                      {formatCreditType(tx.type, tx.comandaId)}
                     </Badge>
                     <span className="font-semibold tabular-nums">
                       {tx.type === "add" ? "+" : "-"}

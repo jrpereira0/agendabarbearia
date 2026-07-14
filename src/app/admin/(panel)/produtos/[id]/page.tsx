@@ -38,6 +38,8 @@ export default async function EditProductPage({ params }: PageProps) {
     notFound();
   }
 
+  const updateWithId = updateProduct.bind(null, product.id);
+
   return (
     <AdminFormPage>
       <PageHeader
@@ -58,7 +60,7 @@ export default async function EditProductPage({ params }: PageProps) {
           stockQuantity: product.stock_quantity,
           photoUrl: product.photo_url,
         }}
-        onSubmit={(formData) => updateProduct(id, formData)}
+        onSubmit={updateWithId}
         submitLabel="Salvar alterações"
       />
     </AdminFormPage>

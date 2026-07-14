@@ -10,6 +10,7 @@ import {
   reopenCashRegister,
   type CashRegisterSession,
 } from "@/lib/cash-register-service";
+import { payProfessionalCommission } from "@/lib/commission-payout-service";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { getAdminSession } from "@/lib/require-admin";
@@ -19,6 +20,8 @@ function revalidateFinance() {
   revalidatePath("/admin");
   revalidatePath("/admin/financeiro");
   revalidatePath("/admin/financeiro/caixas");
+  revalidatePath("/admin/financeiro/comissoes");
+  revalidatePath("/admin/profissionais", "layout");
 }
 
 const serviceDateSchema = z
@@ -209,4 +212,52 @@ export async function loadCashRegisterForDate(
 
   const session = await getCashRegisterSession(admin, serviceDate);
   return { ok: true, session };
+}
+
+const commissionPeriodSchema = z.object({
+  from: serviceDateSchema,
+  to: serviceDateSchema,
+  professionalId: z.string().uuid("Barbeiro inválido."),
+});
+
+/** Registra o pagamento da comissão em aberto de um barbeiro no período. */
+export async function payCommissionAction(input: {
+  from: string;
+  to: string;
+  professionalId: string;
+}): Promise<{ ok: true; amountCents: number } | { ok: false; error: string }> {
+  const denied = await requireOwner();
+  if (denied !== null) {
+    return denied.ok === false
+      ? { ok: false, error: denied.error }
+      : { ok: false, error: "Sem permissão." };
+  }
+
+  const auth = await getAdminSession();
+  if (!auth) return { ok: false, error: "Faça login novamente." };
+
+  const parsed = commissionPeriodSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  }
+
+  let { from, to, professionalId } = parsed.data;
+  if (from > to) [from, to] = [to, from];
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  const result = await payProfessionalCommission(admin, {
+    professionalId,
+    from,
+    to,
+    paidBy: auth.userId,
+  });
+
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidateFinance();
+  return { ok: true, amountCents: result.payout.amountCents };
 }

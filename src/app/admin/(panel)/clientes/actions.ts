@@ -10,7 +10,8 @@ import {
   WHATSAPP_INVALID_MESSAGE,
   whatsappSchema,
 } from "@/lib/whatsapp";
-import { addCustomerCredit } from "@/lib/customer-credit-service";
+import { addCustomerCredit, deductCustomerCredit } from "@/lib/customer-credit-service";
+import { formatPriceBRL } from "@/lib/format";
 
 const customerSchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
@@ -195,6 +196,54 @@ export async function addManualCreditAction(
     customerId,
     amountCents: parsed.data.amountCents,
     description: parsed.data.description || "Crédito adicionado manualmente",
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  revalidatePath("/admin/clientes");
+  revalidatePath(`/admin/clientes/${customerId}`);
+  return { ok: true };
+}
+
+export async function removeManualCreditAction(
+  customerId: string,
+  amountCents: number,
+  description?: string
+): Promise<ActionResult> {
+  const auth = await requireOwner();
+  if (auth) return auth;
+
+  const parsed = manualCreditSchema.safeParse({ amountCents, description });
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { data: customer } = await admin
+    .from("customers")
+    .select("id, credit_balance_cents")
+    .eq("id", customerId)
+    .maybeSingle();
+
+  if (!customer) {
+    return { ok: false, error: "Cliente não encontrado." };
+  }
+
+  if (parsed.data.amountCents > customer.credit_balance_cents) {
+    return {
+      ok: false,
+      error: `Saldo insuficiente. Disponível: ${formatPriceBRL(customer.credit_balance_cents)}.`,
+    };
+  }
+
+  const result = await deductCustomerCredit(admin, {
+    customerId,
+    amountCents: parsed.data.amountCents,
+    description: parsed.data.description || "Crédito removido manualmente",
   });
 
   if (!result.ok) {

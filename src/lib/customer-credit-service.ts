@@ -226,7 +226,8 @@ export async function deductCustomerCredit(
   input: {
     customerId: string;
     amountCents: number;
-    comandaId: string;
+    comandaId?: string | null;
+    description?: string | null;
     createdBy?: string | null;
   }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -240,7 +241,8 @@ export async function deductCustomerCredit(
       customer_id: input.customerId,
       amount_cents: -input.amountCents,
       type: "use",
-      comanda_id: input.comandaId,
+      description: input.description ?? null,
+      comanda_id: input.comandaId ?? null,
       created_by: input.createdBy ?? null,
     });
 

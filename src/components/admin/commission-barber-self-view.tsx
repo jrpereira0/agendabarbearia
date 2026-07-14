@@ -11,11 +11,13 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   HorizontalBarChart,
-  SparklineBars,
   VerticalBarChart,
 } from "@/components/admin/finance-charts";
+import { PayCommissionButton } from "@/components/admin/pay-commission-button";
+import { CommissionPayoutHistory } from "@/components/admin/commission-payout-history";
 import {
   commissionServiceRevenueCents,
   formatPaymentMethodLabel,
@@ -24,9 +26,13 @@ import {
   type CommissionProfessionalReport,
   type CommissionServiceBreakdownRow,
 } from "@/lib/finance-reports";
+import type { CommissionPayout } from "@/lib/commission-payout-service";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
-import { formatDateBR, formatPriceBRL, formatWhatsapp } from "@/lib/format";
-import { formatPeriodLabel } from "@/lib/date-range";
+import {
+  formatDateBR,
+  formatPriceBRL,
+  formatWhatsapp,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type CommissionBarberSelfViewProps = {
@@ -34,6 +40,9 @@ type CommissionBarberSelfViewProps = {
   from: string;
   to: string;
   buildDayHref: (date: string) => string;
+  /** "self" = barbeiro vendo a própria comissão; "owner" = dono detalhando. */
+  viewer?: "self" | "owner";
+  payouts?: CommissionPayout[];
 };
 
 function shortDate(date: string): string {
@@ -41,34 +50,12 @@ function shortDate(date: string): string {
   return `${day}/${month}`;
 }
 
-function MetricTile({
-  label,
-  value,
-  hint,
-  className,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  className?: string;
-}) {
-  return (
-    <div className={cn("rounded-xl border px-4 py-3.5", className)}>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="mt-1 text-xl font-semibold tabular-nums tracking-tight sm:text-2xl">
-        {value}
-      </p>
-      {hint && (
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-      )}
-    </div>
-  );
-}
-
-function SelfServiceTable({
+function ServiceTable({
   rows,
+  earnLabel,
 }: {
   rows: CommissionServiceBreakdownRow[];
+  earnLabel: string;
 }) {
   if (rows.length === 0) {
     return (
@@ -85,7 +72,7 @@ function SelfServiceTable({
           <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
             <th className="px-4 py-3 font-medium">Serviço</th>
             <th className="px-4 py-3 font-medium text-right">Qtd</th>
-            <th className="px-4 py-3 font-medium text-right">Seu ganho</th>
+            <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
           </tr>
         </thead>
         <tbody>
@@ -114,7 +101,13 @@ function SelfServiceTable({
   );
 }
 
-function SelfAtendimentoCard({ comanda }: { comanda: CommissionComandaDetail }) {
+function AtendimentoCard({
+  comanda,
+  receiveLabel,
+}: {
+  comanda: CommissionComandaDetail;
+  receiveLabel: string;
+}) {
   const customerLabel =
     comanda.customerName?.trim() ||
     formatWhatsapp(comanda.customerWhatsapp) ||
@@ -132,7 +125,7 @@ function SelfAtendimentoCard({ comanda }: { comanda: CommissionComandaDetail }) 
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs text-muted-foreground">Você recebe</p>
+          <p className="text-xs text-muted-foreground">{receiveLabel}</p>
           <p className="text-lg font-semibold tabular-nums">
             {formatPriceBRL(comanda.commissionCents)}
           </p>
@@ -163,16 +156,18 @@ function SelfAtendimentoCard({ comanda }: { comanda: CommissionComandaDetail }) 
   );
 }
 
-function SelfDayTable({
+function DayTable({
   rows,
   maxDayCommission,
   buildDayHref,
   activeDate,
+  earnLabel,
 }: {
   rows: CommissionDayRow[];
   maxDayCommission: number;
   buildDayHref: (date: string) => string;
   activeDate?: string;
+  earnLabel: string;
 }) {
   return (
     <div className="overflow-x-auto">
@@ -181,7 +176,7 @@ function SelfDayTable({
           <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
             <th className="px-4 py-3 font-medium">Dia</th>
             <th className="px-4 py-3 font-medium text-right">Serviços</th>
-            <th className="px-4 py-3 font-medium text-right">Seu ganho</th>
+            <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
           </tr>
         </thead>
         <tbody>
@@ -239,7 +234,10 @@ export function CommissionBarberSelfView({
   from,
   to,
   buildDayHref,
+  viewer = "self",
+  payouts = [],
 }: CommissionBarberSelfViewProps) {
+  const isOwnerView = viewer === "owner";
   const isSingleDay = from === to;
   const dayRows = professional.byDay.filter((row) => row.serviceItemCount > 0);
   const activeDay = isSingleDay
@@ -248,6 +246,22 @@ export function CommissionBarberSelfView({
   const comandas = isSingleDay
     ? professional.comandas.filter((comanda) => comanda.serviceDate === from)
     : professional.comandas;
+
+  const earnLabel = isOwnerView ? "Comissão" : "Seu ganho";
+  const receiveLabel = isOwnerView ? "Comissão" : "Você recebe";
+  const tipHint = isOwnerView ? "100% para o barbeiro" : "100% seu";
+  const topServicesHint = isOwnerView
+    ? "Serviços que mais geraram comissão"
+    : "Serviços que mais geraram comissão para você";
+  const dayChartHint = isOwnerView
+    ? "Comissão por dia com atendimento"
+    : "Quanto você ganhou em cada dia com atendimento";
+  const paymentsHint = isOwnerView
+    ? "Como os clientes pagaram a parte dos serviços dele"
+    : "Como seus clientes pagaram a parte dos seus serviços";
+  const heroHint = isOwnerView
+    ? `${professional.commissionPercent}% nos serviços · ${tipHint}`
+    : `Sua comissão · ${professional.commissionPercent}% nos serviços`;
 
   const serviceRows = useMemo(() => {
     if (!isSingleDay) {
@@ -280,13 +294,6 @@ export function CommissionBarberSelfView({
 
   const summary = professional.summary;
   const serviceRevenueCents = commissionServiceRevenueCents(summary);
-  const activeDays = dayRows.length;
-  const avgPerService =
-    summary.serviceItemCount > 0
-      ? Math.round(summary.commissionCents / summary.serviceItemCount)
-      : 0;
-  const avgPerActiveDay =
-    activeDays > 0 ? Math.round(summary.commissionCents / activeDays) : 0;
 
   const bestDay = useMemo(() => {
     if (dayRows.length === 0) return null;
@@ -331,247 +338,219 @@ export function CommissionBarberSelfView({
   );
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="overflow-hidden rounded-2xl border bg-card">
-        <div className="border-b bg-muted/20 px-5 py-5 sm:px-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                {formatPeriodLabel(from, to)}
-              </p>
-              <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl">
-                {formatPriceBRL(summary.commissionCents)}
-              </p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Sua comissão no período · {professional.commissionPercent}% nos
-                serviços
-              </p>
-            </div>
-            {!isSingleDay && dayRows.length > 1 && (
-              <div className="w-full sm:max-w-[200px]">
-                <p className="mb-2 text-xs text-muted-foreground">
-                  Evolução diária
-                </p>
-                <SparklineBars
-                  values={dayRows.map((day) => day.commissionCents)}
-                  height={44}
-                />
-              </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 border-b pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">
+              {professional.professionalNickname}
+            </p>
+            <p className="text-xs text-muted-foreground">{heroHint}</p>
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
+              {formatPriceBRL(summary.commissionCents)}
+            </p>
+            {isOwnerView && (
+              <PayCommissionButton
+                from={from}
+                to={to}
+                professionalId={professional.professionalId}
+                professionalNickname={professional.professionalNickname}
+                amountCents={summary.commissionCents}
+                label="Registrar pagamento"
+              />
             )}
           </div>
         </div>
-
-        <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
-          <MetricTile
-            className="rounded-none border-0 bg-card"
-            label="Serviços realizados"
-            value={String(summary.serviceItemCount)}
-            hint="Cortes, barbas e demais"
-          />
-          <MetricTile
-            className="rounded-none border-0 bg-card"
-            label="Gorjetas"
-            value={formatPriceBRL(summary.tipCents)}
-            hint="100% seu"
-          />
-          <MetricTile
-            className="rounded-none border-0 bg-card"
-            label="Média por serviço"
-            value={formatPriceBRL(avgPerService)}
-            hint="Comissão em cada atendimento"
-          />
-          <MetricTile
-            className="rounded-none border-0 bg-card"
-            label="Média por dia ativo"
-            value={formatPriceBRL(avgPerActiveDay)}
-            hint={
-              activeDays > 0
-                ? `${activeDays} dia${activeDays === 1 ? "" : "s"} com serviço`
-                : "Nenhum dia com serviço"
-            }
-          />
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {summary.serviceItemCount} atendimento
+          {summary.serviceItemCount === 1 ? "" : "s"}
+          {" · "}
+          {formatPriceBRL(serviceRevenueCents)} em serviços
+          {summary.tipCents > 0
+            ? ` · ${formatPriceBRL(summary.tipCents)} gorjeta`
+            : ""}
+          {bestDay && !isSingleDay
+            ? ` · melhor dia ${formatDateBR(bestDay.date)}`
+            : ""}
+        </p>
+        {isSingleDay && activeDay ? (
+          <div>
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/admin?date=${from}`}>
+                <CalendarDays className="size-4" />
+                {isOwnerView
+                  ? "Ver agenda neste dia"
+                  : "Ver sua agenda neste dia"}
+              </Link>
+            </Button>
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <MetricTile
-          label="Valor dos seus serviços"
-          value={formatPriceBRL(serviceRevenueCents)}
-          hint="Só o que você fez, sem gorjeta"
-        />
-        {bestDay && !isSingleDay && (
-          <MetricTile
-            label="Melhor dia"
-            value={formatPriceBRL(bestDay.commissionCents)}
-            hint={`${formatDateBR(bestDay.date)} · ${bestDay.serviceItemCount} serviços`}
-          />
-        )}
-        {isSingleDay && activeDay && (
-          <MetricTile
-            label="Neste dia"
-            value={formatPriceBRL(activeDay.commissionCents)}
-            hint={`${activeDay.serviceItemCount} serviços · ${formatDateBR(from)}`}
-          />
-        )}
-      </div>
+      <Tabs defaultValue="atendimentos" className="w-full">
+        <TabsList>
+          <TabsTrigger value="atendimentos">Atendimentos</TabsTrigger>
+          <TabsTrigger value="servicos">Serviços</TabsTrigger>
+          {!isSingleDay && <TabsTrigger value="dias">Dias</TabsTrigger>}
+          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
+          <TabsTrigger value="resumo">Gráficos</TabsTrigger>
+        </TabsList>
 
-      {isSingleDay && activeDay && (
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/admin?date=${from}`}>
-              <CalendarDays className="size-4" />
-              Ver sua agenda neste dia
-            </Link>
-          </Button>
-        </div>
-      )}
+        <TabsContent value="atendimentos">
+          {comandas.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
+                <ClipboardList className="size-5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Nenhum atendimento neste período.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {isSingleDay && (
+                <p className="text-xs text-muted-foreground">
+                  {formatDateBR(from)}
+                </p>
+              )}
+              {comandas.map((comanda) => (
+                <AtendimentoCard
+                  key={comanda.comandaId}
+                  comanda={comanda}
+                  receiveLabel={receiveLabel}
+                />
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
-      {!isSingleDay && chartDays.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-medium">
-              <TrendingUp className="size-4" />
-              Comissão dia a dia
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Quanto você ganhou em cada dia com atendimento
-            </p>
-          </div>
-          <Card>
-            <CardContent className="pt-6">
-              <VerticalBarChart items={chartDays} height={180} />
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      {topServices.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-medium">
-              <Scissors className="size-4" />
-              O que mais rendeu
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Serviços que mais geraram comissão para você
-            </p>
-          </div>
-          <Card>
-            <CardContent className="pt-6">
-              <HorizontalBarChart items={topServices} />
-            </CardContent>
-          </Card>
-        </section>
-      )}
-
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <Scissors className="size-4" />
-            Detalhe por serviço
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Quantidade e quanto cada serviço rendeu para você
-          </p>
-        </div>
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <SelfServiceTable rows={serviceRows} />
-          </CardContent>
-        </Card>
-      </section>
-
-      {!isSingleDay && dayRows.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="text-sm font-medium">Dia a dia</h2>
-            <p className="text-xs text-muted-foreground">
-              Toque no dia para ver o detalhe completo
-            </p>
-          </div>
+        <TabsContent value="servicos">
           <Card className="overflow-hidden">
             <CardContent className="p-0">
-              <SelfDayTable
-                rows={dayRows}
-                maxDayCommission={maxDayCommission}
-                buildDayHref={buildDayHref}
-              />
+              <ServiceTable rows={serviceRows} earnLabel={earnLabel} />
             </CardContent>
           </Card>
-        </section>
-      )}
+        </TabsContent>
 
-      <section className="flex flex-col gap-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-medium">
-            <ClipboardList className="size-4" />
-            Por cliente
-            {isSingleDay && ` · ${formatDateBR(from)}`}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Cada atendimento finalizado e quanto você recebeu
-          </p>
-        </div>
-        {comandas.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum atendimento neste período.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {comandas.map((comanda) => (
-              <SelfAtendimentoCard key={comanda.comandaId} comanda={comanda} />
-            ))}
-          </div>
+        {!isSingleDay && (
+          <TabsContent value="dias">
+            {dayRows.length === 0 ? (
+              <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                Nenhum dia com atendimento no período.
+              </p>
+            ) : (
+              <Card className="overflow-hidden">
+                <CardContent className="p-0">
+                  <DayTable
+                    rows={dayRows}
+                    maxDayCommission={maxDayCommission}
+                    buildDayHref={buildDayHref}
+                    earnLabel={earnLabel}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
         )}
-      </section>
 
-      {activePaymentMethods.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-medium">
-              <Wallet className="size-4" />
-              Formas de pagamento
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Como seus clientes pagaram a parte dos seus serviços
-            </p>
-          </div>
-          <Card>
-            <CardContent className="flex flex-col gap-4 pt-6">
-              {activePaymentMethods.map((method) => {
-                const amount = paymentRows[method];
-                const pct =
-                  paymentTotal > 0
-                    ? Math.round((amount / paymentTotal) * 100)
-                    : 0;
-                return (
-                  <div key={method} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="text-muted-foreground">
-                        {formatPaymentMethodLabel(method)}
-                      </span>
-                      <span className="font-medium tabular-nums">
-                        {formatPriceBRL(amount)}
-                        <span className="ml-1 text-xs font-normal text-muted-foreground">
-                          {pct}%
-                        </span>
-                      </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-foreground/80"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-        </section>
-      )}
+        <TabsContent value="pagamentos">
+          <CommissionPayoutHistory
+            payouts={payouts}
+            viewer={isOwnerView ? "owner" : "self"}
+          />
+        </TabsContent>
+
+        <TabsContent value="resumo" className="space-y-4">
+          {!isSingleDay && chartDays.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-medium">
+                  <TrendingUp className="size-4" />
+                  Comissão dia a dia
+                </h2>
+                <p className="text-xs text-muted-foreground">{dayChartHint}</p>
+              </div>
+              <Card>
+                <CardContent className="pt-5">
+                  <VerticalBarChart items={chartDays} height={160} />
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {topServices.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-medium">
+                  <Scissors className="size-4" />
+                  O que mais rendeu
+                </h2>
+                <p className="text-xs text-muted-foreground">{topServicesHint}</p>
+              </div>
+              <Card>
+                <CardContent className="pt-5">
+                  <HorizontalBarChart items={topServices} />
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {activePaymentMethods.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <div>
+                <h2 className="flex items-center gap-2 text-sm font-medium">
+                  <Wallet className="size-4" />
+                  Formas de pagamento
+                </h2>
+                <p className="text-xs text-muted-foreground">{paymentsHint}</p>
+              </div>
+              <Card>
+                <CardContent className="flex flex-col gap-3 pt-5">
+                  {activePaymentMethods.map((method) => {
+                    const amount = paymentRows[method];
+                    const pct =
+                      paymentTotal > 0
+                        ? Math.round((amount / paymentTotal) * 100)
+                        : 0;
+                    return (
+                      <div key={method} className="space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-muted-foreground">
+                            {formatPaymentMethodLabel(method)}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {formatPriceBRL(amount)}
+                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                              {pct}%
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-foreground/80"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            </section>
+          )}
+
+          {!isSingleDay &&
+            chartDays.length === 0 &&
+            topServices.length === 0 &&
+            activePaymentMethods.length === 0 && (
+              <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                Nada para resumir neste período.
+              </p>
+            )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

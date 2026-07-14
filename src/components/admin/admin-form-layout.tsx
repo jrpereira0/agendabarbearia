@@ -7,11 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export function AdminFormPage({ children }: { children: ReactNode }) {
-  return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 pb-28">
-      {children}
-    </div>
-  );
+  return <div className="flex w-full flex-col gap-6 pb-28">{children}</div>;
 }
 
 type AdminFormSectionCardProps = {
@@ -156,7 +152,7 @@ export function AdminFormActions({
 }: AdminFormActionsProps) {
   return (
     <div className="sticky bottom-0 z-10 mt-8 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
-      <div className="mx-auto flex w-full max-w-4xl items-center justify-end gap-3">
+      <div className="flex w-full items-center justify-end gap-3">
         <Button
           type="button"
           variant="outline"

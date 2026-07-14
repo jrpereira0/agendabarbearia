@@ -16,6 +16,7 @@ import {
   AdminFormPhotoUpload,
   AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { compressImage } from "@/lib/compress-image";
 import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
 import { formatServiceCatalogPriceLabel } from "@/lib/public-service-prices";
@@ -81,6 +82,15 @@ export function ServiceForm({
   const [preview, setPreview] = useState<string | null>(
     initialValues?.photoUrl ?? null
   );
+  const [name, setName] = useState(initialValues?.name ?? "");
+  const [description, setDescription] = useState(
+    initialValues?.description ?? ""
+  );
+  const [durationMinutes, setDurationMinutes] = useState(
+    initialValues?.durationMinutes
+      ? String(initialValues.durationMinutes)
+      : ""
+  );
   const [professionalIds, setProfessionalIds] = useState<string[]>(
     initialValues?.professionalIds ?? []
   );
@@ -92,6 +102,7 @@ export function ServiceForm({
   );
   const [bulkPriceCents, setBulkPriceCents] = useState(0);
   const [priceFrom, setPriceFrom] = useState(initialValues?.priceFrom ?? false);
+  const [activeTab, setActiveTab] = useState("info");
   const [saving, setSaving] = useState(false);
 
   const openWeekdays = useMemo(
@@ -158,10 +169,32 @@ export function ServiceForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error("Informe o nome do serviço.");
+      setActiveTab("info");
+      return;
+    }
+
+    const duration = Number.parseInt(durationMinutes, 10);
+    if (!Number.isFinite(duration) || duration < 5) {
+      toast.error("Informe a duração do atendimento (mínimo 5 minutos).");
+      setActiveTab("agenda");
+      return;
+    }
+
     setSaving(true);
 
     const formData = new FormData(event.currentTarget);
+    formData.set("name", trimmedName);
+    formData.set("description", description.trim());
+    formData.set("durationMinutes", String(duration));
     formData.set("priceFrom", priceFrom ? "on" : "off");
+    formData.delete("professionalIds");
+    for (const professionalId of professionalIds) {
+      formData.append("professionalIds", professionalId);
+    }
 
     for (const row of weekdayRows) {
       if (!row.shopOpen) continue;
@@ -185,221 +218,252 @@ export function ServiceForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <AdminFormSectionCard
-        title="Informações do serviço"
-        description="Nome, foto e descrição que o cliente vê ao escolher."
-      >
-        <div className="flex flex-col gap-6">
-          <AdminFormPhotoUpload
-            preview={preview}
-            inputRef={fileInputRef}
-            onChange={(event) => void handlePhotoChange(event)}
-          />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList>
+          <TabsTrigger value="info">Dados</TabsTrigger>
+          <TabsTrigger value="precos">Preços</TabsTrigger>
+          <TabsTrigger value="agenda">Agenda</TabsTrigger>
+        </TabsList>
 
-          <AdminFormFields columns={1}>
-            <div className="space-y-2">
-              <Label htmlFor="name">Nome do serviço</Label>
-              <Input
-                id="name"
-                name="name"
-                placeholder="Ex: Corte degradê"
-                defaultValue={initialValues?.name}
-                required
-                disabled={saving}
+        <TabsContent
+          value="info"
+          forceMount
+          className="data-[state=inactive]:hidden"
+        >
+          <AdminFormSectionCard
+            title="Informações do serviço"
+            description="Nome, foto e descrição que o cliente vê ao escolher."
+          >
+            <div className="flex flex-col gap-6">
+              <AdminFormPhotoUpload
+                preview={preview}
+                inputRef={fileInputRef}
+                onChange={(event) => void handlePhotoChange(event)}
               />
+
+              <AdminFormFields columns={1}>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Nome do serviço</Label>
+                  <Input
+                    id="name"
+                    name="name"
+                    placeholder="Ex: Corte degradê"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    disabled={saving}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description">Descrição (opcional)</Label>
+                  <Textarea
+                    id="description"
+                    name="description"
+                    placeholder="Ex: Corte na tesoura e máquina, com acabamento na navalha."
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                    rows={3}
+                    disabled={saving}
+                  />
+                </div>
+              </AdminFormFields>
             </div>
+          </AdminFormSectionCard>
+        </TabsContent>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição (opcional)</Label>
-              <Textarea
-                id="description"
-                name="description"
-                placeholder="Ex: Corte na tesoura e máquina, com acabamento na navalha."
-                defaultValue={initialValues?.description}
-                rows={3}
-                disabled={saving}
-              />
-            </div>
-          </AdminFormFields>
-        </div>
-      </AdminFormSectionCard>
-
-      <AdminFormSectionCard
-        title="Preço por dia da semana"
-        description="Marque os dias em que o serviço é oferecido e defina o preço de cada um."
-      >
-        <div className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3.5">
-            <div className="min-w-0 space-y-1">
-              <Label htmlFor="priceFrom" className="text-sm font-medium">
-                Valor a partir de
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Marque quando o preço final varia no atendimento — por exemplo,
-                progressiva conforme o tamanho do cabelo. O valor cadastrado é
-                só referência mínima para o cliente.
-              </p>
-            </div>
-            <Switch
-              id="priceFrom"
-              checked={priceFrom}
-              onCheckedChange={setPriceFrom}
-              disabled={saving}
-              className="shrink-0"
-            />
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1 space-y-2">
-              <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
-              <Input
-                id="bulkPrice"
-                inputMode="numeric"
-                placeholder="R$ 0,00"
-                value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
-                onChange={handleBulkPriceChange}
-                disabled={saving}
-              />
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={applyBulkPrice}
-              disabled={saving}
-            >
-              Aplicar
-            </Button>
-          </div>
-
-          {openWeekdays.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              A barbearia não tem dias abertos cadastrados. Ajuste em
-              Configurações antes de cadastrar serviços.
-            </p>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border">
-              <table className="w-full min-w-[480px] text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Dia</th>
-                    <th className="px-4 py-3 font-medium">Oferece</th>
-                    <th className="px-4 py-3 font-medium">Preço</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {weekdayRows.map((row) => (
-                    <tr
-                      key={row.weekday}
-                      className={row.shopOpen ? "border-b last:border-0" : "border-b bg-muted/20 text-muted-foreground last:border-0"}
-                    >
-                      <td className="px-4 py-3 font-medium">
-                        {WEEKDAYS[row.weekday]}
-                        {!row.shopOpen ? (
-                          <span className="ml-2 text-xs font-normal">
-                            (fechado)
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-4 py-3">
-                        {row.shopOpen ? (
-                          <Checkbox
-                            id={`weekday-offered-${row.weekday}`}
-                            checked={row.offered}
-                            disabled={saving}
-                            onCheckedChange={(checked) =>
-                              updateWeekdayRow(row.weekday, {
-                                offered: checked === true,
-                              })
-                            }
-                          />
-                        ) : (
-                          <span className="text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Input
-                          inputMode="numeric"
-                          placeholder="R$ 0,00"
-                          disabled={!row.shopOpen || !row.offered || saving}
-                          value={
-                            row.offered && row.priceCents > 0
-                              ? formatPriceBRL(row.priceCents)
-                              : ""
-                          }
-                          onChange={(event) => {
-                            const digits = event.target.value
-                              .replace(/\D/g, "")
-                              .slice(0, 8);
-                            updateWeekdayRow(row.weekday, {
-                              priceCents: Number(digits),
-                            });
-                          }}
-                          className="max-w-[140px]"
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {catalogPriceLabel ? (
-            <p className="text-sm text-muted-foreground">
-              Na listagem aparece como{" "}
-              <span className="font-medium text-foreground">
-                {catalogPriceLabel}
-              </span>
-            </p>
-          ) : null}
-        </div>
-      </AdminFormSectionCard>
-
-      <AdminFormSectionCard
-        title="Agenda"
-        description="Duração do atendimento e quem pode fazer esse serviço."
-      >
-        <AdminFormFields columns={2}>
-          <div className="space-y-2">
-            <Label htmlFor="durationMinutes">Duração (minutos)</Label>
-            <Input
-              id="durationMinutes"
-              name="durationMinutes"
-              type="number"
-              min={5}
-              max={480}
-              step={5}
-              placeholder="Ex: 40"
-              defaultValue={initialValues?.durationMinutes || ""}
-              required
-              disabled={saving}
-            />
-            <p className="text-xs text-muted-foreground">
-              Define quais horários aparecem livres na agenda.
-            </p>
-          </div>
-
-          <div className="space-y-3 sm:col-span-2">
-            <Label>Profissionais que fazem</Label>
-            {professionals.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                Nenhum profissional cadastrado. Cadastre em Profissionais e
-                volte aqui para marcar.
+        <TabsContent
+          value="precos"
+          forceMount
+          className="data-[state=inactive]:hidden"
+        >
+          <AdminFormSectionCard
+            title="Preço por dia da semana"
+            description="Marque os dias em que o serviço é oferecido e defina o preço de cada um."
+          >
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3.5">
+                <div className="min-w-0 space-y-1">
+                  <Label htmlFor="priceFrom" className="text-sm font-medium">
+                    Valor a partir de
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Marque quando o preço final varia no atendimento — por exemplo,
+                    progressiva conforme o tamanho do cabelo. O valor cadastrado é
+                    só referência mínima para o cliente.
+                  </p>
+                </div>
+                <Switch
+                  id="priceFrom"
+                  checked={priceFrom}
+                  onCheckedChange={setPriceFrom}
+                  disabled={saving}
+                  className="shrink-0"
+                />
               </div>
-            ) : (
-              <CheckboxGroup
-                name="professionalIds"
-                options={professionals.map((professional) => ({
-                  id: professional.id,
-                  label: professional.nickname,
-                }))}
-                value={professionalIds}
-                onChange={setProfessionalIds}
-              />
-            )}
-          </div>
-        </AdminFormFields>
-      </AdminFormSectionCard>
+
+              <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
+                  <Input
+                    id="bulkPrice"
+                    inputMode="numeric"
+                    placeholder="R$ 0,00"
+                    value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
+                    onChange={handleBulkPriceChange}
+                    disabled={saving}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={applyBulkPrice}
+                  disabled={saving}
+                >
+                  Aplicar
+                </Button>
+              </div>
+
+              {openWeekdays.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  A barbearia não tem dias abertos cadastrados. Ajuste em
+                  Configurações antes de cadastrar serviços.
+                </p>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[480px] text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+                        <th className="px-4 py-3 font-medium">Dia</th>
+                        <th className="px-4 py-3 font-medium">Oferece</th>
+                        <th className="px-4 py-3 font-medium">Preço</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weekdayRows.map((row) => (
+                        <tr
+                          key={row.weekday}
+                          className={
+                            row.shopOpen
+                              ? "border-b last:border-0"
+                              : "border-b bg-muted/20 text-muted-foreground last:border-0"
+                          }
+                        >
+                          <td className="px-4 py-3 font-medium">
+                            {WEEKDAYS[row.weekday]}
+                            {!row.shopOpen ? (
+                              <span className="ml-2 text-xs font-normal">
+                                (fechado)
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-3">
+                            {row.shopOpen ? (
+                              <Checkbox
+                                id={`weekday-offered-${row.weekday}`}
+                                checked={row.offered}
+                                disabled={saving}
+                                onCheckedChange={(checked) =>
+                                  updateWeekdayRow(row.weekday, {
+                                    offered: checked === true,
+                                  })
+                                }
+                              />
+                            ) : (
+                              <span className="text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Input
+                              inputMode="numeric"
+                              placeholder="R$ 0,00"
+                              disabled={!row.shopOpen || !row.offered || saving}
+                              value={
+                                row.offered && row.priceCents > 0
+                                  ? formatPriceBRL(row.priceCents)
+                                  : ""
+                              }
+                              onChange={(event) => {
+                                const digits = event.target.value
+                                  .replace(/\D/g, "")
+                                  .slice(0, 8);
+                                updateWeekdayRow(row.weekday, {
+                                  priceCents: Number(digits),
+                                });
+                              }}
+                              className="max-w-[140px]"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {catalogPriceLabel ? (
+                <p className="text-sm text-muted-foreground">
+                  Na listagem aparece como{" "}
+                  <span className="font-medium text-foreground">
+                    {catalogPriceLabel}
+                  </span>
+                </p>
+              ) : null}
+            </div>
+          </AdminFormSectionCard>
+        </TabsContent>
+
+        <TabsContent
+          value="agenda"
+          forceMount
+          className="data-[state=inactive]:hidden"
+        >
+          <AdminFormSectionCard
+            title="Agenda"
+            description="Duração do atendimento e quem pode fazer esse serviço."
+          >
+            <AdminFormFields columns={2}>
+              <div className="space-y-2">
+                <Label htmlFor="durationMinutes">Duração (minutos)</Label>
+                <Input
+                  id="durationMinutes"
+                  name="durationMinutes"
+                  type="number"
+                  min={5}
+                  max={480}
+                  step={5}
+                  placeholder="Ex: 40"
+                  value={durationMinutes}
+                  onChange={(event) => setDurationMinutes(event.target.value)}
+                  disabled={saving}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Define quais horários aparecem livres na agenda.
+                </p>
+              </div>
+
+              <div className="space-y-3 sm:col-span-2">
+                <Label>Profissionais que fazem</Label>
+                {professionals.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                    Nenhum profissional cadastrado. Cadastre em Profissionais e
+                    volte aqui para marcar.
+                  </div>
+                ) : (
+                  <CheckboxGroup
+                    name="professionalIds"
+                    options={professionals.map((professional) => ({
+                      id: professional.id,
+                      label: professional.nickname,
+                    }))}
+                    value={professionalIds}
+                    onChange={setProfessionalIds}
+                  />
+                )}
+              </div>
+            </AdminFormFields>
+          </AdminFormSectionCard>
+        </TabsContent>
+      </Tabs>
 
       <AdminFormActions
         onCancel={() => router.push("/admin/servicos")}

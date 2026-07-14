@@ -1,12 +1,13 @@
 "use client";
 
 import { CalendarDays } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import type { CustomerAppointment } from "@/components/admin/customer-form";
 import { formatDateBR, formatTime } from "@/lib/format";
 import { STATUS_LABELS } from "@/lib/appointment-status";
+import { agendaStatusSwatchClass } from "@/lib/agenda-colors";
+import { cn } from "@/lib/utils";
 
 type CustomerAppointmentsHistoryProps = {
   appointments: CustomerAppointment[];
@@ -43,18 +44,15 @@ export function CustomerAppointmentsHistory({
                   <p className="font-medium">
                     {formatDateBR(a.date)} às {formatTime(a.startTime)}
                   </p>
-                  <Badge
-                    variant={
-                      a.status === "done"
-                        ? "secondary"
-                        : a.status === "cancelled"
-                          ? "outline"
-                          : "default"
-                    }
-                    className="font-normal"
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium text-white",
+                      agendaStatusSwatchClass(a.status),
+                      a.status === "cancelled" && "line-through opacity-90"
+                    )}
                   >
                     {STATUS_LABELS[a.status]}
-                  </Badge>
+                  </span>
                 </div>
                 <p className="mt-1 text-muted-foreground">
                   {a.professionalName}

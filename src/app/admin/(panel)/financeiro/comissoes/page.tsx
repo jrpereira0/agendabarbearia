@@ -6,6 +6,7 @@ import { isActionResult } from "@/lib/is-action-result";
 import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getCommissionReport } from "@/lib/finance-reports";
+import { listProfessionalCommissionPayouts } from "@/lib/commission-payout-service";
 import { shiftDate } from "@/lib/date-range";
 import { CommissionsView } from "@/components/admin/commissions-view";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -84,6 +85,10 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
     scopedProfessionalId
   );
 
+  const payouts = scopedProfessionalId
+    ? await listProfessionalCommissionPayouts(admin, scopedProfessionalId)
+    : [];
+
   return (
     <CommissionsView
       from={from}
@@ -92,6 +97,7 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
       professionalId={scopedProfessionalId ?? null}
       report={report}
       professionals={professionals}
+      payouts={payouts}
       isOwner={session.isOwner}
     />
   );

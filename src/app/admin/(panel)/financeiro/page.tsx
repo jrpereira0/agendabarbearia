@@ -4,6 +4,7 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { todayInTimezone } from "@/lib/availability";
 import { getFinanceMetricsReport } from "@/lib/finance-reports";
+import { parseFinanceMetric } from "@/lib/finance-metrics";
 import { shiftDate } from "@/lib/date-range";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -11,7 +12,12 @@ import { EmptyState } from "@/components/admin/empty-state";
 export const metadata = { title: "Financeiro" };
 
 type PageProps = {
-  searchParams: Promise<{ from?: string; to?: string; date?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    date?: string;
+    metric?: string;
+  }>;
 };
 
 function isIsoDate(value: string | undefined): value is string {
@@ -43,9 +49,15 @@ function normalizeRange(
 export default async function FinanceiroPage({ searchParams }: PageProps) {
   await assertOwnerPage();
 
-  const { from: fromParam, to: toParam, date: legacyDate } = await searchParams;
+  const {
+    from: fromParam,
+    to: toParam,
+    date: legacyDate,
+    metric: metricParam,
+  } = await searchParams;
   const today = todayInTimezone();
   const { from, to } = normalizeRange(fromParam, toParam, legacyDate, today);
+  const metric = parseFinanceMetric(metricParam);
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
@@ -65,6 +77,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       from={from}
       to={to}
       today={today}
+      metric={metric}
       report={report}
     />
   );

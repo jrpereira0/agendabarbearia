@@ -13,10 +13,12 @@ export function HorizontalBarChart({
   items,
   maxValue,
   className,
+  formatValue = formatPriceBRL,
 }: {
   items: BarChartItem[];
   maxValue?: number;
   className?: string;
+  formatValue?: (value: number) => string;
 }) {
   const max = maxValue ?? Math.max(...items.map((item) => item.value), 1);
 
@@ -36,7 +38,7 @@ export function HorizontalBarChart({
                 )}
               </div>
               <span className="shrink-0 tabular-nums font-medium">
-                {formatPriceBRL(item.value)}
+                {formatValue(item.value)}
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -57,11 +59,13 @@ export function VerticalBarChart({
   maxValue,
   height = 160,
   className,
+  formatValue = formatPriceBRL,
 }: {
   items: BarChartItem[];
   maxValue?: number;
   height?: number;
   className?: string;
+  formatValue?: (value: number) => string;
 }) {
   const max = maxValue ?? Math.max(...items.map((item) => item.value), 1);
 
@@ -80,7 +84,7 @@ export function VerticalBarChart({
               className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
             >
               <span className="text-[10px] font-medium tabular-nums text-muted-foreground sm:text-xs">
-                {item.value > 0 ? formatPriceBRL(item.value) : "—"}
+                {item.value > 0 ? formatValue(item.value) : "—"}
               </span>
               <div
                 className="flex w-full max-w-10 items-end justify-center sm:max-w-12"
@@ -89,7 +93,7 @@ export function VerticalBarChart({
                 <div
                   className="w-full max-w-8 rounded-t-sm bg-foreground/80 transition-all"
                   style={{ height: `${barHeight}%` }}
-                  title={`${item.label}: ${formatPriceBRL(item.value)}`}
+                  title={`${item.label}: ${formatValue(item.value)}`}
                 />
               </div>
               <span className="w-full truncate text-center text-[10px] text-muted-foreground sm:text-xs">
