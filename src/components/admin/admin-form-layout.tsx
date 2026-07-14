@@ -76,17 +76,22 @@ export function AdminFormActions({
   disabled = false,
 }: AdminFormActionsProps) {
   return (
-    <div className="sticky bottom-0 z-10 mt-8 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8">
+    <div className="sticky bottom-0 z-10 mt-8 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex w-full items-center justify-end gap-3">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           disabled={saving}
+          className="h-10 min-w-24 sm:h-8"
         >
           Cancelar
         </Button>
-        <Button type="submit" disabled={saving || disabled} className="min-w-40">
+        <Button
+          type="submit"
+          disabled={saving || disabled}
+          className="h-10 min-w-40 sm:h-8"
+        >
           {saving ? "Salvando..." : submitLabel}
         </Button>
       </div>

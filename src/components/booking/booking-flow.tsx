@@ -246,14 +246,13 @@ function SlotGroups({
           <p className="mb-2 text-xs font-medium text-muted-foreground">
             {group.label}
           </p>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
             {group.slots.map((slot) => (
               <Button
                 key={slot}
                 type="button"
                 variant={selected === slot ? "default" : "outline"}
-                size="sm"
-                className="h-9 tabular-nums"
+                className="h-11 tabular-nums"
                 onClick={() => onSelect(slot)}
               >
                 {slot}
@@ -666,8 +665,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="border-b px-5 py-4 sm:px-6">
+    <div className="flex flex-col rounded-2xl border bg-card shadow-sm">
+      <div className="shrink-0 border-b px-5 py-4 sm:px-6">
         <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
           <span>
             Passo {currentStep} de {stepOrder.length}
@@ -682,7 +681,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         </p>
       </div>
 
-      <div className="px-5 py-5 sm:px-6 sm:py-6">
+      <div className="min-h-0 max-h-[min(48dvh,28rem)] overflow-y-auto overscroll-contain px-5 py-5 sm:max-h-[min(58dvh,32rem)] sm:px-6 sm:py-6">
         {step === "professional" && (
           <ul className="flex flex-col gap-2">
             {professionals.map((pro) => {
@@ -693,7 +692,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                     type="button"
                     onClick={() => selectProfessional(pro.id)}
                     className={cn(
-                      "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+                      "flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
                       selected
                         ? "border-foreground bg-muted/40"
                         : "border-transparent bg-muted/30 hover:bg-muted/50"
@@ -928,14 +927,14 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
       </div>
 
-      <div className="flex gap-2 border-t bg-muted/20 px-5 py-4 sm:px-6">
+      <div className="flex shrink-0 gap-2 border-t bg-card px-5 py-3 sm:px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {step !== "professional" && (
           <Button
             type="button"
             variant="ghost"
             size="lg"
             onClick={goBack}
-            className="shrink-0"
+            className="h-11 shrink-0"
           >
             <ArrowLeft className="size-4" />
             Voltar
@@ -948,7 +947,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               form="booking-form"
               disabled={saving}
               size="lg"
-              className="ml-auto min-w-0 flex-1 sm:flex-none sm:px-8"
+              className="ml-auto h-11 min-w-0 flex-1 sm:flex-none sm:px-8"
             >
               {saving ? "Confirmando..." : "Confirmar agendamento"}
             </Button>
@@ -958,7 +957,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             type="button"
             onClick={goNext}
             size="lg"
-            className="ml-auto min-w-0 flex-1 sm:flex-none sm:px-8"
+            className="ml-auto h-11 min-w-0 flex-1 sm:w-auto sm:flex-none sm:px-8"
           >
             Continuar
           </Button>
