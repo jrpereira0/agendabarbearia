@@ -29,10 +29,19 @@ function sortTransactionsForReversal(
   });
 }
 
+export type CreditReverseCheckResult =
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+      code?: "credit_shortfall";
+      shortfallCents?: number;
+    };
+
 export async function canReverseComandaCreditTransactions(
   admin: SupabaseClient,
   comandaId: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<CreditReverseCheckResult> {
   const { data: transactions } = await admin
     .from("customer_credit_transactions")
     .select("id, customer_id, amount_cents, type")
@@ -66,9 +75,11 @@ export async function canReverseComandaCreditTransactions(
       const shortfallCents = tx.amount_cents - balance;
       return {
         ok: false,
+        code: tx.type === "add" ? "credit_shortfall" : undefined,
+        shortfallCents: tx.type === "add" ? shortfallCents : undefined,
         error:
           tx.type === "add"
-            ? `Não dá para reabrir: o cliente já usou ${formatPriceBRL(shortfallCents)} deste crédito em outro lugar. Ajuste o saldo no cadastro do cliente antes de reabrir.`
+            ? `O cliente já usou ${formatPriceBRL(shortfallCents)} deste crédito em outro lugar.`
             : "Saldo de crédito inconsistente para reabrir esta comanda.",
       };
     }
@@ -253,34 +264,92 @@ export async function deductCustomerCredit(
   return applyCreditDelta(admin, input.customerId, -input.amountCents);
 }
 
+async function rollbackCreditDeltas(
+  admin: SupabaseClient,
+  appliedDeltas: Array<{ customerId: string; deltaCents: number }>
+): Promise<void> {
+  for (const applied of [...appliedDeltas].reverse()) {
+    await applyCreditDelta(admin, applied.customerId, -applied.deltaCents);
+  }
+}
+
+/**
+ * Estorna movimentos de crédito da comanda.
+ * - `use` (pagamento com crédito): sempre devolve o valor inteiro ao saldo.
+ * - `add` (crédito gerado no fechamento): remove do saldo; com `allowShortfall`,
+ *   só o que ainda existir (crédito já gasto em outro lugar não volta).
+ * Se houver pagamento `store_credit` sem movimentação `use` correspondente,
+ * o valor pago é devolvido ao saldo mesmo assim.
+ */
 export async function reverseComandaCreditTransactions(
   admin: SupabaseClient,
-  comandaId: string
-): Promise<{ ok: true } | { ok: false; error: string }> {
+  comandaId: string,
+  options?: { allowShortfall?: boolean; customerId?: string | null }
+): Promise<CreditReverseCheckResult> {
   const canReverse = await canReverseComandaCreditTransactions(admin, comandaId);
-  if (!canReverse.ok) return canReverse;
+  if (!canReverse.ok) {
+    if (!(options?.allowShortfall && canReverse.code === "credit_shortfall")) {
+      return canReverse;
+    }
+  }
 
-  const { data: transactions } = await admin
-    .from("customer_credit_transactions")
-    .select("id, customer_id, amount_cents, type")
-    .eq("comanda_id", comandaId);
+  const [{ data: transactions }, { data: payments }] = await Promise.all([
+    admin
+      .from("customer_credit_transactions")
+      .select("id, customer_id, amount_cents, type")
+      .eq("comanda_id", comandaId),
+    admin
+      .from("comanda_payments")
+      .select("amount_cents, payment_method")
+      .eq("comanda_id", comandaId),
+  ]);
 
-  if (!transactions?.length) return { ok: true };
+  const storeCreditPaidCents = (payments ?? [])
+    .filter((payment) => payment.payment_method === "store_credit")
+    .reduce((sum, payment) => sum + payment.amount_cents, 0);
+
+  if (!transactions?.length && storeCreditPaidCents <= 0) {
+    return { ok: true };
+  }
 
   const appliedDeltas: Array<{ customerId: string; deltaCents: number }> = [];
+  let restoredUseCents = 0;
+  let customerId =
+    options?.customerId ??
+    transactions?.[0]?.customer_id ??
+    null;
 
-  for (const tx of sortTransactionsForReversal(transactions)) {
-    const deltaCents = -tx.amount_cents;
-    const balanceResult = await applyCreditDelta(admin, tx.customer_id, deltaCents);
-    if (!balanceResult.ok) {
-      for (const applied of [...appliedDeltas].reverse()) {
-        await applyCreditDelta(admin, applied.customerId, -applied.deltaCents);
+  for (const tx of sortTransactionsForReversal(transactions ?? [])) {
+    customerId = customerId ?? tx.customer_id;
+    let deltaCents = -tx.amount_cents;
+
+    if (tx.type === "use") {
+      // Pagamento com crédito: sempre devolve o valor integral.
+      deltaCents = -tx.amount_cents;
+    } else if (options?.allowShortfall && deltaCents < 0) {
+      // Crédito gerado nesta comanda: estorna só o que ainda sobrou no saldo.
+      const balance = await getCustomerCreditBalance(admin, tx.customer_id);
+      deltaCents = -Math.min(balance, -deltaCents);
+    }
+
+    if (deltaCents !== 0) {
+      const balanceResult = await applyCreditDelta(
+        admin,
+        tx.customer_id,
+        deltaCents
+      );
+      if (!balanceResult.ok) {
+        await rollbackCreditDeltas(admin, appliedDeltas);
+        return {
+          ok: false,
+          error:
+            "Não foi possível estornar o crédito desta comanda. Tente de novo.",
+        };
       }
-      return {
-        ok: false,
-        error:
-          "Não foi possível estornar o crédito desta comanda. Tente de novo.",
-      };
+      appliedDeltas.push({ customerId: tx.customer_id, deltaCents });
+      if (tx.type === "use") {
+        restoredUseCents += deltaCents;
+      }
     }
 
     const { error: deleteError } = await admin
@@ -289,17 +358,37 @@ export async function reverseComandaCreditTransactions(
       .eq("id", tx.id);
 
     if (deleteError) {
-      await applyCreditDelta(admin, tx.customer_id, -deltaCents);
-      for (const applied of [...appliedDeltas].reverse()) {
-        await applyCreditDelta(admin, applied.customerId, -applied.deltaCents);
-      }
+      await rollbackCreditDeltas(admin, appliedDeltas);
       return {
         ok: false,
         error: "Não foi possível estornar o crédito desta comanda.",
       };
     }
+  }
 
-    appliedDeltas.push({ customerId: tx.customer_id, deltaCents });
+  // Fallback: pagamento com crédito registrado na comanda sem `use` no histórico.
+  const missingStoreCreditCents = storeCreditPaidCents - restoredUseCents;
+  if (missingStoreCreditCents > 0) {
+    if (!customerId) {
+      await rollbackCreditDeltas(admin, appliedDeltas);
+      return {
+        ok: false,
+        error: "Cliente não encontrado para devolver o crédito do pagamento.",
+      };
+    }
+
+    const balanceResult = await applyCreditDelta(
+      admin,
+      customerId,
+      missingStoreCreditCents
+    );
+    if (!balanceResult.ok) {
+      await rollbackCreditDeltas(admin, appliedDeltas);
+      return {
+        ok: false,
+        error: "Não foi possível devolver o crédito usado no pagamento.",
+      };
+    }
   }
 
   return { ok: true };

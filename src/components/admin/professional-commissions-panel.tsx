@@ -77,7 +77,7 @@ export function ProfessionalCommissionsPanel({
                 {formatPriceBRL(openCommissionCents)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
               <PayCommissionButton
                 from={from}
                 to={to}
@@ -85,8 +85,13 @@ export function ProfessionalCommissionsPanel({
                 professionalNickname={professionalNickname}
                 amountCents={openCommissionCents}
                 label="Registrar pagamento"
+                className="h-10 w-full sm:h-8 sm:w-auto"
               />
-              <Button variant="outline" size="sm" asChild>
+              <Button
+                variant="outline"
+                className="h-10 w-full sm:h-8 sm:w-auto"
+                asChild
+              >
                 <Link
                   href={`/admin/financeiro/comissoes?from=${from}&to=${to}&professionalId=${professionalId}`}
                 >

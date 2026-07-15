@@ -1,5 +1,6 @@
-// Zera dados operacionais da barbearia.
-// Mantém: logins (auth + profiles) e profissionais (com grade working_hours).
+// Limpa histórico operacional da barbearia.
+// Apaga: clientes, agendamentos, comandas, caixas, créditos, comissões/repasses.
+// Mantém: login, profissionais, serviços, produtos, horários, preços e perfil da loja.
 // Uso: npm run db:reset-shop
 import { createClient } from "@supabase/supabase-js";
 
@@ -13,14 +14,22 @@ async function deleteAllById(table) {
   const { data, error: fetchErr } = await admin.from(table).select("id");
   if (fetchErr) throw new Error(`${table}: ${fetchErr.message}`);
   if (!data?.length) return 0;
+
+  // Apaga em lotes para evitar payload grande / limites do PostgREST.
   const ids = data.map((row) => row.id);
-  const { error } = await admin.from(table).delete().in("id", ids);
-  if (error) throw new Error(`${table}: ${error.message}`);
+  const chunkSize = 200;
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const { error } = await admin.from(table).delete().in("id", chunk);
+    if (error) throw new Error(`${table}: ${error.message}`);
+  }
   return ids.length;
 }
 
 async function deleteCompositeRows(table, columns) {
-  const { data, error: fetchErr } = await admin.from(table).select(columns.join(","));
+  const { data, error: fetchErr } = await admin
+    .from(table)
+    .select(columns.join(","));
   if (fetchErr) throw new Error(`${table}: ${fetchErr.message}`);
   if (!data?.length) return 0;
 
@@ -35,107 +44,86 @@ async function deleteCompositeRows(table, columns) {
   return data.length;
 }
 
-async function resetBusinessHours() {
-  const seed = [
-    { weekday: 0, open_time: "09:00", close_time: "19:00", active: false },
-    { weekday: 1, open_time: "09:00", close_time: "19:00", active: true },
-    { weekday: 2, open_time: "09:00", close_time: "19:00", active: true },
-    { weekday: 3, open_time: "09:00", close_time: "19:00", active: true },
-    { weekday: 4, open_time: "09:00", close_time: "19:00", active: true },
-    { weekday: 5, open_time: "09:00", close_time: "19:00", active: true },
-    { weekday: 6, open_time: "09:00", close_time: "19:00", active: true },
-  ];
-  for (const day of seed) {
-    const { error } = await admin.from("business_hours").upsert(day);
-    if (error) throw new Error(`business_hours: ${error.message}`);
-  }
-}
-
-async function resetShopSettings() {
-  const { error } = await admin
-    .from("shop_settings")
-    .update({
-      shop_name: "",
-      bio: "",
-      address: "",
-      cep: "",
-      street: "",
-      address_number: "",
-      address_complement: "",
-      neighborhood: "",
-      city: "",
-      state: "",
-      whatsapp: "",
-      instagram: null,
-      logo_url: null,
-      slot_step_minutes: 15,
-    })
-    .eq("id", 1);
-  if (error) throw new Error(`shop_settings: ${error.message}`);
-}
-
-async function clearStorageFolder(folder) {
-  const { data: files, error } = await admin.storage.from("photos").list(folder, {
-    limit: 1000,
-  });
-  if (error) return;
-  if (!files?.length) return;
-  const paths = files
-    .filter((file) => file.name && !file.name.startsWith("."))
-    .map((file) => `${folder}/${file.name}`);
-  if (paths.length) {
-    await admin.storage.from("photos").remove(paths);
-  }
+async function countRows(table) {
+  const { count, error } = await admin
+    .from(table)
+    .select("id", { count: "exact", head: true });
+  if (error) throw new Error(`${table} count: ${error.message}`);
+  return count ?? 0;
 }
 
 async function main() {
   const summary = {};
 
+  // Ordem respeita FKs (repasses → créditos → comandas → caixa → agenda → clientes).
+  summary.commission_payout_items = await deleteAllById("commission_payout_items");
+  summary.commission_payouts = await deleteAllById("commission_payouts");
+  summary.customer_credit_transactions = await deleteAllById(
+    "customer_credit_transactions"
+  );
   summary.comanda_payments = await deleteAllById("comanda_payments");
   summary.comanda_items = await deleteAllById("comanda_items");
-  summary.comanda_appointments = await deleteCompositeRows("comanda_appointments", [
-    "comanda_id",
-    "appointment_id",
-  ]);
+  summary.comanda_appointments = await deleteCompositeRows(
+    "comanda_appointments",
+    ["comanda_id", "appointment_id"]
+  );
   summary.comandas = await deleteAllById("comandas");
   summary.cash_register_sessions = await deleteAllById("cash_register_sessions");
-  summary.appointment_services = await deleteCompositeRows("appointment_services", [
-    "appointment_id",
-    "service_id",
-  ]);
+  summary.appointment_notifications = await deleteCompositeRows(
+    "appointment_notifications",
+    ["appointment_id", "event"]
+  );
+  summary.appointment_reminders = await deleteAllById("appointment_reminders");
+  summary.appointment_services = await deleteCompositeRows(
+    "appointment_services",
+    ["appointment_id", "service_id"]
+  );
   summary.appointments = await deleteAllById("appointments");
   summary.schedule_blocks = await deleteAllById("schedule_blocks");
-  summary.schedule_exceptions = await deleteAllById("schedule_exceptions");
-  summary.service_weekday_prices = await deleteCompositeRows(
-    "service_weekday_prices",
-    ["service_id", "weekday"]
-  );
-  summary.professional_services = await deleteCompositeRows("professional_services", [
-    "professional_id",
-    "service_id",
-  ]);
-  summary.services = await deleteAllById("services");
   summary.customers = await deleteAllById("customers");
-  summary.api_keys = await deleteAllById("api_keys");
 
-  await resetBusinessHours();
-  await resetShopSettings();
+  summary.professionals_kept = await countRows("professionals");
+  summary.services_kept = await countRows("services");
+  summary.products_kept = await countRows("products");
+  summary.profiles_kept = await countRows("profiles");
 
-  await clearStorageFolder("services");
-  await clearStorageFolder("shop");
-
-  const { count: professionalsKept } = await admin
-    .from("professionals")
-    .select("id", { count: "exact", head: true });
-  const { count: profilesKept } = await admin
-    .from("profiles")
-    .select("id", { count: "exact", head: true });
-
-  summary.professionals_kept = professionalsKept ?? 0;
-  summary.profiles_kept = profilesKept ?? 0;
-
-  console.log("Reset concluído (login e profissionais mantidos):");
-  console.log(JSON.stringify(summary, null, 2));
+  console.log("Limpeza concluída.");
+  console.log("Apagado (histórico):");
+  console.log(
+    JSON.stringify(
+      {
+        commission_payout_items: summary.commission_payout_items,
+        commission_payouts: summary.commission_payouts,
+        customer_credit_transactions: summary.customer_credit_transactions,
+        comanda_payments: summary.comanda_payments,
+        comanda_items: summary.comanda_items,
+        comanda_appointments: summary.comanda_appointments,
+        comandas: summary.comandas,
+        cash_register_sessions: summary.cash_register_sessions,
+        appointment_notifications: summary.appointment_notifications,
+        appointment_reminders: summary.appointment_reminders,
+        appointment_services: summary.appointment_services,
+        appointments: summary.appointments,
+        schedule_blocks: summary.schedule_blocks,
+        customers: summary.customers,
+      },
+      null,
+      2
+    )
+  );
+  console.log("Mantido (cadastro):");
+  console.log(
+    JSON.stringify(
+      {
+        professionals: summary.professionals_kept,
+        services: summary.services_kept,
+        products: summary.products_kept,
+        profiles: summary.profiles_kept,
+      },
+      null,
+      2
+    )
+  );
 }
 
 main().catch((error) => {

@@ -23,7 +23,10 @@ import {
   ACTIVE_APPOINTMENT_STATUSES,
   type AppointmentStatus,
 } from "@/lib/appointment-status";
-import { detachEncaixeFromOpenComandas } from "@/lib/comanda-service";
+import {
+  detachEncaixeFromOpenComandas,
+  finalizeOpenComandaAfterAppointmentRemoved,
+} from "@/lib/comanda-service";
 import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
 import {
@@ -923,59 +926,7 @@ export async function cancelAppointment(input: {
     .eq("appointment_id", appointmentId);
 
   if (comanda?.id) {
-    const { data: remainingLinks } = await admin
-      .from("comanda_appointments")
-      .select("appointment_id")
-      .eq("comanda_id", comanda.id);
-
-    if (!remainingLinks?.length) {
-      await admin.from("comandas").delete().eq("id", comanda.id).eq("status", "open");
-    } else {
-      const { data: remainingItems } = await admin
-        .from("comanda_items")
-        .select("charged_price_cents, professional_id")
-        .eq("comanda_id", comanda.id);
-
-      let totalCents = 0;
-      let commissionCents = 0;
-      const proIds = [
-        ...new Set(
-          (remainingItems ?? [])
-            .map((item) => item.professional_id)
-            .filter((id): id is string => Boolean(id))
-        ),
-      ];
-
-      const { data: pros } = proIds.length
-        ? await admin
-            .from("professionals")
-            .select("id, commission_percent")
-            .in("id", proIds)
-        : { data: [] };
-
-      const commissionByPro = new Map(
-        (pros ?? []).map((pro) => [pro.id, pro.commission_percent ?? 50])
-      );
-
-      for (const item of remainingItems ?? []) {
-        totalCents += item.charged_price_cents;
-        const pct = item.professional_id
-          ? (commissionByPro.get(item.professional_id) ?? 50)
-          : 50;
-        commissionCents += Math.round(
-          (item.charged_price_cents * pct) / 100
-        );
-      }
-
-      await admin
-        .from("comandas")
-        .update({
-          total_cents: totalCents,
-          commission_cents: commissionCents,
-          updated_at: cancelledAt,
-        })
-        .eq("id", comanda.id);
-    }
+    await finalizeOpenComandaAfterAppointmentRemoved(admin, comanda.id);
   }
 
   // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
@@ -1083,7 +1034,7 @@ export async function deleteAppointment(
 
   const { data: link } = await admin
     .from("comanda_appointments")
-    .select("comanda_id, comandas ( status )")
+    .select("comanda_id, comandas ( id, status )")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
 
@@ -1116,6 +1067,11 @@ export async function deleteAppointment(
 
   if (squeezeIds.length > 0) {
     await admin.from("appointments").delete().in("id", squeezeIds);
+  }
+
+  const openComandaId = comanda?.id ?? link?.comanda_id;
+  if (openComandaId) {
+    await finalizeOpenComandaAfterAppointmentRemoved(admin, openComandaId);
   }
 
   const { error } = await admin

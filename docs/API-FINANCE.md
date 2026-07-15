@@ -27,7 +27,7 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Caixa do dia | Precisa estar **aberto** para finalizar comandas daquele dia |
 | Um caixa por vez | Só pode haver **um** caixa aberto; feche o atual antes de abrir outro dia |
 | Comanda no caixa | Só fecha comanda do **mesmo dia** do caixa aberto; fica vinculada à sessão |
-| Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável; **estorna** depósitos e usos de crédito ligados à comanda (bloqueia se o cliente já tiver gasto esse crédito em outro lugar) |
+| Reabrir comanda | Remove do caixa do dia; agendamento volta a ser editável; **estorna** depósitos e usos de crédito ligados à comanda. Se o cliente já gastou esse crédito em outro lugar, a API/UI pedem confirmação (`confirmCreditShortfall`) e estornam só o que ainda sobrar no saldo |
 | Cancelar horário | Motivo obrigatório; some da agenda; **bloqueado** se a comanda estiver fechada (reabra antes) |
 
 Formas de pagamento aceitas: `pix`, `cash`, `debit`, `credit`, `store_credit`.
@@ -264,9 +264,16 @@ Efeitos:
 ```
 POST /api/v1/comandas/<id>/reopen
 Authorization: Bearer <chave>
+Content-Type: application/json
+
+{ "confirmCreditShortfall": true }
 ```
 
-Remove pagamentos, zera totais e volta o agendamento para status editável (geralmente `confirmed`). Sai do caixa do dia em que estava fechada.
+Corpo opcional. Sem body também funciona.
+
+Remove pagamentos, zera totais e volta o agendamento para status editável (geralmente `scheduled`). Sai do caixa do dia em que estava fechada.
+
+Se a comanda gerou crédito e o cliente **já usou** esse valor em outro lugar, a resposta é `409` com `code: "credit_shortfall"` e `shortfallCents`. Envie de novo com `confirmCreditShortfall: true` para reabrir mesmo assim (estorna só o saldo restante do crédito gerado e limpa o vínculo dessa comanda). Pagamento com `store_credit` nesta comanda **sempre** devolve o crédito ao cliente na reabertura.
 
 ---
 

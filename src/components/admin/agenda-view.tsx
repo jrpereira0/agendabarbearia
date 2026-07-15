@@ -332,6 +332,23 @@ export function AgendaView({
     setPendingDate(null);
   }, [date]);
 
+  useEffect(() => {
+    if (!selectedAppointment) return;
+    const fresh = appointments.find((apt) => apt.id === selectedAppointment.id);
+    if (!fresh) {
+      setSelectedAppointment(null);
+      return;
+    }
+    if (
+      fresh.status !== selectedAppointment.status ||
+      fresh.startTime !== selectedAppointment.startTime ||
+      fresh.endTime !== selectedAppointment.endTime ||
+      fresh.professionalId !== selectedAppointment.professionalId
+    ) {
+      setSelectedAppointment(fresh);
+    }
+  }, [appointments, selectedAppointment]);
+
   const professionals: ProfessionalOption[] = useMemo(
     () =>
       dayContext.professionals.map((p) => ({

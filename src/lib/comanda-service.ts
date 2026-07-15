@@ -18,6 +18,7 @@ import { notifyAppointmentCreated } from "@/lib/notifications/appointment-create
 import { assertComandaClosableInOpenCashRegister } from "@/lib/cash-register-service";
 import {
   addCustomerCredit,
+  canReverseComandaCreditTransactions,
   deductCustomerCredit,
   getCustomerCreditBalanceByWhatsapp,
   resolveCustomerIdByWhatsapp,
@@ -409,7 +410,7 @@ async function pruneStaleEncaixeComandaItems(
     .map((item) => item.id);
 
   if (staleIds.length > 0) {
-    await admin.from("comanda_items").delete().in("id", staleIds);
+    await deleteComandaItemsSafely(admin, staleIds);
   }
 }
 
@@ -659,12 +660,44 @@ async function resolveComandaDetail(
     linkedAppointments.filter((apt) => apt.isSqueezeIn).map((apt) => apt.id)
   );
   const apt = firstOrSelf(row.appointments);
-  return mapComandaRow(row, linkedAppointments, validAppointmentIds, {
+  const mapped = mapComandaRow(row, linkedAppointments, validAppointmentIds, {
     customerFirstName: apt?.customer_first_name ?? "",
     customerLastName: apt?.customer_last_name ?? "",
     customerWhatsapp: row.customer_whatsapp,
     validSqueezeAppointmentIds,
   });
+
+  // Em comanda aberta, o total da linha pode ficar defasado se sobrou item
+  // de horário cancelado. Alinha o total ao que a tela realmente exibe.
+  if (row.status === "open") {
+    const commissions = await loadProfessionalCommissions(
+      admin,
+      [
+        ...new Set(
+          mapped.items
+            .map((item) => item.professionalId)
+            .filter((id): id is string => Boolean(id))
+        ),
+      ]
+    );
+    const live = calculateComandaTotalsByProfessional(
+      mapped.items.map((item) => ({
+        chargedPriceCents: item.chargedPriceCents,
+        professionalId: item.professionalId,
+        isTip: item.isTip,
+        productId: item.productId,
+        commissionPercentSnapshot: item.commissionPercentSnapshot,
+      })),
+      commissions
+    );
+    return {
+      ...mapped,
+      totalCents: live.totalCents,
+      commissionCents: live.commissionCents,
+    };
+  }
+
+  return mapped;
 }
 
 async function seedItemsFromAppointment(
@@ -730,7 +763,7 @@ async function seedItemsFromAppointment(
   return sortOrderStart + rows.length;
 }
 
-/** Remove vínculos e itens de agendamentos que não são do dia da comanda. */
+/** Remove vínculos e itens de agendamentos que não são do dia / não estão ativos. */
 async function pruneComandaToDayScope(
   admin: SupabaseClient,
   comandaId: string,
@@ -763,16 +796,305 @@ async function pruneComandaToDayScope(
     .select("id, appointment_id")
     .eq("comanda_id", comandaId);
 
+  const itemAppointmentIds = [
+    ...new Set(
+      (items ?? [])
+        .map((item) => item.appointment_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+
+  const inactiveAppointmentIds = new Set<string>();
+  if (itemAppointmentIds.length > 0) {
+    const { data: appointments } = await admin
+      .from("appointments")
+      .select("id, status")
+      .in("id", itemAppointmentIds);
+
+    for (const apt of appointments ?? []) {
+      if (
+        !(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+      ) {
+        inactiveAppointmentIds.add(apt.id);
+      }
+    }
+  }
+
   const staleItemIds = (items ?? [])
-    .filter(
-      (item) =>
-        item.appointment_id && !validAppointmentIds.has(item.appointment_id)
-    )
+    .filter((item) => {
+      if (!item.appointment_id) return false;
+      if (!validAppointmentIds.has(item.appointment_id)) return true;
+      return inactiveAppointmentIds.has(item.appointment_id);
+    })
     .map((item) => item.id);
 
   if (staleItemIds.length > 0) {
-    await admin.from("comanda_items").delete().in("id", staleItemIds);
+    await deleteComandaItemsSafely(admin, staleItemIds);
   }
+
+  const totals = await recalculateComandaTotals(admin, comandaId);
+  await admin
+    .from("comandas")
+    .update({
+      total_cents: totals.totalCents,
+      commission_cents: totals.commissionCents,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", comandaId)
+    .eq("status", "open");
+}
+
+/**
+ * Se a comanda aberta não tem mais serviços de agendamentos ativos do dia,
+ * remove gorjeta e produtos órfãos (restos de horário cancelado).
+ */
+async function purgeOrphanTipsAndProducts(
+  admin: SupabaseClient,
+  comandaId: string,
+  validAppointmentIds: Set<string>
+): Promise<void> {
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("id, appointment_id, is_tip, product_id, squeeze_appointment_id")
+    .eq("comanda_id", comandaId);
+
+  if (!items?.length) return;
+
+  const hasActiveService = items.some((item) => {
+    if (item.is_tip || item.product_id) return false;
+    if (item.appointment_id && validAppointmentIds.has(item.appointment_id)) {
+      return true;
+    }
+    return Boolean(item.squeeze_appointment_id);
+  });
+
+  if (hasActiveService) return;
+
+  const orphanIds = items
+    .filter((item) => item.is_tip || Boolean(item.product_id))
+    .map((item) => item.id);
+
+  if (orphanIds.length > 0) {
+    await deleteComandaItemsSafely(admin, orphanIds);
+  }
+}
+
+/**
+ * Remove da comanda aberta itens/vínculos de horário cancelado ou inexistente.
+ * Evita total “fantasma” na finalização (UI esconde o item, DB ainda soma).
+ */
+async function scrubInactiveAppointmentItemsFromOpenComanda(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<void> {
+  const { data: links } = await admin
+    .from("comanda_appointments")
+    .select(
+      `
+      appointment_id,
+      appointments ( id, status, is_squeeze_in )
+    `
+    )
+    .eq("comanda_id", comandaId);
+
+  const staleLinkIds: string[] = [];
+  for (const row of links ?? []) {
+    const apt = firstOrSelf(
+      row.appointments as
+        | { id: string; status: string; is_squeeze_in: boolean }
+        | { id: string; status: string; is_squeeze_in: boolean }[]
+        | null
+    );
+    if (
+      !apt ||
+      !(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+    ) {
+      staleLinkIds.push(row.appointment_id);
+    }
+  }
+
+  if (staleLinkIds.length > 0) {
+    await admin
+      .from("comanda_appointments")
+      .delete()
+      .eq("comanda_id", comandaId)
+      .in("appointment_id", staleLinkIds);
+
+    const { data: staleLinkItems } = await admin
+      .from("comanda_items")
+      .select("id")
+      .eq("comanda_id", comandaId)
+      .in("appointment_id", staleLinkIds);
+    await deleteComandaItemsSafely(
+      admin,
+      (staleLinkItems ?? []).map((item) => item.id)
+    );
+  }
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("id, appointment_id, squeeze_appointment_id")
+    .eq("comanda_id", comandaId);
+
+  const relatedIds = [
+    ...new Set(
+      (items ?? []).flatMap((item) => {
+        const ids: string[] = [];
+        if (item.appointment_id) ids.push(item.appointment_id);
+        if (item.squeeze_appointment_id) ids.push(item.squeeze_appointment_id);
+        return ids;
+      })
+    ),
+  ];
+
+  if (relatedIds.length === 0) return;
+
+  const { data: appointments } = await admin
+    .from("appointments")
+    .select("id, status")
+    .in("id", relatedIds);
+
+  const activeIds = new Set(
+    (appointments ?? [])
+      .filter((apt) =>
+        (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+      )
+      .map((apt) => apt.id)
+  );
+  const knownIds = new Set((appointments ?? []).map((apt) => apt.id));
+
+  const staleItemIds = (items ?? [])
+    .filter((item) => {
+      if (item.appointment_id) {
+        if (!knownIds.has(item.appointment_id)) return true;
+        if (!activeIds.has(item.appointment_id)) return true;
+      }
+      if (item.squeeze_appointment_id) {
+        if (!knownIds.has(item.squeeze_appointment_id)) return true;
+        if (!activeIds.has(item.squeeze_appointment_id)) return true;
+      }
+      return false;
+    })
+    .map((item) => item.id);
+
+  if (staleItemIds.length > 0) {
+    await deleteComandaItemsSafely(admin, staleItemIds);
+  }
+}
+
+/**
+ * Depois de desvincular/cancelar um horário: se não sobrou atendimento ativo,
+ * apaga a comanda aberta (incluindo gorjeta/produto órfãos). Caso contrário,
+ * só recalcula o total.
+ */
+export async function finalizeOpenComandaAfterAppointmentRemoved(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<void> {
+  await scrubInactiveAppointmentItemsFromOpenComanda(admin, comandaId);
+
+  const { data: links } = await admin
+    .from("comanda_appointments")
+    .select(
+      `
+      appointment_id,
+      appointments ( id, status, is_squeeze_in )
+    `
+    )
+    .eq("comanda_id", comandaId);
+
+  let hasActiveMain = false;
+  for (const row of links ?? []) {
+    const apt = firstOrSelf(
+      row.appointments as
+        | { id: string; status: string; is_squeeze_in: boolean }
+        | { id: string; status: string; is_squeeze_in: boolean }[]
+        | null
+    );
+    if (
+      apt &&
+      !apt.is_squeeze_in &&
+      (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+    ) {
+      hasActiveMain = true;
+      break;
+    }
+  }
+
+  const { data: squeezeItems } = await admin
+    .from("comanda_items")
+    .select("squeeze_appointment_id")
+    .eq("comanda_id", comandaId)
+    .not("squeeze_appointment_id", "is", null);
+
+  let hasActiveSqueeze = false;
+  for (const item of squeezeItems ?? []) {
+    if (!item.squeeze_appointment_id) continue;
+    const { data: squeezeApt } = await admin
+      .from("appointments")
+      .select("status")
+      .eq("id", item.squeeze_appointment_id)
+      .maybeSingle();
+
+    if (
+      squeezeApt &&
+      (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(
+        squeezeApt.status
+      )
+    ) {
+      hasActiveSqueeze = true;
+    } else {
+      await detachEncaixeFromOpenComandas(admin, item.squeeze_appointment_id);
+    }
+  }
+
+  if (hasActiveMain || hasActiveSqueeze) {
+    const totals = await recalculateComandaTotals(admin, comandaId);
+    await admin
+      .from("comandas")
+      .update({
+        total_cents: totals.totalCents,
+        commission_cents: totals.commissionCents,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", comandaId)
+      .eq("status", "open");
+    return;
+  }
+
+  // Comanda sem atendimento ativo: apaga o que der.
+  // Itens já no repasse de comissão ficam (FK); aí só zera o total.
+  const { data: remainingItems } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId);
+
+  await deleteComandaItemsSafely(
+    admin,
+    (remainingItems ?? []).map((item) => item.id)
+  );
+
+  const { data: leftovers } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId)
+    .limit(1);
+
+  if (leftovers && leftovers.length > 0) {
+    await admin
+      .from("comandas")
+      .update({
+        total_cents: 0,
+        commission_cents: 0,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", comandaId)
+      .eq("status", "open");
+    return;
+  }
+
+  await admin.from("comanda_appointments").delete().eq("comanda_id", comandaId);
+  await admin.from("comandas").delete().eq("id", comandaId).eq("status", "open");
 }
 
 async function unlinkSqueezeAppointmentsFromComanda(
@@ -1107,6 +1429,13 @@ export async function getOrCreateComandaForAppointment(
     validDayAppointmentIds
   );
 
+  // Impede gorjeta/produto de horário cancelado de voltar num agendamento novo.
+  await purgeOrphanTipsAndProducts(
+    admin,
+    resolvedComandaId,
+    validDayAppointmentIds
+  );
+
   for (const id of dayIds) {
     await linkAppointmentToComanda(admin, resolvedComandaId, id);
   }
@@ -1145,6 +1474,44 @@ export async function getOrCreateComandaForAppointment(
   return getComandaById(admin, resolvedComandaId, { sync: false });
 }
 
+/** Itens já vinculados a repasse de comissão não podem ser apagados (FK restrict). */
+async function loadPayoutProtectedItemIds(
+  admin: SupabaseClient,
+  itemIds: string[]
+): Promise<Set<string>> {
+  if (itemIds.length === 0) return new Set();
+  const { data } = await admin
+    .from("commission_payout_items")
+    .select("comanda_item_id")
+    .in("comanda_item_id", itemIds);
+  return new Set((data ?? []).map((row) => row.comanda_item_id));
+}
+
+/** Apaga itens liberados; mantém os que já entraram em repasse de comissão. */
+async function deleteComandaItemsSafely(
+  admin: SupabaseClient,
+  itemIds: string[]
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (itemIds.length === 0) return { ok: true };
+
+  const protectedIds = await loadPayoutProtectedItemIds(admin, itemIds);
+  const removableIds = itemIds.filter((id) => !protectedIds.has(id));
+  if (removableIds.length === 0) return { ok: true };
+
+  const { error } = await admin
+    .from("comanda_items")
+    .delete()
+    .in("id", removableIds);
+
+  if (error) {
+    return {
+      ok: false,
+      error: "Não foi possível atualizar os itens da comanda.",
+    };
+  }
+  return { ok: true };
+}
+
 async function recalculateComandaTotals(
   admin: SupabaseClient,
   comandaId: string
@@ -1152,13 +1519,58 @@ async function recalculateComandaTotals(
   const { data: items } = await admin
     .from("comanda_items")
     .select(
-      "charged_price_cents, professional_id, is_tip, product_id, commission_percent_snapshot"
+      "charged_price_cents, professional_id, is_tip, product_id, commission_percent_snapshot, appointment_id, squeeze_appointment_id"
     )
     .eq("comanda_id", comandaId);
 
+  const relatedIds = [
+    ...new Set(
+      (items ?? []).flatMap((item) => {
+        const ids: string[] = [];
+        if (item.appointment_id) ids.push(item.appointment_id);
+        if (item.squeeze_appointment_id) ids.push(item.squeeze_appointment_id);
+        return ids;
+      })
+    ),
+  ];
+
+  const activeAppointmentIds = new Set<string>();
+  if (relatedIds.length > 0) {
+    const { data: appointments } = await admin
+      .from("appointments")
+      .select("id, status")
+      .in("id", relatedIds);
+
+    for (const apt of appointments ?? []) {
+      if (
+        (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+      ) {
+        activeAppointmentIds.add(apt.id);
+      }
+    }
+  }
+
+  // Ignora serviço de horário cancelado que não pôde ser apagado (ex.: já teve repasse).
+  const billableItems = (items ?? []).filter((item) => {
+    if (item.is_tip || item.product_id) return true;
+    if (
+      item.appointment_id &&
+      !activeAppointmentIds.has(item.appointment_id)
+    ) {
+      return false;
+    }
+    if (
+      item.squeeze_appointment_id &&
+      !activeAppointmentIds.has(item.squeeze_appointment_id)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
   const professionalIds = [
     ...new Set(
-      (items ?? [])
+      billableItems
         .map((item) => item.professional_id)
         .filter((id): id is string => Boolean(id))
     ),
@@ -1166,7 +1578,7 @@ async function recalculateComandaTotals(
   const commissions = await loadProfessionalCommissions(admin, professionalIds);
 
   return calculateComandaTotalsByProfessional(
-    (items ?? []).map((item) => ({
+    billableItems.map((item) => ({
       chargedPriceCents: item.charged_price_cents,
       professionalId: item.professional_id,
       isTip: item.is_tip,
@@ -1973,27 +2385,61 @@ async function restoreComandaItems(
   comandaId: string,
   items: ComandaItem[]
 ): Promise<void> {
-  await admin.from("comanda_items").delete().eq("comanda_id", comandaId);
+  const { data: existing } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId);
+
+  const keepIds = new Set(items.map((item) => item.id).filter(Boolean));
+  const removableIds = (existing ?? [])
+    .map((row) => row.id)
+    .filter((id) => !keepIds.has(id));
+  await deleteComandaItemsSafely(admin, removableIds);
 
   if (items.length > 0) {
-    await admin.from("comanda_items").insert(
-      items.map((item, index) => ({
-        id: item.id,
-        comanda_id: comandaId,
-        service_id: item.serviceId,
-        product_id: item.productId,
-        service_name: item.serviceName,
-        catalog_price_cents: item.catalogPriceCents,
-        charged_price_cents: item.chargedPriceCents,
-        quantity: item.quantity,
-        commission_percent_snapshot: item.commissionPercentSnapshot,
-        sort_order: index,
-        squeeze_appointment_id: item.squeezeAppointmentId,
-        appointment_id: item.appointmentId,
-        professional_id: item.professionalId,
-        is_tip: item.isTip,
-      }))
-    );
+    const existingIds = new Set((existing ?? []).map((row) => row.id));
+    const toInsert = items.filter((item) => !existingIds.has(item.id));
+    const toUpdate = items.filter((item) => existingIds.has(item.id));
+
+    for (const item of toUpdate) {
+      await admin
+        .from("comanda_items")
+        .update({
+          service_id: item.serviceId,
+          product_id: item.productId,
+          service_name: item.serviceName,
+          catalog_price_cents: item.catalogPriceCents,
+          charged_price_cents: item.chargedPriceCents,
+          quantity: item.quantity,
+          commission_percent_snapshot: item.commissionPercentSnapshot,
+          squeeze_appointment_id: item.squeezeAppointmentId,
+          appointment_id: item.appointmentId,
+          professional_id: item.professionalId,
+          is_tip: item.isTip,
+        })
+        .eq("id", item.id);
+    }
+
+    if (toInsert.length > 0) {
+      await admin.from("comanda_items").insert(
+        toInsert.map((item, index) => ({
+          id: item.id,
+          comanda_id: comandaId,
+          service_id: item.serviceId,
+          product_id: item.productId,
+          service_name: item.serviceName,
+          catalog_price_cents: item.catalogPriceCents,
+          charged_price_cents: item.chargedPriceCents,
+          quantity: item.quantity,
+          commission_percent_snapshot: item.commissionPercentSnapshot,
+          sort_order: index,
+          squeeze_appointment_id: item.squeezeAppointmentId,
+          appointment_id: item.appointmentId,
+          professional_id: item.professionalId,
+          is_tip: item.isTip,
+        }))
+      );
+    }
   }
 
   const totals = await recalculateComandaTotals(admin, comandaId);
@@ -2318,7 +2764,19 @@ export async function updateComandaItems(
     return syncResult;
   }
 
-  await admin.from("comanda_items").delete().eq("comanda_id", comandaId);
+  const { data: existingRows } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId);
+  const existingIds = (existingRows ?? []).map((row) => row.id);
+  const protectedIds = await loadPayoutProtectedItemIds(admin, existingIds);
+
+  // Não apaga itens que já entraram em repasse de comissão (FK restrict).
+  const removableIds = existingIds.filter((id) => !protectedIds.has(id));
+  const deleteResult = await deleteComandaItemsSafely(admin, removableIds);
+  if (!deleteResult.ok) {
+    return { ok: false, error: deleteResult.error, status: 500 };
+  }
 
   const previousById = new Map(previousItems.map((item) => [item.id, item]));
 
@@ -2326,8 +2784,9 @@ export async function updateComandaItems(
     const previous =
       (item.id ? previousById.get(item.id) : undefined) ??
       previousServiceItems[index];
+    const preferredId = item.id ?? crypto.randomUUID();
     return {
-      id: item.id ?? crypto.randomUUID(),
+      id: protectedIds.has(preferredId) ? crypto.randomUUID() : preferredId,
       comanda_id: comandaId,
       service_id: item.serviceId ?? null,
       product_id: null,
@@ -2359,8 +2818,9 @@ export async function updateComandaItems(
     const unitPrice = item.catalogPriceCents || product.price_cents;
     const lineTotal =
       item.chargedPriceCents > 0 ? item.chargedPriceCents : unitPrice * qty;
+    const preferredId = item.id ?? crypto.randomUUID();
     return {
-      id: item.id ?? crypto.randomUUID(),
+      id: protectedIds.has(preferredId) ? crypto.randomUUID() : preferredId,
       comanda_id: comandaId,
       service_id: null,
       product_id: item.productId,
@@ -2378,22 +2838,25 @@ export async function updateComandaItems(
     };
   });
 
-  const tipInsertRows = tipItems.map((item, index) => ({
-    id: item.id ?? crypto.randomUUID(),
-    comanda_id: comandaId,
-    service_id: null,
-    product_id: null,
-    service_name: item.serviceName,
-    catalog_price_cents: item.chargedPriceCents,
-    charged_price_cents: item.chargedPriceCents,
-    quantity: 1,
-    commission_percent_snapshot: null,
-    sort_order: serviceItems.length + productItems.length + index,
-    is_tip: true,
-    squeeze_appointment_id: null,
-    appointment_id: null,
-    professional_id: item.professionalId ?? null,
-  }));
+  const tipInsertRows = tipItems.map((item, index) => {
+    const preferredId = item.id ?? crypto.randomUUID();
+    return {
+      id: protectedIds.has(preferredId) ? crypto.randomUUID() : preferredId,
+      comanda_id: comandaId,
+      service_id: null,
+      product_id: null,
+      service_name: item.serviceName,
+      catalog_price_cents: item.chargedPriceCents,
+      charged_price_cents: item.chargedPriceCents,
+      quantity: 1,
+      commission_percent_snapshot: null,
+      sort_order: serviceItems.length + productItems.length + index,
+      is_tip: true,
+      squeeze_appointment_id: null,
+      appointment_id: null,
+      professional_id: item.professionalId ?? null,
+    };
+  });
 
   const insertRows = [
     ...serviceInsertRows,
@@ -2476,14 +2939,24 @@ export async function closeComanda(
   const current = await getComandaById(admin, comandaId);
   if (!current.ok) return current;
 
-  const comanda = current.comanda;
-  if (comanda.status === "closed") {
+  if (current.comanda.status === "closed") {
     return { ok: false, error: "Esta comanda já está fechada.", status: 409 };
   }
 
+  // Limpa itens de horário cancelado antes de validar total x pagamento.
+  await scrubInactiveAppointmentItemsFromOpenComanda(admin, comandaId);
+
+  const refreshed = await getComandaById(admin, comandaId, { sync: false });
+  if (!refreshed.ok) return refreshed;
+  const comanda = refreshed.comanda;
+
+  const activeLinked = comanda.linkedAppointments.filter((apt) =>
+    (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
+  );
+
   if (
     comanda.linkedAppointments.length > 0 &&
-    comanda.linkedAppointments.every((apt) => apt.status === "cancelled")
+    activeLinked.length === 0
   ) {
     return {
       ok: false,
@@ -2503,7 +2976,9 @@ export async function closeComanda(
   const stockCheck = await validateProductStockForClose(admin, comandaId);
   if (!stockCheck.ok) return stockCheck;
 
-  const paymentError = validatePayments(payments, comanda.totalCents);
+  // Total ao vivo dos itens restantes (não o total_cents antigo da linha).
+  const liveTotals = await recalculateComandaTotals(admin, comandaId);
+  const paymentError = validatePayments(payments, liveTotals.totalCents);
   if (paymentError) {
     return { ok: false, error: paymentError, status: 400 };
   }
@@ -2713,10 +3188,21 @@ async function absorbConflictingOpenComandas(
   }
 }
 
+export type ReopenComandaResult =
+  | { ok: true; comanda: ComandaDetail }
+  | {
+      ok: false;
+      error: string;
+      status: number;
+      code?: "credit_shortfall";
+      shortfallCents?: number;
+    };
+
 export async function reopenComanda(
   admin: SupabaseClient,
-  comandaId: string
-): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
+  comandaId: string,
+  options?: { confirmCreditShortfall?: boolean }
+): Promise<ReopenComandaResult> {
   const current = await getComandaById(admin, comandaId);
   if (!current.ok) return current;
 
@@ -2772,7 +3258,38 @@ export async function reopenComanda(
     comanda.serviceDate
   );
 
-  const creditReverse = await reverseComandaCreditTransactions(admin, comandaId);
+  const creditCheck = await canReverseComandaCreditTransactions(admin, comandaId);
+  if (!creditCheck.ok) {
+    if (
+      creditCheck.code === "credit_shortfall" &&
+      !options?.confirmCreditShortfall
+    ) {
+      return {
+        ok: false,
+        error: creditCheck.error,
+        status: 409,
+        code: "credit_shortfall",
+        shortfallCents: creditCheck.shortfallCents,
+      };
+    }
+
+    if (
+      creditCheck.code !== "credit_shortfall" ||
+      !options?.confirmCreditShortfall
+    ) {
+      return { ok: false, error: creditCheck.error, status: 400 };
+    }
+  }
+
+  const customerId = await resolveCustomerIdByWhatsapp(
+    admin,
+    comanda.customerWhatsapp
+  );
+
+  const creditReverse = await reverseComandaCreditTransactions(admin, comandaId, {
+    allowShortfall: Boolean(options?.confirmCreditShortfall),
+    customerId,
+  });
   if (!creditReverse.ok) {
     return { ok: false, error: creditReverse.error, status: 400 };
   }

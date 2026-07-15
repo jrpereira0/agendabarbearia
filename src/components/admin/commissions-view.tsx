@@ -184,7 +184,7 @@ export function CommissionsView({
             <Select value={selectedPro} onValueChange={setSelectedPro}>
               <SelectTrigger
                 aria-label="Barbeiro"
-                className="h-8 w-full bg-background sm:w-[10.5rem]"
+                className="h-10 w-full bg-background sm:h-8 sm:w-[10.5rem]"
               >
                 <SelectValue placeholder="Todos" />
               </SelectTrigger>
@@ -270,7 +270,100 @@ export function CommissionsView({
           </div>
 
           <Card className="overflow-hidden">
-            <div className="overflow-x-auto">
+            {/* Mobile: cards */}
+            <div className="flex flex-col divide-y md:hidden">
+              {filteredProfessionals.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  Nenhum barbeiro para &ldquo;{search}&rdquo;.
+                </p>
+              ) : (
+                filteredProfessionals.map((row) => {
+                  const detailHref = buildQuery(
+                    from,
+                    to,
+                    row.professionalId
+                  );
+                  return (
+                    <div
+                      key={row.professionalId}
+                      className="flex flex-col gap-3 p-4 active:bg-muted/40"
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => router.push(detailHref)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(detailHref);
+                        }
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {row.professionalNickname}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {row.commissionPercent}% · {row.summary.serviceItemCount}{" "}
+                            atendimento
+                            {row.summary.serviceItemCount === 1 ? "" : "s"}
+                            {row.summary.tipCents > 0 &&
+                              ` · gorjeta ${formatPriceBRL(row.summary.tipCents)}`}
+                          </p>
+                          <div className="mt-2 h-1.5 w-full max-w-[10rem] overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-foreground/70"
+                              style={{
+                                width: `${
+                                  maxCommission > 0
+                                    ? Math.round(
+                                        (row.summary.commissionCents /
+                                          maxCommission) *
+                                          100
+                                      )
+                                    : 0
+                                }%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Comissão</p>
+                          <p className="text-base font-semibold tabular-nums">
+                            {formatPriceBRL(row.summary.commissionCents)}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        className="flex gap-2"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <PayCommissionButton
+                          from={from}
+                          to={to}
+                          professionalId={row.professionalId}
+                          professionalNickname={row.professionalNickname}
+                          amountCents={row.summary.commissionCents}
+                          className="h-10 flex-1"
+                        />
+                        <Button
+                          variant="outline"
+                          className="h-10 flex-1"
+                          asChild
+                        >
+                          <Link href={detailHref}>
+                            Detalhes
+                            <ArrowRight className="size-4" />
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop: tabela */}
+            <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">

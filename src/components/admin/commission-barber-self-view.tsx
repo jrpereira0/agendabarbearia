@@ -66,38 +66,62 @@ function ServiceTable({
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[420px] text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-            <th className="px-4 py-3 font-medium">Serviço</th>
-            <th className="px-4 py-3 font-medium text-right">Qtd</th>
-            <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={`${row.isTip ? "tip" : "svc"}:${row.serviceName}`}
-              className="border-b last:border-b-0"
-            >
-              <td className="px-4 py-3 font-medium">
-                {row.serviceName}
-                {row.isTip && (
-                  <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    gorjeta
-                  </span>
-                )}
-              </td>
-              <td className="px-4 py-3 text-right tabular-nums">{row.quantity}</td>
-              <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                {formatPriceBRL(row.commissionCents)}
-              </td>
+    <>
+      <ul className="divide-y md:hidden">
+        {rows.map((row) => (
+          <li
+            key={`${row.isTip ? "tip" : "svc"}:${row.serviceName}`}
+            className="flex items-center justify-between gap-3 px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="font-medium leading-snug">{row.serviceName}</p>
+              <p className="text-xs text-muted-foreground">
+                {row.quantity}x
+                {row.isTip ? " · gorjeta" : ""}
+              </p>
+            </div>
+            <p className="shrink-0 font-semibold tabular-nums">
+              {formatPriceBRL(row.commissionCents)}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[420px] text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+              <th className="px-4 py-3 font-medium">Serviço</th>
+              <th className="px-4 py-3 font-medium text-right">Qtd</th>
+              <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr
+                key={`${row.isTip ? "tip" : "svc"}:${row.serviceName}`}
+                className="border-b last:border-b-0"
+              >
+                <td className="px-4 py-3 font-medium">
+                  {row.serviceName}
+                  {row.isTip && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      gorjeta
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {row.quantity}
+                </td>
+                <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                  {formatPriceBRL(row.commissionCents)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -170,62 +194,107 @@ function DayTable({
   earnLabel: string;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[360px] text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-            <th className="px-4 py-3 font-medium">Dia</th>
-            <th className="px-4 py-3 font-medium text-right">Serviços</th>
-            <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const isActive = activeDate === row.date;
-            return (
-              <tr
-                key={row.date}
+    <>
+      <ul className="divide-y md:hidden">
+        {rows.map((row) => {
+          const isActive = activeDate === row.date;
+          return (
+            <li key={row.date}>
+              <Link
+                href={buildDayHref(row.date)}
                 className={cn(
-                  "border-b last:border-b-0",
+                  "flex items-center justify-between gap-3 px-4 py-3 active:bg-muted/40",
                   isActive && "bg-muted/30"
                 )}
               >
-                <td className="px-4 py-3">
-                  <Link
-                    href={buildDayHref(row.date)}
-                    className="group block font-medium"
-                  >
-                    <span className="group-hover:underline">
-                      {formatDateBR(row.date)}
-                    </span>
-                    <div className="mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-foreground/70"
-                        style={{
-                          width: `${
-                            maxDayCommission > 0
-                              ? Math.round(
-                                  (row.commissionCents / maxDayCommission) * 100
-                                )
-                              : 0
-                          }%`,
-                        }}
-                      />
-                    </div>
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {row.serviceItemCount}
-                </td>
-                <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                <div className="min-w-0">
+                  <p className="font-medium">{formatDateBR(row.date)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {row.serviceItemCount} serviço
+                    {row.serviceItemCount === 1 ? "" : "s"}
+                  </p>
+                  <div className="mt-1.5 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-foreground/70"
+                      style={{
+                        width: `${
+                          maxDayCommission > 0
+                            ? Math.round(
+                                (row.commissionCents / maxDayCommission) * 100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
+                <p className="shrink-0 font-semibold tabular-nums">
                   {formatPriceBRL(row.commissionCents)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                </p>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[360px] text-sm">
+          <thead>
+            <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+              <th className="px-4 py-3 font-medium">Dia</th>
+              <th className="px-4 py-3 font-medium text-right">Serviços</th>
+              <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const isActive = activeDate === row.date;
+              return (
+                <tr
+                  key={row.date}
+                  className={cn(
+                    "border-b last:border-b-0",
+                    isActive && "bg-muted/30"
+                  )}
+                >
+                  <td className="px-4 py-3">
+                    <Link
+                      href={buildDayHref(row.date)}
+                      className="group block font-medium"
+                    >
+                      <span className="group-hover:underline">
+                        {formatDateBR(row.date)}
+                      </span>
+                      <div className="mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-foreground/70"
+                          style={{
+                            width: `${
+                              maxDayCommission > 0
+                                ? Math.round(
+                                    (row.commissionCents / maxDayCommission) *
+                                      100
+                                  )
+                                : 0
+                            }%`,
+                          }}
+                        />
+                      </div>
+                    </Link>
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {row.serviceItemCount}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                    {formatPriceBRL(row.commissionCents)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
 
@@ -340,14 +409,14 @@ export function CommissionBarberSelfView({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 border-b pb-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium">
               {professional.professionalNickname}
             </p>
             <p className="text-xs text-muted-foreground">{heroHint}</p>
           </div>
-          <div className="flex flex-col items-end gap-2">
+          <div className="flex flex-col gap-2 sm:items-end">
             <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
               {formatPriceBRL(summary.commissionCents)}
             </p>
@@ -359,6 +428,7 @@ export function CommissionBarberSelfView({
                 professionalNickname={professional.professionalNickname}
                 amountCents={summary.commissionCents}
                 label="Registrar pagamento"
+                className="h-10 w-full sm:h-8 sm:w-auto"
               />
             )}
           </div>
@@ -390,13 +460,27 @@ export function CommissionBarberSelfView({
       </div>
 
       <Tabs defaultValue="atendimentos" className="w-full">
-        <TabsList>
-          <TabsTrigger value="atendimentos">Atendimentos</TabsTrigger>
-          <TabsTrigger value="servicos">Serviços</TabsTrigger>
-          {!isSingleDay && <TabsTrigger value="dias">Dias</TabsTrigger>}
-          <TabsTrigger value="pagamentos">Pagamentos</TabsTrigger>
-          <TabsTrigger value="resumo">Gráficos</TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="w-max min-w-full">
+            <TabsTrigger value="atendimentos" className="shrink-0">
+              Atendimentos
+            </TabsTrigger>
+            <TabsTrigger value="servicos" className="shrink-0">
+              Serviços
+            </TabsTrigger>
+            {!isSingleDay && (
+              <TabsTrigger value="dias" className="shrink-0">
+                Dias
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="pagamentos" className="shrink-0">
+              Pagamentos
+            </TabsTrigger>
+            <TabsTrigger value="resumo" className="shrink-0">
+              Gráficos
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="atendimentos">
           {comandas.length === 0 ? (

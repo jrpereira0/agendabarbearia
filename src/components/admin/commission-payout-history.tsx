@@ -55,7 +55,28 @@ export function CommissionPayoutHistory({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        <ul className="divide-y md:hidden">
+          {payouts.map((payout) => (
+            <li
+              key={payout.id}
+              className="flex items-start justify-between gap-3 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="font-medium leading-snug">
+                  {formatDateTimeBR(payout.paidAt)}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatPeriodLabel(payout.periodFrom, payout.periodTo)}
+                </p>
+              </div>
+              <p className="shrink-0 font-semibold tabular-nums">
+                {formatPriceBRL(payout.amountCents)}
+              </p>
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full min-w-[420px] text-sm">
             <thead>
               <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">

@@ -36,7 +36,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -45,6 +44,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SearchInput } from "@/components/admin/search-input";
+import { CancelAppointmentDialog } from "@/components/admin/cancel-appointment-dialog";
 import { ComandaDialogSkeleton } from "@/components/skeletons/comanda-dialog-skeleton";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
@@ -127,7 +127,7 @@ function buildPersistItems(
   tipProfessionalId: string
 ): ComandaItemInput[] {
   const payload = serviceItems.map(stripEditableItem);
-  if (tipCents > 0) {
+  if (tipCents > 0 && tipProfessionalId) {
     payload.push({
       serviceName: "Gorjeta",
       catalogPriceCents: tipCents,
@@ -145,9 +145,35 @@ function stripEditableItem(item: EditableItem): ComandaItemInput {
     id,
     professionalNickname: _pn,
     squeezeAppointmentId: _sq,
+    startTime,
+    serviceId,
+    productId,
+    appointmentId,
+    professionalId,
+    quantity,
+    commissionPercent,
+    isComandaExtra,
     ...rest
   } = item;
-  return { ...rest, ...(id ? { id } : {}) };
+
+  const normalizedStart = startTime ? formatTime(startTime) : undefined;
+
+  return {
+    serviceName: rest.serviceName,
+    catalogPriceCents: rest.catalogPriceCents,
+    chargedPriceCents: rest.chargedPriceCents,
+    ...(id ? { id } : {}),
+    ...(serviceId ? { serviceId } : {}),
+    ...(productId ? { productId } : {}),
+    ...(appointmentId ? { appointmentId } : {}),
+    ...(professionalId ? { professionalId } : {}),
+    ...(quantity && quantity > 0 ? { quantity } : {}),
+    ...(typeof commissionPercent === "number"
+      ? { commissionPercent }
+      : {}),
+    ...(normalizedStart ? { startTime: normalizedStart } : {}),
+    ...(isComandaExtra ? { isComandaExtra: true } : {}),
+  };
 }
 
 type PaymentRow = {
@@ -301,6 +327,9 @@ export function ComandaDialog({
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
   const [confirmOverpayCredit, setConfirmOverpayCredit] = useState(false);
+  const [confirmCreditShortfallCents, setConfirmCreditShortfallCents] = useState<
+    number | null
+  >(null);
   const [tipDialogOpen, setTipDialogOpen] = useState(false);
   const [tipDraftCents, setTipDraftCents] = useState(0);
   const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
@@ -365,6 +394,7 @@ export function ComandaDialog({
       setComanda(null);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);
+      setConfirmCreditShortfallCents(null);
       setServiceSearch("");
       setServicePickerOpen(false);
       setFocusAppointmentId(null);
@@ -663,23 +693,33 @@ export function ComandaDialog({
   }
 
   function getCancelTargetForItem(item: EditableItem): string | null {
-    if (item.squeezeAppointmentId) {
-      const apt = linkedAppointments.find(
-        (linked) => linked.id === item.squeezeAppointmentId
-      );
-      if (apt && canCancelLinkedAppointment(apt)) {
-        return item.squeezeAppointmentId;
-      }
+    // Encaixe / serviço extra: remove o item da comanda (o sync já apaga o
+    // horário). Não abre o modal de cancelamento.
+    if (item.squeezeAppointmentId || item.isComandaExtra) {
       return null;
     }
 
-    if (item.appointmentId && item.id) {
-      const apt = linkedAppointments.find(
-        (linked) => linked.id === item.appointmentId && !linked.isSqueezeIn
-      );
-      if (apt && canCancelLinkedAppointment(apt)) {
-        return item.appointmentId;
-      }
+    if (!item.appointmentId || !item.id || isProductItem(item)) {
+      return null;
+    }
+
+    // Só cancela o agendamento quando este é o único serviço daquele horário.
+    const siblings = items.filter(
+      (other) =>
+        other.appointmentId === item.appointmentId &&
+        !other.squeezeAppointmentId &&
+        !other.isComandaExtra &&
+        !isProductItem(other)
+    );
+    if (siblings.length !== 1) {
+      return null;
+    }
+
+    const apt = linkedAppointments.find(
+      (linked) => linked.id === item.appointmentId && !linked.isSqueezeIn
+    );
+    if (apt && canCancelLinkedAppointment(apt)) {
+      return item.appointmentId;
     }
 
     return null;
@@ -688,6 +728,7 @@ export function ComandaDialog({
   function canRemoveItemFromComanda(item: EditableItem): boolean {
     if (!canEdit || items.length <= 1) return false;
     if (isProductItem(item)) return true;
+    if (item.squeezeAppointmentId || item.isComandaExtra) return true;
     return !getCancelTargetForItem(item);
   }
 
@@ -765,6 +806,12 @@ export function ComandaDialog({
   ): Promise<boolean> => {
     if (!comanda || !canEdit) return false;
 
+    const nonTipCount = nextItems.length;
+    if (nonTipCount === 0) {
+      toast.error("A comanda precisa de ao menos um serviço ou produto.");
+      return false;
+    }
+
     if (nextTipCents > 0 && !nextTipProfessionalId) {
       toast.error("Escolha o barbeiro que recebe a gorjeta.");
       return false;
@@ -791,7 +838,13 @@ export function ComandaDialog({
           ? [{ ...prev[0], amountCents: result.comanda.totalCents }]
           : prev
       );
+      router.refresh();
       return true;
+    } catch {
+      toast.error(
+        "Não foi possível salvar os itens. Verifique a internet e tente de novo."
+      );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -968,24 +1021,36 @@ export function ComandaDialog({
       totals.totalCents
     );
 
-    setBusy(true);
-    const result = await closeComandaWithItemsAction(
-      comanda.id,
-      buildPersistItems(items, tipCents, tipProfessionalId),
-      comandaPayments,
-      {
-        creditDeposits: saveOverpayAsCredit ? creditDeposits : undefined,
-      }
-    );
-    if (result.ok) {
-      toast.success("Comanda fechada.");
-      setConfirmOverpayCredit(false);
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      toast.error(result.error);
+    if (comandaPayments.length === 0) {
+      toast.error("Informe ao menos uma forma de pagamento.");
+      return;
     }
-    setBusy(false);
+
+    setBusy(true);
+    try {
+      const result = await closeComandaWithItemsAction(
+        comanda.id,
+        buildPersistItems(items, tipCents, tipProfessionalId),
+        comandaPayments,
+        {
+          creditDeposits: saveOverpayAsCredit ? creditDeposits : undefined,
+        }
+      );
+      if (result.ok) {
+        toast.success("Comanda fechada.");
+        setConfirmOverpayCredit(false);
+        onOpenChange(false);
+        router.refresh();
+      } else {
+        toast.error(result.error);
+      }
+    } catch {
+      toast.error(
+        "Não foi possível finalizar a comanda. Verifique a internet e tente de novo."
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   function handleClose() {
@@ -1011,24 +1076,34 @@ export function ComandaDialog({
     void finalizeComanda(false);
   }
 
-  async function handleReopen() {
+  async function handleReopen(confirmCreditShortfall = false) {
     if (!comanda) return;
     setBusy(true);
-    const result = await reopenComandaAction(comanda.id);
-    if (result.ok) {
-      toast.success("Comanda reaberta.");
-      setComanda(result.comanda);
-      setItems(mapComandaItemsToEditable(result.comanda.items));
-      const tipItem = result.comanda.items.find((item) => item.isTip);
-      setTipCents(tipItem?.chargedPriceCents ?? 0);
-      setTipProfessionalId(
-        tipItem?.professionalId ?? sessionProfessionalId ?? ""
+    try {
+      const result = await reopenComandaAction(comanda.id, {
+        confirmCreditShortfall,
+      });
+      if (result.ok) {
+        setConfirmCreditShortfallCents(null);
+        toast.success("Comanda reaberta.");
+        await load();
+        router.refresh();
+      } else if (
+        result.code === "credit_shortfall" &&
+        result.shortfallCents != null &&
+        !confirmCreditShortfall
+      ) {
+        setConfirmCreditShortfallCents(result.shortfallCents);
+      } else {
+        toast.error(result.error);
+      }
+    } catch {
+      toast.error(
+        "Não foi possível reabrir a comanda. Verifique a internet e tente de novo."
       );
-      router.refresh();
-    } else {
-      toast.error(result.error);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   async function handleCancel() {
@@ -1042,30 +1117,37 @@ export function ComandaDialog({
     }
 
     setBusy(true);
-    const result = await cancelAppointment({
-      appointmentId: targetId,
-      reason,
-    });
-    if (result.ok) {
-      toast.success("Agendamento cancelado.");
-      setConfirmCancel(false);
-      setCancelReason("");
-      setCancelTargetId(null);
-      setCancelTargetLabel(null);
-      const remaining = linkedAppointments.filter((apt) => apt.id !== targetId);
-      if (remaining.length === 0) {
-        onOpenChange(false);
-      } else {
-        if (focusAppointmentId === targetId) {
-          setFocusAppointmentId(remaining[0]?.id ?? null);
+    try {
+      const result = await cancelAppointment({
+        appointmentId: targetId,
+        reason,
+      });
+      if (result.ok) {
+        toast.success("Agendamento cancelado.");
+        setConfirmCancel(false);
+        setCancelReason("");
+        setCancelTargetId(null);
+        setCancelTargetLabel(null);
+        const remaining = linkedAppointments.filter((apt) => apt.id !== targetId);
+        if (remaining.length === 0) {
+          onOpenChange(false);
+        } else {
+          if (focusAppointmentId === targetId) {
+            setFocusAppointmentId(remaining[0]?.id ?? null);
+          }
+          await load();
         }
-        await load();
+        router.refresh();
+      } else {
+        toast.error(result.error);
       }
-      router.refresh();
-    } else {
-      toast.error(result.error);
+    } catch {
+      toast.error(
+        "Não foi possível cancelar. Verifique a internet e tente de novo."
+      );
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   }
 
   function removeCustomerCreditPayment() {
@@ -1958,83 +2040,45 @@ export function ComandaDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <CancelAppointmentDialog
         open={confirmCancel}
-        onOpenChange={(open) => {
-          setConfirmCancel(open);
-          if (!open) {
+        onOpenChange={(dialogOpen) => {
+          setConfirmCancel(dialogOpen);
+          if (!dialogOpen) {
             setCancelReason("");
             setCancelTargetId(null);
             setCancelTargetLabel(null);
           }
         }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {appointmentToCancel?.isComandaExtra
-                ? "Cancelar serviço extra?"
-                : appointmentToCancel?.isSqueezeIn
-                  ? "Cancelar encaixe?"
-                  : "Cancelar agendamento?"}
-            </DialogTitle>
-            <DialogDescription>
-              O horário some da agenda e nenhum valor entra no caixa.
-              {cancelTargetLabel && (
-                <>
-                  {" "}
-                  Serviço: <strong>{cancelTargetLabel}</strong>.
-                </>
-              )}
-              {appointmentToCancel && linkedAppointments.length > 1 && (
-                <>
-                  {" "}
-                  Será cancelado o horário de{" "}
-                  {appointmentToCancel.professionalNickname} (
-                  {formatTime(appointmentToCancel.startTime)}
-                  {appointmentToCancel.isComandaExtra
-                    ? " · serviço extra"
-                    : appointmentToCancel.isSqueezeIn
-                      ? " · encaixe"
-                      : ""}
-                  ).
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-2 py-1">
-            <Label htmlFor="cancel-reason">Motivo do cancelamento</Label>
-            <Textarea
-              id="cancel-reason"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-              placeholder="Ex.: cliente desmarcou, não compareceu, trocou de horário…"
-              rows={3}
-              disabled={busy}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setConfirmCancel(false);
-                setCancelReason("");
-                setCancelTargetId(null);
-                setCancelTargetLabel(null);
-              }}
-            >
-              Voltar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancel}
-              disabled={busy || cancelReason.trim().length < 3}
-            >
-              Confirmar cancelamento
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        reason={cancelReason}
+        onReasonChange={setCancelReason}
+        onConfirm={() => void handleCancel()}
+        busy={busy}
+        kind={
+          appointmentToCancel?.isComandaExtra
+            ? "extra"
+            : appointmentToCancel?.isSqueezeIn
+              ? "squeeze"
+              : "normal"
+        }
+        customerName={customerName}
+        professionalNickname={appointmentToCancel?.professionalNickname}
+        startTime={appointmentToCancel?.startTime}
+        endTime={appointmentToCancel?.endTime}
+        serviceLabel={cancelTargetLabel}
+        dateLabel={formatDateBR(serviceDate)}
+        detailNote={
+          appointmentToCancel && linkedAppointments.length > 1
+            ? `Será cancelado o horário de ${appointmentToCancel.professionalNickname} (${formatTime(appointmentToCancel.startTime)}${
+                appointmentToCancel.isComandaExtra
+                  ? " · serviço extra"
+                  : appointmentToCancel.isSqueezeIn
+                    ? " · encaixe"
+                    : ""
+              }).`
+            : null
+        }
+      />
 
       <Dialog open={tipDialogOpen} onOpenChange={setTipDialogOpen}>
         <DialogContent className="sm:max-w-sm">
@@ -2142,6 +2186,44 @@ export function ComandaDialog({
               onClick={() => void finalizeComanda(true)}
             >
               Sim, guardar crédito
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmCreditShortfallCents !== null}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && !busy) setConfirmCreditShortfallCents(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crédito já foi usado</DialogTitle>
+            <DialogDescription>
+              Esta comanda gerou crédito e o cliente já usou{" "}
+              <strong>
+                {formatPriceBRL(confirmCreditShortfallCents ?? 0)}
+              </strong>{" "}
+              em outro atendimento. Esse valor gasto não volta. Já o crédito
+              usado como pagamento nesta comanda volta para o cliente. Continuar?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setConfirmCreditShortfallCents(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleReopen(true)}
+            >
+              Reabrir mesmo assim
             </Button>
           </div>
         </DialogContent>

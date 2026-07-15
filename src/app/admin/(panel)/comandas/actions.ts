@@ -45,10 +45,11 @@ const itemSchema = z
     commissionPercent: z.number().int().min(0).max(100).optional(),
     appointmentId: z.uuid().optional(),
     professionalId: z.uuid().optional(),
-    startTime: z
-      .string()
-      .regex(/^\d{2}:\d{2}$/, "Horário inválido.")
-      .optional(),
+    startTime: z.preprocess((value) => {
+      if (value == null || value === "") return undefined;
+      if (typeof value === "string") return value.trim().slice(0, 5);
+      return value;
+    }, z.string().regex(/^\d{2}:\d{2}$/, "Horário inválido.").optional()),
     isComandaExtra: z.boolean().optional(),
     isTip: z.boolean().optional(),
   })
@@ -189,9 +190,12 @@ export async function saveComandaItems(
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const serviceItems = parsed.data.filter((item) => !item.isTip);
-  if (serviceItems.length === 0) {
-    return { ok: false, error: "Informe ao menos um serviço na comanda." };
+  const billableItems = parsed.data.filter((item) => !item.isTip);
+  if (billableItems.length === 0) {
+    return {
+      ok: false,
+      error: "Informe ao menos um serviço ou produto na comanda.",
+    };
   }
 
   const admin = requireAdminClient();
@@ -231,9 +235,12 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: parsedItems.error.issues[0].message };
   }
 
-  const serviceItems = parsedItems.data.filter((item) => !item.isTip);
-  if (serviceItems.length === 0) {
-    return { ok: false, error: "Informe ao menos um serviço na comanda." };
+  const billableItems = parsedItems.data.filter((item) => !item.isTip);
+  if (billableItems.length === 0) {
+    return {
+      ok: false,
+      error: "Informe ao menos um serviço ou produto na comanda.",
+    };
   }
 
   const parsedPayments = z.array(paymentSchema).min(1).safeParse(payments);
@@ -259,21 +266,33 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: accessDenied.error };
   }
 
-  const itemsResult = await updateComandaItems(admin, comandaId, parsedItems.data);
-  if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
+  try {
+    const itemsResult = await updateComandaItems(
+      admin,
+      comandaId,
+      parsedItems.data
+    );
+    if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
 
-  const closeResult = await closeComanda(
-    admin,
-    comandaId,
-    parsedPayments.data,
-    session.userId,
-    { creditDeposits: parsedCreditDeposits.data }
-  );
-  if (!closeResult.ok) return { ok: false, error: closeResult.error };
+    const closeResult = await closeComanda(
+      admin,
+      comandaId,
+      parsedPayments.data,
+      session.userId,
+      { creditDeposits: parsedCreditDeposits.data }
+    );
+    if (!closeResult.ok) return { ok: false, error: closeResult.error };
 
-  revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
-  return { ok: true };
+    revalidatePath("/admin");
+    revalidatePath("/admin/financeiro");
+    return { ok: true };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Não foi possível finalizar a comanda. Verifique a internet e tente de novo.",
+    };
+  }
 }
 
 export async function closeComandaAction(
@@ -320,29 +339,51 @@ export async function closeComandaAction(
 }
 
 export async function reopenComandaAction(
-  comandaId: string
+  comandaId: string,
+  options?: { confirmCreditShortfall?: boolean }
 ): Promise<
-  { ok: true; comanda: ComandaDetail } | { ok: false; error: string }
+  | { ok: true; comanda: ComandaDetail }
+  | {
+      ok: false;
+      error: string;
+      code?: "credit_shortfall";
+      shortfallCents?: number;
+    }
 > {
-  const denied = await requireOwner();
-  if (denied !== null) {
-    return denied.ok === false
-      ? { ok: false, error: denied.error }
-      : { ok: false, error: "Sem permissão." };
+  try {
+    const denied = await requireOwner();
+    if (denied !== null) {
+      return denied.ok === false
+        ? { ok: false, error: denied.error }
+        : { ok: false, error: "Sem permissão." };
+    }
+
+    const admin = requireAdminClient();
+    if (isActionResult(admin)) {
+      return { ok: false, error: admin.error };
+    }
+
+    const result = await reopenComanda(admin, comandaId, options);
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: result.error,
+        code: result.code,
+        shortfallCents: result.shortfallCents,
+      };
+    }
+
+    revalidatePath("/admin");
+    revalidatePath("/admin/financeiro");
+    revalidatePath("/admin/clientes");
+    return { ok: true, comanda: result.comanda };
+  } catch {
+    return {
+      ok: false,
+      error:
+        "Não foi possível reabrir a comanda. Verifique a internet e tente de novo.",
+    };
   }
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) {
-    return { ok: false, error: admin.error };
-  }
-
-  const result = await reopenComanda(admin, comandaId);
-  if (!result.ok) return { ok: false, error: result.error };
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
-  revalidatePath("/admin/clientes");
-  return { ok: true, comanda: result.comanda };
 }
 
 export async function previewComandaTotals(

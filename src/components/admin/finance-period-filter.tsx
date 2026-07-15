@@ -91,7 +91,7 @@ export function FinancePeriodFilter({
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "h-8 flex-1 rounded-md px-3 text-xs font-medium lg:flex-none",
+                  "h-10 flex-1 rounded-md px-3 text-sm font-medium sm:h-8 sm:text-xs lg:flex-none",
                   active
                     ? "bg-background text-foreground shadow-sm hover:bg-background"
                     : "text-muted-foreground hover:text-foreground"
@@ -106,7 +106,7 @@ export function FinancePeriodFilter({
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             <label className="sr-only" htmlFor="finance-from">
               Data inicial
             </label>
@@ -115,9 +115,11 @@ export function FinancePeriodFilter({
               type="date"
               value={fromDate}
               onChange={(e) => onFromChange(e.target.value)}
-              className="h-8 w-full bg-background sm:w-[9.75rem]"
+              className="h-10 w-full bg-background sm:h-8 sm:w-[9.75rem]"
             />
-            <span className="shrink-0 text-xs text-muted-foreground">até</span>
+            <span className="px-0.5 text-xs text-muted-foreground sm:shrink-0">
+              até
+            </span>
             <label className="sr-only" htmlFor="finance-to">
               Data final
             </label>
@@ -126,17 +128,16 @@ export function FinancePeriodFilter({
               type="date"
               value={toDate}
               onChange={(e) => onToChange(e.target.value)}
-              className="h-8 w-full bg-background sm:w-[9.75rem]"
+              className="h-10 w-full bg-background sm:h-8 sm:w-[9.75rem]"
             />
           </div>
 
           {(extraFields || submitLabel) && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               {extraFields}
               <Button
                 type={embedded ? "button" : "submit"}
-                size="sm"
-                className="h-8 shrink-0 px-4"
+                className="h-10 w-full shrink-0 px-4 sm:h-8 sm:w-auto"
                 onClick={
                   embedded
                     ? (event) => {

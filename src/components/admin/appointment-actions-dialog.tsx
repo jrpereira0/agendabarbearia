@@ -21,9 +21,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
+import { CancelAppointmentDialog } from "@/components/admin/cancel-appointment-dialog";
 import { DialogSection } from "@/components/admin/dialog-section";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
@@ -106,6 +105,10 @@ export function AppointmentActionsDialog({
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [comandaClosed, setComandaClosed] = useState(false);
+  const [confirmCreditShortfallCents, setConfirmCreditShortfallCents] = useState<
+    number | null
+  >(null);
+  const [reopenComandaId, setReopenComandaId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open || !appointment) return;
@@ -116,6 +119,8 @@ export function AppointmentActionsDialog({
     setLastName(appointment.customerLastName);
     setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
     setComandaClosed(appointment.status === "done");
+    setConfirmCreditShortfallCents(null);
+    setReopenComandaId(null);
   }, [open, appointment?.id, appointment?.status, appointment]);
 
   if (!appointment) return null;
@@ -171,25 +176,45 @@ export function AppointmentActionsDialog({
     }
   }
 
-  async function handleReopenComanda() {
+  async function handleReopenComanda(confirmCreditShortfall = false) {
     setBusy(true);
-    const loaded = await loadComandaForAppointment(appointment!.id);
-    if (!loaded.ok) {
-      toast.error(loaded.error);
+    try {
+      let comandaId = reopenComandaId;
+      if (!comandaId) {
+        const loaded = await loadComandaForAppointment(appointment!.id);
+        if (!loaded.ok) {
+          toast.error(loaded.error);
+          return;
+        }
+        comandaId = loaded.comanda.id;
+        setReopenComandaId(comandaId);
+      }
+
+      const result = await reopenComandaAction(comandaId, {
+        confirmCreditShortfall,
+      });
+      if (result.ok) {
+        setConfirmCreditShortfallCents(null);
+        setReopenComandaId(null);
+        toast.success("Comanda reaberta.");
+        setComandaClosed(false);
+        onOpenChange(false);
+        router.refresh();
+      } else if (
+        result.code === "credit_shortfall" &&
+        result.shortfallCents != null &&
+        !confirmCreditShortfall
+      ) {
+        setConfirmCreditShortfallCents(result.shortfallCents);
+      } else {
+        toast.error(result.error);
+      }
+    } catch {
+      toast.error(
+        "Não foi possível reabrir a comanda. Verifique a internet e tente de novo."
+      );
+    } finally {
       setBusy(false);
-      return;
-    }
-
-    const result = await reopenComandaAction(loaded.comanda.id);
-    setBusy(false);
-
-    if (result.ok) {
-      toast.success("Comanda reaberta.");
-      setComandaClosed(false);
-      onOpenChange(false);
-      router.refresh();
-    } else {
-      toast.error(result.error);
     }
   }
 
@@ -396,58 +421,29 @@ export function AppointmentActionsDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog
+      <CancelAppointmentDialog
         open={open && subView === "cancel"}
         onOpenChange={(next) => {
           if (!next) setSubView("main");
         }}
-      >
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
-          <DialogHeader className="border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
-            <DialogTitle>Cancelar agendamento?</DialogTitle>
-            <DialogDescription>
-              O horário some da agenda. Nenhum valor entra no caixa.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-4 py-4 sm:px-6 sm:py-5">
-            <DialogSection
-              icon={X}
-              title="Motivo"
-              description="Obrigatório para registrar o cancelamento."
-            >
-              <div className="space-y-2">
-                <Label htmlFor="cancel-reason-actions" className="sr-only">
-                  Motivo do cancelamento
-                </Label>
-                <Textarea
-                  id="cancel-reason-actions"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Ex.: cliente desmarcou, não veio..."
-                  rows={3}
-                  disabled={busy}
-                />
-              </div>
-            </DialogSection>
-          </div>
-          <div className="flex flex-col-reverse gap-2 border-t bg-muted/20 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
-            <Button
-              variant="outline"
-              onClick={() => setSubView("main")}
-              disabled={busy}
-            >
-              Voltar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleCancel}
-              disabled={busy || cancelReason.trim().length < 3}
-            >
-              Confirmar cancelamento
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        reason={cancelReason}
+        onReasonChange={setCancelReason}
+        onConfirm={() => void handleCancel()}
+        busy={busy}
+        customerName={customerName}
+        professionalNickname={appointment.professionalNickname}
+        startTime={appointment.startTime}
+        endTime={appointment.endTime}
+        serviceLabel={serviceNames}
+        dateLabel={formatDateBR(appointment.date)}
+        kind={
+          appointment.isComandaExtra
+            ? "extra"
+            : appointment.isSqueezeIn
+              ? "squeeze"
+              : "normal"
+        }
+      />
 
       <Dialog
         open={open && subView === "changeClient"}
@@ -495,6 +491,50 @@ export function AppointmentActionsDialog({
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmCreditShortfallCents !== null}
+        onOpenChange={(dialogOpen) => {
+          if (!dialogOpen && !busy) {
+            setConfirmCreditShortfallCents(null);
+            setReopenComandaId(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crédito já foi usado</DialogTitle>
+            <DialogDescription>
+              Esta comanda gerou crédito e o cliente já usou{" "}
+              <strong>
+                {formatPriceBRL(confirmCreditShortfallCents ?? 0)}
+              </strong>{" "}
+              em outro atendimento. Esse valor gasto não volta. Já o crédito
+              usado como pagamento nesta comanda volta para o cliente. Continuar?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                setConfirmCreditShortfallCents(null);
+                setReopenComandaId(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleReopenComanda(true)}
+            >
+              Reabrir mesmo assim
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>
