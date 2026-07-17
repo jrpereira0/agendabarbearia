@@ -31,6 +31,8 @@ npm run dev
 
 Acesse [http://localhost:3000](http://localhost:3000) para entrar no painel. O link de agendamento para clientes fica em `/agenda`.
 
+A prévia do link no WhatsApp (título, descrição e imagem) usa o nome, a bio e a logo cadastrados em **Configurações**. Depois de publicar uma mudança nessa prévia, o WhatsApp pode continuar mostrando a versão antiga por um tempo. Para forçar a atualização, abra o [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/), cole a URL de `/agenda` e clique em **Scrape Again**.
+
 ## Publicar na Vercel
 
 No painel da Vercel, abra **Settings → Environment Variables** e cadastre as chaves abaixo (copie os mesmos valores do `.env.local`):
@@ -48,6 +50,7 @@ Opcionais (só quem usa a funcionalidade correspondente):
 
 | Variável | Para quê |
 |---|---|
+| `NEXT_PUBLIC_SITE_URL` | URL pública do site (prévia do WhatsApp/Open Graph). Se omitir na Vercel, usa `VERCEL_URL` |
 | `DATABASE_URL` | Rodar `npm run db:migrate` (não precisa na Vercel, só localmente) |
 | `API_SECRET_KEY` / chaves geradas em Configurações > Integrações | Automações externas (n8n) |
 | `N8N_APPOINTMENT_WEBHOOK_URL` | Avisa o barbeiro (webhook n8n) a cada novo agendamento — ver [docs/API-N8N.md](docs/API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated) |

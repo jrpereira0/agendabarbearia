@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
-import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
+import { BRAND_ICON_PATH } from "@/lib/brand";
 import { getShopSeo } from "@/lib/get-shop-seo";
+import { getSiteUrl } from "@/lib/site-url";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,17 +17,31 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { name, description } = await getShopSeo();
+  const { name, shareDescription } = await getShopSeo();
+  const siteUrl = getSiteUrl();
 
   return {
+    metadataBase: siteUrl,
     title: {
       default: name,
       template: `%s | ${name}`,
     },
-    description,
+    description: shareDescription,
     icons: {
       icon: BRAND_ICON_PATH,
       apple: BRAND_ICON_PATH,
+    },
+    openGraph: {
+      type: "website",
+      locale: "pt_BR",
+      siteName: name,
+      title: name,
+      description: shareDescription,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: name,
+      description: shareDescription,
     },
   };
 }
