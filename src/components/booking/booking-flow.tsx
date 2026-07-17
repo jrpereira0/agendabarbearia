@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle2, User } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -37,6 +37,9 @@ import type {
 type Step = "professional" | "services" | "datetime" | "confirm";
 type CustomerSubstep = "whatsapp" | "identity";
 
+/** Marcador local: cliente não escolheu barbeiro (servidor atribui). */
+const NO_PREFERENCE_ID = "__any__";
+
 const MAX_DAYS_AHEAD = 60;
 const stepOrder: Step[] = ["professional", "services", "datetime", "confirm"];
 
@@ -46,7 +49,7 @@ const stepMeta: Record<
 > = {
   professional: {
     title: "Escolha o barbeiro",
-    description: "Quem vai te atender?",
+    description: "Quem vai te atender? Ou deixe sem preferência.",
   },
   services: {
     title: "Escolha os serviços",
@@ -176,29 +179,41 @@ function StepProgress({ current }: { current: number }) {
 
 function SelectionSummary({
   professional,
+  anyPreference,
   services,
   date,
   startTime,
   totalMinutes,
   totalPriceLabel,
 }: {
-  professional: PublicProfessional;
+  professional: PublicProfessional | null;
+  anyPreference?: boolean;
   services: PublicService[];
   date?: string;
   startTime?: string | null;
   totalMinutes: number;
   totalPriceLabel: string;
 }) {
+  const showAny = Boolean(anyPreference) || !professional;
+
   return (
     <div className="flex items-center gap-3 rounded-xl bg-muted/50 px-3 py-2.5">
-      <ProfessionalAvatar
-        photoUrl={professional.photoUrl}
-        photoPosition={professional.photoPosition}
-        name={professional.nickname}
-        size="sm"
-      />
+      {showAny ? (
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted">
+          <Users className="size-4 text-muted-foreground" strokeWidth={1.5} />
+        </div>
+      ) : (
+        <ProfessionalAvatar
+          photoUrl={professional.photoUrl}
+          photoPosition={professional.photoPosition}
+          name={professional.nickname}
+          size="sm"
+        />
+      )}
       <div className="min-w-0 flex-1 text-xs leading-relaxed text-muted-foreground">
-        <p className="font-medium text-foreground">{professional.nickname}</p>
+        <p className="font-medium text-foreground">
+          {showAny ? "Sem preferência" : professional.nickname}
+        </p>
         <p className="truncate">
           {services.map((s) => s.name).join(", ")}
           {date && startTime && (
@@ -294,14 +309,30 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     (p) => p.serviceIds.length > 0
   );
 
-  const selectedProfessional = professionals.find((p) => p.id === professionalId);
+  const anyPreference = professionalId === NO_PREFERENCE_ID;
+  const selectedProfessional = anyPreference
+    ? null
+    : (professionals.find((p) => p.id === professionalId) ?? null);
   const currentStep = stepOrder.indexOf(step) + 1;
-  const meta = stepMeta[step];
+  const meta =
+    step === "datetime" && anyPreference
+      ? {
+          ...stepMeta.datetime,
+          description:
+            "Horários de qualquer barbeiro disponível. Você verá quem te atende na confirmação.",
+        }
+      : stepMeta[step];
 
   const availableServices = useMemo(() => {
+    if (anyPreference) {
+      const allowed = new Set(
+        professionals.flatMap((p) => p.serviceIds)
+      );
+      return services.filter((s) => allowed.has(s.id));
+    }
     const allowed = new Set(selectedProfessional?.serviceIds ?? []);
     return services.filter((s) => allowed.has(s.id));
-  }, [selectedProfessional, services]);
+  }, [anyPreference, professionals, selectedProfessional, services]);
 
   const filteredServices = useMemo(() => {
     if (!serviceSearch.trim()) return availableServices;
@@ -338,10 +369,14 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setStartTime(null);
 
     const params = new URLSearchParams({
-      professionalId,
       date,
       serviceIds: serviceIds.join(","),
     });
+    if (anyPreference) {
+      params.set("anyProfessional", "1");
+    } else {
+      params.set("professionalId", professionalId);
+    }
 
     fetch(`/api/v1/availability?${params}`)
       .then(async (res) => {
@@ -373,7 +408,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     return () => {
       cancelled = true;
     };
-  }, [step, professionalId, serviceIds, date]);
+  }, [step, professionalId, anyPreference, serviceIds, date]);
 
   function selectProfessional(id: string) {
     setProfessionalId(id);
@@ -530,7 +565,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          professionalId,
+          ...(anyPreference
+            ? { anyProfessional: true }
+            : { professionalId }),
           date,
           startTime,
           serviceIds,
@@ -548,11 +585,23 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         return;
       }
 
+      const assignedId =
+        (typeof body.professionalId === "string" && body.professionalId) ||
+        professionalId;
+      const assignedPro = catalog.professionals.find((p) => p.id === assignedId);
+      const assignedName =
+        (typeof body.professionalNickname === "string" &&
+          body.professionalNickname) ||
+        assignedPro?.nickname ||
+        selectedProfessional?.nickname ||
+        "Barbeiro";
+
       setConfirmation({
-        professionalId,
-        professionalName: selectedProfessional!.nickname,
-        professionalPhotoUrl: selectedProfessional!.photoUrl,
-        professionalPhotoPosition: selectedProfessional!.photoPosition,
+        professionalId: assignedId,
+        professionalName: assignedName,
+        professionalPhotoUrl: assignedPro?.photoUrl ?? null,
+        professionalPhotoPosition:
+          assignedPro?.photoPosition ?? "50% 50%",
         date,
         startTime: startTime!,
         serviceNames: selectedServices.map((s) => s.name),
@@ -684,6 +733,41 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       <div className="min-h-0 max-h-[min(48dvh,28rem)] overflow-y-auto overscroll-contain px-5 py-5 sm:max-h-[min(58dvh,32rem)] sm:px-6 sm:py-6">
         {step === "professional" && (
           <ul className="flex flex-col gap-2">
+            <li>
+              <button
+                type="button"
+                onClick={() => selectProfessional(NO_PREFERENCE_ID)}
+                className={cn(
+                  "flex min-h-14 w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
+                  anyPreference
+                    ? "border-foreground bg-muted/40"
+                    : "border-transparent bg-muted/30 hover:bg-muted/50"
+                )}
+              >
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-background">
+                  <Users
+                    className="size-5 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">Sem preferência</p>
+                  <p className="text-xs text-muted-foreground">
+                    Caso você não tenha preferência, a gente te encaixa no barbeiro dísponivel no horário.
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                    anyPreference
+                      ? "border-foreground bg-foreground text-background"
+                      : "border-muted-foreground/30"
+                  )}
+                >
+                  {anyPreference && <Check className="size-3" />}
+                </div>
+              </button>
+            </li>
             {professionals.map((pro) => {
               const selected = professionalId === pro.id;
               return (
@@ -725,10 +809,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           </ul>
         )}
 
-        {step === "services" && selectedProfessional && (
+        {step === "services" && (anyPreference || selectedProfessional) && (
           <div className="flex flex-col gap-4">
             <SelectionSummary
               professional={selectedProfessional}
+              anyPreference={anyPreference}
               services={selectedServices}
               totalMinutes={totalMinutes}
               totalPriceLabel={totalPriceLabel}
@@ -736,7 +821,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
             {availableServices.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Esse profissional ainda não tem serviços disponíveis.
+                {anyPreference
+                  ? "Ainda não há serviços disponíveis para agendamento."
+                  : "Esse profissional ainda não tem serviços disponíveis."}
               </p>
             ) : (
               <>
@@ -793,10 +880,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           </div>
         )}
 
-        {step === "datetime" && selectedProfessional && (
+        {step === "datetime" && (anyPreference || selectedProfessional) && (
           <div className="flex flex-col gap-4">
             <SelectionSummary
               professional={selectedProfessional}
+              anyPreference={anyPreference}
               services={selectedServices}
               totalMinutes={totalMinutes}
               totalPriceLabel={totalPriceLabel}
@@ -825,7 +913,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           </div>
         )}
 
-        {step === "confirm" && selectedProfessional && (
+        {step === "confirm" && (anyPreference || selectedProfessional) && (
           <form
             id="booking-form"
             onSubmit={handleSubmit}
@@ -833,6 +921,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           >
             <SelectionSummary
               professional={selectedProfessional}
+              anyPreference={anyPreference}
               services={selectedServices}
               date={date}
               startTime={startTime}

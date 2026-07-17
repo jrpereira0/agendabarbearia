@@ -411,10 +411,17 @@ Retorna todos os serviços com `prices` (sem `priceCents` nem filtro por dia).
 
 | Parâmetro | Obrigatório | Descrição |
 | --- | --- | --- |
-| `professionalId` | Sim | UUID do barbeiro |
+| `professionalId` | Condicional | UUID do barbeiro (**obrigatório** se não usar `anyProfessional`) |
+| `anyProfessional` | Condicional | `1` = união dos horários de quem faz os serviços (**obrigatório** se não enviar `professionalId`) |
 | `date` | Sim | `AAAA-MM-DD` |
 | `serviceIds` | Sim | Um ou mais UUIDs separados por **vírgula** (sem espaço) |
 | `excludeAppointmentId` | Não | UUID ao remarcar (ignora o próprio agendamento no cálculo) |
+
+**Sem preferência (qualquer barbeiro livre):**
+
+```
+GET {{baseUrl}}/availability?anyProfessional=1&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
+```
 
 **Exemplo — Junior + Corte e Barba em 15/06/2026:**
 
@@ -812,7 +819,8 @@ Retorna o agendamento mais recente com status **`done`** (atendido), ordenado po
 
 | Campo | Tipo | Obrigatório | Descrição |
 | --- | --- | --- | --- |
-| `professionalId` | UUID | Sim | Barbeiro |
+| `professionalId` | UUID | Condicional | Barbeiro (**obrigatório** se `anyProfessional` não for `true`) |
+| `anyProfessional` | boolean | Condicional | `true` = servidor escolhe o barbeiro com **menos agendamentos ativos no dia** entre quem tem o horário livre |
 | `date` | string | Sim | `AAAA-MM-DD` |
 | `startTime` | string | Sim | `HH:MM` |
 | `serviceIds` | UUID[] | Sim | Pelo menos um serviço |
@@ -839,9 +847,13 @@ Retorna o agendamento mais recente com status **`done`** (atendido), ordenado po
 ```json
 {
   "ok": true,
-  "appointmentId": "uuid-gerado"
+  "appointmentId": "uuid-gerado",
+  "professionalId": "054a545a-75c8-4807-b72d-5c460bb3539f",
+  "professionalNickname": "Junior"
 }
 ```
+
+Com `anyProfessional: true`, o `professionalId` / `professionalNickname` são os do barbeiro atribuído (o com menos horários no dia, entre quem tinha o slot livre).
 
 **Erros comuns:**
 

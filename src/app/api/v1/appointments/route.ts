@@ -13,19 +13,31 @@ import {
   whatsappSchema,
 } from "@/lib/whatsapp";
 
-const bodySchema = z.object({
-  professionalId: z.uuid("professionalId inválido."),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date deve ser AAAA-MM-DD."),
-  startTime: z
-    .string()
-    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "startTime inválido."),
-  serviceIds: z
-    .array(z.uuid("serviceIds contém um id inválido."))
-    .min(1, "Informe ao menos um serviço."),
-  firstName: z.string().trim().min(1, "Informe o nome."),
-  lastName: z.string().trim().min(1, "Informe o sobrenome."),
-  whatsapp: whatsappSchema,
-});
+const bodySchema = z
+  .object({
+    professionalId: z.uuid("professionalId inválido.").optional(),
+    anyProfessional: z.boolean().optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date deve ser AAAA-MM-DD."),
+    startTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "startTime inválido."),
+    serviceIds: z
+      .array(z.uuid("serviceIds contém um id inválido."))
+      .min(1, "Informe ao menos um serviço."),
+    firstName: z.string().trim().min(1, "Informe o nome."),
+    lastName: z.string().trim().min(1, "Informe o sobrenome."),
+    whatsapp: whatsappSchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.anyProfessional) return;
+    if (!data.professionalId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Informe o barbeiro ou anyProfessional.",
+        path: ["professionalId"],
+      });
+    }
+  });
 
 // GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
 export async function GET(request: NextRequest) {
@@ -142,6 +154,11 @@ export async function POST(request: NextRequest) {
 
     revalidatePath("/admin");
     revalidatePath("/agenda");
-    return NextResponse.json({ ok: true, appointmentId: result.appointmentId });
+    return NextResponse.json({
+      ok: true,
+      appointmentId: result.appointmentId,
+      professionalId: result.professionalId,
+      professionalNickname: result.professionalNickname,
+    });
   });
 }

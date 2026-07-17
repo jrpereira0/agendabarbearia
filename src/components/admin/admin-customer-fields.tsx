@@ -7,15 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { lookupCustomerForAdmin } from "@/app/admin/(panel)/agenda/lookup-customer-action";
 import { formatWhatsapp } from "@/lib/format";
 import {
   normalizeWhatsapp,
   whatsappLookupDelayMs,
 } from "@/lib/whatsapp";
-
-type CustomerLookupResponse =
-  | { found: true; firstName: string; lastName: string }
-  | { found: false };
 
 type AdminCustomerFieldsProps = {
   firstName: string;
@@ -99,22 +96,19 @@ export function AdminCustomerFields({
       if (!mountedRef.current) return;
       setLookupLoading(true);
 
-      fetch(`/api/v1/customers/lookup?whatsapp=${encodeURIComponent(current)}`)
-        .then(async (res) => {
-          const body = (await res.json()) as CustomerLookupResponse & {
-            error?: string;
-          };
+      void lookupCustomerForAdmin(current)
+        .then((result) => {
           if (cancelled || !mountedRef.current) return;
 
-          if (!res.ok) {
+          if (!result.ok) {
             lastLookupDigitsRef.current = "";
-            toast.error(body.error ?? "Não foi possível buscar o cliente.");
+            toast.error(result.error);
             return;
           }
 
-          if (body.found) {
-            onFirstNameChange(body.firstName);
-            onLastNameChange(body.lastName);
+          if (result.found) {
+            onFirstNameChange(result.firstName);
+            onLastNameChange(result.lastName);
             setCustomerFound(true);
           } else {
             onFirstNameChange("");

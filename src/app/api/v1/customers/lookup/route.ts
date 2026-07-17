@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeApiRoute } from "@/lib/api/safe-route";
 import { withPublicApiRouteGuard } from "@/lib/api/with-api-guard";
+import { getAdminApiSession } from "@/lib/protected-api-auth";
 import { lookupCustomerByWhatsapp } from "@/lib/lookup-customer";
 import {
   normalizeWhatsapp,
@@ -9,8 +10,23 @@ import {
 
 // GET /api/v1/customers/lookup?whatsapp=... — busca cliente pelo WhatsApp (agendamento online)
 export async function GET(request: NextRequest) {
-  return safeApiRoute(() =>
-    withPublicApiRouteGuard(
+  return safeApiRoute(async () => {
+    // Painel logado: sem o limite curto da API pública (10/15min).
+    const adminSession = await getAdminApiSession();
+    if (adminSession) {
+      const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
+      const whatsapp = normalizeWhatsapp(raw);
+      if (!whatsapp) {
+        return NextResponse.json(
+          { error: WHATSAPP_INVALID_MESSAGE },
+          { status: 400 }
+        );
+      }
+      const result = await lookupCustomerByWhatsapp(whatsapp);
+      return NextResponse.json(result);
+    }
+
+    return withPublicApiRouteGuard(
       request,
       { scope: "customers:read", rateLimit: "whatsappSensitive" },
       async () => {
@@ -26,6 +42,6 @@ export async function GET(request: NextRequest) {
         const result = await lookupCustomerByWhatsapp(whatsapp);
         return NextResponse.json(result);
       }
-    )
-  );
+    );
+  });
 }

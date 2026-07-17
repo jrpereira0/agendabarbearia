@@ -148,7 +148,8 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 ## Página do cliente (`/agenda`)
 
 - Mostra o **perfil da barbearia** (nome, bio, endereço, horários, WhatsApp, Instagram, logo) e o fluxo de agendamento
-- Passos: barbeiro → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
+- Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
+- **Sem preferência:** o site mostra a união dos horários livres de quem faz os serviços; na hora de confirmar, o servidor escolhe o barbeiro **com menos agendamentos ativos naquele dia** (empate: ordem do apelido)
 - **Preços na escolha de serviços:** como o dia ainda não foi escolhido, cada serviço mostra a **faixa de preço** (ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`). O total aparece como **“a partir de …”** quando há variação por dia
 - **Serviços mais agendados:** no topo da lista aparece a seção **“Mais agendados”** (até 5 serviços com histórico de marcações); o restante fica em **“Outros serviços”**, ordenado pela mesma contagem
 - **Preços após escolher a data:** na etapa de data/horário e na confirmação, o total passa a usar o **valor exato** do dia selecionado (mesma regra da API ao gravar)
@@ -167,7 +168,7 @@ Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
 | GET | `/api/v1/catalog` | Pública | Catálogo completo (`weekdayPrices` em cada serviço) ou `?mode=booking` enxuto para n8n/IA (`dayLabels` + `prices` agrupados) |
-| GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro num dia |
+| GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro (`professionalId`) ou de qualquer um (`anyProfessional=1`) |
 | GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
 | GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
