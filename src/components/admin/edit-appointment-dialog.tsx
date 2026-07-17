@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Clock, Scissors, User, UserRound, Check } from "lucide-react";
+import { Clock, Scissors, User, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -402,11 +402,6 @@ export function EditAppointmentDialog({
               ) : null}
                 </DialogSection>
 
-                <DialogSection
-                  icon={UserRound}
-                  title="Cliente"
-                  description="Nome e WhatsApp para contato."
-                >
               <AdminCustomerFields
                 firstName={firstName}
                 lastName={lastName}
@@ -417,7 +412,6 @@ export function EditAppointmentDialog({
                 enabled={open}
                 idPrefix="editCustomer"
               />
-                </DialogSection>
               </div>
 
               <div className="space-y-4">

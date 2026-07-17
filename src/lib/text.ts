@@ -16,3 +16,33 @@ export function compareAlphabetically(a: string, b: string): number {
 export function matchesSearch(haystack: string, query: string): boolean {
   return normalizeText(haystack).includes(normalizeText(query.trim()));
 }
+
+/**
+ * Busca de cliente no painel: nome (com ou sem acento) OU WhatsApp
+ * (aceita últimos dígitos, número parcial ou com máscara).
+ */
+export function matchesCustomerSearch(
+  customer: { firstName: string; lastName: string; whatsapp: string },
+  query: string
+): boolean {
+  const q = query.trim();
+  if (!q) return true;
+
+  const fullName = `${customer.firstName} ${customer.lastName}`;
+  if (matchesSearch(fullName, q)) return true;
+  if (matchesSearch(customer.firstName, q)) return true;
+  if (matchesSearch(customer.lastName, q)) return true;
+
+  const queryDigits = q.replace(/\D/g, "");
+  if (queryDigits.length >= 2) {
+    const phoneDigits = customer.whatsapp.replace(/\D/g, "");
+    if (
+      phoneDigits.includes(queryDigits) ||
+      phoneDigits.endsWith(queryDigits)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}

@@ -8,6 +8,7 @@ type SearchInputProps = {
   onChange: (value: string) => void;
   placeholder: string;
   onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 // Barra de busca padrão das listagens do painel.
@@ -16,6 +17,7 @@ export function SearchInput({
   onChange,
   placeholder,
   onFocus,
+  onBlur,
 }: SearchInputProps) {
   return (
     <div className="relative w-full">
@@ -25,6 +27,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onFocus={onFocus}
+        onBlur={onBlur}
         placeholder={placeholder}
         className="h-10 pl-10 pr-9 [&::-webkit-search-cancel-button]:hidden"
       />

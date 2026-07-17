@@ -460,22 +460,16 @@ export function AppointmentActionsDialog({
           </DialogHeader>
           <form onSubmit={handleChangeClient}>
             <div className="px-4 py-4 sm:px-6 sm:py-5">
-              <DialogSection
-                icon={UserRound}
-                title="Dados do cliente"
-                description="Busque pelo WhatsApp ou preencha manualmente."
-              >
-                <AdminCustomerFields
-                  firstName={firstName}
-                  lastName={lastName}
-                  whatsapp={whatsapp}
-                  onFirstNameChange={setFirstName}
-                  onLastNameChange={setLastName}
-                  onWhatsappChange={setWhatsapp}
-                  enabled={open && subView === "changeClient"}
-                  idPrefix="changeClient"
-                />
-              </DialogSection>
+              <AdminCustomerFields
+                firstName={firstName}
+                lastName={lastName}
+                whatsapp={whatsapp}
+                onFirstNameChange={setFirstName}
+                onLastNameChange={setLastName}
+                onWhatsappChange={setWhatsapp}
+                enabled={open && subView === "changeClient"}
+                idPrefix="changeClient"
+              />
             </div>
             <div className="flex flex-col-reverse gap-2 border-t bg-muted/20 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
               <Button
