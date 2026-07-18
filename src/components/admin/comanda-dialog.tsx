@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   Check,
   Coins,
+  Loader2,
   MessageCircle,
   MoreHorizontal,
   Package,
@@ -304,6 +305,7 @@ export function ComandaDialog({
   );
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -1027,6 +1029,7 @@ export function ComandaDialog({
     }
 
     setBusy(true);
+    setClosing(true);
     try {
       const result = await closeComandaWithItemsAction(
         comanda.id,
@@ -1051,6 +1054,7 @@ export function ComandaDialog({
       );
     } finally {
       setBusy(false);
+      setClosing(false);
     }
   }
 
@@ -1273,9 +1277,23 @@ export function ComandaDialog({
     <>
       <Dialog
         open={open && !confirmCancel && !pendingExtraService && !pendingProduct}
-        onOpenChange={onOpenChange}
+        onOpenChange={(next) => {
+          if (closing) return;
+          onOpenChange(next);
+        }}
       >
         <DialogContent className={adminComandaDialogClassName()}>
+          {closing && (
+            <div
+              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/80"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="size-8 animate-spin text-foreground" aria-hidden />
+              <p className="text-sm font-medium">Finalizando comanda…</p>
+              <p className="text-xs text-muted-foreground">Aguarde um instante</p>
+            </div>
+          )}
           <DialogHeader className="sr-only">
             <DialogTitle>Comanda — {customerName}</DialogTitle>
             <DialogDescription>
@@ -2031,9 +2049,19 @@ export function ComandaDialog({
                     !cashRegisterOpen ||
                     paymentShortfallCents > 0
                   }
+                  aria-busy={closing}
                 >
-                  <Check className="size-4" />
-                  Finalizar comanda
+                  {closing ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      Finalizando…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-4" />
+                      Finalizar comanda
+                    </>
+                  )}
                 </Button>
               )}
             </div>
@@ -2161,8 +2189,24 @@ export function ComandaDialog({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={confirmOverpayCredit} onOpenChange={setConfirmOverpayCredit}>
+      <Dialog
+        open={confirmOverpayCredit}
+        onOpenChange={(next) => {
+          if (!next && closing) return;
+          setConfirmOverpayCredit(next);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
+          {closing && (
+            <div
+              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-lg bg-background/80"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="size-7 animate-spin text-foreground" aria-hidden />
+              <p className="text-sm font-medium">Finalizando comanda…</p>
+            </div>
+          )}
           <DialogHeader>
             <DialogTitle>Guardar o troco como crédito?</DialogTitle>
             <DialogDescription>
@@ -2179,14 +2223,22 @@ export function ComandaDialog({
               disabled={busy}
               onClick={() => void finalizeComanda(false)}
             >
-              Não, foi troco
+              {closing ? "Finalizando…" : "Não, foi troco"}
             </Button>
             <Button
               type="button"
               disabled={busy}
               onClick={() => void finalizeComanda(true)}
+              aria-busy={closing}
             >
-              Sim, guardar crédito
+              {closing ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Finalizando…
+                </>
+              ) : (
+                "Sim, guardar crédito"
+              )}
             </Button>
           </div>
         </DialogContent>
