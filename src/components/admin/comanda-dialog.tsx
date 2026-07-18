@@ -118,6 +118,83 @@ function mapComandaItemsToEditable(
     }));
 }
 
+/** Horários do mesmo cliente no dia (já estão na agenda — dá para abrir na hora). */
+function dayAppointmentsForCustomer(
+  appointment: AppointmentItem,
+  appointments: AppointmentItem[]
+): AppointmentItem[] {
+  const sameDay = appointments.filter(
+    (apt) =>
+      apt.customerWhatsapp === appointment.customerWhatsapp &&
+      apt.date === appointment.date &&
+      apt.status !== "cancelled"
+  );
+  if (sameDay.length === 0) return [appointment];
+  return sameDay.sort((a, b) => a.startTime.localeCompare(b.startTime));
+}
+
+function buildProvisionalItems(dayApts: AppointmentItem[]): EditableItem[] {
+  const items: EditableItem[] = [];
+  for (const apt of dayApts) {
+    for (const service of apt.services) {
+      const isSqueeze = Boolean(apt.isSqueezeIn);
+      items.push({
+        localKey: newLocalKey(),
+        serviceId: service.id,
+        serviceName: service.name,
+        catalogPriceCents: service.priceCents,
+        chargedPriceCents: service.priceCents,
+        quantity: 1,
+        appointmentId: isSqueeze ? undefined : apt.id,
+        squeezeAppointmentId: isSqueeze ? apt.id : undefined,
+        professionalId: apt.professionalId,
+        professionalNickname: apt.professionalNickname,
+        isComandaExtra: apt.isComandaExtra || undefined,
+      });
+    }
+  }
+  return items;
+}
+
+function appointmentToLinked(
+  apt: AppointmentItem
+): ComandaLinkedAppointment {
+  return {
+    id: apt.id,
+    professionalId: apt.professionalId,
+    professionalNickname: apt.professionalNickname,
+    startTime: apt.startTime,
+    endTime: apt.endTime,
+    status: apt.status,
+    isSqueezeIn: apt.isSqueezeIn ?? false,
+  };
+}
+
+/** Chave estável para saber se os itens mudaram desde o load do servidor. */
+function comandaItemsKey(
+  items: EditableItem[],
+  tipCents: number,
+  tipProfessionalId: string
+): string {
+  return JSON.stringify({
+    tip:
+      tipCents > 0
+        ? { tipCents, tipProfessionalId }
+        : null,
+    items: items.map((item) => ({
+      id: item.id ?? null,
+      serviceId: item.serviceId ?? null,
+      productId: item.productId ?? null,
+      chargedPriceCents: item.chargedPriceCents,
+      quantity: item.quantity ?? 1,
+      professionalId: item.professionalId ?? null,
+      appointmentId: item.appointmentId ?? null,
+      squeezeAppointmentId: item.squeezeAppointmentId ?? null,
+      serviceName: item.serviceName,
+    })),
+  });
+}
+
 function isProductItem(item: EditableItem): boolean {
   return Boolean(item.productId);
 }
@@ -199,6 +276,11 @@ type ComandaDialogProps = {
   commissionPercent?: number;
   slotStepMinutes?: number;
   appointments?: AppointmentItem[];
+  /** Dono da barbearia — evita esperar o load só para liberar ações. */
+  isOwnerHint?: boolean;
+  /** Caixa já conhecido na agenda — libera finalizar sem esperar o servidor. */
+  initialCashRegisterOpen?: boolean;
+  initialOpenCashRegisterDate?: string | null;
   onEditSchedule?: () => void;
 };
 
@@ -291,21 +373,28 @@ export function ComandaDialog({
   commissionPercent = 50,
   slotStepMinutes = 15,
   appointments = [],
+  isOwnerHint = false,
+  initialCashRegisterOpen = false,
+  initialOpenCashRegisterDate = null,
   onEditSchedule,
 }: ComandaDialogProps) {
   const router = useRouter();
   const servicePickerRef = useRef<HTMLDivElement>(null);
+  const loadGenRef = useRef(0);
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
-  const [isOwner, setIsOwner] = useState(false);
-  const [cashRegisterOpen, setCashRegisterOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(isOwnerHint);
+  const [cashRegisterOpen, setCashRegisterOpen] = useState(
+    initialCashRegisterOpen
+  );
   const [openCashRegisterDate, setOpenCashRegisterDate] = useState<string | null>(
-    null
+    initialOpenCashRegisterDate
   );
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [loadedItemsKey, setLoadedItemsKey] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePickerOpen, setServicePickerOpen] = useState(false);
@@ -338,9 +427,14 @@ export function ComandaDialog({
 
   const load = useCallback(async () => {
     if (!appointment) return;
+    const gen = ++loadGenRef.current;
     setLoading(true);
     try {
-      const result = await loadComandaForAppointment(appointment.id);
+      const result = await loadComandaForAppointment(
+        appointment.id,
+        appointment.customerWhatsapp
+      );
+      if (gen !== loadGenRef.current) return;
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -351,14 +445,19 @@ export function ComandaDialog({
       setOpenCashRegisterDate(result.openCashRegisterDate);
       setCustomerCreditBalanceCents(result.customerCreditBalanceCents);
       const tipItem = result.comanda.items.find((item) => item.isTip);
-      setItems(mapComandaItemsToEditable(result.comanda.items));
-      setTipCents(tipItem?.chargedPriceCents ?? 0);
-      setTipProfessionalId(
+      const editable = mapComandaItemsToEditable(result.comanda.items);
+      const nextTipCents = tipItem?.chargedPriceCents ?? 0;
+      const nextTipProfessionalId =
         tipItem?.professionalId ??
-          appointment.professionalId ??
-          sessionProfessionalId ??
-          ""
+        appointment.professionalId ??
+        sessionProfessionalId ??
+        "";
+      setItems(editable);
+      setLoadedItemsKey(
+        comandaItemsKey(editable, nextTipCents, nextTipProfessionalId)
       );
+      setTipCents(nextTipCents);
+      setTipProfessionalId(nextTipProfessionalId);
       if (result.comanda.status === "closed") {
         setPayments(
           result.comanda.payments.map((p) => ({
@@ -381,18 +480,50 @@ export function ComandaDialog({
         ]);
       }
     } finally {
-      setLoading(false);
+      if (gen === loadGenRef.current) {
+        setLoading(false);
+      }
     }
   }, [appointment, sessionProfessionalId]);
 
   useEffect(() => {
     if (open && appointment) {
+      const dayApts = dayAppointmentsForCustomer(appointment, appointments);
+      const provisional = buildProvisionalItems(dayApts);
+      const provisionalTotal = provisional.reduce(
+        (sum, item) => sum + item.chargedPriceCents,
+        0
+      );
+
       setFocusAppointmentId(appointment.id);
+      setComanda(null);
+      setItems(provisional);
+      setLoadedItemsKey(null);
+      setPayments(
+        provisionalTotal > 0
+          ? [
+              {
+                localKey: newLocalKey(),
+                paymentMethod: "pix",
+                amountCents: provisionalTotal,
+              },
+            ]
+          : []
+      );
+      setIsOwner(isOwnerHint);
+      setCashRegisterOpen(initialCashRegisterOpen);
+      setOpenCashRegisterDate(initialOpenCashRegisterDate);
+      setTipCents(0);
+      setTipProfessionalId(
+        appointment.professionalId || sessionProfessionalId || ""
+      );
+      setCustomerCreditBalanceCents(0);
       void load();
       return;
     }
 
     if (!open) {
+      loadGenRef.current += 1;
       setComanda(null);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);
@@ -410,8 +541,20 @@ export function ComandaDialog({
       setTipProfessionalId("");
       setCustomerCreditBalanceCents(0);
       setTipDialogOpen(false);
+      setLoadedItemsKey(null);
+      setClosing(false);
+      setBusy(false);
     }
-  }, [open, appointment?.id, load]);
+  }, [
+    open,
+    appointment?.id,
+    load,
+    appointments,
+    isOwnerHint,
+    initialCashRegisterOpen,
+    initialOpenCashRegisterDate,
+    sessionProfessionalId,
+  ]);
 
   useEffect(() => {
     if (!servicePickerOpen) return;
@@ -570,20 +713,13 @@ export function ComandaDialog({
 
   const linkedAppointmentsForMemo = useMemo((): ComandaLinkedAppointment[] => {
     if (!appointment) return [];
-    return (
-      comanda?.linkedAppointments ?? [
-        {
-          id: appointment.id,
-          professionalId: appointment.professionalId,
-          professionalNickname: appointment.professionalNickname,
-          startTime: appointment.startTime,
-          endTime: appointment.endTime,
-          status: appointment.status,
-          isSqueezeIn: appointment.isSqueezeIn ?? false,
-        },
-      ]
+    if (comanda?.linkedAppointments) return comanda.linkedAppointments;
+    return dayAppointmentsForCustomer(appointment, appointments).map(
+      appointmentToLinked
     );
-  }, [appointment, comanda?.linkedAppointments]);
+  }, [appointment, appointments, comanda?.linkedAppointments]);
+
+  const showSkeleton = loading && items.length === 0;
 
   const extraTimeSlots = useMemo(
     () => encaixeTimeSlots(slotStepMinutes),
@@ -648,9 +784,15 @@ export function ComandaDialog({
     (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
   );
   const canEdit =
-    (isOwner || permissions.canEditComanda) && !isClosed && hasActiveLinked;
+    Boolean(comanda) &&
+    (isOwner || permissions.canEditComanda) &&
+    !isClosed &&
+    hasActiveLinked;
   const canFinalize =
-    (isOwner || permissions.canCloseComanda) && !isClosed && hasActiveLinked;
+    Boolean(comanda) &&
+    (isOwner || permissions.canCloseComanda) &&
+    !isClosed &&
+    hasActiveLinked;
 
   function getItemProfessionalName(item: EditableItem): string {
     if (item.professionalNickname && item.professionalNickname !== "—") {
@@ -832,9 +974,16 @@ export function ComandaDialog({
 
       setComanda(result.comanda);
       const savedTip = result.comanda.items.find((item) => item.isTip);
-      setItems(mapComandaItemsToEditable(result.comanda.items));
-      setTipCents(savedTip?.chargedPriceCents ?? 0);
-      setTipProfessionalId(savedTip?.professionalId ?? nextTipProfessionalId);
+      const editable = mapComandaItemsToEditable(result.comanda.items);
+      const savedTipCents = savedTip?.chargedPriceCents ?? 0;
+      const savedTipProId =
+        savedTip?.professionalId ?? nextTipProfessionalId;
+      setItems(editable);
+      setTipCents(savedTipCents);
+      setTipProfessionalId(savedTipProId);
+      setLoadedItemsKey(
+        comandaItemsKey(editable, savedTipCents, savedTipProId)
+      );
       setPayments((prev) =>
         prev.length === 1
           ? [{ ...prev[0], amountCents: result.comanda.totalCents }]
@@ -1028,34 +1177,45 @@ export function ComandaDialog({
       return;
     }
 
-    setBusy(true);
-    setClosing(true);
-    try {
-      const result = await closeComandaWithItemsAction(
-        comanda.id,
-        buildPersistItems(items, tipCents, tipProfessionalId),
-        comandaPayments,
-        {
-          creditDeposits: saveOverpayAsCredit ? creditDeposits : undefined,
-        }
-      );
-      if (result.ok) {
-        // Fecha na hora; a agenda atualiza em seguida.
-        setConfirmOverpayCredit(false);
-        onOpenChange(false);
-        toast.success("Comanda fechada.");
-        router.refresh();
-      } else {
-        toast.error(result.error);
+    const persistItemsPayload = buildPersistItems(
+      items,
+      tipCents,
+      tipProfessionalId
+    );
+    const comandaId = comanda.id;
+    const itemsChanged =
+      loadedItemsKey == null ||
+      loadedItemsKey !== comandaItemsKey(items, tipCents, tipProfessionalId);
+
+    // Fecha na hora — o salvamento segue em segundo plano.
+    setConfirmOverpayCredit(false);
+    setClosing(false);
+    setBusy(false);
+    onOpenChange(false);
+    toast.success("Comanda fechada.");
+    router.refresh();
+
+    void closeComandaWithItemsAction(
+      comandaId,
+      persistItemsPayload,
+      comandaPayments,
+      {
+        creditDeposits: saveOverpayAsCredit ? creditDeposits : undefined,
+        skipItemsUpdate: !itemsChanged,
       }
-    } catch {
+    ).then((result) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        router.refresh();
+        return;
+      }
+      router.refresh();
+    }).catch(() => {
       toast.error(
         "Não foi possível finalizar a comanda. Verifique a internet e tente de novo."
       );
-    } finally {
-      setBusy(false);
-      setClosing(false);
-    }
+      router.refresh();
+    });
   }
 
   function handleClose() {
@@ -1371,7 +1531,7 @@ export function ComandaDialog({
             </div>
           </div>
 
-          {loading ? (
+          {showSkeleton ? (
             <ComandaDialogSkeleton />
           ) : (
             <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,22rem)] lg:gap-5 lg:overflow-hidden">
@@ -1688,7 +1848,7 @@ export function ComandaDialog({
                   </p>
                 </div>
 
-                {canEdit && !cashRegisterOpen && isOwner && (
+                {!isClosed && !cashRegisterOpen && isOwner && (
                   <div className="shrink-0 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
                     {openCashRegisterDate &&
                     openCashRegisterDate !== serviceDate ? (
@@ -1712,7 +1872,7 @@ export function ComandaDialog({
                   </div>
                 )}
 
-                {(canEdit || isClosed) && (
+                {(canEdit || isClosed || (hasActiveLinked && items.length > 0)) && (
                   <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                     {customerCreditBalanceCents > 0 && canEdit && (
                       <div className="shrink-0 space-y-2 rounded-xl border bg-muted/20 p-3">
@@ -2038,20 +2198,30 @@ export function ComandaDialog({
                 </div>
               </div>
 
-              {canFinalize && (
+              {(canFinalize ||
+                (loading &&
+                  !isClosed &&
+                  hasActiveLinked &&
+                  (isOwner || permissions.canCloseComanda))) && (
                 <Button
                   type="button"
                   className="h-11 w-full shrink-0 sm:h-8 sm:w-auto"
                   onClick={handleClose}
                   disabled={
+                    !canFinalize ||
                     busy ||
                     loading ||
                     !cashRegisterOpen ||
                     paymentShortfallCents > 0
                   }
-                  aria-busy={closing}
+                  aria-busy={closing || (loading && !comanda)}
                 >
-                  {closing ? (
+                  {loading && !comanda ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      Preparando…
+                    </>
+                  ) : closing ? (
                     <>
                       <Loader2 className="size-4 animate-spin" aria-hidden />
                       Finalizando…

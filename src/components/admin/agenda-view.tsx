@@ -613,6 +613,18 @@ export function AgendaView({
         sessionProfessionalId={professionalId}
         slotStepMinutes={dayContext.slotStepMinutes}
         appointments={appointments}
+        isOwnerHint={isOwner}
+        initialCashRegisterOpen={
+          Boolean(
+            cashRegister?.openCashRegister &&
+              selectedAppointment &&
+              cashRegister.openCashRegister.serviceDate ===
+                selectedAppointment.date
+          )
+        }
+        initialOpenCashRegisterDate={
+          cashRegister?.openCashRegister?.serviceDate ?? null
+        }
         professionals={dayContext.professionals.map((p) => ({
           id: p.id,
           nickname: p.nickname,

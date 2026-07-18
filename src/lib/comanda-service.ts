@@ -3102,6 +3102,8 @@ export type CloseComandaOptions = {
   skipScrub?: boolean;
   /** Se false, não hidrata o detalhe completo no fim. */
   returnDetail?: boolean;
+  /** Evita getComandaById quando o update acabou de devolver o snapshot. */
+  prefetched?: ComandaDetail;
 };
 
 export async function closeComanda(
@@ -3111,14 +3113,19 @@ export async function closeComanda(
   closedByUserId: string,
   options: CloseComandaOptions = {}
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
-  const current = await getComandaById(admin, comandaId, { sync: false });
-  if (!current.ok) return current;
+  let comanda: ComandaDetail;
 
-  if (current.comanda.status === "closed") {
-    return { ok: false, error: "Esta comanda já está fechada.", status: 409 };
+  if (options.prefetched && options.prefetched.id === comandaId) {
+    comanda = options.prefetched;
+  } else {
+    const current = await getComandaById(admin, comandaId, { sync: false });
+    if (!current.ok) return current;
+    comanda = current.comanda;
   }
 
-  let comanda = current.comanda;
+  if (comanda.status === "closed") {
+    return { ok: false, error: "Esta comanda já está fechada.", status: 409 };
+  }
 
   if (!options.skipScrub) {
     // Limpa itens de horário cancelado antes de validar total x pagamento.

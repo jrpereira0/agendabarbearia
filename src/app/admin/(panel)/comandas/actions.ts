@@ -156,7 +156,8 @@ async function assertBarberComandaAccess(
 }
 
 export async function loadComandaForAppointment(
-  appointmentId: string
+  appointmentId: string,
+  customerWhatsappHint?: string
 ): Promise<
   | {
       ok: true;
@@ -178,6 +179,10 @@ export async function loadComandaForAppointment(
     return { ok: false, error: admin.error };
   }
 
+  const creditPromise = customerWhatsappHint
+    ? getCustomerCreditBalanceByWhatsapp(admin, customerWhatsappHint)
+    : null;
+
   const [result, openCashRegister] = await Promise.all([
     getComandaForAppointment(admin, appointmentId),
     getOpenCashRegisterSessionBasic(admin),
@@ -196,10 +201,12 @@ export async function loadComandaForAppointment(
     }
   }
 
-  const customerCreditBalanceCents = await getCustomerCreditBalanceByWhatsapp(
-    admin,
-    result.comanda.customerWhatsapp
-  );
+  const customerCreditBalanceCents = creditPromise
+    ? await creditPromise
+    : await getCustomerCreditBalanceByWhatsapp(
+        admin,
+        result.comanda.customerWhatsapp
+      );
 
   return {
     ok: true,
@@ -263,7 +270,11 @@ export async function closeComandaWithItemsAction(
   comandaId: string,
   items: ComandaItemInput[],
   payments: ComandaPaymentInput[],
-  options?: { creditDeposits?: CreditDepositInput[] }
+  options?: {
+    creditDeposits?: CreditDepositInput[];
+    /** Itens iguais ao último load — pula regravação pesada. */
+    skipItemsUpdate?: boolean;
+  }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const session = await requireAdmin();
   if (!("userId" in session)) {
@@ -311,13 +322,18 @@ export async function closeComandaWithItemsAction(
   }
 
   try {
-    const itemsResult = await updateComandaItems(
-      admin,
-      comandaId,
-      parsedItems.data,
-      { skipAgendaSync: true, returnDetail: false }
-    );
-    if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
+    let prefetched: ComandaDetail | undefined;
+
+    if (!options?.skipItemsUpdate) {
+      const itemsResult = await updateComandaItems(
+        admin,
+        comandaId,
+        parsedItems.data,
+        { skipAgendaSync: true, returnDetail: false }
+      );
+      if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
+      prefetched = itemsResult.comanda;
+    }
 
     const closeResult = await closeComanda(
       admin,
@@ -328,6 +344,7 @@ export async function closeComandaWithItemsAction(
         creditDeposits: parsedCreditDeposits.data,
         skipScrub: true,
         returnDetail: false,
+        prefetched,
       }
     );
     if (!closeResult.ok) return { ok: false, error: closeResult.error };
