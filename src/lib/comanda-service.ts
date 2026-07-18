@@ -2766,7 +2766,13 @@ async function restoreProductStockForComanda(
 export async function updateComandaItems(
   admin: SupabaseClient,
   comandaId: string,
-  items: ComandaItemInput[]
+  items: ComandaItemInput[],
+  options: {
+    /** No finalize: pula sync de agenda (já está alinhada). */
+    skipAgendaSync?: boolean;
+    /** Se false, não hidrata o detalhe completo no fim. */
+    returnDetail?: boolean;
+  } = {}
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
   const current = await getComandaById(admin, comandaId, { sync: false });
   if (!current.ok) return current;
@@ -2839,43 +2845,76 @@ export async function updateComandaItems(
   const productsResult = await loadProductsForComandaItems(admin, productItems);
   if (!productsResult.ok) return productsResult;
 
-  const durationsResult = await loadServiceDurationsForSync(
-    admin,
-    serviceItems,
-    current.comanda.professionalId,
-    current.comanda.serviceDate
-  );
-  if (!durationsResult.ok) return durationsResult;
-
   const previousServiceItems = previousItems.filter(
     (item) => !item.isTip && !item.productId
   );
 
-  const agendaMoveResult = await syncComandaItemAgendaMoves(
-    admin,
-    comandaId,
-    serviceItems,
-    previousServiceItems,
-    durationsResult.durations
-  );
-  if (!agendaMoveResult.ok) return agendaMoveResult;
+  let durationsResult: Awaited<
+    ReturnType<typeof loadServiceDurationsForSync>
+  > | null = null;
+  let agendaMoveResult: {
+    ok: true;
+    appointmentIdsForItems: (string | null)[];
+  } = {
+    ok: true,
+    appointmentIdsForItems: serviceItems.map((item) => item.appointmentId ?? null),
+  };
+  let syncResult: {
+    ok: true;
+    appointmentIdsForItems: (string | null)[];
+    squeezeIdsForItems: (string | null)[];
+  } = {
+    ok: true,
+    appointmentIdsForItems: serviceItems.map((item) => item.appointmentId ?? null),
+    squeezeIdsForItems: serviceItems.map(() => null),
+  };
 
-  const itemsForAgendaSync = serviceItems.map((item, index) => ({
-    ...item,
-    appointmentId:
-      agendaMoveResult.appointmentIdsForItems[index] ??
-      item.appointmentId,
-  }));
+  if (!options.skipAgendaSync) {
+    durationsResult = await loadServiceDurationsForSync(
+      admin,
+      serviceItems,
+      current.comanda.professionalId,
+      current.comanda.serviceDate
+    );
+    if (!durationsResult.ok) return durationsResult;
 
-  const syncResult = await syncComandaAddonAppointments(
-    admin,
-    itemsForAgendaSync,
-    previousServiceItems,
-    durationsResult.durations
-  );
+    const moveResult = await syncComandaItemAgendaMoves(
+      admin,
+      comandaId,
+      serviceItems,
+      previousServiceItems,
+      durationsResult.durations
+    );
+    if (!moveResult.ok) return moveResult;
+    agendaMoveResult = moveResult;
 
-  if (!syncResult.ok) {
-    return syncResult;
+    const itemsForAgendaSync = serviceItems.map((item, index) => ({
+      ...item,
+      appointmentId:
+        agendaMoveResult.appointmentIdsForItems[index] ??
+        item.appointmentId,
+    }));
+
+    const addonResult = await syncComandaAddonAppointments(
+      admin,
+      itemsForAgendaSync,
+      previousServiceItems,
+      durationsResult.durations
+    );
+
+    if (!addonResult.ok) {
+      return addonResult;
+    }
+    syncResult = addonResult;
+  } else if (serviceItems.length > 0) {
+    // Ainda precisa dos preços de catálogo para gravar os itens.
+    durationsResult = await loadServiceDurationsForSync(
+      admin,
+      serviceItems,
+      current.comanda.professionalId,
+      current.comanda.serviceDate
+    );
+    if (!durationsResult.ok) return durationsResult;
   }
 
   const { data: existingRows } = await admin
@@ -2893,6 +2932,9 @@ export async function updateComandaItems(
   }
 
   const previousById = new Map(previousItems.map((item) => [item.id, item]));
+  const catalogPrices = durationsResult?.ok
+    ? durationsResult.catalogPrices
+    : new Map<string, number>();
 
   const serviceInsertRows = serviceItems.map((item, index) => {
     const previous =
@@ -2906,7 +2948,7 @@ export async function updateComandaItems(
       product_id: null,
       service_name: item.serviceName,
       catalog_price_cents:
-        durationsResult.catalogPrices.get(item.serviceId ?? "") ??
+        catalogPrices.get(item.serviceId ?? "") ??
         item.catalogPriceCents,
       charged_price_cents: item.chargedPriceCents,
       quantity: 1,
@@ -2984,10 +3026,12 @@ export async function updateComandaItems(
 
   if (insertError) {
     await restoreComandaItems(admin, comandaId, previousItems);
-    await removeSqueezeAppointments(
-      admin,
-      syncResult.squeezeIdsForItems.filter((id): id is string => Boolean(id))
-    );
+    if (!options.skipAgendaSync) {
+      await removeSqueezeAppointments(
+        admin,
+        syncResult.squeezeIdsForItems.filter((id): id is string => Boolean(id))
+      );
+    }
     return {
       ok: false,
       error: "Não foi possível atualizar os itens da comanda.",
@@ -2995,7 +3039,9 @@ export async function updateComandaItems(
     };
   }
 
-  await unlinkSqueezeAppointmentsFromComanda(admin, comandaId);
+  if (!options.skipAgendaSync) {
+    await unlinkSqueezeAppointmentsFromComanda(admin, comandaId);
+  }
 
   const totals = await recalculateComandaTotals(admin, comandaId);
 
@@ -3007,6 +3053,17 @@ export async function updateComandaItems(
       updated_at: new Date().toISOString(),
     })
     .eq("id", comandaId);
+
+  if (options.returnDetail === false) {
+    return {
+      ok: true,
+      comanda: {
+        ...current.comanda,
+        totalCents: totals.totalCents,
+        commissionCents: totals.commissionCents,
+      },
+    };
+  }
 
   return getComandaById(admin, comandaId, { sync: false });
 }
@@ -3041,6 +3098,10 @@ export type CreditDepositInput = {
 
 export type CloseComandaOptions = {
   creditDeposits?: CreditDepositInput[];
+  /** Itens acabaram de ser salvos — pula scrub e 2ª leitura. */
+  skipScrub?: boolean;
+  /** Se false, não hidrata o detalhe completo no fim. */
+  returnDetail?: boolean;
 };
 
 export async function closeComanda(
@@ -3050,19 +3111,23 @@ export async function closeComanda(
   closedByUserId: string,
   options: CloseComandaOptions = {}
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
-  const current = await getComandaById(admin, comandaId);
+  const current = await getComandaById(admin, comandaId, { sync: false });
   if (!current.ok) return current;
 
   if (current.comanda.status === "closed") {
     return { ok: false, error: "Esta comanda já está fechada.", status: 409 };
   }
 
-  // Limpa itens de horário cancelado antes de validar total x pagamento.
-  await scrubInactiveAppointmentItemsFromOpenComanda(admin, comandaId);
+  let comanda = current.comanda;
 
-  const refreshed = await getComandaById(admin, comandaId, { sync: false });
-  if (!refreshed.ok) return refreshed;
-  const comanda = refreshed.comanda;
+  if (!options.skipScrub) {
+    // Limpa itens de horário cancelado antes de validar total x pagamento.
+    await scrubInactiveAppointmentItemsFromOpenComanda(admin, comandaId);
+
+    const refreshed = await getComandaById(admin, comandaId, { sync: false });
+    if (!refreshed.ok) return refreshed;
+    comanda = refreshed.comanda;
+  }
 
   const activeLinked = comanda.linkedAppointments.filter((apt) =>
     (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)
@@ -3087,12 +3152,9 @@ export async function closeComanda(
     };
   }
 
-  const stockCheck = await validateProductStockForClose(admin, comandaId);
-  if (!stockCheck.ok) return stockCheck;
-
-  // Total ao vivo dos itens restantes (não o total_cents antigo da linha).
-  const liveTotals = await recalculateComandaTotals(admin, comandaId);
-  const paymentError = validatePayments(payments, liveTotals.totalCents);
+  // Total ao vivo dos itens (uma vez só).
+  const totals = await recalculateComandaTotals(admin, comandaId);
+  const paymentError = validatePayments(payments, totals.totalCents);
   if (paymentError) {
     return { ok: false, error: paymentError, status: 400 };
   }
@@ -3101,12 +3163,38 @@ export async function closeComanda(
     .filter((payment) => payment.paymentMethod === "store_credit")
     .reduce((sum, payment) => sum + payment.amountCents, 0);
 
+  const creditDeposits = (options.creditDeposits ?? []).filter(
+    (deposit) => deposit.amountCents > 0
+  );
+
+  const needsCustomer =
+    storeCreditCents > 0 || creditDeposits.length > 0;
+
+  const [stockCheck, cashCheck, balanceOrCustomer] = await Promise.all([
+    validateProductStockForClose(admin, comandaId),
+    assertComandaClosableInOpenCashRegister(admin, comanda.serviceDate),
+    needsCustomer
+      ? Promise.all([
+          storeCreditCents > 0
+            ? getCustomerCreditBalanceByWhatsapp(
+                admin,
+                comanda.customerWhatsapp
+              )
+            : Promise.resolve(null as number | null),
+          resolveCustomerIdByWhatsapp(admin, comanda.customerWhatsapp),
+        ])
+      : Promise.resolve([null, null] as const),
+  ]);
+
+  if (!stockCheck.ok) return stockCheck;
+  if (!cashCheck.ok) {
+    return { ok: false, error: cashCheck.error, status: cashCheck.status };
+  }
+
+  const [creditBalance, customerId] = balanceOrCustomer;
+
   if (storeCreditCents > 0) {
-    const balance = await getCustomerCreditBalanceByWhatsapp(
-      admin,
-      comanda.customerWhatsapp
-    );
-    if (balance < storeCreditCents) {
+    if ((creditBalance ?? 0) < storeCreditCents) {
       return {
         ok: false,
         error: "Saldo de crédito insuficiente para fechar a comanda.",
@@ -3115,16 +3203,7 @@ export async function closeComanda(
     }
   }
 
-  const creditDeposits = (options.creditDeposits ?? []).filter(
-    (deposit) => deposit.amountCents > 0
-  );
-
-  const customerId =
-    storeCreditCents > 0 || creditDeposits.length > 0
-      ? await resolveCustomerIdByWhatsapp(admin, comanda.customerWhatsapp)
-      : null;
-
-  if ((storeCreditCents > 0 || creditDeposits.length > 0) && !customerId) {
+  if (needsCustomer && !customerId) {
     return {
       ok: false,
       error: "Cliente não encontrado para movimentar o crédito.",
@@ -3132,15 +3211,6 @@ export async function closeComanda(
     };
   }
 
-  const cashCheck = await assertComandaClosableInOpenCashRegister(
-    admin,
-    comanda.serviceDate
-  );
-  if (!cashCheck.ok) {
-    return { ok: false, error: cashCheck.error, status: cashCheck.status };
-  }
-
-  const totals = await recalculateComandaTotals(admin, comandaId);
   const commissionPercentSnapshot =
     totals.totalCents > 0
       ? Math.round((totals.commissionCents / totals.totalCents) * 100)
@@ -3219,25 +3289,32 @@ export async function closeComanda(
   }
 
   const linkedIds = comanda.linkedAppointments.map((apt) => apt.id);
-  if (linkedIds.length > 0) {
-    await admin
-      .from("appointments")
-      .update({ status: "done" })
-      .in("id", linkedIds);
-  } else if (comanda.appointmentId) {
-    await admin
-      .from("appointments")
-      .update({ status: "done" })
-      .eq("id", comanda.appointmentId);
-  }
-
   const squeezeIds = await listComandaSqueezeAppointmentIds(admin, comandaId);
+
+  const appointmentUpdates: PromiseLike<unknown>[] = [];
+  if (linkedIds.length > 0) {
+    appointmentUpdates.push(
+      admin.from("appointments").update({ status: "done" }).in("id", linkedIds)
+    );
+  } else if (comanda.appointmentId) {
+    appointmentUpdates.push(
+      admin
+        .from("appointments")
+        .update({ status: "done" })
+        .eq("id", comanda.appointmentId)
+    );
+  }
   if (squeezeIds.length > 0) {
-    await admin
-      .from("appointments")
-      .update({ status: "done" })
-      .in("id", squeezeIds)
-      .eq("is_squeeze_in", true);
+    appointmentUpdates.push(
+      admin
+        .from("appointments")
+        .update({ status: "done" })
+        .in("id", squeezeIds)
+        .eq("is_squeeze_in", true)
+    );
+  }
+  if (appointmentUpdates.length > 0) {
+    await Promise.all(appointmentUpdates);
   }
 
   // A comanda já está fechada neste ponto (não há mais como desfazer o
@@ -3261,6 +3338,19 @@ export async function closeComanda(
         );
       }
     }
+  }
+
+  if (options.returnDetail === false) {
+    return {
+      ok: true,
+      comanda: {
+        ...comanda,
+        status: "closed",
+        totalCents: totals.totalCents,
+        commissionCents: totals.commissionCents,
+        closedAt: now,
+      },
+    };
   }
 
   return getComandaById(admin, comandaId, { sync: false });

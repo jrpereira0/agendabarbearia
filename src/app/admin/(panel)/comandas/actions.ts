@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
@@ -102,12 +103,52 @@ async function assertBarberComandaAccess(
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
-  const result = await getComandaById(admin, comandaId);
-  if (!result.ok) return { ok: false, error: result.error };
-  if (
-    !session.professionalId ||
-    !barberCanAccessComanda(result.comanda, session.professionalId)
-  ) {
+  if (!session.professionalId) {
+    return { ok: false, error: "Você não pode alterar esta comanda." };
+  }
+
+  // Leitura leve — sem hidratar ComandaDetail completo.
+  const { data } = await admin
+    .from("comandas")
+    .select(
+      `
+      id,
+      professional_id,
+      comanda_items ( professional_id ),
+      comanda_appointments (
+        appointments ( professional_id )
+      )
+    `
+    )
+    .eq("id", comandaId)
+    .maybeSingle();
+
+  if (!data) {
+    return { ok: false, error: "Comanda não encontrada." };
+  }
+
+  const proId = session.professionalId;
+  const itemPros = (data.comanda_items ?? []) as {
+    professional_id: string | null;
+  }[];
+  const linkPros = (data.comanda_appointments ?? []) as {
+    appointments:
+      | { professional_id: string }
+      | { professional_id: string }[]
+      | null;
+  }[];
+
+  const hasAccess =
+    data.professional_id === proId ||
+    itemPros.some((item) => item.professional_id === proId) ||
+    linkPros.some((link) => {
+      const apt = Array.isArray(link.appointments)
+        ? link.appointments[0]
+        : link.appointments;
+      return apt?.professional_id === proId;
+    });
+
+  if (!hasAccess) {
     return { ok: false, error: "Você não pode alterar esta comanda." };
   }
 
@@ -273,7 +314,8 @@ export async function closeComandaWithItemsAction(
     const itemsResult = await updateComandaItems(
       admin,
       comandaId,
-      parsedItems.data
+      parsedItems.data,
+      { skipAgendaSync: true, returnDetail: false }
     );
     if (!itemsResult.ok) return { ok: false, error: itemsResult.error };
 
@@ -282,12 +324,18 @@ export async function closeComandaWithItemsAction(
       comandaId,
       parsedPayments.data,
       session.userId,
-      { creditDeposits: parsedCreditDeposits.data }
+      {
+        creditDeposits: parsedCreditDeposits.data,
+        skipScrub: true,
+        returnDetail: false,
+      }
     );
     if (!closeResult.ok) return { ok: false, error: closeResult.error };
 
-    revalidatePath("/admin");
-    revalidatePath("/admin/financeiro");
+    after(() => {
+      revalidatePath("/admin");
+      revalidatePath("/admin/financeiro");
+    });
     return { ok: true };
   } catch {
     return {

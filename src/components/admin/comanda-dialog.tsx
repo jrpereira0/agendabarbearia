@@ -1037,9 +1037,10 @@ export function ComandaDialog({
         }
       );
       if (result.ok) {
-        toast.success("Comanda fechada.");
+        // Fecha na hora; a agenda atualiza em seguida.
         setConfirmOverpayCredit(false);
         onOpenChange(false);
+        toast.success("Comanda fechada.");
         router.refresh();
       } else {
         toast.error(result.error);
