@@ -289,6 +289,8 @@ export async function getCommissionSummary(
         charged_price_cents,
         professional_id,
         is_tip,
+        product_id,
+        commission_percent_snapshot,
         professionals ( nickname, commission_percent )
       )
     `
@@ -347,6 +349,8 @@ export async function getCommissionSummary(
           chargedPriceCents: item.charged_price_cents,
           professionalId: pid,
           isTip: item.is_tip,
+          productId: item.product_id,
+          commissionPercentSnapshot: item.commission_percent_snapshot,
         },
         new Map([[pid, pct]])
       );
@@ -864,6 +868,8 @@ type ComandaCommissionRow = {
     charged_price_cents: number;
     professional_id: string | null;
     is_tip: boolean;
+    product_id: string | null;
+    commission_percent_snapshot: number | null;
     professionals:
       | { nickname: string; commission_percent: number }
       | { nickname: string; commission_percent: number }[]
@@ -1059,6 +1065,8 @@ export async function getCommissionReport(
         charged_price_cents,
         professional_id,
         is_tip,
+        product_id,
+        commission_percent_snapshot,
         professionals ( nickname, commission_percent )
       ),
       comanda_payments ( payment_method, amount_cents )
@@ -1132,6 +1140,8 @@ export async function getCommissionReport(
           chargedPriceCents: item.charged_price_cents,
           professionalId: item.professional_id,
           isTip: item.is_tip,
+          productId: item.product_id,
+          commissionPercentSnapshot: item.commission_percent_snapshot,
         },
         new Map([[item.professional_id, pct]])
       );
@@ -1215,6 +1225,8 @@ export async function getCommissionReport(
             chargedPriceCents: item.charged_price_cents,
             professionalId: item.professional_id,
             isTip: item.is_tip,
+            productId: item.product_id,
+            commissionPercentSnapshot: item.commission_percent_snapshot,
           },
           new Map([
             [

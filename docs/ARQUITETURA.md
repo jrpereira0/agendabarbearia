@@ -67,6 +67,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
 | `appointment_reminders` | Lembretes para clientes (ex.: 1h antes do atendimento); o n8n consulta os vencidos via API e marca envio/confirmação |
+| `dinho_ai_status` | Por conversa de WhatsApp (`session_id` = telefone): se o atendimento por IA está ativo ou pausado (`ia_ativa`). Só service role / n8n |
 
 Regras importantes no banco:
 
