@@ -2806,13 +2806,6 @@ export async function updateComandaItems(
   }
 
   for (const product of productItems) {
-    if (!product.professionalId) {
-      return {
-        ok: false,
-        error: "Escolha o barbeiro que vendeu o produto.",
-        status: 400,
-      };
-    }
     const qty = product.quantity ?? 1;
     if (qty < 1) {
       return {
@@ -2975,6 +2968,10 @@ export async function updateComandaItems(
     const lineTotal =
       item.chargedPriceCents > 0 ? item.chargedPriceCents : unitPrice * qty;
     const preferredId = item.id ?? crypto.randomUUID();
+    // Sem barbeiro: sem comissão — valor fica integralmente com a barbearia.
+    const commissionPercent = item.professionalId
+      ? (item.commissionPercent ?? product.commission_percent)
+      : 0;
     return {
       id: protectedIds.has(preferredId) ? crypto.randomUUID() : preferredId,
       comanda_id: comandaId,
@@ -2984,8 +2981,7 @@ export async function updateComandaItems(
       catalog_price_cents: unitPrice,
       charged_price_cents: lineTotal,
       quantity: qty,
-      commission_percent_snapshot:
-        item.commissionPercent ?? product.commission_percent,
+      commission_percent_snapshot: commissionPercent,
       sort_order: serviceItems.length + index,
       is_tip: false,
       squeeze_appointment_id: null,

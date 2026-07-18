@@ -144,6 +144,10 @@ export function calculateItemCommissionCents(
   if (item.isTip) {
     return item.chargedPriceCents;
   }
+  // Produto sem barbeiro: 100% da barbearia.
+  if (item.productId && !item.professionalId) {
+    return 0;
+  }
   if (item.productId || item.commissionPercentSnapshot != null) {
     const pct = item.commissionPercentSnapshot ?? 0;
     return Math.round((item.chargedPriceCents * pct) / 100);

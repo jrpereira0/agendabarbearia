@@ -96,6 +96,8 @@ type EditableItem = ComandaItemInput & {
   squeezeAppointmentId?: string | null;
 };
 
+const PRODUCT_NO_PROFESSIONAL = "__none__";
+
 function mapComandaItemsToEditable(
   comandaItems: ComandaDetail["items"]
 ): EditableItem[] {
@@ -806,6 +808,7 @@ export function ComandaDialog({
       );
       if (fromLinked?.professionalNickname) return fromLinked.professionalNickname;
     }
+    if (isProductItem(item)) return "Sem profissional";
     return "—";
   }
 
@@ -1109,18 +1112,18 @@ export function ComandaDialog({
   async function confirmAddProduct() {
     if (!pendingProduct || !canEdit || busy) return;
 
-    if (!productProfessionalId) {
-      toast.error("Escolha o barbeiro que vendeu.");
-      return;
-    }
-
     const qty = Number.parseInt(productQuantity.replace(/\D/g, "") || "0", 10);
     if (qty < 1) {
       toast.error("Informe uma quantidade válida.");
       return;
     }
 
-    const pro = professionals.find((p) => p.id === productProfessionalId);
+    const hasProfessional =
+      productProfessionalId.length > 0 &&
+      productProfessionalId !== PRODUCT_NO_PROFESSIONAL;
+    const pro = hasProfessional
+      ? professionals.find((p) => p.id === productProfessionalId)
+      : undefined;
     const lineTotal = pendingProduct.priceCents * qty;
     const previous = items;
     const nextItems: EditableItem[] = [
@@ -1132,9 +1135,13 @@ export function ComandaDialog({
         catalogPriceCents: pendingProduct.priceCents,
         chargedPriceCents: lineTotal,
         quantity: qty,
-        commissionPercent: pendingProduct.commissionPercent,
-        professionalId: productProfessionalId,
-        professionalNickname: pro?.nickname,
+        commissionPercent: hasProfessional
+          ? pendingProduct.commissionPercent
+          : 0,
+        professionalId: hasProfessional ? productProfessionalId : undefined,
+        professionalNickname: hasProfessional
+          ? pro?.nickname
+          : "Sem profissional",
       },
     ];
 
@@ -1153,12 +1160,9 @@ export function ComandaDialog({
 
   function pickProduct(product: ProductOption) {
     if (!canEdit || busy) return;
-    const defaultPro =
-      professionals.find((pro) => pro.id === sessionProfessionalId) ??
-      professionals[0];
 
     setPendingProduct(product);
-    setProductProfessionalId(defaultPro?.id ?? "");
+    setProductProfessionalId("");
     setProductQuantity("1");
     setProductSearch("");
     setProductPickerOpen(false);
@@ -2581,14 +2585,23 @@ export function ComandaDialog({
             <div className="space-y-2">
               <Label htmlFor="product-professional">Barbeiro que vendeu</Label>
               <Select
-                value={productProfessionalId}
-                onValueChange={setProductProfessionalId}
+                value={
+                  productProfessionalId || PRODUCT_NO_PROFESSIONAL
+                }
+                onValueChange={(value) =>
+                  setProductProfessionalId(
+                    value === PRODUCT_NO_PROFESSIONAL ? "" : value
+                  )
+                }
                 disabled={busy}
               >
                 <SelectTrigger id="product-professional" className="w-full">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={PRODUCT_NO_PROFESSIONAL}>
+                    Sem profissional
+                  </SelectItem>
                   {professionals.map((pro) => (
                     <SelectItem key={pro.id} value={pro.id}>
                       {pro.nickname}
@@ -2596,6 +2609,10 @@ export function ComandaDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Sem profissional, a venda não gera comissão e fica só da
+                barbearia.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -2633,7 +2650,7 @@ export function ComandaDialog({
             <Button
               type="button"
               onClick={() => void confirmAddProduct()}
-              disabled={busy || !productProfessionalId || !pendingProduct}
+              disabled={busy || !pendingProduct}
             >
               Adicionar à comanda
             </Button>

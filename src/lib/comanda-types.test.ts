@@ -79,6 +79,19 @@ describe("calculateItemCommissionCents", () => {
     );
     expect(cents).toBe(0);
   });
+
+  it("produto sem barbeiro não gera comissão", () => {
+    const cents = calculateItemCommissionCents(
+      {
+        chargedPriceCents: 5000,
+        professionalId: null,
+        productId: "pomada-1",
+        commissionPercentSnapshot: 40,
+      },
+      new Map([["pro-1", 50]])
+    );
+    expect(cents).toBe(0);
+  });
 });
 
 describe("sumPayments", () => {

@@ -66,13 +66,7 @@ const itemSchema = z
       return;
     }
     if (item.productId) {
-      if (!item.professionalId) {
-        ctx.addIssue({
-          code: "custom",
-          message: "Escolha o barbeiro que vendeu o produto.",
-          path: ["professionalId"],
-        });
-      }
+      // Profissional opcional — sem barbeiro a venda fica só da barbearia.
       return;
     }
     if (!item.serviceId) {
