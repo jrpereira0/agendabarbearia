@@ -369,14 +369,14 @@ export async function getComandaForAppointment(
       };
     }
 
-    const existing = await getComandaById(admin, comandaId);
+    const existing = await getComandaById(admin, comandaId, { sync: false });
     if (!existing.ok) return existing;
     return existing;
   }
 
   // Atendimento em aberto: une todos os horários ativos do cliente no dia
   // numa única comanda aberta (ou cria uma nova se a anterior já foi fechada).
-  return getOrCreateComandaForAppointment(admin, appointmentId);
+  return getOrCreateComandaForAppointment(admin, appointmentId, trigger);
 }
 
 async function pruneStaleEncaixeComandaItems(
@@ -1328,17 +1328,152 @@ async function mergeDuplicateOpenComandas(
   return primaryId;
 }
 
+type AppointmentTriggerRow = {
+  id: string;
+  professional_id: string;
+  status: string;
+  customer_whatsapp: string;
+  date: string;
+  customer_first_name: string;
+  customer_last_name: string;
+};
+
+/**
+ * Verifica se a comanda aberta já está alinhada com os horários do dia.
+ * Se sim, dá para abrir sem o sync completo (muito mais rápido).
+ */
+async function isOpenComandaReadyToShow(
+  admin: SupabaseClient,
+  comandaId: string,
+  dayIds: string[],
+  triggerAppointmentId: string,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<boolean> {
+  const [{ data: links }, { data: items }, { data: squeezeApts }] =
+    await Promise.all([
+      admin
+        .from("comanda_appointments")
+        .select("appointment_id")
+        .eq("comanda_id", comandaId),
+      admin
+        .from("comanda_items")
+        .select("appointment_id, squeeze_appointment_id")
+        .eq("comanda_id", comandaId),
+      admin
+        .from("appointments")
+        .select("id")
+        .eq("customer_whatsapp", customerWhatsapp)
+        .eq("date", serviceDate)
+        .eq("is_squeeze_in", true)
+        .eq("is_comanda_extra", false)
+        .in("status", [...ACTIVE_APPOINTMENT_STATUSES]),
+    ]);
+
+  const linkedIds = new Set((links ?? []).map((row) => row.appointment_id));
+  const daySet = new Set(dayIds);
+
+  for (const id of daySet) {
+    if (!linkedIds.has(id)) return false;
+  }
+  for (const id of linkedIds) {
+    if (!daySet.has(id)) return false;
+  }
+
+  for (const id of daySet) {
+    const hasItem = (items ?? []).some((item) => item.appointment_id === id);
+    if (!hasItem) return false;
+  }
+
+  if (
+    !(items ?? []).some((item) => item.appointment_id === triggerAppointmentId)
+  ) {
+    return false;
+  }
+
+  for (const squeeze of squeezeApts ?? []) {
+    const hasItem = (items ?? []).some(
+      (item) =>
+        item.squeeze_appointment_id === squeeze.id ||
+        item.appointment_id === squeeze.id
+    );
+    if (!hasItem) return false;
+  }
+
+  return true;
+}
+
+async function syncOpenComandaForCustomerDay(
+  admin: SupabaseClient,
+  comandaId: string,
+  dayIds: string[],
+  validDayAppointmentIds: Set<string>,
+  customerWhatsapp: string,
+  serviceDate: string
+): Promise<void> {
+  await pruneComandaToDayScope(admin, comandaId, validDayAppointmentIds);
+
+  // Impede gorjeta/produto de horário cancelado de voltar num agendamento novo.
+  await purgeOrphanTipsAndProducts(
+    admin,
+    comandaId,
+    validDayAppointmentIds
+  );
+
+  if (dayIds.length > 0) {
+    await admin.from("comanda_appointments").upsert(
+      dayIds.map((appointmentId) => ({
+        comanda_id: comandaId,
+        appointment_id: appointmentId,
+      })),
+      { onConflict: "appointment_id" }
+    );
+  }
+
+  await syncItemsFromLinkedAppointments(
+    admin,
+    comandaId,
+    validDayAppointmentIds
+  );
+
+  await refreshLinkedAppointmentItemPrices(admin, comandaId, serviceDate);
+
+  await unlinkSqueezeAppointmentsFromComanda(admin, comandaId);
+
+  await syncManualEncaixeItemsToComanda(
+    admin,
+    comandaId,
+    customerWhatsapp,
+    serviceDate
+  );
+
+  const totals = await recalculateComandaTotals(admin, comandaId);
+  await admin
+    .from("comandas")
+    .update({
+      total_cents: totals.totalCents,
+      commission_cents: totals.commissionCents,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", comandaId);
+}
+
 export async function getOrCreateComandaForAppointment(
   admin: SupabaseClient,
-  appointmentId: string
+  appointmentId: string,
+  knownTrigger?: AppointmentTriggerRow
 ): Promise<{ ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }> {
-  const { data: trigger } = await admin
-    .from("appointments")
-    .select(
-      "id, professional_id, status, customer_whatsapp, date, customer_first_name, customer_last_name"
-    )
-    .eq("id", appointmentId)
-    .maybeSingle();
+  const trigger =
+    knownTrigger ??
+    (
+      await admin
+        .from("appointments")
+        .select(
+          "id, professional_id, status, customer_whatsapp, date, customer_first_name, customer_last_name"
+        )
+        .eq("id", appointmentId)
+        .maybeSingle()
+    ).data;
 
   if (!trigger) {
     return { ok: false, error: "Agendamento não encontrado.", status: 404 };
@@ -1389,6 +1524,8 @@ export async function getOrCreateComandaForAppointment(
     comandaId = byAppointment?.id ?? null;
   }
 
+  let justCreated = false;
+
   if (!comandaId) {
     const { data: created, error } = await admin
       .from("comandas")
@@ -1410,6 +1547,7 @@ export async function getOrCreateComandaForAppointment(
       };
     }
     comandaId = created.id;
+    justCreated = true;
     await seedItemsFromAppointment(admin, created.id, appointmentId);
   }
 
@@ -1423,53 +1561,29 @@ export async function getOrCreateComandaForAppointment(
 
   const resolvedComandaId = comandaId;
 
-  await pruneComandaToDayScope(
-    admin,
-    resolvedComandaId,
-    validDayAppointmentIds
-  );
-
-  // Impede gorjeta/produto de horário cancelado de voltar num agendamento novo.
-  await purgeOrphanTipsAndProducts(
-    admin,
-    resolvedComandaId,
-    validDayAppointmentIds
-  );
-
-  for (const id of dayIds) {
-    await linkAppointmentToComanda(admin, resolvedComandaId, id);
+  // Caminho rápido: comanda já existe e está consistente → só lê.
+  if (
+    !justCreated &&
+    (await isOpenComandaReadyToShow(
+      admin,
+      resolvedComandaId,
+      dayIds,
+      appointmentId,
+      trigger.customer_whatsapp,
+      trigger.date
+    ))
+  ) {
+    return getComandaById(admin, resolvedComandaId, { sync: false });
   }
 
-  await syncItemsFromLinkedAppointments(
+  await syncOpenComandaForCustomerDay(
     admin,
     resolvedComandaId,
-    validDayAppointmentIds
-  );
-
-  await refreshLinkedAppointmentItemPrices(
-    admin,
-    resolvedComandaId,
-    trigger.date
-  );
-
-  await unlinkSqueezeAppointmentsFromComanda(admin, resolvedComandaId);
-
-  await syncManualEncaixeItemsToComanda(
-    admin,
-    resolvedComandaId,
+    dayIds,
+    validDayAppointmentIds,
     trigger.customer_whatsapp,
     trigger.date
   );
-
-  const totals = await recalculateComandaTotals(admin, resolvedComandaId);
-  await admin
-    .from("comandas")
-    .update({
-      total_cents: totals.totalCents,
-      commission_cents: totals.commissionCents,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", resolvedComandaId);
 
   return getComandaById(admin, resolvedComandaId, { sync: false });
 }

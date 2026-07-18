@@ -137,13 +137,11 @@ export async function loadComandaForAppointment(
     return { ok: false, error: admin.error };
   }
 
-  const result = await getComandaForAppointment(admin, appointmentId);
-  if (!result.ok) return { ok: false, error: result.error };
-
-  const [openCashRegister, customerCreditBalanceCents] = await Promise.all([
+  const [result, openCashRegister] = await Promise.all([
+    getComandaForAppointment(admin, appointmentId),
     getOpenCashRegisterSessionBasic(admin),
-    getCustomerCreditBalanceByWhatsapp(admin, result.comanda.customerWhatsapp),
   ]);
+  if (!result.ok) return { ok: false, error: result.error };
 
   if (!session.isOwner) {
     if (!session.professionalId) {
@@ -156,6 +154,11 @@ export async function loadComandaForAppointment(
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
   }
+
+  const customerCreditBalanceCents = await getCustomerCreditBalanceByWhatsapp(
+    admin,
+    result.comanda.customerWhatsapp
+  );
 
   return {
     ok: true,
