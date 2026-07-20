@@ -26,6 +26,7 @@ import {
 import {
   detachEncaixeFromOpenComandas,
   finalizeOpenComandaAfterAppointmentRemoved,
+  syncOpenComandaAfterAppointmentEdit,
 } from "@/lib/comanda-service";
 import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
 import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
@@ -622,6 +623,18 @@ export async function updateAppointment(input: {
 
   if (linkError) {
     return { ok: false, error: "Não foi possível salvar os serviços." };
+  }
+
+  try {
+    await syncOpenComandaAfterAppointmentEdit(
+      admin,
+      parsed.data.appointmentId
+    );
+  } catch (syncError) {
+    console.error("[comanda-sync] erro ao alinhar comanda após edição:", {
+      appointmentId: parsed.data.appointmentId,
+      error: syncError,
+    });
   }
 
   // Alteração já salva — a partir daqui, uma falha ao notificar o barbeiro

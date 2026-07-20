@@ -1,6 +1,6 @@
 # Arquitetura — Dinho Barber Coffee
 
-Atualizado por fase, conforme o sistema evolui.
+Atualizado conforme o sistema evolui (última revisão: jul/2026).
 
 ## Visão geral
 
@@ -60,7 +60,7 @@ Atualizado por fase, conforme o sistema evolui.
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
 | `comandas` | Comanda financeira por cliente/dia (`open` ou `closed`); uma comanda aberta por WhatsApp + data |
 | `comanda_appointments` | Vínculo entre comanda e agendamentos normais do mesmo cliente no dia (RLS ativo) |
-| `comanda_items` | Serviços e produtos na comanda com preço de tabela e preço cobrado (snapshot); serviços podem referenciar encaixe (`squeeze_appointment_id`); produtos usam `product_id`, `quantity` e `commission_percent_snapshot` |
+| `comanda_items` | Serviços e produtos na comanda com preço de tabela e preço cobrado (snapshot); serviços podem referenciar encaixe (`squeeze_appointment_id`); produtos usam `product_id`, `quantity` e `commission_percent_snapshot`; `professional_id` é **opcional** em produtos (venda sem barbeiro) |
 | `product_categories` | Categorias de produto (ex.: Produtos, Geladeira) |
 | `products` | Produtos: nome, foto, ponto focal (`photo_position`), preço, estoque, comissão % por item |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
@@ -124,17 +124,18 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Encaixe manual** (`+ Encaixe`): passos barbeiro → serviços → horário → cliente; pode escolher qualquer horário do dia, **sobrepor** outros e ficar **fora do expediente**; o sistema avisa antes de confirmar (`is_squeeze_in = true`). Encaixes do **mesmo cliente no mesmo dia** entram automaticamente na comanda aberta dele
 - **Cancelar** horário: motivo obrigatório; o card **some da agenda** (não fica visível como cancelado)
 - Ações no horário: ao **clicar no card**, abre um modal com resumo e opções (abrir comanda, editar, trocar cliente, cancelar, WhatsApp); a comanda abre só quando escolher essa opção
-- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais **ainda ativos** do dia (vários barbeiros/horários) e os encaixes manuais desse cliente; ao **finalizar**, essa comanda fecha de vez — se o cliente marcar de novo no mesmo dia, abre uma **nova** comanda só com os novos atendimentos. Ao cancelar horário, itens do agendamento cancelado saem da comanda e o total é recalculado; se não sobrar atendimento ativo, a comanda aberta (incluindo gorjeta/produto órfãos) é apagada — assim não “contam” no próximo agendamento nem atrapalham a finalização. Itens que já entraram em **repasse de comissão** não podem ser apagados (histórico); a edição/fechamento ignora esses resíduos no total
-- **Produtos na comanda**: na mesma comanda dos serviços, dá para adicionar produtos (busca, quantidade e barbeiro vendedor obrigatório); a comissão é a % cadastrada no produto; o estoque baixa só no **fechamento** da comanda e volta se reabrir
+- **Comanda unificada**: uma comanda aberta por cliente (WhatsApp) e dia; reúne todos os agendamentos normais **ainda ativos** do dia (vários barbeiros/horários) e os encaixes manuais desse cliente; ao **finalizar**, essa comanda fecha de vez — se o cliente marcar de novo no mesmo dia, abre uma **nova** comanda só com os novos atendimentos. Ao **editar serviços** de um agendamento, a comanda aberta **realinha** os itens (remove os que saíram e inclui os novos). Ao cancelar horário, itens do agendamento cancelado saem da comanda e o total é recalculado; se não sobrar atendimento ativo, a comanda aberta (incluindo gorjeta/produto órfãos) é apagada — assim não “contam” no próximo agendamento nem atrapalham a finalização. Itens que já entraram em **repasse de comissão** não podem ser apagados (histórico); a edição/fechamento ignora esses resíduos no total
+- **UX da comanda**: ao abrir, a interface já mostra serviços/preços da agenda (sem esperar o skeleton); o servidor sincroniza em segundo plano. Ao finalizar, o modal fecha na hora com feedback de sucesso; o fechamento no banco segue em segundo plano (se falhar, aparece aviso). Enquanto finaliza, há loading claro no botão/overlay
+- **Produtos na comanda**: na mesma comanda dos serviços, dá para adicionar produtos (busca e quantidade). O **barbeiro vendedor é opcional** — o padrão é **Sem profissional** (venda sem vínculo, **sem comissão**, valor 100% da barbearia). Se escolher um barbeiro, vale a % cadastrada no produto. O estoque baixa só no **fechamento** da comanda e volta se reabrir
 - Ao **adicionar serviço na comanda**, o dono escolhe barbeiro e horário — vira **serviço extra** na agenda (borda tracejada cinza; encaixe manual continua vermelho)
 - Na comanda, o barbeiro de cada serviço é **somente leitura** — para mudar, edite o agendamento na agenda
-- Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; só o **dono** fecha, reabre ou edita valores
+- Fechar comanda marca os atendimentos vinculados como **atendido** (`done`) e lança no caixa; o **dono** sempre pode fechar/reabrir; barbeiro fecha/edita conforme as **permissões** do cadastro
 - **Reabrir comanda**: pagamento com crédito do cliente **sempre volta** ao saldo; se a comanda tinha gerado crédito e esse valor já foi gasto em outro atendimento, o dono confirma e o valor gasto não volta (só estorna o que ainda sobrar)
-- Comissão: % configurável por barbeiro, calculada sobre o valor **cobrado** de cada serviço (taxa de cartão não entra no cálculo)
-- **Caixa lateral na agenda** (aba **CAIXA** à direita): abrir/fechar o caixa do dia, ver comandas fechadas, entradas, comissões e repasse da barbearia; link para métricas do dia
+- Comissão: % configurável por barbeiro nos **serviços** (valor cobrado); nos **produtos**, % do cadastro do produto **somente se houver barbeiro** vinculado (taxa de cartão não entra no cálculo)
+- **Caixa lateral na agenda** (aba **CAIXA** à direita): painel com **saldo do dia em destaque**, métricas (entradas, comissões, barbearia), barras por forma de pagamento, lista de comandas fechadas (busca) e ações no rodapé (abrir/encerrar caixa, ver métricas do dia)
 - **Financeiro** (`/admin/financeiro`): painel de **análise** por período (`from` / `to`) — faturamento, comissões, evolução diária, formas de pagamento e ranking por barbeiro; não é onde se abre/fecha caixa
 - **Caixas** (`/admin/financeiro/caixas`): histórico de sessões de caixa no período — abrir, fechar, reabrir, KPIs e atalhos para agenda/comissões do dia
-- **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual. O dono vê todos; o barbeiro vê só as próprias (**Minhas comissões** no menu)
+- **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual. Produtos **sem profissional** não entram no repasse do barbeiro. O dono vê todos; o barbeiro vê só as próprias (**Minhas comissões** no menu)
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres
@@ -212,7 +213,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 ## Clientes
 
 - Cadastro automático na primeira reserva (página ou painel); um WhatsApp = um cliente
-- No painel, ao agendar: o WhatsApp busca o cadastro existente e **não altera o nome**; para corrigir dados, use **Clientes**
+- No painel, ao agendar: busca e cadastro ficam **na mesma tela** — o WhatsApp busca o cadastro existente e **não altera o nome**; para corrigir dados, use **Clientes**
 - Somente o **dono** vê **Clientes** (`/admin/clientes`): busca, cadastro manual em **Novo cliente**, ficha com histórico
 - Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados

@@ -1169,70 +1169,123 @@ async function syncItemsFromLinkedAppointments(
     .filter((id) => validAppointmentIds.has(id));
   if (appointmentIds.length === 0) return;
 
-  const { data: existingItems } = await admin
-    .from("comanda_items")
-    .select("appointment_id, service_id")
-    .eq("comanda_id", comandaId);
+  const [{ data: existingItems }, { data: appointments }, { data: serviceLinks }] =
+    await Promise.all([
+      admin
+        .from("comanda_items")
+        .select(
+          "id, appointment_id, service_id, product_id, is_tip, squeeze_appointment_id"
+        )
+        .eq("comanda_id", comandaId),
+      admin
+        .from("appointments")
+        .select("id, professional_id, is_squeeze_in")
+        .in("id", appointmentIds),
+      admin
+        .from("appointment_services")
+        .select("appointment_id, service_id, services ( id, name, price_cents )")
+        .in("appointment_id", appointmentIds),
+    ]);
 
-  const existingKeys = new Set(
-    (existingItems ?? []).map(
-      (item) => `${item.appointment_id ?? ""}:${item.service_id ?? ""}`
-    )
+  const appointmentById = new Map(
+    (appointments ?? []).map((apt) => [apt.id, apt])
   );
 
+  const desiredKeys = new Set<string>();
+  const desiredRows: Array<{
+    key: string;
+    appointmentId: string;
+    serviceId: string;
+    serviceName: string;
+    priceCents: number;
+    professionalId: string;
+  }> = [];
+
+  for (const link of serviceLinks ?? []) {
+    const apt = appointmentById.get(link.appointment_id);
+    if (!apt || apt.is_squeeze_in) continue;
+
+    const service = Array.isArray(link.services)
+      ? link.services[0]
+      : link.services;
+    const price = resolvePriceCentsOrFallback(
+      {
+        id: link.service_id,
+        name: service?.name ?? "Serviço",
+        price_cents: service?.price_cents ?? 0,
+      },
+      pricing
+    );
+    const key = `${link.appointment_id}:${link.service_id}`;
+    desiredKeys.add(key);
+    desiredRows.push({
+      key,
+      appointmentId: link.appointment_id,
+      serviceId: link.service_id,
+      serviceName: service?.name ?? "Serviço",
+      priceCents: price,
+      professionalId: apt.professional_id,
+    });
+  }
+
+  // Remove serviços que saíram do agendamento (mantém tip/produto/encaixe).
+  const staleItemIds = (existingItems ?? [])
+    .filter((item) => {
+      if (item.is_tip || item.product_id) return false;
+      if (!item.appointment_id || item.squeeze_appointment_id) return false;
+      if (!appointmentIds.includes(item.appointment_id)) return false;
+      const key = `${item.appointment_id}:${item.service_id ?? ""}`;
+      return !desiredKeys.has(key);
+    })
+    .map((item) => item.id);
+
+  if (staleItemIds.length > 0) {
+    await deleteComandaItemsSafely(admin, staleItemIds);
+  }
+
+  const existingKeys = new Set(
+    (existingItems ?? [])
+      .filter((item) => !staleItemIds.includes(item.id))
+      .map((item) => `${item.appointment_id ?? ""}:${item.service_id ?? ""}`)
+  );
+
+  // Atualiza barbeiro nos itens que continuam vinculados.
+  for (const apt of appointments ?? []) {
+    if (apt.is_squeeze_in) continue;
+    await admin
+      .from("comanda_items")
+      .update({ professional_id: apt.professional_id })
+      .eq("comanda_id", comandaId)
+      .eq("appointment_id", apt.id)
+      .is("product_id", null)
+      .eq("is_tip", false);
+  }
+
+  const { data: sortRows } = await admin
+    .from("comanda_items")
+    .select("sort_order")
+    .eq("comanda_id", comandaId);
   let sortOrder =
-    (existingItems ?? []).length > 0
-      ? Math.max(
-          ...(await admin
-            .from("comanda_items")
-            .select("sort_order")
-            .eq("comanda_id", comandaId)
-            .then((r) => (r.data ?? []).map((i) => i.sort_order)))
-        ) + 1
-      : 0;
+    (sortRows ?? []).reduce(
+      (max, row) => Math.max(max, row.sort_order ?? 0),
+      -1
+    ) + 1;
 
-  for (const appointmentId of appointmentIds) {
-    const { data: appointment } = await admin
-      .from("appointments")
-      .select("professional_id, is_squeeze_in")
-      .eq("id", appointmentId)
-      .maybeSingle();
-    if (!appointment || appointment.is_squeeze_in) continue;
+  const insertRows = desiredRows
+    .filter((row) => !existingKeys.has(row.key))
+    .map((row, index) => ({
+      comanda_id: comandaId,
+      service_id: row.serviceId,
+      service_name: row.serviceName,
+      catalog_price_cents: row.priceCents,
+      charged_price_cents: row.priceCents,
+      sort_order: sortOrder + index,
+      appointment_id: row.appointmentId,
+      professional_id: row.professionalId,
+    }));
 
-    const { data: services } = await admin
-      .from("appointment_services")
-      .select("service_id, services ( id, name, price_cents )")
-      .eq("appointment_id", appointmentId);
-
-    for (const link of services ?? []) {
-      const key = `${appointmentId}:${link.service_id}`;
-      if (existingKeys.has(key)) continue;
-
-      const service = Array.isArray(link.services)
-        ? link.services[0]
-        : link.services;
-      const price = resolvePriceCentsOrFallback(
-        {
-          id: link.service_id,
-          name: service?.name ?? "Serviço",
-          price_cents: service?.price_cents ?? 0,
-        },
-        pricing
-      );
-
-      await admin.from("comanda_items").insert({
-        comanda_id: comandaId,
-        service_id: link.service_id,
-        service_name: service?.name ?? "Serviço",
-        catalog_price_cents: price,
-        charged_price_cents: price,
-        sort_order: sortOrder,
-        appointment_id: appointmentId,
-        professional_id: appointment.professional_id,
-      });
-      existingKeys.add(key);
-      sortOrder += 1;
-    }
+  if (insertRows.length > 0) {
+    await admin.from("comanda_items").insert(insertRows);
   }
 }
 
@@ -1339,7 +1392,8 @@ type AppointmentTriggerRow = {
 };
 
 /**
- * Verifica se a comanda aberta já está alinhada com os horários do dia.
+ * Verifica se a comanda aberta já está alinhada com os horários do dia
+ * (incluindo a lista de serviços de cada agendamento).
  * Se sim, dá para abrir sem o sync completo (muito mais rápido).
  */
 async function isOpenComandaReadyToShow(
@@ -1350,7 +1404,7 @@ async function isOpenComandaReadyToShow(
   customerWhatsapp: string,
   serviceDate: string
 ): Promise<boolean> {
-  const [{ data: links }, { data: items }, { data: squeezeApts }] =
+  const [{ data: links }, { data: items }, { data: squeezeApts }, { data: aptServices }] =
     await Promise.all([
       admin
         .from("comanda_appointments")
@@ -1358,7 +1412,9 @@ async function isOpenComandaReadyToShow(
         .eq("comanda_id", comandaId),
       admin
         .from("comanda_items")
-        .select("appointment_id, squeeze_appointment_id")
+        .select(
+          "appointment_id, squeeze_appointment_id, service_id, product_id, is_tip"
+        )
         .eq("comanda_id", comandaId),
       admin
         .from("appointments")
@@ -1368,6 +1424,12 @@ async function isOpenComandaReadyToShow(
         .eq("is_squeeze_in", true)
         .eq("is_comanda_extra", false)
         .in("status", [...ACTIVE_APPOINTMENT_STATUSES]),
+      dayIds.length > 0
+        ? admin
+            .from("appointment_services")
+            .select("appointment_id, service_id")
+            .in("appointment_id", dayIds)
+        : Promise.resolve({ data: [] as { appointment_id: string; service_id: string }[] }),
     ]);
 
   const linkedIds = new Set((links ?? []).map((row) => row.appointment_id));
@@ -1380,9 +1442,27 @@ async function isOpenComandaReadyToShow(
     if (!daySet.has(id)) return false;
   }
 
-  for (const id of daySet) {
-    const hasItem = (items ?? []).some((item) => item.appointment_id === id);
-    if (!hasItem) return false;
+  const desiredServiceKeys = new Set(
+    (aptServices ?? []).map(
+      (row) => `${row.appointment_id}:${row.service_id}`
+    )
+  );
+  const actualServiceKeys = new Set(
+    (items ?? [])
+      .filter(
+        (item) =>
+          item.appointment_id &&
+          !item.product_id &&
+          !item.is_tip &&
+          !item.squeeze_appointment_id &&
+          daySet.has(item.appointment_id)
+      )
+      .map((item) => `${item.appointment_id}:${item.service_id ?? ""}`)
+  );
+
+  if (desiredServiceKeys.size !== actualServiceKeys.size) return false;
+  for (const key of desiredServiceKeys) {
+    if (!actualServiceKeys.has(key)) return false;
   }
 
   if (
@@ -1561,6 +1641,19 @@ export async function getOrCreateComandaForAppointment(
 
   const resolvedComandaId = comandaId;
 
+  // Primeira abertura do dia (só este horário): seed já preencheu — evita sync pesado.
+  if (
+    justCreated &&
+    dayIds.length === 1 &&
+    dayIds[0] === appointmentId
+  ) {
+    await admin.from("comanda_appointments").upsert(
+      { comanda_id: resolvedComandaId, appointment_id: appointmentId },
+      { onConflict: "appointment_id" }
+    );
+    return getComandaById(admin, resolvedComandaId, { sync: false });
+  }
+
   // Caminho rápido: comanda já existe e está consistente → só lê.
   if (
     !justCreated &&
@@ -1586,6 +1679,71 @@ export async function getOrCreateComandaForAppointment(
   );
 
   return getComandaById(admin, resolvedComandaId, { sync: false });
+}
+
+/**
+ * Após editar serviços/barbeiro de um agendamento, realinha a comanda aberta do dia.
+ */
+export async function syncOpenComandaAfterAppointmentEdit(
+  admin: SupabaseClient,
+  appointmentId: string
+): Promise<void> {
+  const { data: trigger } = await admin
+    .from("appointments")
+    .select("customer_whatsapp, date, status")
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!trigger) return;
+  if (
+    !(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(trigger.status)
+  ) {
+    return;
+  }
+
+  const comandaId = await findOpenComandaIdForCustomerDay(
+    admin,
+    trigger.customer_whatsapp,
+    trigger.date
+  );
+  if (!comandaId) return;
+
+  const { data: dayAppointments } = await admin
+    .from("appointments")
+    .select("id")
+    .eq("customer_whatsapp", trigger.customer_whatsapp)
+    .eq("date", trigger.date)
+    .eq("is_squeeze_in", false)
+    .in("status", [...ACTIVE_APPOINTMENT_STATUSES]);
+
+  const dayIds = (dayAppointments ?? []).map((row) => row.id);
+  const validDayAppointmentIds = new Set(dayIds);
+
+  if (dayIds.length > 0) {
+    await admin.from("comanda_appointments").upsert(
+      dayIds.map((id) => ({
+        comanda_id: comandaId,
+        appointment_id: id,
+      })),
+      { onConflict: "appointment_id" }
+    );
+  }
+
+  await syncItemsFromLinkedAppointments(
+    admin,
+    comandaId,
+    validDayAppointmentIds
+  );
+
+  const totals = await recalculateComandaTotals(admin, comandaId);
+  await admin
+    .from("comandas")
+    .update({
+      total_cents: totals.totalCents,
+      commission_cents: totals.commissionCents,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", comandaId);
 }
 
 /** Itens já vinculados a repasse de comissão não podem ser apagados (FK restrict). */

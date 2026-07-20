@@ -339,11 +339,24 @@ export function AgendaView({
       setSelectedAppointment(null);
       return;
     }
+
+    const servicesChanged =
+      fresh.services.length !== selectedAppointment.services.length ||
+      fresh.services.some(
+        (service, index) =>
+          service.id !== selectedAppointment.services[index]?.id ||
+          service.priceCents !== selectedAppointment.services[index]?.priceCents
+      );
+
     if (
       fresh.status !== selectedAppointment.status ||
       fresh.startTime !== selectedAppointment.startTime ||
       fresh.endTime !== selectedAppointment.endTime ||
-      fresh.professionalId !== selectedAppointment.professionalId
+      fresh.professionalId !== selectedAppointment.professionalId ||
+      fresh.customerFirstName !== selectedAppointment.customerFirstName ||
+      fresh.customerLastName !== selectedAppointment.customerLastName ||
+      fresh.customerWhatsapp !== selectedAppointment.customerWhatsapp ||
+      servicesChanged
     ) {
       setSelectedAppointment(fresh);
     }

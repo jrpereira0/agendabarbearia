@@ -14,15 +14,16 @@ Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
 | Nova comanda no mesmo dia | Depois de **fechar** a comanda, um novo agendamento do cliente naquele dia abre **outra** comanda — não mistura com a já finalizada |
 | Encaixes na comanda | Encaixes manuais do mesmo cliente no dia entram na comanda automaticamente (serviços + lista de atendimentos) |
 | Extras na comanda | Serviço adicionado na comanda além dos do agendamento vira **encaixe** na agenda |
-| Comissão | % sobre o valor **cobrado** de cada serviço na comanda (configurável por barbeiro) |
+| Produtos na comanda | Item com `productId`; `professionalId` é **opcional**. Sem barbeiro: **sem comissão** (100% barbearia). Com barbeiro: % do produto |
+| Comissão | % sobre o valor **cobrado** de cada **serviço** (configurável por barbeiro). Produto: % do cadastro **só se** houver `professionalId` |
 | Gorjeta | Opcional ao fechar; linha `is_tip` na comanda — o barbeiro escolhido recebe **100%** (entra no total e no caixa) |
 | Crédito do cliente | Saldo por cliente; pode pagar comanda com `store_credit`; troco ou depósito vira crédito e **entra no caixa** pelo método de origem (Pix, dinheiro etc.) |
 | Uso de crédito | Pagamento `store_credit` **não** entra no caixa (dinheiro já entrou antes), mas **gera comissão** normalmente |
-| Quem fecha | Somente o **dono** (painel ou API com chave com `comandas:write`) |
+| Quem fecha | **Dono** no painel; barbeiro se tiver permissão; API com chave `comandas:write` |
 | Taxa de cartão | **Não** entra no cálculo da comissão |
 | Pagamento misto | Várias formas na mesma comanda (ex.: R$ 50 Pix + R$ 50 dinheiro) |
 | Preço editável | Cada linha da comanda guarda snapshot do preço cobrado (não altera a tabela de serviços) |
-| Barbeiro na comanda | Exibido por serviço, mas **não é editável** na comanda — altere na agenda |
+| Barbeiro na comanda | Em **serviços**, exibido mas **não editável** na comanda — altere na agenda. Em **produtos**, pode ser omitido ou escolhido na hora |
 | Fechar comanda | Registra pagamento, marca atendimentos como `done` e entra no caixa/comissão |
 | Caixa do dia | Precisa estar **aberto** para finalizar comandas daquele dia |
 | Um caixa por vez | Só pode haver **um** caixa aberto; feche o atual antes de abrir outro dia |
@@ -211,10 +212,20 @@ Corpo:
       "chargedPriceCents": 3500
     },
     {
-      "serviceId": "uuid-outro",
-      "serviceName": "Barba",
-      "catalogPriceCents": 2500,
-      "chargedPriceCents": 2500
+      "productId": "uuid-do-produto",
+      "serviceName": "Pomada",
+      "catalogPriceCents": 4500,
+      "chargedPriceCents": 4500,
+      "quantity": 1
+    },
+    {
+      "productId": "uuid-outro-produto",
+      "serviceName": "Água",
+      "catalogPriceCents": 500,
+      "chargedPriceCents": 500,
+      "quantity": 2,
+      "professionalId": "uuid-do-barbeiro",
+      "commissionPercent": 10
     }
   ]
 }
@@ -222,6 +233,8 @@ Corpo:
 
 - `catalogPriceCents`: preço de tabela no momento (referência)
 - `chargedPriceCents`: valor cobrado (pode ter desconto)
+- Produto **sem** `professionalId`: venda da barbearia, comissão `0`
+- Produto **com** `professionalId`: usa `commissionPercent` (ou a % cadastrada no produto)
 
 Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original. Cada serviço extra novo (não reatribuição) também dispara o webhook `appointment.created` (`source: "comanda_extra"`) — ver [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated).
 
@@ -395,12 +408,12 @@ Somente o **dono** vê as rotas abaixo (menu **Dia a dia** na sidebar).
 
 | Rota | Função |
 | --- | --- |
-| `/admin` (aba **CAIXA**) | Operar o caixa do dia na agenda: abrir/fechar, comandas fechadas, entradas, comissões e barbearia |
+| `/admin` (aba **CAIXA**) | Operar o caixa do dia na agenda: **saldo em destaque**, entradas/comissões/barbearia, barras por forma de pagamento, lista de comandas fechadas, abrir/encerrar caixa e link para métricas |
 | `/admin/financeiro` | Dashboard de métricas por período: KPIs, evolução diária, pagamentos e barbeiros (comparação com período anterior) |
 | `/admin/financeiro/caixas` | Histórico de sessões de caixa: filtro por período, busca, abrir/fechar/reabrir, links para agenda e comissões |
-| `/admin/financeiro/comissoes` | Comissões por barbeiro no período (`service_date`). Ao **detalhar** um barbeiro: resumo com **faturamento**, **comissão** e **serviços**, **dia a dia**, ranking de serviços, lista de **atendimentos** (cliente, itens, valores e pagamentos) e formas de pagamento. Clique em um dia para filtrar só aquele dia |
+| `/admin/financeiro/comissoes` | Comissões por barbeiro no período (`service_date`). Ao **detalhar** um barbeiro: resumo com **faturamento**, **comissão** e **serviços**, **dia a dia**, ranking de serviços, lista de **atendimentos** (cliente, itens, valores e pagamentos) e formas de pagamento. Clique em um dia para filtrar só aquele dia. Produtos sem profissional **não** entram no repasse |
 
-- **Agenda:** clique no horário → modal de comanda (fechar, reabrir, pagamento misto)
+- **Agenda:** clique no horário → modal de comanda (abre com dados na hora; fechar, reabrir, pagamento misto; produto com opção **Sem profissional**)
 - **Profissionais:** campo **% de comissão** no cadastro de cada barbeiro
 
 Relatórios do painel e da API filtram comandas fechadas por **`service_date`** (dia do atendimento / dia do caixa), não por `closed_at`.
