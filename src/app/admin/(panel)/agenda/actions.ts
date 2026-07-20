@@ -228,6 +228,7 @@ async function insertAppointment(
       end_time: endTime,
       status: "scheduled",
       is_squeeze_in: isSqueezeIn,
+      booking_source: "admin",
     })
     .select("id")
     .single();

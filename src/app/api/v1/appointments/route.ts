@@ -143,7 +143,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await createPublicAppointment(parsed.data);
+    const result = await createPublicAppointment(parsed.data, {
+      bookingSource: authResult.auth.type === "api_key" ? "ai" : "site",
+    });
 
     if (!result.ok) {
       return NextResponse.json(

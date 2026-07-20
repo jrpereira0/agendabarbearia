@@ -4,9 +4,9 @@ import {
   type MinuteRange,
 } from "@/lib/availability";
 
-// Altura de cada linha escala com o intervalo (30 min ≈ 24 px).
+// Altura de cada linha escala com o intervalo (30 min ≈ 27 px).
 export function rowHeightForStep(stepMinutes: number): number {
-  return Math.max(10, Math.round((24 / 30) * stepMinutes));
+  return Math.max(10, Math.round((24 / 30) * stepMinutes) + 3);
 }
 
 export function buildTimeSlots(

@@ -7,6 +7,11 @@ import { Separator } from "@/components/ui/separator";
 import { AgendaMiniCalendar } from "@/components/admin/agenda-mini-calendar";
 import { ScheduleBlocksPanel } from "@/components/admin/schedule-blocks-panel";
 import { agendaLegend } from "@/lib/agenda-colors";
+import {
+  BOOKING_SOURCES,
+  BOOKING_SOURCE_ICONS,
+  BOOKING_SOURCE_LABELS,
+} from "@/lib/booking-source";
 import { formatDateBR } from "@/lib/format";
 import type { ScheduleBlockItem } from "@/lib/get-agenda-day";
 import { cn } from "@/lib/utils";
@@ -92,26 +97,68 @@ function CollapsiblePanel({
 
 function LegendGrid({ compact }: { compact?: boolean }) {
   return (
-    <ul
-      className={cn(
-        "grid gap-2",
-        compact ? "grid-cols-2 text-xs" : "flex flex-col gap-2.5 text-sm"
-      )}
-    >
-      {LEGEND_ITEMS.map((item) => (
-        <li key={item.label} className="flex items-center gap-2">
-          <span
-            className={cn(
-              "shrink-0 rounded-sm shadow-sm",
-              compact ? "size-3" : "size-4",
-              item.swatchClass
-            )}
-            aria-hidden
-          />
-          <span className="leading-snug">{item.label}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <ul
+        className={cn(
+          "grid gap-2",
+          compact ? "grid-cols-2 text-xs" : "flex flex-col gap-2.5 text-sm"
+        )}
+      >
+        {LEGEND_ITEMS.map((item) => (
+          <li key={item.label} className="flex items-center gap-2">
+            <span
+              className={cn(
+                "shrink-0 rounded-sm shadow-sm",
+                compact ? "size-3" : "size-4",
+                item.swatchClass
+              )}
+              aria-hidden
+            />
+            <span className="leading-snug">{item.label}</span>
+          </li>
+        ))}
+      </ul>
+
+      <div className="border-t pt-3">
+        <p
+          className={cn(
+            "mb-2 font-medium text-muted-foreground",
+            compact ? "text-[10px] uppercase tracking-wide" : "text-xs"
+          )}
+        >
+          Origem do agendamento
+        </p>
+        <ul
+          className={cn(
+            "grid gap-2",
+            compact ? "grid-cols-2 text-xs" : "flex flex-col gap-2.5 text-sm"
+          )}
+        >
+          {BOOKING_SOURCES.map((source) => {
+            const Icon = BOOKING_SOURCE_ICONS[source];
+            return (
+              <li key={source} className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "inline-flex shrink-0 items-center justify-center rounded-sm border bg-muted/40 text-foreground",
+                    compact ? "size-3" : "size-4"
+                  )}
+                  aria-hidden
+                >
+                  <Icon
+                    className={compact ? "size-2" : "size-2.5"}
+                    strokeWidth={2.25}
+                  />
+                </span>
+                <span className="leading-snug">
+                  {BOOKING_SOURCE_LABELS[source]}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
   );
 }
 
@@ -218,7 +265,7 @@ function AgendaMobileToolsSection({
 
       <CollapsiblePanel
         title="Legenda da grade"
-        subtitle="Cores dos horários e status"
+        subtitle="Cores e origem do agendamento"
         defaultOpen={false}
       >
         <LegendGrid compact />

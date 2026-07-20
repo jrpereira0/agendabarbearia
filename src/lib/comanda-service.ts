@@ -2194,6 +2194,7 @@ async function upsertSqueezeAppointment(
       status,
       is_squeeze_in: true,
       is_comanda_extra: isComandaExtra,
+      booking_source: "admin",
     })
     .select("id")
     .single();
@@ -2490,6 +2491,7 @@ async function syncComandaItemAgendaMoves(
         end_time: endTime,
         status: targetMain.status,
         is_squeeze_in: false,
+        booking_source: "admin",
       })
       .select("id")
       .single();

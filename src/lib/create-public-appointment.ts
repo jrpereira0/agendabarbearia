@@ -10,6 +10,7 @@ import {
   WHATSAPP_INVALID_MESSAGE,
   whatsappSchema,
 } from "@/lib/whatsapp";
+import type { BookingSource } from "@/lib/booking-source";
 
 const createSchema = z
   .object({
@@ -54,6 +55,7 @@ async function insertAppointment(params: {
   startTime: string;
   endTime: string;
   serviceIds: string[];
+  bookingSource: BookingSource;
 }): Promise<
   | { ok: true; appointmentId: string }
   | { ok: false; error: string; status: number; conflict?: boolean }
@@ -76,6 +78,7 @@ async function insertAppointment(params: {
       end_time: params.endTime,
       status: "scheduled",
       is_squeeze_in: false,
+      booking_source: params.bookingSource,
     })
     .select("id")
     .single();
@@ -131,8 +134,10 @@ async function resolveProfessionalNickname(
 }
 
 export async function createPublicAppointment(
-  input: CreatePublicAppointmentInput
+  input: CreatePublicAppointmentInput,
+  options?: { bookingSource?: BookingSource }
 ): Promise<CreatePublicAppointmentResult> {
+  const bookingSource = options?.bookingSource ?? "site";
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!whatsapp) {
     return {
@@ -198,6 +203,7 @@ export async function createPublicAppointment(
         startTime: data.startTime,
         endTime: minutesToTime(endMinutes),
         serviceIds: data.serviceIds,
+        bookingSource,
       });
 
       if (inserted.ok) {
@@ -269,6 +275,7 @@ export async function createPublicAppointment(
     startTime: data.startTime,
     endTime: minutesToTime(endMinutes),
     serviceIds: data.serviceIds,
+    bookingSource,
   });
 
   if (!inserted.ok) {

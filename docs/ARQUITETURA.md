@@ -55,7 +55,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
 | `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único) |
-| `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp) |
+| `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp); `booking_source` indica origem (`admin` / `site` / `ai`) para o ícone no card da agenda |
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
 | `comandas` | Comanda financeira por cliente/dia (`open` ou `closed`); uma comanda aberta por WhatsApp + data |

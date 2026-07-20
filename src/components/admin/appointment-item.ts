@@ -1,3 +1,5 @@
+import type { BookingSource } from "@/lib/booking-source";
+
 export type AppointmentItem = {
   id: string;
   date: string;
@@ -16,6 +18,8 @@ export type AppointmentItem = {
     | "done";
   isSqueezeIn?: boolean;
   isComandaExtra?: boolean;
+  /** De onde veio o agendamento (painel, site ou IA). */
+  bookingSource?: BookingSource | null;
   services: {
     id: string;
     name: string;
