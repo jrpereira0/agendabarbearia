@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
@@ -34,6 +35,20 @@ import {
   captureAppointmentUpdateSnapshot,
   notifyAppointmentUpdated,
 } from "@/lib/notifications/appointment-updated-webhook";
+
+/** Revalida a agenda depois de responder ao navegador (mais rápido na Vercel). */
+function revalidateAdminAgendaSoon() {
+  after(() => {
+    revalidatePath("/admin");
+  });
+}
+
+function revalidateAdminAndPublicAgendaSoon() {
+  after(() => {
+    revalidatePath("/admin");
+    revalidatePath("/agenda");
+  });
+}
 
 const createSchema = z.object({
   professionalId: z.uuid(),
@@ -241,31 +256,31 @@ async function insertAppointment(
 
   console.log("[admin-appointment-create] appointment criado:", appointment.id);
 
-  // Agendamento e serviços já estão salvos — a partir daqui, uma falha ao
-  // notificar o barbeiro não pode reverter o agendamento nem quebrar a tela
-  // do admin. Cobre tanto "+ Agendar" quanto "+ Encaixe", já que os dois
-  // passam por aqui (o source diferencia qual foi). O await é obrigatório:
-  // em ambiente serverless (Vercel), a function pode ser encerrada assim
-  // que a action retorna, então "disparar e esquecer" perderia o webhook.
+  // Responde na hora; webhook + revalidate seguem com after() (seguro na Vercel).
   const source = isSqueezeIn ? "admin_squeeze_in" : "admin_agenda";
-  try {
-    console.log(
-      "[admin-appointment-create] chamando webhook appointment.created:",
-      appointment.id
-    );
-    await notifyAppointmentCreated(appointment.id, source);
-    console.log(
-      "[admin-appointment-create] webhook finalizado:",
-      appointment.id
-    );
-  } catch (error) {
-    console.error("[admin-appointment-create] erro ao enviar webhook:", {
-      appointmentId: appointment.id,
-      error,
-    });
-  }
+  const createdId = appointment.id;
+  after(() => {
+    void (async () => {
+      try {
+        console.log(
+          "[admin-appointment-create] chamando webhook appointment.created:",
+          createdId
+        );
+        await notifyAppointmentCreated(createdId, source);
+        console.log(
+          "[admin-appointment-create] webhook finalizado:",
+          createdId
+        );
+      } catch (error) {
+        console.error("[admin-appointment-create] erro ao enviar webhook:", {
+          appointmentId: createdId,
+          error,
+        });
+      }
+      revalidatePath("/admin");
+    })();
+  });
 
-  revalidatePath("/admin");
   return { ok: true, appointmentId: appointment.id };
 }
 
@@ -625,6 +640,7 @@ export async function updateAppointment(input: {
     return { ok: false, error: "Não foi possível salvar os serviços." };
   }
 
+  // Sync da comanda precisa terminar antes da resposta (abrir comanda em seguida).
   try {
     await syncOpenComandaAfterAppointmentEdit(
       admin,
@@ -637,27 +653,32 @@ export async function updateAppointment(input: {
     });
   }
 
-  // Alteração já salva — a partir daqui, uma falha ao notificar o barbeiro
-  // não pode desfazer a edição nem quebrar a tela do admin.
-  if (previousSnapshot) {
-    const updateSource = existing.is_squeeze_in
-      ? "admin_squeeze_update"
-      : "admin_update";
-    try {
-      await notifyAppointmentUpdated(
-        parsed.data.appointmentId,
-        updateSource,
-        previousSnapshot
-      );
-    } catch (webhookError) {
-      console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
-        appointmentId: parsed.data.appointmentId,
-        error: webhookError,
-      });
-    }
-  }
+  const appointmentId = parsed.data.appointmentId;
+  const updateSource = existing.is_squeeze_in
+    ? "admin_squeeze_update"
+    : "admin_update";
+  const snapshot = previousSnapshot;
 
-  revalidatePath("/admin");
+  after(() => {
+    void (async () => {
+      if (snapshot) {
+        try {
+          await notifyAppointmentUpdated(
+            appointmentId,
+            updateSource,
+            snapshot
+          );
+        } catch (webhookError) {
+          console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
+            appointmentId,
+            error: webhookError,
+          });
+        }
+      }
+      revalidatePath("/admin");
+    })();
+  });
+
   return { ok: true };
 }
 
@@ -725,7 +746,7 @@ export async function createScheduleBlock(input: {
     return { ok: false, error: "Não foi possível bloquear o horário." };
   }
 
-  revalidatePath("/admin");
+  revalidateAdminAgendaSoon();
   return { ok: true };
 }
 
@@ -760,7 +781,7 @@ export async function deleteScheduleBlock(
     return { ok: false, error: "Não foi possível remover o bloqueio." };
   }
 
-  revalidatePath("/admin");
+  revalidateAdminAgendaSoon();
   return { ok: true };
 }
 
@@ -871,8 +892,7 @@ export async function cancelAppointment(input: {
       });
     }
 
-    revalidatePath("/admin");
-    revalidatePath("/agenda");
+    revalidateAdminAndPublicAgendaSoon();
     return { ok: true };
   }
 
@@ -982,8 +1002,7 @@ export async function cancelAppointment(input: {
     }
   }
 
-  revalidatePath("/admin");
-  revalidatePath("/agenda");
+  revalidateAdminAndPublicAgendaSoon();
   return { ok: true };
 }
 
@@ -1040,8 +1059,7 @@ export async function deleteAppointment(
       return { ok: false, error: "Não foi possível excluir o agendamento." };
     }
 
-    revalidatePath("/admin");
-    revalidatePath("/agenda");
+    revalidateAdminAndPublicAgendaSoon();
     return { ok: true };
   }
 
@@ -1096,8 +1114,7 @@ export async function deleteAppointment(
     return { ok: false, error: "Não foi possível excluir o agendamento." };
   }
 
-  revalidatePath("/admin");
-  revalidatePath("/agenda");
+  revalidateAdminAndPublicAgendaSoon();
   return { ok: true };
 }
 
@@ -1183,7 +1200,7 @@ export async function moveAppointmentToDate(input: {
     return { ok: false, error: "Não foi possível mudar a data do agendamento." };
   }
 
-  revalidatePath("/admin");
+  revalidateAdminAgendaSoon();
   return { ok: true };
 }
 
@@ -1310,8 +1327,7 @@ export async function updateAppointmentStatus(
     };
   }
 
-  revalidatePath("/admin");
-  revalidatePath("/agenda");
+  revalidateAdminAndPublicAgendaSoon();
   return { ok: true };
 }
 

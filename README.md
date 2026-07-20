@@ -58,6 +58,12 @@ Opcionais (só quem usa a funcionalidade correspondente):
 
 Marque **Production**, **Preview** e **Development**.
 
+### Região das Functions (importante para velocidade)
+
+O projeto usa `vercel.json` com região **`gru1` (São Paulo)**, alinhada ao Supabase em `sa-east-1`. Assim, salvar/editar na produção não precisa ir até os EUA e voltar a cada ação.
+
+Confira também em **Settings → Functions → Function Region** se está em São Paulo. Se o seu Supabase estiver em outra região, ajuste `regions` no `vercel.json` para a região Vercel mais próxima do banco.
+
 Depois de salvar, faça **Deployments → Redeploy** e desmarque **Use existing Build Cache** para forçar um build novo com as chaves.
 
 Sem isso o site abre sem dados da barbearia e o painel mostra erro de Supabase não configurado.
