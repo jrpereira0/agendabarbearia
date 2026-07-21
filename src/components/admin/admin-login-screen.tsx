@@ -1,97 +1,56 @@
-import { Lock } from "lucide-react";
-import { BrandLogo, BrandMark } from "@/components/brand-logo";
-import { AdminLoginForm } from "@/components/admin/admin-login-form";
+"use client"
+
+import { AdminLoginForm } from "@/components/admin/admin-login-form"
+import "@/components/admin/admin-login-theme.css"
+import { BRAND_NAME } from "@/lib/brand"
 
 type AdminLoginScreenProps = {
-  configured: boolean;
-  errorMessage?: string;
-};
+  configured: boolean
+  errorMessage?: string
+}
 
 export function AdminLoginScreen({
   configured,
   errorMessage,
 }: AdminLoginScreenProps) {
   return (
-    <div className="flex min-h-dvh bg-background">
-      <aside className="relative hidden w-[min(44%,520px)] shrink-0 flex-col justify-between overflow-hidden border-r bg-foreground p-10 text-background lg:flex">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{
-            backgroundImage:
-              "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-        />
+    <div className="login-theme relative flex min-h-dvh flex-col overflow-hidden">
+      <div
+        aria-hidden
+        className="login-glow pointer-events-none absolute inset-0"
+      />
+      <div
+        aria-hidden
+        className="login-grid pointer-events-none absolute inset-x-0 top-0 h-[55vh]"
+      />
 
-        <div className="relative">
-          <BrandLogo
-            size="lg"
-            nameClassName="text-background"
-            className="text-background"
-          />
-        </div>
-
-        <div className="relative space-y-5">
-          <p className="text-xs font-medium uppercase tracking-[0.2em] text-background/50">
-            Painel administrativo
-          </p>
-          <h1 className="max-w-xs text-3xl font-semibold leading-tight tracking-tight">
-            Sua barbearia, organizada de ponta a ponta.
+      <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-4 py-6 sm:px-6 sm:py-10">
+        <div className="mb-6 flex flex-col items-center text-center sm:mb-8">
+          <h1 className="login-display login-enter-title text-[1.75rem] leading-tight font-medium tracking-tight text-white sm:text-[2.15rem]">
+            {BRAND_NAME}
           </h1>
-          <p className="max-w-sm text-sm leading-relaxed text-background/65">
-            Agenda do dia, clientes, profissionais e serviços — tudo em um lugar
-            só, feito para quem está na correria do salão.
+          <p className="login-enter-subtitle mt-2.5 max-w-[20rem] text-sm leading-relaxed text-[var(--login-muted)]">
+            Entre no painel para gerenciar horários, clientes e a rotina do
+            salão.
           </p>
         </div>
 
-        <p className="relative text-xs text-background/45">
-          Acesso restrito à equipe
-        </p>
-      </aside>
-
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center border-b px-5 py-4 sm:px-8 lg:hidden">
-          <BrandLogo size="md" />
-        </header>
-
-        <div className="flex flex-1 items-center justify-center px-5 py-10 sm:px-8">
-          <div className="w-full max-w-[400px]">
-            <div className="mb-8 flex flex-col items-center text-center lg:items-start lg:text-left">
-              <BrandMark className="mb-5 size-16 rounded-2xl border-border lg:hidden" />
-              <div className="mb-3 hidden size-11 items-center justify-center rounded-xl border bg-muted/40 lg:flex">
-                <Lock className="size-5 text-foreground" aria-hidden />
-              </div>
-              <h2 className="text-2xl font-semibold tracking-tight">
-                Entrar no painel
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Use o e-mail e a senha que você recebeu para acessar a agenda e
-                o cadastro da barbearia.
-              </p>
-            </div>
-
-            {!configured && (
-              <div
-                className="mb-6 rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground"
-                role="status"
-              >
-                O painel ainda não está ligado ao banco de dados. Na Vercel,
-                cadastre as variáveis do Supabase e faça um novo deploy.
-              </div>
-            )}
-
+        <div className="login-enter-card login-card relative w-full max-w-[420px] overflow-hidden rounded-2xl">
+          <div className="relative p-5 sm:p-8">
             <AdminLoginForm
               configured={configured}
               errorMessage={errorMessage}
             />
-
-            <p className="mt-8 text-center text-xs text-muted-foreground lg:text-left">
-              Problemas para entrar? Fale com o dono da barbearia.
-            </p>
           </div>
         </div>
       </main>
+
+      <footer className="login-enter-footer relative z-10 flex items-center justify-center px-4 pb-6 pt-2">
+        <p className="text-center text-xs tracking-wide text-[var(--login-muted)]">
+          © 2026 {BRAND_NAME}
+          <sup className="ml-0.5 text-[0.65em] leading-none">®</sup>
+        </p>
+      </footer>
     </div>
-  );
+  )
 }

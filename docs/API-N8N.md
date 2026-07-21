@@ -8,7 +8,7 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
 
 - **Produto:** sistema de agendamento para barbearia (Agenda Barbearia).
 - **Site do cliente:** `https://agendabarbearia-seven.vercel.app/agenda`
-- **Painel admin:** `https://agendabarbearia-seven.vercel.app/` (login do dono/barbeiro).
+- **Painel admin:** `https://agendabarbearia-seven.vercel.app/login-admin` (login do dono/barbeiro).
 - **API base (produção):** `https://agendabarbearia-seven.vercel.app/api/v1`
 - **Fuso horário:** `America/Sao_Paulo`
 - **Autenticação:** rotas públicas continuam acessíveis pelo site sem chave. Para integrações (n8n), use **chave de API** gerada no painel (`Configurações > Integrações > Chaves de API`). Header: `Authorization: Bearer dbc_live_<keyId>_<secret>`.

@@ -1,0 +1,265 @@
+/* Tema local da login — escuro + #ECF15E, sóbrio.
+   Fontes: public/fonts/ (veja README). */
+
+@font-face {
+  font-family: "Aeonik";
+  src: url("/fonts/aeonik/Aeonik-Regular.woff2") format("woff2"),
+    url("/fonts/aeonik/Aeonik-Regular.woff") format("woff");
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Montreal";
+  src: url("/fonts/neue-montreal/NeueMontreal-Regular.woff2") format("woff2"),
+    url("/fonts/neue-montreal/NeueMontreal-Regular.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Montreal";
+  src: url("/fonts/neue-montreal/NeueMontreal-Medium.woff2") format("woff2"),
+    url("/fonts/neue-montreal/NeueMontreal-Medium.woff") format("woff");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Montreal";
+  src: url("/fonts/neue-montreal/NeueMontreal-Bold.woff2") format("woff2"),
+    url("/fonts/neue-montreal/NeueMontreal-Bold.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+.login-theme {
+  --login-bg: #0e0f11;
+  --login-card: #151618;
+  --login-card-border: rgb(255 255 255 / 8%);
+  --login-muted: #8b8d93;
+  --login-input: #1a1b1e;
+  --login-input-border: rgb(255 255 255 / 10%);
+  --login-accent: #ecf15e;
+  --login-accent-hover: #e0e64f;
+  --login-accent-pressed: #d4da45;
+  --login-accent-foreground: #0e0f11;
+  --login-font-body: "Aeonik", var(--font-outfit), var(--font-sans), system-ui,
+    sans-serif;
+  --login-font-display: "Neue Montreal", "Aeonik", var(--font-outfit),
+    var(--font-sans), system-ui, sans-serif;
+
+  font-family: var(--login-font-body);
+  color: #f5f5f5;
+  background: var(--login-bg);
+  min-height: 100dvh;
+}
+
+.login-theme .login-display {
+  font-family: var(--login-font-display);
+}
+
+.login-theme .login-glow {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 0%,
+    rgb(236 241 94 / 22%) 0%,
+    rgb(236 241 94 / 8%) 40%,
+    transparent 70%
+  );
+  animation: login-bg-in 900ms ease-out both, login-glow-soft 8s ease-in-out 900ms infinite;
+}
+
+.login-theme .login-grid {
+  background-image: linear-gradient(
+      to right,
+      rgb(236 241 94 / 10%) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgb(236 241 94 / 10%) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(
+    ellipse 65% 50% at 50% 0%,
+    #000 0%,
+    transparent 75%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 65% 50% at 50% 0%,
+    #000 0%,
+    transparent 75%
+  );
+  animation: login-bg-in 1100ms ease-out 80ms both;
+}
+
+.login-theme .login-card {
+  background: var(--login-card);
+  border: 1px solid var(--login-card-border);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 45%);
+}
+
+.login-theme .login-input {
+  border-color: var(--login-input-border);
+  background: var(--login-input);
+  color: #f5f5f5;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.login-theme .login-input::placeholder {
+  color: rgb(139 141 147 / 80%);
+}
+
+.login-theme .login-input:focus-visible {
+  border-color: rgb(236 241 94 / 55%);
+  box-shadow: 0 0 0 3px rgb(236 241 94 / 18%);
+  outline: none;
+}
+
+.login-theme .login-btn-primary {
+  position: relative;
+  overflow: hidden;
+  background: var(--login-accent);
+  color: var(--login-accent-foreground);
+  transition: background-color 160ms ease, transform 160ms ease,
+    box-shadow 180ms ease;
+}
+
+.login-theme .login-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgb(255 255 255 / 35%) 50%,
+    transparent 60%
+  );
+  transform: translateX(-130%);
+  transition: transform 480ms ease;
+}
+
+.login-theme .login-btn-primary:hover:not(:disabled) {
+  background: var(--login-accent-hover);
+  box-shadow: 0 8px 24px rgb(236 241 94 / 18%);
+}
+
+.login-theme .login-btn-primary:hover:not(:disabled)::after {
+  transform: translateX(130%);
+}
+
+.login-theme .login-btn-primary:active:not(:disabled) {
+  background: var(--login-accent-pressed);
+  transform: translateY(1px);
+  box-shadow: none;
+}
+
+.login-theme .login-btn-primary:disabled {
+  opacity: 0.5;
+}
+
+.login-theme .login-btn-primary[aria-busy="true"] {
+  opacity: 1;
+  box-shadow: 0 0 0 1px rgb(236 241 94 / 35%), 0 8px 28px rgb(236 241 94 / 22%);
+}
+
+.login-theme .login-alert {
+  border: 1px solid rgb(236 241 94 / 22%);
+  background: rgb(236 241 94 / 8%);
+  color: #f0f1e8;
+  animation: login-rise 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.login-theme .login-alert-warn {
+  border-color: rgb(245 158 11 / 28%);
+  background: rgb(245 158 11 / 10%);
+  color: #f5e6c8;
+}
+
+/* Entrada em sequência */
+
+.login-theme .login-enter-title {
+  animation: login-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+}
+
+.login-theme .login-enter-subtitle {
+  animation: login-rise 620ms cubic-bezier(0.22, 1, 0.36, 1) 220ms both;
+}
+
+.login-theme .login-enter-card {
+  animation: login-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) 320ms both;
+}
+
+.login-theme .login-enter-field {
+  animation: login-rise 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(420ms + var(--enter-step, 0) * 70ms);
+}
+
+.login-theme .login-enter-footer {
+  animation: login-fade 700ms ease-out 560ms both;
+}
+
+@keyframes login-bg-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes login-glow-soft {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-theme .login-glow,
+  .login-theme .login-grid,
+  .login-theme .login-enter-title,
+  .login-theme .login-enter-subtitle,
+  .login-theme .login-enter-card,
+  .login-theme .login-enter-field,
+  .login-theme .login-enter-footer {
+    animation: none;
+  }
+
+  .login-theme .login-btn-primary,
+  .login-theme .login-btn-primary::after {
+    transition: none;
+  }
+
+  .login-theme .login-btn-primary:hover:not(:disabled)::after {
+    transform: none;
+  }
+
+  .login-theme .login-btn-primary:active:not(:disabled) {
+    transform: none;
+  }
+}

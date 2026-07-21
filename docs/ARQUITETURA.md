@@ -12,7 +12,8 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 
 | Pasta | O que tem |
 | --- | --- |
-| `src/app/page.tsx` | Login do painel (página inicial) |
+| `src/app/login-admin` | Login do painel admin |
+| `src/app/page.tsx` | Redireciona `/` → `/login-admin` |
 | `src/app/agenda` | Página do cliente: perfil da barbearia e agendamento |
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
@@ -31,8 +32,8 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/hooks` | Hooks compartilhados (ex.: `use-mobile`, usado pela sidebar) |
 | `src/lib/supabase` | Conexões com o Supabase (server e admin) |
 | `src/lib/api` | Guards de autenticação/rate limit das rotas REST (`with-api-guard.ts`, `safe-route.ts`) |
-| `src/proxy.ts` | Protege `/admin` e renova sessão em `/` (login). No Next.js 16, "Middleware" foi renomeado para "Proxy" — é o mesmo conceito |
-| `src/lib/login-path.ts` | Caminho do login (`/`) e URLs de erro |
+| `src/proxy.ts` | Protege `/admin` e renova sessão em `/login-admin`. No Next.js 16, "Middleware" foi renomeado para "Proxy" — é o mesmo conceito |
+| `src/lib/login-path.ts` | Caminho do login (`/login-admin`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
 | `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices`, `db:reset-shop` e `create-admin` |
 | `src/lib/catalog-booking.ts` | Catálogo enxuto `mode=booking` (preços agrupados por dia para n8n/IA) |

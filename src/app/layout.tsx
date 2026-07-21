@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Outfit } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { BRAND_ICON_PATH } from "@/lib/brand";
 import { getShopSeo } from "@/lib/get-shop-seo";
@@ -13,6 +13,12 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+/** Tipografia da nova identidade — usada na login (fase 1); demais telas ainda usam Geist. */
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -54,7 +60,7 @@ export default function RootLayout({
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

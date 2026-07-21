@@ -1,5 +1,5 @@
-/** Página inicial do sistema: login do painel. */
-export const LOGIN_PATH = "/";
+/** Login do painel admin. */
+export const LOGIN_PATH = "/login-admin";
 
 export function loginUrl(erro?: string): string {
   if (!erro) return LOGIN_PATH;
