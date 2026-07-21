@@ -14,7 +14,6 @@ import {
 import {
   closeComanda,
   getComandaForAppointment,
-  getComandaById,
   reopenComanda,
   updateComandaItems,
   type CreditDepositInput,
@@ -24,11 +23,8 @@ import {
   canCloseComandaInOpenCashRegister,
   getOpenCashRegisterSessionBasic,
 } from "@/lib/cash-register-service";
-import {
-  addCustomerCredit,
-  getCustomerCreditBalanceByWhatsapp,
-} from "@/lib/customer-credit-service";
-import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { getCustomerCreditBalanceByWhatsapp } from "@/lib/customer-credit-service";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
@@ -470,5 +466,3 @@ export async function previewComandaTotals(
 
   return calculateComandaTotals(items, data?.commission_percent ?? 50);
 }
-
-export { systemUnavailable };

@@ -35,7 +35,6 @@ import {
 import {
   formatPublicServicePriceLabel,
   formatPublicServicesTotalLabel,
-  sumPublicServicesPriceCents,
 } from "@/lib/public-service-prices";
 import { sortServicesByPopularity } from "@/lib/booking-service-groups";
 import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
@@ -106,7 +105,6 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     (sum, s) => sum + s.durationMinutes,
     0
   );
-  const editTotalPrice = sumPublicServicesPriceCents(selectedServices, editDate);
   const editTotalPriceLabel = formatPublicServicesTotalLabel(
     selectedServices,
     editDate

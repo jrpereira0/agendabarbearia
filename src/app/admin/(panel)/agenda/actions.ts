@@ -3,7 +3,7 @@
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { minutesToTime, nowMinutesInTimezone, timeToMinutes, todayInTimezone, weekdayOf } from "@/lib/availability";
 import { formatTime } from "@/lib/format";

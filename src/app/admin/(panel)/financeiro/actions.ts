@@ -241,7 +241,8 @@ export async function payCommissionAction(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
   }
 
-  let { from, to, professionalId } = parsed.data;
+  const { professionalId } = parsed.data;
+  let { from, to } = parsed.data;
   if (from > to) [from, to] = [to, from];
 
   const admin = requireAdminClient();

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, requireAdminClient, systemUnavailable } from "@/lib/supabase/admin";
+import { createAdminClient, requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { formatShopAddress } from "@/lib/format";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";

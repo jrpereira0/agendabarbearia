@@ -1265,7 +1265,7 @@ async function syncItemsFromLinkedAppointments(
     .from("comanda_items")
     .select("sort_order")
     .eq("comanda_id", comandaId);
-  let sortOrder =
+  const sortOrder =
     (sortRows ?? []).reduce(
       (max, row) => Math.max(max, row.sort_order ?? 0),
       -1

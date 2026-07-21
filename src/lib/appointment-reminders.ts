@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 import {
-  TIMEZONE,
   nowMinutesInTimezone,
   timeToMinutes,
   todayInTimezone,
