@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -98,30 +98,26 @@ export function AppointmentActionsDialog({
   onEditAppointment,
 }: AppointmentActionsDialogProps) {
   const router = useRouter();
+  // Estado reinicia a cada agendamento aberto — ver `key` no componente-pai.
   const [subView, setSubView] = useState<SubView>("main");
   const [busy, setBusy] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [comandaClosed, setComandaClosed] = useState(false);
+  const [firstName, setFirstName] = useState(
+    () => appointment?.customerFirstName ?? ""
+  );
+  const [lastName, setLastName] = useState(
+    () => appointment?.customerLastName ?? ""
+  );
+  const [whatsapp, setWhatsapp] = useState(() =>
+    appointment ? formatWhatsapp(appointment.customerWhatsapp) : ""
+  );
+  const [comandaClosed, setComandaClosed] = useState(
+    () => appointment?.status === "done"
+  );
   const [confirmCreditShortfallCents, setConfirmCreditShortfallCents] = useState<
     number | null
   >(null);
   const [reopenComandaId, setReopenComandaId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open || !appointment) return;
-    setSubView("main");
-    setBusy(false);
-    setCancelReason("");
-    setFirstName(appointment.customerFirstName);
-    setLastName(appointment.customerLastName);
-    setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
-    setComandaClosed(appointment.status === "done");
-    setConfirmCreditShortfallCents(null);
-    setReopenComandaId(null);
-  }, [open, appointment?.id, appointment?.status, appointment]);
 
   if (!appointment) return null;
 

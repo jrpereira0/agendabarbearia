@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,31 +56,19 @@ export function OpenCashRegisterDialog({
   defaultOpeningBalanceCents = 0,
   onSuccess,
 }: OpenCashRegisterDialogProps) {
-  const [serviceDateInput, setServiceDateInput] = useState(serviceDate);
-  const [responsibleId, setResponsibleId] = useState("");
-  const [cashInput, setCashInput] = useState("");
+  // Reinicia sempre que o diálogo abre de novo — ver `key` no componente-pai.
+  const [serviceDateInput, setServiceDateInput] = useState(
+    () => serviceDate || today
+  );
+  const [responsibleId, setResponsibleId] = useState(
+    () => defaultResponsibleId ?? responsibleOptions[0]?.id ?? ""
+  );
+  const [cashInput, setCashInput] = useState(() =>
+    defaultOpeningBalanceCents > 0
+      ? formatPriceBRL(defaultOpeningBalanceCents)
+      : ""
+  );
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setServiceDateInput(serviceDate || today);
-    const fallbackId =
-      defaultResponsibleId ?? responsibleOptions[0]?.id ?? "";
-    setResponsibleId(fallbackId);
-    setCashInput(
-      defaultOpeningBalanceCents > 0
-        ? formatPriceBRL(defaultOpeningBalanceCents)
-        : ""
-    );
-    setBusy(false);
-  }, [
-    open,
-    serviceDate,
-    today,
-    defaultResponsibleId,
-    defaultOpeningBalanceCents,
-    responsibleOptions,
-  ]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

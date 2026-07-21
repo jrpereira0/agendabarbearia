@@ -486,7 +486,59 @@ export function ComandaDialog({
     }
   }, [appointment, sessionProfessionalId]);
 
+  // Dispara a busca da comanda no servidor sempre que o diálogo abre pra um
+  // agendamento (ou os dados relevantes mudam enquanto já está aberto).
   useEffect(() => {
+    if (open && appointment) {
+      // Defer pro próximo tick: evita "setState direto no efeito" e permite
+      // cancelar (abaixo) se o diálogo fechar antes da busca começar.
+      const timer = setTimeout(() => void load(), 0);
+      return () => clearTimeout(timer);
+    }
+    if (!open) {
+      loadGenRef.current += 1;
+    }
+  }, [
+    open,
+    appointment,
+    load,
+    appointments,
+    isOwnerHint,
+    initialCashRegisterOpen,
+    initialOpenCashRegisterDate,
+    sessionProfessionalId,
+  ]);
+
+  // Ajustes de estado local (sem chamada ao servidor) pro mesmo gatilho acima.
+  const [syncedFor, setSyncedFor] = useState({
+    open,
+    appointmentId: appointment?.id ?? null,
+    appointments,
+    isOwnerHint,
+    initialCashRegisterOpen,
+    initialOpenCashRegisterDate,
+    sessionProfessionalId,
+  });
+  const needsSync =
+    open !== syncedFor.open ||
+    (appointment?.id ?? null) !== syncedFor.appointmentId ||
+    appointments !== syncedFor.appointments ||
+    isOwnerHint !== syncedFor.isOwnerHint ||
+    initialCashRegisterOpen !== syncedFor.initialCashRegisterOpen ||
+    initialOpenCashRegisterDate !== syncedFor.initialOpenCashRegisterDate ||
+    sessionProfessionalId !== syncedFor.sessionProfessionalId;
+
+  if (needsSync) {
+    setSyncedFor({
+      open,
+      appointmentId: appointment?.id ?? null,
+      appointments,
+      isOwnerHint,
+      initialCashRegisterOpen,
+      initialOpenCashRegisterDate,
+      sessionProfessionalId,
+    });
+
     if (open && appointment) {
       const dayApts = dayAppointmentsForCustomer(appointment, appointments);
       const provisional = buildProvisionalItems(dayApts);
@@ -518,12 +570,7 @@ export function ComandaDialog({
         appointment.professionalId || sessionProfessionalId || ""
       );
       setCustomerCreditBalanceCents(0);
-      void load();
-      return;
-    }
-
-    if (!open) {
-      loadGenRef.current += 1;
+    } else if (!open) {
       setComanda(null);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);
@@ -545,16 +592,7 @@ export function ComandaDialog({
       setClosing(false);
       setBusy(false);
     }
-  }, [
-    open,
-    appointment?.id,
-    load,
-    appointments,
-    isOwnerHint,
-    initialCashRegisterOpen,
-    initialOpenCashRegisterDate,
-    sessionProfessionalId,
-  ]);
+  }
 
   useEffect(() => {
     if (!servicePickerOpen) return;

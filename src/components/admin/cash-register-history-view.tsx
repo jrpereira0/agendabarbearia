@@ -66,6 +66,7 @@ export function CashRegisterHistoryView({
   const mountedRef = useRef(true);
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
+  const [appliedRange, setAppliedRange] = useState({ from, to });
   const [search, setSearch] = useState("");
   const [busyDate, setBusyDate] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -83,10 +84,12 @@ export function CashRegisterHistoryView({
     };
   }, []);
 
-  useEffect(() => {
+  // Sincroniza com a URL quando o período muda (ex: navegação pelo filtro).
+  if (appliedRange.from !== from || appliedRange.to !== to) {
+    setAppliedRange({ from, to });
     setFromDate(from);
     setToDate(to);
-  }, [from, to]);
+  }
 
   const filtered = useMemo(() => {
     if (!search.trim()) return sessions;
@@ -448,6 +451,7 @@ export function CashRegisterHistoryView({
       )}
 
       <OpenCashRegisterDialog
+        key={`${openDialog}-${openMode}-${dialogDate ?? today}`}
         open={openDialog}
         onOpenChange={setOpenDialog}
         serviceDate={dialogDate ?? today}

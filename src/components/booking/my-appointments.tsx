@@ -182,45 +182,51 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     if (step !== "edit" || !editing || editServiceIds.length === 0) return;
 
     let cancelled = false;
-    setLoadingSlots(true);
-    setSlotsError(null);
+    // Defer pro próximo tick: evita "setState direto no efeito" e permite
+    // cancelar (abaixo) antes de sequer começar a buscar.
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setLoadingSlots(true);
+      setSlotsError(null);
 
-    const params = new URLSearchParams({
-      professionalId: editing.professionalId,
-      date: editDate,
-      serviceIds: editServiceIds.join(","),
-      excludeAppointmentId: editing.id,
-    });
-
-    fetch(`/api/v1/availability?${params}`)
-      .then(async (res) => {
-        const body = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setAvailableSlots([]);
-          setSlotsError(body.error ?? "Não foi possível carregar os horários.");
-          return;
-        }
-        const loaded: string[] = body.slots ?? [];
-        setAvailableSlots(loaded);
-        if (loaded.length === 0) {
-          setSlotsError("Nenhum horário livre neste dia para esses serviços.");
-        } else if (editStartTime && !loaded.includes(editStartTime)) {
-          setEditStartTime(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailableSlots([]);
-          setSlotsError("Não foi possível carregar os horários.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSlots(false);
+      const params = new URLSearchParams({
+        professionalId: editing.professionalId,
+        date: editDate,
+        serviceIds: editServiceIds.join(","),
+        excludeAppointmentId: editing.id,
       });
+
+      fetch(`/api/v1/availability?${params}`)
+        .then(async (res) => {
+          const body = await res.json();
+          if (cancelled) return;
+          if (!res.ok) {
+            setAvailableSlots([]);
+            setSlotsError(body.error ?? "Não foi possível carregar os horários.");
+            return;
+          }
+          const loaded: string[] = body.slots ?? [];
+          setAvailableSlots(loaded);
+          if (loaded.length === 0) {
+            setSlotsError("Nenhum horário livre neste dia para esses serviços.");
+          } else if (editStartTime && !loaded.includes(editStartTime)) {
+            setEditStartTime(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAvailableSlots([]);
+            setSlotsError("Não foi possível carregar os horários.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSlots(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [step, editing, editDate, editServiceIds, editStartTime]);
 

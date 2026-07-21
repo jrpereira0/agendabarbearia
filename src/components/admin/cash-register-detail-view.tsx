@@ -407,6 +407,7 @@ export function CashRegisterDetailView({
       </section>
 
       <OpenCashRegisterDialog
+        key={`${openDialog}-${openMode}`}
         open={openDialog}
         onOpenChange={setOpenDialog}
         serviceDate={date}

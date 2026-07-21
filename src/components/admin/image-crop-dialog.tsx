@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Cropper, { type Area } from "react-easy-crop";
 import { Button } from "@/components/ui/button";
 import {
@@ -87,13 +87,6 @@ export function ImageCropDialog({
   const onCropComplete = useCallback((_area: Area, pixels: Area) => {
     setCroppedAreaPixels(pixels);
   }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    setCrop({ x: 0, y: 0 });
-    setZoom(1);
-    setCroppedAreaPixels(null);
-  }, [open, imageSrc]);
 
   async function handleConfirm() {
     if (!imageSrc || !croppedAreaPixels) return;

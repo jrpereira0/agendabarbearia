@@ -94,14 +94,17 @@ export function EditAppointmentDialog({
     );
   }, [availableServices, serviceSearch]);
 
-  const selectedServices = services.filter((s) => serviceIds.includes(s.id));
-  const totalMinutes = selectedServices.reduce(
-    (sum, s) => sum + s.durationMinutes,
-    0
+  const selectedServices = useMemo(
+    () => services.filter((s) => serviceIds.includes(s.id)),
+    [services, serviceIds]
   );
-  const totalPrice = selectedServices.reduce(
-    (sum, s) => sum + s.priceCents,
-    0
+  const totalMinutes = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+    [selectedServices]
+  );
+  const totalPrice = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.priceCents, 0),
+    [selectedServices]
   );
 
   const encaixeSlots = useMemo(
@@ -205,28 +208,47 @@ export function EditAppointmentDialog({
     );
   }, [startTime, totalMinutes, selectedRanges]);
 
-  useEffect(() => {
-    if (!open || !appointment) return;
+  // Reinicia o formulário sempre que o diálogo abre pra um agendamento.
+  const [syncedFor, setSyncedFor] = useState({
+    open,
+    appointmentId: appointment?.id ?? null,
+  });
+  if (open !== syncedFor.open || (appointment?.id ?? null) !== syncedFor.appointmentId) {
+    setSyncedFor({ open, appointmentId: appointment?.id ?? null });
 
-    setSaving(false);
-    setProfessionalId(appointment.professionalId);
-    setFirstName(appointment.customerFirstName);
-    setLastName(appointment.customerLastName);
-    setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
-    setServiceIds(appointment.services.map((s) => s.id));
-    setStartTime(appointment.startTime);
-    setServiceSearch("");
-    setAvailableSlots([]);
-    setSlotsError(null);
-  }, [open, appointment]);
+    if (open && appointment) {
+      setSaving(false);
+      setProfessionalId(appointment.professionalId);
+      setFirstName(appointment.customerFirstName);
+      setLastName(appointment.customerLastName);
+      setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
+      setServiceIds(appointment.services.map((s) => s.id));
+      setStartTime(appointment.startTime);
+      setServiceSearch("");
+      setAvailableSlots([]);
+      setSlotsError(null);
+    }
+  }
 
-  useEffect(() => {
-    if (!open || !professionalId) return;
+  // Troca de barbeiro → tira da seleção os serviços que ele não oferece.
+  const [serviceFilterSyncedFor, setServiceFilterSyncedFor] = useState({
+    open,
+    professionalId,
+    professionals,
+  });
+  if (
+    open &&
+    professionalId &&
+    (professionalId !== serviceFilterSyncedFor.professionalId ||
+      professionals !== serviceFilterSyncedFor.professionals ||
+      open !== serviceFilterSyncedFor.open)
+  ) {
+    setServiceFilterSyncedFor({ open, professionalId, professionals });
     const allowed = new Set(
       professionals.find((p) => p.id === professionalId)?.serviceIds ?? []
     );
     setServiceIds((prev) => prev.filter((id) => allowed.has(id)));
-  }, [open, professionalId, professionals]);
+  }
 
   useEffect(() => {
     if (
@@ -241,41 +263,47 @@ export function EditAppointmentDialog({
     }
 
     let cancelled = false;
-    setLoadingSlots(true);
-    setSlotsError(null);
+    // Defer pro próximo tick: evita "setState direto no efeito" e permite
+    // cancelar (abaixo) antes de sequer começar a buscar.
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setLoadingSlots(true);
+      setSlotsError(null);
 
-    getEditAvailabilitySlots({
-      professionalId,
-      date: appointment.date,
-      serviceIds,
-      excludeAppointmentId: appointment.id,
-    })
-      .then((result) => {
-        if (cancelled) return;
-        if (!result.ok) {
-          setAvailableSlots([]);
-          setSlotsError(result.error);
-          return;
-        }
-        setAvailableSlots(result.slots);
-        if (result.slots.length === 0 && appointment.startTime) {
-          setSlotsError(null);
-        } else if (result.slots.length === 0) {
-          setSlotsError("Nenhum horário livre neste dia para esses serviços.");
-        }
+      getEditAvailabilitySlots({
+        professionalId,
+        date: appointment.date,
+        serviceIds,
+        excludeAppointmentId: appointment.id,
       })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailableSlots([]);
-          setSlotsError("Não foi possível carregar os horários.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSlots(false);
-      });
+        .then((result) => {
+          if (cancelled) return;
+          if (!result.ok) {
+            setAvailableSlots([]);
+            setSlotsError(result.error);
+            return;
+          }
+          setAvailableSlots(result.slots);
+          if (result.slots.length === 0 && appointment.startTime) {
+            setSlotsError(null);
+          } else if (result.slots.length === 0) {
+            setSlotsError("Nenhum horário livre neste dia para esses serviços.");
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAvailableSlots([]);
+            setSlotsError("Não foi possível carregar os horários.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSlots(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [open, appointment, isEncaixe, ownerFreeMode, serviceIds, professionalId]);
 

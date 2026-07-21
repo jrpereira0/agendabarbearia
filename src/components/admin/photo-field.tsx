@@ -201,6 +201,7 @@ export function PhotoField({
       <input type="hidden" name={positionName} value={position} />
 
       <ImageCropDialog
+        key={cropSrc}
         open={cropOpen}
         imageSrc={cropSrc}
         shape={shape}

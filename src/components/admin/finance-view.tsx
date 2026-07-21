@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BarChart3, Percent, Wallet } from "lucide-react";
@@ -52,12 +52,15 @@ export function FinanceView({
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
   const [selectedMetric, setSelectedMetric] = useState<FinanceMetricId>(metric);
+  const [applied, setApplied] = useState({ from, to, metric });
 
-  useEffect(() => {
+  // Sincroniza com a URL quando período/métrica mudam (ex: navegação pelo filtro).
+  if (applied.from !== from || applied.to !== to || applied.metric !== metric) {
+    setApplied({ from, to, metric });
     setFromDate(from);
     setToDate(to);
     setSelectedMetric(metric);
-  }, [from, to, metric]);
+  }
 
   const hasData = report.totals.serviceItemCount > 0;
   const isDetail = metric !== "geral";

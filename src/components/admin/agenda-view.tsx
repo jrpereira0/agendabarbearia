@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -322,44 +322,47 @@ export function AgendaView({
   );
   /** No celular: filtrar a grade por um barbeiro (`null` = todos). */
   const [mobileProFocus, setMobileProFocus] = useState<string | null>(null);
+  const [prevDate, setPrevDate] = useState(date);
 
   const displayDate = pendingDate ?? date;
   const isNavigating =
     isPending || (pendingDate !== null && pendingDate !== date);
 
-  useEffect(() => {
+  // A navegação (troca de dia) foi confirmada pelo servidor → some o estado otimista.
+  if (date !== prevDate) {
+    setPrevDate(date);
     setPendingDate(null);
-  }, [date]);
+  }
 
-  useEffect(() => {
-    if (!selectedAppointment) return;
+  // Mantém o agendamento selecionado sincronizado com dados mais recentes da agenda.
+  if (selectedAppointment) {
     const fresh = appointments.find((apt) => apt.id === selectedAppointment.id);
     if (!fresh) {
       setSelectedAppointment(null);
-      return;
-    }
+    } else {
+      const servicesChanged =
+        fresh.services.length !== selectedAppointment.services.length ||
+        fresh.services.some(
+          (service, index) =>
+            service.id !== selectedAppointment.services[index]?.id ||
+            service.priceCents !==
+              selectedAppointment.services[index]?.priceCents
+        );
 
-    const servicesChanged =
-      fresh.services.length !== selectedAppointment.services.length ||
-      fresh.services.some(
-        (service, index) =>
-          service.id !== selectedAppointment.services[index]?.id ||
-          service.priceCents !== selectedAppointment.services[index]?.priceCents
-      );
-
-    if (
-      fresh.status !== selectedAppointment.status ||
-      fresh.startTime !== selectedAppointment.startTime ||
-      fresh.endTime !== selectedAppointment.endTime ||
-      fresh.professionalId !== selectedAppointment.professionalId ||
-      fresh.customerFirstName !== selectedAppointment.customerFirstName ||
-      fresh.customerLastName !== selectedAppointment.customerLastName ||
-      fresh.customerWhatsapp !== selectedAppointment.customerWhatsapp ||
-      servicesChanged
-    ) {
-      setSelectedAppointment(fresh);
+      if (
+        fresh.status !== selectedAppointment.status ||
+        fresh.startTime !== selectedAppointment.startTime ||
+        fresh.endTime !== selectedAppointment.endTime ||
+        fresh.professionalId !== selectedAppointment.professionalId ||
+        fresh.customerFirstName !== selectedAppointment.customerFirstName ||
+        fresh.customerLastName !== selectedAppointment.customerLastName ||
+        fresh.customerWhatsapp !== selectedAppointment.customerWhatsapp ||
+        servicesChanged
+      ) {
+        setSelectedAppointment(fresh);
+      }
     }
-  }, [appointments, selectedAppointment]);
+  }
 
   const professionals: ProfessionalOption[] = useMemo(
     () =>
@@ -395,9 +398,10 @@ export function AgendaView({
     });
   }
 
-  useEffect(() => {
-    if (!isPending) setIsRefreshing(false);
-  }, [isPending]);
+  // A transição do `router.refresh()` terminou → desliga o indicador de "atualizando".
+  if (!isPending && isRefreshing) {
+    setIsRefreshing(false);
+  }
 
   function openBooking(
     mode: BookingMode,
@@ -605,6 +609,7 @@ export function AgendaView({
       />
 
       <AppointmentActionsDialog
+        key={`${actionsOpen}-${selectedAppointment?.id}-${selectedAppointment?.status}`}
         appointment={selectedAppointment}
         open={actionsOpen}
         onOpenChange={setActionsOpen}

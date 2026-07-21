@@ -400,34 +400,70 @@ export function NewAppointmentDialog({
     [filteredServices, serviceSearch]
   );
 
-  const selectedServices = services.filter((s) => serviceIds.includes(s.id));
-  const totalMinutes = selectedServices.reduce(
-    (sum, s) => sum + s.durationMinutes,
-    0
+  const selectedServices = useMemo(
+    () => services.filter((s) => serviceIds.includes(s.id)),
+    [services, serviceIds]
   );
-  const totalPrice = selectedServices.reduce(
-    (sum, s) => sum + s.priceCents,
-    0
+  const totalMinutes = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0),
+    [selectedServices]
+  );
+  const totalPrice = useMemo(
+    () => selectedServices.reduce((sum, s) => sum + s.priceCents, 0),
+    [selectedServices]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setSaving(false);
-    const proId =
-      defaultProfessionalId ??
-      (isOwner ? "" : professionals[0]?.id ?? "");
-    setStep(initialStep(isOwner, defaultProfessionalId, presetFromGrid));
-    setProfessionalId(proId);
-    setServiceIds([]);
-    setServiceSearch("");
-    setStartTime(defaultStartTime);
-    setPendingStartTime(defaultStartTime);
-    setFirstName("");
-    setLastName("");
-    setWhatsapp("");
-    setAvailableSlots([]);
-    setSlotsError(null);
-  }, [open, defaultProfessionalId, defaultStartTime, isOwner, professionals, mode, isEncaixe]);
+  // Reinicia o assistente inteiro sempre que o diálogo abre de novo.
+  const [syncedFor, setSyncedFor] = useState({
+    open,
+    defaultProfessionalId,
+    defaultStartTime,
+    isOwner,
+    professionals,
+    mode,
+    isEncaixe,
+    presetFromGrid,
+  });
+  const needsSync =
+    open !== syncedFor.open ||
+    defaultProfessionalId !== syncedFor.defaultProfessionalId ||
+    defaultStartTime !== syncedFor.defaultStartTime ||
+    isOwner !== syncedFor.isOwner ||
+    professionals !== syncedFor.professionals ||
+    mode !== syncedFor.mode ||
+    isEncaixe !== syncedFor.isEncaixe ||
+    presetFromGrid !== syncedFor.presetFromGrid;
+
+  if (needsSync) {
+    setSyncedFor({
+      open,
+      defaultProfessionalId,
+      defaultStartTime,
+      isOwner,
+      professionals,
+      mode,
+      isEncaixe,
+      presetFromGrid,
+    });
+
+    if (open) {
+      setSaving(false);
+      const proId =
+        defaultProfessionalId ??
+        (isOwner ? "" : professionals[0]?.id ?? "");
+      setStep(initialStep(isOwner, defaultProfessionalId, presetFromGrid));
+      setProfessionalId(proId);
+      setServiceIds([]);
+      setServiceSearch("");
+      setStartTime(defaultStartTime);
+      setPendingStartTime(defaultStartTime);
+      setFirstName("");
+      setLastName("");
+      setWhatsapp("");
+      setAvailableSlots([]);
+      setSlotsError(null);
+    }
+  }
 
   const encaixeSlots = useMemo(
     () => encaixeTimeSlots(slotStepMinutes),
@@ -526,45 +562,51 @@ export function NewAppointmentDialog({
     if (!professionalId || serviceIds.length === 0) return;
 
     let cancelled = false;
-    setLoadingSlots(true);
-    setSlotsError(null);
+    // Defer pro próximo tick: evita "setState direto no efeito" e permite
+    // cancelar (abaixo) antes de sequer começar a buscar.
+    const timer = setTimeout(() => {
+      if (cancelled) return;
+      setLoadingSlots(true);
+      setSlotsError(null);
 
-    const params = new URLSearchParams({
-      professionalId,
-      date,
-      serviceIds: serviceIds.join(","),
-    });
-
-    fetch(`/api/v1/availability?${params}`)
-      .then(async (res) => {
-        const body = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setAvailableSlots([]);
-          setSlotsError(body.error ?? "Não foi possível carregar os horários.");
-          return;
-        }
-        const loaded: string[] = body.slots ?? [];
-        setAvailableSlots(loaded);
-        if (loaded.length === 0) {
-          setSlotsError("Nenhum horário livre neste dia para esses serviços.");
-        } else if (pendingStartTime && loaded.includes(pendingStartTime)) {
-          setStartTime(pendingStartTime);
-          setPendingStartTime(null);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailableSlots([]);
-          setSlotsError("Não foi possível carregar os horários.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSlots(false);
+      const params = new URLSearchParams({
+        professionalId,
+        date,
+        serviceIds: serviceIds.join(","),
       });
+
+      fetch(`/api/v1/availability?${params}`)
+        .then(async (res) => {
+          const body = await res.json();
+          if (cancelled) return;
+          if (!res.ok) {
+            setAvailableSlots([]);
+            setSlotsError(body.error ?? "Não foi possível carregar os horários.");
+            return;
+          }
+          const loaded: string[] = body.slots ?? [];
+          setAvailableSlots(loaded);
+          if (loaded.length === 0) {
+            setSlotsError("Nenhum horário livre neste dia para esses serviços.");
+          } else if (pendingStartTime && loaded.includes(pendingStartTime)) {
+            setStartTime(pendingStartTime);
+            setPendingStartTime(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAvailableSlots([]);
+            setSlotsError("Não foi possível carregar os horários.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLoadingSlots(false);
+        });
+    }, 0);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [
     open,
@@ -577,13 +619,17 @@ export function NewAppointmentDialog({
     pendingStartTime,
   ]);
 
-  useEffect(() => {
-    if (!open || step !== "time" || !isEncaixe || !pendingStartTime) return;
-    if (encaixeSlots.includes(pendingStartTime)) {
-      setStartTime(pendingStartTime);
-      setPendingStartTime(null);
-    }
-  }, [open, step, isEncaixe, pendingStartTime, encaixeSlots]);
+  // Encaixe: assim que um horário pendente (vindo da grade) é válido, confirma.
+  if (
+    open &&
+    step === "time" &&
+    isEncaixe &&
+    pendingStartTime &&
+    encaixeSlots.includes(pendingStartTime)
+  ) {
+    setStartTime(pendingStartTime);
+    setPendingStartTime(null);
+  }
 
   function validatePresetTimeForServices(): boolean {
     if (!presetFromGrid || !startTime || !professionalId || totalMinutes === 0) {

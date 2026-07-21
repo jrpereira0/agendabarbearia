@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   Loader2,
@@ -88,6 +88,7 @@ export function AdminCustomerFields({
   const lastSearchRef = useRef("");
   const mountedRef = useRef(false);
   const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [wasEnabled, setWasEnabled] = useState(enabled);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -96,7 +97,19 @@ export function AdminCustomerFields({
     };
   }, []);
 
+  // Refs não entram em render — limpa fora, junto do resto (abaixo).
   useEffect(() => {
+    if (!enabled) {
+      lastLookupDigitsRef.current = "";
+      lastSearchRef.current = "";
+    } else if (searchQuery.trim().length < 2) {
+      lastSearchRef.current = "";
+    }
+  }, [enabled, searchQuery]);
+
+  // Campo desabilitado (ex: já tem cliente selecionado por fora) → limpa a busca.
+  if (enabled !== wasEnabled) {
+    setWasEnabled(enabled);
     if (!enabled) {
       setSearchQuery("");
       setSuggestions([]);
@@ -104,10 +117,8 @@ export function AdminCustomerFields({
       setCustomerFound(null);
       setLookupLoading(false);
       setSearchLoading(false);
-      lastLookupDigitsRef.current = "";
-      lastSearchRef.current = "";
     }
-  }, [enabled]);
+  }
 
   function resetSelection() {
     lastLookupDigitsRef.current = "";
@@ -136,26 +147,29 @@ export function AdminCustomerFields({
     setCustomerFound(true);
   }
 
-  function prefillFromSearchQuery(q: string) {
-    if (firstName || lastName || whatsapp) return;
+  const prefillFromSearchQuery = useCallback(
+    (q: string) => {
+      if (firstName || lastName || whatsapp) return;
 
-    const trimmed = q.trim();
-    const digits = trimmed.replace(/\D/g, "");
-    const hasLetters = /[a-zA-ZÀ-ÿ]/.test(trimmed);
+      const trimmed = q.trim();
+      const digits = trimmed.replace(/\D/g, "");
+      const hasLetters = /[a-zA-ZÀ-ÿ]/.test(trimmed);
 
-    if (!hasLetters && digits.length >= 8) {
-      onWhatsappChange(formatWhatsapp(digits));
-      return;
-    }
-
-    if (hasLetters) {
-      const parts = trimmed.split(/\s+/).filter(Boolean);
-      onFirstNameChange(parts[0] ?? "");
-      if (parts.length > 1) {
-        onLastNameChange(parts.slice(1).join(" "));
+      if (!hasLetters && digits.length >= 8) {
+        onWhatsappChange(formatWhatsapp(digits));
+        return;
       }
-    }
-  }
+
+      if (hasLetters) {
+        const parts = trimmed.split(/\s+/).filter(Boolean);
+        onFirstNameChange(parts[0] ?? "");
+        if (parts.length > 1) {
+          onLastNameChange(parts.slice(1).join(" "));
+        }
+      }
+    },
+    [firstName, lastName, whatsapp, onFirstNameChange, onLastNameChange, onWhatsappChange]
+  );
 
   function handleWhatsappChange(raw: string) {
     const formatted = formatWhatsapp(raw);
@@ -169,19 +183,18 @@ export function AdminCustomerFields({
     }
   }
 
+  const searchQueryTooShort = enabled && searchQuery.trim().length < 2;
+  if (searchQueryTooShort) {
+    if (suggestions.length > 0) setSuggestions([]);
+    if (suggestionsOpen) setSuggestionsOpen(false);
+    if (searchLoading) setSearchLoading(false);
+  }
+
   useEffect(() => {
-    if (!enabled) {
-      return;
-    }
+    if (!enabled) return;
 
     const q = searchQuery.trim();
-    if (q.length < 2) {
-      setSuggestions([]);
-      setSuggestionsOpen(false);
-      setSearchLoading(false);
-      lastSearchRef.current = "";
-      return;
-    }
+    if (q.length < 2) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -219,16 +232,7 @@ export function AdminCustomerFields({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [
-    searchQuery,
-    enabled,
-    firstName,
-    lastName,
-    whatsapp,
-    onFirstNameChange,
-    onLastNameChange,
-    onWhatsappChange,
-  ]);
+  }, [searchQuery, enabled, prefillFromSearchQuery]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -94,6 +94,7 @@ export default async function Image() {
           }}
         >
           {logoSrc ? (
+            // eslint-disable-next-line @next/next/no-img-element -- gerado via next/og (satori), não é DOM real; next/image não funciona aqui.
             <img
               src={logoSrc}
               width={96}

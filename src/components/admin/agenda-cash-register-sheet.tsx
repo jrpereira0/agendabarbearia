@@ -555,6 +555,7 @@ export function AgendaCashRegisterSheet({
       </Dialog>
 
       <OpenCashRegisterDialog
+        key={`${openDialog}-${openMode}`}
         open={openDialog}
         onOpenChange={setOpenDialog}
         serviceDate={date}
