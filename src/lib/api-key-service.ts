@@ -57,30 +57,6 @@ function mapRow(row: {
   };
 }
 
-export async function listApiKeysForOwner(): Promise<
-  ActionResult & { keys?: ApiKeyListItem[] }
-> {
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) {
-    return { ok: false, error: admin.error };
-  }
-
-  const { data, error } = await admin
-    .from("api_keys")
-    .select(LIST_COLUMNS)
-    .eq("shop_id", SHOP_ID)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    return { ok: false, error: "Não foi possível carregar as chaves." };
-  }
-
-  return {
-    ok: true,
-    keys: (data ?? []).map(mapRow),
-  };
-}
-
 export async function createApiKeyForOwner(input: {
   name: string;
   preset: ApiKeyPermissionPreset;

@@ -31,6 +31,10 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | 6 | `POST` | `/appointments` | Pública | Criar agendamento (site e bot sem chave) |
 | 7 | `PATCH` | `/appointments/:id` | **Privada** | Remarcar agendamento |
 | 8 | `DELETE` | `/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
+| 8b | `GET` | `/appointment-reminders/due` | **Privada** | Listar lembretes vencidos (n8n consulta pra disparar no WhatsApp) — ver [seção 6e](#6e-lembretes-automáticos-para-clientes-1h-antes) |
+| 8c | `POST` | `/appointment-reminders/:id/mark-sent` | **Privada** | Marcar lembrete como enviado |
+| 8d | `GET` | `/appointment-reminders/pending-response?whatsapp=` | **Privada** | Buscar lembrete enviado aguardando confirmação do cliente |
+| 8e | `POST` | `/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
 | 9 | `GET` | `/comandas` | **Privada** | Listar comandas ou abrir por `appointmentId` |
 | 10 | `GET/PATCH` | `/comandas/:id` | **Privada** | Ver ou editar itens da comanda |
 | 11 | `POST` | `/comandas/:id/close` | **Privada** | Fechar comanda e registrar pagamento |
@@ -38,7 +42,7 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | 13 | `GET` | `/finance/cash-register` | **Privada** | Caixa do dia |
 | 14 | `GET` | `/finance/commissions` | **Privada** | Comissões por barbeiro no período |
 
-**Resumo:** 4 rotas públicas (1, 2, 4, 6) e 10 privadas de agenda/cliente (3, 5, 7, 8) + **6 rotas financeiras** (9–14, todas privadas). Encaixe, status manual e cadastros continuam só pelo painel — exceto comandas/caixa via API com chave.
+**Resumo:** 4 rotas públicas (1, 2, 4, 6) e 10 privadas de agenda/cliente (3, 5, 7, 8) + **4 rotas de lembretes** (8b–8e, todas privadas) + **6 rotas financeiras** (9–14, todas privadas). Encaixe, status manual e cadastros continuam só pelo painel — exceto comandas/caixa via API com chave.
 
 **Financeiro:** guia detalhado com exemplos de corpo JSON em [API-FINANCE.md](./API-FINANCE.md).
 
@@ -92,6 +96,8 @@ Authorization: Bearer <sua-chave-do-painel>
 | `comandas:read` | `GET /comandas`, `GET /comandas/:id` |
 | `comandas:write` | `PATCH /comandas/:id`, `POST /comandas/:id/close`, `POST /comandas/:id/reopen` |
 | `finance:read` | `GET /finance/cash-register`, `GET /finance/commissions` |
+| `appointment_reminders:read` | `GET /appointment-reminders/due`, `GET /appointment-reminders/pending-response` |
+| `appointment_reminders:write` | `POST /appointment-reminders/:id/mark-sent`, `POST /appointment-reminders/:id/confirm` |
 
 Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personalizada**.
 
@@ -114,8 +120,13 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 | --- | --- |
 | `GET /customers/by-whatsapp` | Sim |
 | `GET /appointments` | Sim |
+| `GET /appointments/last-completed` | Sim |
 | `PATCH /appointments/:id` | Sim |
 | `DELETE /appointments/:id` | Sim |
+| `GET /appointment-reminders/due` | Sim |
+| `GET /appointment-reminders/pending-response` | Sim |
+| `POST /appointment-reminders/:id/mark-sent` | Sim |
+| `POST /appointment-reminders/:id/confirm` | Sim |
 
 - Se você **enviar** `Authorization: Bearer ...` na requisição, a chave será validada e o scope exigido
 - Chaves com rate limit próprio: **120 req / 15 min** por chave (além dos limites por IP/WhatsApp onde aplicável)
@@ -941,6 +952,8 @@ x-appointment-webhook-secret: {{N8N_APPOINTMENT_WEBHOOK_SECRET}}
 
 `source` pode ser `"public_api"`, `"admin_agenda"`, `"admin_squeeze_in"` ou `"comanda_extra"` (ver tabela acima) — útil para o workflow tratar diferente cada origem, por exemplo pulando o aviso pro encaixe se preferir.
 
+**Origem gravada no agendamento (`booking_source`):** além do `source` do webhook, cada agendamento grava internamente `admin`, `site` ou `ai` em `appointments.booking_source` — usado pelo ícone na agenda do painel para indicar se foi marcado pelo painel, pelo site do cliente ou pela IA/WhatsApp. Em `POST /appointments`, o sistema grava `ai` quando a chamada usa **chave de API** (n8n/IA) e `site` quando é o site público sem chave.
+
 `professional.whatsapp` e `customer.whatsapp` já vêm normalizados (DDI + DDD + número, sem máscara) — prontos para usar em nós de envio de WhatsApp (Evolution API, Z-API, etc.). `totalPriceCents` já soma o preço de todos os serviços **no dia do agendamento** (considerando preço por dia da semana).
 
 **Configuração do nó Webhook no n8n:**
@@ -1423,6 +1436,10 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Criar | POST | `{{baseUrl}}/appointments` + JSON body | Pública (chave opcional) |
 | Remarcar | PATCH | `{{baseUrl}}/appointments/{{id}}` + JSON body | **Privada** |
 | Cancelar | DELETE | `{{baseUrl}}/appointments/{{id}}?whatsapp=...` | **Privada** |
+| Lembretes vencidos | GET | `{{baseUrl}}/appointment-reminders/due` | **Privada** |
+| Marcar lembrete enviado | POST | `{{baseUrl}}/appointment-reminders/{{id}}/mark-sent` | **Privada** |
+| Lembrete aguardando resposta | GET | `{{baseUrl}}/appointment-reminders/pending-response?whatsapp=...` | **Privada** |
+| Confirmar lembrete | POST | `{{baseUrl}}/appointment-reminders/{{id}}/confirm` | **Privada** |
 
 `baseUrl` = `https://agendabarbearia-seven.vercel.app/api/v1`
 
@@ -1446,6 +1463,7 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 - [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para **Meus horários** no site (`POST /api/agenda/session`)
 - [ ] **`N8N_APPOINTMENT_WEBHOOK_URL`** e **`N8N_APPOINTMENT_WEBHOOK_SECRET`** — opcionais, só para o aviso automático ao barbeiro (ver [seção 6b](#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated))
 - [ ] Rodar as migrations `0037`–`0039` (`npm run db:migrate`) — `0037`/`0038` para webhooks de barbeiro, `0039` para lembretes de cliente
+- [ ] Rodar também `0047` (status do atendimento por IA) e `0048` (`booking_source` — ícone de origem na agenda)
 - [ ] Redeploy após salvar variáveis
 - [ ] `GET /catalog` retorna JSON com profissionais e serviços
 - [ ] Profissionais e serviços cadastrados e **ativos** no painel

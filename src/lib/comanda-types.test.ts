@@ -3,7 +3,6 @@ import {
   calculateComandaTotals,
   calculateComandaTotalsByProfessional,
   calculateItemCommissionCents,
-  sumPayments,
 } from "@/lib/comanda-types";
 
 describe("calculateComandaTotals", () => {
@@ -91,16 +90,5 @@ describe("calculateItemCommissionCents", () => {
       new Map([["pro-1", 50]])
     );
     expect(cents).toBe(0);
-  });
-});
-
-describe("sumPayments", () => {
-  it("soma pagamentos mistos", () => {
-    expect(
-      sumPayments([
-        { amountCents: 5000 },
-        { amountCents: 5000 },
-      ])
-    ).toBe(10000);
   });
 });

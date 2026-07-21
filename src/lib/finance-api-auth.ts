@@ -1,32 +1,6 @@
 import { NextResponse } from "next/server";
-import type { ApiScope } from "@/lib/api-key-scopes";
 import { apiForbiddenResponse } from "@/lib/api-key-auth";
-import {
-  resolveProtectedApiAuth,
-  type ProtectedApiAuthContext,
-} from "@/lib/protected-api-auth";
-
-export async function resolveFinanceApiAuth(
-  request: Request,
-  requiredScope: ApiScope,
-  options: { ownerOnly?: boolean } = {}
-): Promise<
-  | { ok: true; auth: ProtectedApiAuthContext }
-  | { ok: false; response: NextResponse }
-> {
-  const authResult = await resolveProtectedApiAuth(request, requiredScope);
-  if (!authResult.ok) {
-    return authResult;
-  }
-
-  if (options.ownerOnly) {
-    if (authResult.auth.type === "admin" && authResult.auth.role !== "owner") {
-      return { ok: false, response: apiForbiddenResponse() };
-    }
-  }
-
-  return authResult;
-}
+import type { ProtectedApiAuthContext } from "@/lib/protected-api-auth";
 
 export function financeForbiddenForBarberWrite(
   auth: ProtectedApiAuthContext

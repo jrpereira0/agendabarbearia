@@ -17,10 +17,3 @@ export const BOOKING_SOURCE_ICONS: Record<BookingSource, LucideIcon> = {
   site: Globe,
   ai: Bot,
 };
-
-export function isBookingSource(value: unknown): value is BookingSource {
-  return (
-    typeof value === "string" &&
-    (BOOKING_SOURCES as readonly string[]).includes(value)
-  );
-}

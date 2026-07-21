@@ -54,38 +54,9 @@ export function priceForWeekday(
   return prices.find((row) => row.weekday === weekday)?.priceCents ?? null;
 }
 
-export function isOfferedOnWeekday(
-  prices: ServiceWeekdayPrice[],
-  weekday: number
-): boolean {
-  return priceForWeekday(prices, weekday) !== null;
-}
-
 export function minWeekdayPrice(prices: ServiceWeekdayPrice[]): number {
   if (prices.length === 0) return 0;
   return Math.min(...prices.map((row) => row.priceCents));
-}
-
-export function hasVariableWeekdayPrices(
-  prices: ServiceWeekdayPrice[]
-): boolean {
-  if (prices.length === 0) return false;
-  const amounts = new Set(prices.map((row) => row.priceCents));
-  return amounts.size > 1;
-}
-
-export function mergeWeekdayPrices(
-  groups: ServiceWeekdayPrice[][]
-): ServiceWeekdayPrice[] {
-  const map = new Map<number, number>();
-  for (const group of groups) {
-    for (const row of group) {
-      map.set(row.weekday, row.priceCents);
-    }
-  }
-  return [...map.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([weekday, priceCents]) => ({ weekday, priceCents }));
 }
 
 export function parseWeekdayPricesForm(

@@ -17,10 +17,13 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais (inclui permissões no painel por barbeiro) |
+| `src/app/admin/(panel)/servicos` | Lista, cadastro e edição de serviços (preço por dia da semana, duração, foto) |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
 | `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
 | `src/app/admin/(panel)/comandas` | Server actions da comanda (sem página própria — a UI é o `ComandaDialog`, aberto a partir da agenda) |
 | `src/app/admin/(panel)/produtos` | Cadastro de produtos, estoque, comissão por item e categorias |
+| `src/app/admin/(panel)/configuracoes` | Perfil público da barbearia, horários, chaves de API (Integrações) |
+| `src/app/admin/(panel)/minha-conta` | Tela do barbeiro para ver a própria grade e trocar a senha |
 | `src/app/api/agenda/session` | Emite o cookie de sessão do cliente (aba "Meus horários") |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
@@ -54,7 +57,11 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos. Leitura pública (catálogo e site); policies de escrita só para o dono (migration `0031`) |
 | `professional_services` | Quais serviços cada profissional faz |
 | `working_hours` | Grade semanal de horários por profissional |
-| `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único) |
+| `business_hours` | Horário da barbearia por dia da semana (abre/fecha ou fechado) — teto que vale para todos os profissionais |
+| `schedule_exceptions` | Dias especiais que vencem `business_hours`/`working_hours` numa data específica (fechado ou horário diferente); pode ser da barbearia toda ou de um profissional só |
+| `shop_settings` | Configuração única da loja (linha `id = 1`): intervalo da agenda (`slot_step_minutes`) e perfil público (nome, bio, endereço, WhatsApp, Instagram, logo) |
+| `customers` | Cadastro de clientes (nome, sobrenome, WhatsApp único, `credit_balance_cents` com o saldo de crédito) |
+| `customer_credit_transactions` | Histórico de crédito do cliente: depósitos (`add`) e usos (`use`), com forma de pagamento e comanda/caixa vinculados |
 | `appointments` | Agendamentos dos clientes (vinculados a `customers`, com cópia do nome/WhatsApp); `booking_source` indica origem (`admin` / `site` / `ai`) para o ícone no card da agenda |
 | `appointment_services` | Serviços escolhidos em cada agendamento |
 | `schedule_blocks` | Bloqueios pontuais na agenda (impedem agendamento normal; encaixe ainda funciona) |
@@ -65,8 +72,11 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `products` | Produtos: nome, foto, ponto focal (`photo_position`), preço, estoque, comissão % por item |
 | `comanda_payments` | Formas de pagamento ao fechar (permite misto: Pix + dinheiro etc.) |
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
+| `commission_payouts` | Repasse de comissão pago a um profissional num período (`period_from`/`period_to`, valor, quem pagou) |
+| `commission_payout_items` | Itens da comanda incluídos em cada repasse (evita pagar a mesma comissão duas vezes) |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
 | `appointment_reminders` | Lembretes para clientes (ex.: 1h antes do atendimento); o n8n consulta os vencidos via API e marca envio/confirmação |
+| `api_keys` | Chaves de API para integrações (n8n): nome, prefixo, hash do segredo, scopes, validade — geradas em Configurações > Integrações |
 | `dinho_ai_status` | Por conversa de WhatsApp (`session_id` = telefone): se o atendimento por IA está ativo ou pausado (`ia_ativa`). Só service role / n8n |
 
 Regras importantes no banco:
@@ -166,7 +176,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## API REST (`/api/v1`)
 
-Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das comandas: [API-FINANCE.md](./API-FINANCE.md).
+Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6 operações). Detalhes das comandas: [API-FINANCE.md](./API-FINANCE.md).
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
@@ -179,6 +189,10 @@ Rotas de agendamento (8 operações) + financeiro (6 operações). Detalhes das 
 | POST | `/api/v1/appointments` | Pública | Criar agendamento online |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
+| GET | `/api/v1/appointment-reminders/due` | **Privada** | Listar lembretes vencidos (n8n consulta pra disparar no WhatsApp) |
+| GET | `/api/v1/appointment-reminders/pending-response` | **Privada** | Listar lembretes enviados sem confirmação do cliente |
+| POST | `/api/v1/appointment-reminders/:id/mark-sent` | **Privada** | Marcar lembrete como enviado |
+| POST | `/api/v1/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
 | GET | `/api/v1/comandas` | **Privada** | Listar comandas ou abrir por agendamento |
 | GET/PATCH | `/api/v1/comandas/:id` | **Privada** | Ver ou editar itens da comanda |
 | POST | `/api/v1/comandas/:id/close` | **Privada** | Fechar comanda |

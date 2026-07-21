@@ -179,7 +179,3 @@ export function calculateComandaTotalsByProfessional(
   }
   return { totalCents, commissionCents };
 }
-
-export function sumPayments(payments: Pick<ComandaPayment, "amountCents">[]): number {
-  return payments.reduce((sum, p) => sum + p.amountCents, 0);
-}

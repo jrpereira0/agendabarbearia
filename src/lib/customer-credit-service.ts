@@ -2,16 +2,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CashInflowPaymentMethod } from "@/lib/comanda-types";
 import { formatPriceBRL } from "@/lib/format";
 
-export type CustomerCreditTransaction = {
-  id: string;
-  amountCents: number;
-  type: "add" | "use";
-  paymentMethod: CashInflowPaymentMethod | null;
-  description: string | null;
-  comandaId: string | null;
-  createdAt: string;
-};
-
 type CreditTxRow = {
   id: string;
   customer_id: string;
@@ -127,31 +117,6 @@ export async function resolveCustomerIdByWhatsapp(
     .maybeSingle();
 
   return data?.id ?? null;
-}
-
-export async function listCustomerCreditTransactions(
-  admin: SupabaseClient,
-  customerId: string,
-  limit = 50
-): Promise<CustomerCreditTransaction[]> {
-  const { data } = await admin
-    .from("customer_credit_transactions")
-    .select(
-      "id, amount_cents, type, payment_method, description, comanda_id, created_at"
-    )
-    .eq("customer_id", customerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    amountCents: row.amount_cents,
-    type: row.type as "add" | "use",
-    paymentMethod: row.payment_method as CashInflowPaymentMethod | null,
-    description: row.description,
-    comandaId: row.comanda_id,
-    createdAt: row.created_at,
-  }));
 }
 
 async function applyCreditDelta(

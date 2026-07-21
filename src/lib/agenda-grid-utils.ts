@@ -21,14 +21,6 @@ export function buildTimeSlots(
   return slots;
 }
 
-export function gridRowIndex(
-  minute: number,
-  gridStart: number,
-  stepMinutes: number
-): number {
-  return (minute - gridStart) / stepMinutes + 2;
-}
-
 /** Posição na grade; garante ao menos 1 linha (ex.: serviço de 10 min em grade de 15 min). */
 export function appointmentGridRows(
   startTime: string,
