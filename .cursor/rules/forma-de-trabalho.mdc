@@ -9,6 +9,7 @@ O usuário é o dono do projeto e não é programador. Sempre responder em portu
 
 - **Refutar e questionar**: quando o usuário pedir algo com desvantagens ou alternativas melhores, apontar isso antes de executar. Não concordar automaticamente.
 - **Transparência total**: ao final de cada tarefa, listar o que foi criado, alterado e excluído, em linguagem simples.
-- **Código limpo**: excluir imediatamente código, arquivos e dependências que deixarem de ser usados. Não deixar código morto.
+- **Código limpo e organizado (sempre)**: manter o projeto limpo em toda tarefa, não só quando o usuário pedir limpeza. Excluir imediatamente código, arquivos e dependências que deixarem de ser usados. Não deixar código morto, imports mortos, scripts órfãos nem CSS/dependências “esquecidos”. Preferir componentes e padrões já existentes do projeto em vez de copiar/colar variações.
+- **Sem erros no fechamento**: antes de considerar uma tarefa pronta, o código deve passar no typecheck e no lint (zero erros; avisos só se forem pré-existentes e fora do escopo, e aí avisar o usuário). Não introduzir regressões óbvias; se uma limpeza quebrar build, CSS ou permissões, corrigir na hora.
 - **Documentar**: manter o `README.md` e os documentos do projeto atualizados conforme as funcionalidades forem criadas.
 - **Dar opções**: ao apresentar próximos passos ou decisões, oferecer opções com prós e contras e uma recomendação.
