@@ -31,10 +31,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function AgendaPublicPage() {
+  let catalog;
   try {
-    const catalog = await getShopCatalog();
-    return <BookingPage catalog={catalog} today={todayInTimezone()} />;
+    catalog = await getShopCatalog();
   } catch {
     return <BookingUnavailable />;
   }
+
+  return <BookingPage catalog={catalog} today={todayInTimezone()} />;
 }

@@ -323,7 +323,6 @@ export function AgendaView({
   /** No celular: filtrar a grade por um barbeiro (`null` = todos). */
   const [mobileProFocus, setMobileProFocus] = useState<string | null>(null);
 
-  const isToday = date === today;
   const displayDate = pendingDate ?? date;
   const isNavigating =
     isPending || (pendingDate !== null && pendingDate !== date);
@@ -645,13 +644,6 @@ export function AgendaView({
           serviceIds: p.serviceIds,
           commissionPercent: p.commissionPercent,
         }))}
-        commissionPercent={
-          selectedAppointment
-            ? (dayContext.professionals.find(
-                (p) => p.id === selectedAppointment.professionalId
-              )?.commissionPercent ?? 50)
-            : 50
-        }
         onEditSchedule={
           isOwner && selectedAppointment
             ? () => {

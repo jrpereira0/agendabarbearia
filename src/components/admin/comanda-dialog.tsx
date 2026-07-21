@@ -275,7 +275,6 @@ type ComandaDialogProps = {
   productsCatalog?: ProductOption[];
   professionals?: ComandaProfessionalOption[];
   sessionProfessionalId?: string | null;
-  commissionPercent?: number;
   slotStepMinutes?: number;
   appointments?: AppointmentItem[];
   /** Dono da barbearia — evita esperar o load só para liberar ações. */
@@ -372,7 +371,6 @@ export function ComandaDialog({
   productsCatalog = [],
   professionals = [],
   sessionProfessionalId = null,
-  commissionPercent = 50,
   slotStepMinutes = 15,
   appointments = [],
   isOwnerHint = false,
@@ -1595,6 +1593,7 @@ export function ComandaDialog({
                                     <button
                                       type="button"
                                       role="option"
+                                      aria-selected={false}
                                       className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
                                       onClick={() => void pickService(svc)}
                                       disabled={busy}
@@ -1649,6 +1648,7 @@ export function ComandaDialog({
                                       <button
                                         type="button"
                                         role="option"
+                                        aria-selected={false}
                                         className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
                                         onClick={() => pickProduct(product)}
                                         disabled={busy}

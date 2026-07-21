@@ -13,8 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import { SearchInput } from "@/components/admin/search-input";
 import type { ServiceOption, ProfessionalOption } from "@/components/admin/new-appointment-dialog";
