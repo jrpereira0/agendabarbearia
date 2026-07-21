@@ -196,31 +196,37 @@ export function FinanceView({
                     ? `Inclui ${formatPriceBRL(report.totals.creditDepositsCents)} em créditos`
                     : "Pagamentos + créditos"
                 }
+                tooltip="Soma o dinheiro que realmente entrou no período: pix, dinheiro, débito, crédito e depósitos que viraram crédito do cliente. Pagamento com crédito antigo do cliente não entra aqui."
               />
               <FinanceMetricCard
                 label="Faturamento"
                 value={formatPriceBRL(report.totals.servicesGrossCents)}
                 hint="Serviços no período"
+                tooltip="É o valor dos serviços realizados no período. Pode ser maior que o caixa quando o cliente usa crédito antigo, e pode ser menor quando entra depósito de crédito a mais."
               />
               <FinanceMetricCard
                 label="Comissões"
                 value={formatPriceBRL(report.totals.commissionCents)}
                 hint={`${report.commissionRatePercent}% do faturamento`}
+                tooltip="Quanto desse faturamento vai para os barbeiros em comissão."
               />
               <FinanceMetricCard
                 label="Barbearia"
                 value={formatPriceBRL(report.totals.shopCents)}
                 hint={`${report.shopRatePercent}% fica com a casa`}
+                tooltip="Parte do faturamento que fica com a barbearia depois das comissões."
               />
               <FinanceMetricCard
                 label="Serviços"
                 value={String(report.totals.serviceItemCount)}
                 hint={`${report.activeDays} dia${report.activeDays === 1 ? "" : "s"} ativos`}
+                tooltip="Quantidade de serviços finalizados no período."
               />
               <FinanceMetricCard
                 label="Ticket médio"
                 value={formatPriceBRL(report.averageServiceCents)}
                 hint="Por serviço realizado"
+                tooltip="Média por serviço realizado, não por comanda."
               />
             </div>
             {comparisonLine && (
