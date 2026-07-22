@@ -3,16 +3,24 @@
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-/** Fundo escuro só na Agenda, pra não piscar branco no carregamento. */
+function isAdminDarkSurface(pathname: string): boolean {
+  return (
+    pathname === "/admin" ||
+    pathname === "/admin/financeiro/comissoes" ||
+    pathname.startsWith("/admin/financeiro/comissoes/")
+  );
+}
+
+/** Fundo escuro nas telas com identidade nova, pra não piscar branco. */
 export function AdminPanelContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAgenda = pathname === "/admin";
+  const darkSurface = isAdminDarkSurface(pathname);
 
   return (
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-8",
-        isAgenda && "bg-[#0e0f11]"
+        darkSurface && "bg-[#0e0f11] text-[#f5f5f5]"
       )}
     >
       {children}

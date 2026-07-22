@@ -4,15 +4,23 @@ import { usePathname } from "next/navigation";
 import { SidebarInset } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
+function isAdminDarkSurface(pathname: string): boolean {
+  return (
+    pathname === "/admin" ||
+    pathname === "/admin/financeiro/comissoes" ||
+    pathname.startsWith("/admin/financeiro/comissoes/")
+  );
+}
+
 export function AdminPanelInset({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAgenda = pathname === "/admin";
+  const darkSurface = isAdminDarkSurface(pathname);
 
   return (
     <SidebarInset
       className={cn(
         "flex min-h-svh flex-col",
-        isAgenda && "!bg-[#0e0f11] text-[#f5f5f5]"
+        darkSurface && "!bg-[#0e0f11] text-[#f5f5f5]"
       )}
     >
       {children}

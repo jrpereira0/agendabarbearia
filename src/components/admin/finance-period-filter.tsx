@@ -4,6 +4,7 @@ import type { ElementType, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { monthStart, shiftDate } from "@/lib/date-range";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 type FinancePeriodFilterProps = {
@@ -22,6 +23,8 @@ type FinancePeriodFilterProps = {
    * Use dentro de outro formulário para evitar form aninhado.
    */
   embedded?: boolean;
+  /** "dark" = identidade agenda/login. */
+  tone?: "default" | "dark";
 };
 
 type PresetId = "today" | "7days" | "month";
@@ -41,7 +44,9 @@ export function FinancePeriodFilter({
   extraFields,
   className,
   embedded = false,
+  tone = "default",
 }: FinancePeriodFilterProps) {
+  const dark = tone === "dark" || Boolean(className?.includes("page-filter"));
   const activePreset: PresetId | null =
     fromDate === today && toDate === today
       ? "today"
@@ -72,13 +77,21 @@ export function FinancePeriodFilter({
             onSubmit,
           })}
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-3 shadow-sm",
+        "flex flex-col gap-3 rounded-2xl border p-3",
+        dark
+          ? cn(ADMIN_SURFACE.panel, "shadow-none")
+          : "bg-card shadow-sm",
         className
       )}
     >
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div
-          className="inline-flex w-full rounded-lg border bg-muted/40 p-0.5 lg:w-auto"
+          className={cn(
+            "inline-flex w-full rounded-lg border p-0.5 lg:w-auto",
+            dark
+              ? "border-white/10 bg-white/[0.04]"
+              : "border bg-muted/40"
+          )}
           role="group"
           aria-label="Atalhos de período"
         >
@@ -92,9 +105,13 @@ export function FinancePeriodFilter({
                 size="sm"
                 className={cn(
                   "h-10 flex-1 rounded-md px-3 text-sm font-medium sm:h-8 sm:text-xs lg:flex-none",
-                  active
-                    ? "bg-background text-foreground shadow-sm hover:bg-background"
-                    : "text-muted-foreground hover:text-foreground"
+                  dark
+                    ? active
+                      ? ADMIN_SURFACE.chipActive
+                      : ADMIN_SURFACE.chip
+                    : active
+                      ? "bg-background text-foreground shadow-sm hover:bg-background"
+                      : "text-muted-foreground hover:text-foreground"
                 )}
                 aria-pressed={active}
                 onClick={() => onPreset(preset.from, preset.to)}
@@ -115,9 +132,17 @@ export function FinancePeriodFilter({
               type="date"
               value={fromDate}
               onChange={(e) => onFromChange(e.target.value)}
-              className="h-10 w-full bg-background sm:h-8 sm:w-[9.75rem]"
+              className={cn(
+                "h-10 w-full sm:h-8 sm:w-[9.75rem]",
+                dark ? ADMIN_SURFACE.input : "bg-background"
+              )}
             />
-            <span className="px-0.5 text-xs text-muted-foreground sm:shrink-0">
+            <span
+              className={cn(
+                "px-0.5 text-xs sm:shrink-0",
+                dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+              )}
+            >
               até
             </span>
             <label className="sr-only" htmlFor="finance-to">
@@ -128,7 +153,10 @@ export function FinancePeriodFilter({
               type="date"
               value={toDate}
               onChange={(e) => onToChange(e.target.value)}
-              className="h-10 w-full bg-background sm:h-8 sm:w-[9.75rem]"
+              className={cn(
+                "h-10 w-full sm:h-8 sm:w-[9.75rem]",
+                dark ? ADMIN_SURFACE.input : "bg-background"
+              )}
             />
           </div>
 
@@ -137,7 +165,10 @@ export function FinancePeriodFilter({
               {extraFields}
               <Button
                 type={embedded ? "button" : "submit"}
-                className="h-10 w-full shrink-0 px-4 sm:h-8 sm:w-auto"
+                className={cn(
+                  "h-10 w-full shrink-0 px-4 sm:h-8 sm:w-auto",
+                  dark && ADMIN_SURFACE.btnPrimary
+                )}
                 onClick={
                   embedded
                     ? (event) => {

@@ -10,12 +10,12 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   HorizontalBarChart,
   VerticalBarChart,
 } from "@/components/admin/finance-charts";
+import { FinanceMetricCard } from "@/components/admin/finance-metric-card";
 import { PayCommissionButton } from "@/components/admin/pay-commission-button";
 import { CommissionPayoutHistory } from "@/components/admin/commission-payout-history";
 import {
@@ -33,6 +33,7 @@ import {
   formatPriceBRL,
   formatWhatsapp,
 } from "@/lib/format";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 type CommissionBarberSelfViewProps = {
@@ -43,6 +44,8 @@ type CommissionBarberSelfViewProps = {
   /** "self" = barbeiro vendo a própria comissão; "owner" = dono detalhando. */
   viewer?: "self" | "owner";
   payouts?: CommissionPayout[];
+  /** Quando o PageHeader já mostra nome e CTA de pagamento. */
+  hideIdentityHeader?: boolean;
 };
 
 function shortDate(date: string): string {
@@ -59,7 +62,7 @@ function ServiceTable({
 }) {
   if (rows.length === 0) {
     return (
-      <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+      <p className="px-4 py-8 text-center text-sm text-[#8b8d93]">
         Nenhum serviço no período.
       </p>
     );
@@ -75,7 +78,7 @@ function ServiceTable({
           >
             <div className="min-w-0">
               <p className="font-medium leading-snug">{row.serviceName}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-[#8b8d93]">
                 {row.quantity}x
                 {row.isTip ? " · gorjeta" : ""}
               </p>
@@ -90,7 +93,7 @@ function ServiceTable({
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[420px] text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+            <tr className="border-b bg-muted/30 text-left text-xs text-[#8b8d93]">
               <th className="px-4 py-3 font-medium">Serviço</th>
               <th className="px-4 py-3 font-medium text-right">Qtd</th>
               <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
@@ -105,7 +108,7 @@ function ServiceTable({
                 <td className="px-4 py-3 font-medium">
                   {row.serviceName}
                   {row.isTip && (
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    <span className="ml-2 text-xs font-normal text-[#8b8d93]">
                       gorjeta
                     </span>
                   )}
@@ -138,44 +141,51 @@ function AtendimentoCard({
     "Cliente";
 
   return (
-    <div className="rounded-xl border p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="font-medium">{customerLabel}</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {formatDateBR(comanda.serviceDate)}
-            {comanda.serviceItemCount > 0 &&
-              ` · ${comanda.serviceItemCount} serviço${comanda.serviceItemCount === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground">{receiveLabel}</p>
-          <p className="text-lg font-semibold tabular-nums">
-            {formatPriceBRL(comanda.commissionCents)}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-3 space-y-2">
-        {comanda.items.map((item, index) => (
-          <div
-            key={`${item.serviceName}-${index}`}
-            className="flex items-center justify-between gap-3 rounded-lg bg-muted/30 px-3 py-2 text-sm"
-          >
-            <span>
-              {item.serviceName}
-              {item.isTip && (
-                <span className="ml-1 text-xs text-muted-foreground">
-                  (gorjeta)
-                </span>
-              )}
-            </span>
-            <span className="shrink-0 font-medium tabular-nums">
-              {formatPriceBRL(item.commissionCents)}
-            </span>
+    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-3 p-4")}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="page-display truncate text-[15px] font-medium tracking-tight">
+              {customerLabel}
+            </p>
+            <p className="mt-0.5 text-xs text-[#8b8d93]">
+              {formatDateBR(comanda.serviceDate)}
+              {comanda.serviceItemCount > 0
+                ? ` · ${comanda.serviceItemCount} serviço${
+                    comanda.serviceItemCount === 1 ? "" : "s"
+                  }`
+                : ""}
+            </p>
           </div>
-        ))}
-      </div>
+          <div className="shrink-0 text-right">
+            <p className="text-xs text-[#8b8d93]">{receiveLabel}</p>
+            <p className="text-base font-semibold tabular-nums text-[#f5f5f5]">
+              {formatPriceBRL(comanda.commissionCents)}
+            </p>
+          </div>
+        </div>
+
+        {comanda.items.length > 0 ? (
+          <ul className="divide-y rounded-lg border border-[var(--page-border,rgb(255_255_255_/_10%))]">
+            {comanda.items.map((item, index) => (
+              <li
+                key={`${item.serviceName}-${index}`}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <span className="min-w-0 truncate">
+                  {item.serviceName}
+                  {item.isTip ? (
+                    <span className="ml-1 text-xs text-[#8b8d93]">
+                      gorjeta
+                    </span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 tabular-nums text-[#8b8d93]">
+                  {formatPriceBRL(item.commissionCents)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
     </div>
   );
 }
@@ -209,13 +219,21 @@ function DayTable({
               >
                 <div className="min-w-0">
                   <p className="font-medium">{formatDateBR(row.date)}</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-[#8b8d93]">
                     {row.serviceItemCount} serviço
                     {row.serviceItemCount === 1 ? "" : "s"}
                   </p>
-                  <div className="mt-1.5 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      "mt-1.5 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full",
+                      ADMIN_SURFACE.progress
+                    )}
+                  >
                     <div
-                      className="h-full rounded-full bg-foreground/70"
+                      className={cn(
+                        "h-full rounded-full",
+                        ADMIN_SURFACE.progressBar
+                      )}
                       style={{
                         width: `${
                           maxDayCommission > 0
@@ -240,7 +258,7 @@ function DayTable({
       <div className="hidden overflow-x-auto md:block">
         <table className="w-full min-w-[360px] text-sm">
           <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
+            <tr className="border-b bg-muted/30 text-left text-xs text-[#8b8d93]">
               <th className="px-4 py-3 font-medium">Dia</th>
               <th className="px-4 py-3 font-medium text-right">Serviços</th>
               <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
@@ -265,9 +283,17 @@ function DayTable({
                       <span className="group-hover:underline">
                         {formatDateBR(row.date)}
                       </span>
-                      <div className="mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn(
+                          "mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full",
+                          ADMIN_SURFACE.progress
+                        )}
+                      >
                         <div
-                          className="h-full rounded-full bg-foreground/70"
+                          className={cn(
+                            "h-full rounded-full",
+                            ADMIN_SURFACE.progressBar
+                          )}
                           style={{
                             width: `${
                               maxDayCommission > 0
@@ -305,6 +331,7 @@ export function CommissionBarberSelfView({
   buildDayHref,
   viewer = "self",
   payouts = [],
+  hideIdentityHeader = false,
 }: CommissionBarberSelfViewProps) {
   const isOwnerView = viewer === "owner";
   const isSingleDay = from === to;
@@ -406,21 +433,31 @@ export function CommissionBarberSelfView({
     0
   );
 
+  const metricCount =
+    2 +
+    (summary.tipCents > 0 ? 1 : 0) +
+    (bestDay && !isSingleDay ? 1 : 0);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 border-b pb-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
+    <div className="flex flex-col gap-5">
+      {!hideIdentityHeader ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-medium">
+            <p className="page-display text-[15px] font-medium tracking-tight">
               {professional.professionalNickname}
             </p>
-            <p className="text-xs text-muted-foreground">{heroHint}</p>
+            <p className="mt-0.5 text-xs text-[#8b8d93]">{heroHint}</p>
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
-            <p className="text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
-              {formatPriceBRL(summary.commissionCents)}
-            </p>
-            {isOwnerView && (
+            <div>
+              <p className="text-xs text-[#8b8d93]">
+                {isOwnerView ? "A pagar" : "Você recebe"}
+              </p>
+              <p className="page-display text-2xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-3xl">
+                {formatPriceBRL(summary.commissionCents)}
+              </p>
+            </div>
+            {isOwnerView ? (
               <PayCommissionButton
                 from={from}
                 to={to}
@@ -428,36 +465,75 @@ export function CommissionBarberSelfView({
                 professionalNickname={professional.professionalNickname}
                 amountCents={summary.commissionCents}
                 label="Registrar pagamento"
-                className="h-10 w-full sm:h-8 sm:w-auto"
+                className={cn(ADMIN_SURFACE.btnPrimary, "h-10 w-full sm:h-9 sm:w-auto")}
               />
-            )}
+            ) : null}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {summary.serviceItemCount} atendimento
-          {summary.serviceItemCount === 1 ? "" : "s"}
-          {" · "}
-          {formatPriceBRL(serviceRevenueCents)} em serviços
-          {summary.tipCents > 0
-            ? ` · ${formatPriceBRL(summary.tipCents)} gorjeta`
-            : ""}
-          {bestDay && !isSingleDay
-            ? ` · melhor dia ${formatDateBR(bestDay.date)}`
-            : ""}
-        </p>
-        {isSingleDay && activeDay ? (
-          <div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin?date=${from}`}>
-                <CalendarDays className="size-4" />
-                {isOwnerView
-                  ? "Ver agenda neste dia"
-                  : "Ver sua agenda neste dia"}
-              </Link>
-            </Button>
-          </div>
+      ) : (
+        <div>
+          <p className="text-xs text-[#8b8d93]">
+            {isOwnerView ? "A pagar no período" : "Você recebe"}
+          </p>
+          <p className="page-display mt-0.5 text-3xl font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
+            {formatPriceBRL(summary.commissionCents)}
+          </p>
+          <p className="mt-1 text-xs text-[#8b8d93]">{heroHint}</p>
+        </div>
+      )}
+
+      <div
+        className={cn(
+          "grid gap-3",
+          metricCount >= 4
+            ? "sm:grid-cols-2 xl:grid-cols-4"
+            : metricCount === 3
+              ? "sm:grid-cols-3"
+              : "sm:grid-cols-2"
+        )}
+      >
+        <FinanceMetricCard
+          tone="dark"
+          label="Atendimentos"
+          value={String(summary.serviceItemCount)}
+          hint="Serviços com comissão no período"
+        />
+        <FinanceMetricCard
+          tone="dark"
+          label="Em serviços"
+          value={formatPriceBRL(serviceRevenueCents)}
+          hint="Base da comissão"
+        />
+        {summary.tipCents > 0 ? (
+          <FinanceMetricCard
+            tone="dark"
+            label="Gorjetas"
+            value={formatPriceBRL(summary.tipCents)}
+            hint={tipHint}
+          />
+        ) : null}
+        {bestDay && !isSingleDay ? (
+          <FinanceMetricCard
+            tone="dark"
+            label="Melhor dia"
+            value={formatPriceBRL(bestDay.commissionCents)}
+            hint={formatDateBR(bestDay.date)}
+          />
         ) : null}
       </div>
+
+      {isSingleDay && activeDay ? (
+        <div>
+          <Button variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost} asChild>
+            <Link href={`/admin?date=${from}`}>
+              <CalendarDays className="size-4" />
+              {isOwnerView
+                ? "Ver agenda neste dia"
+                : "Ver sua agenda neste dia"}
+            </Link>
+          </Button>
+        </div>
+      ) : null}
 
       <Tabs defaultValue="atendimentos" className="w-full">
         <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -466,39 +542,37 @@ export function CommissionBarberSelfView({
               Atendimentos
             </TabsTrigger>
             <TabsTrigger value="servicos" className="shrink-0">
-              Serviços
+              Por serviço
             </TabsTrigger>
-            {!isSingleDay && (
+            {!isSingleDay ? (
               <TabsTrigger value="dias" className="shrink-0">
-                Dias
+                Por dia
               </TabsTrigger>
-            )}
-            <TabsTrigger value="pagamentos" className="shrink-0">
-              Pagamentos
+            ) : null}
+            <TabsTrigger value="repasses" className="shrink-0">
+              Repasses
             </TabsTrigger>
             <TabsTrigger value="resumo" className="shrink-0">
-              Gráficos
+              Resumo
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="atendimentos">
+        <TabsContent value="atendimentos" className="mt-4">
           {comandas.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
-                <ClipboardList className="size-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
+            <div className={cn(ADMIN_SURFACE.panel, "flex flex-col items-center gap-2 px-4 py-10 text-center")}>
+                <ClipboardList className={cn("size-5", ADMIN_SURFACE.muted)} />
+                <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
                   Nenhum atendimento neste período.
                 </p>
-              </CardContent>
-            </Card>
+              </div>
           ) : (
             <div className="flex flex-col gap-3">
-              {isSingleDay && (
-                <p className="text-xs text-muted-foreground">
+              {isSingleDay ? (
+                <p className="text-xs text-[#8b8d93]">
                   {formatDateBR(from)}
                 </p>
-              )}
+              ) : null}
               {comandas.map((comanda) => (
                 <AtendimentoCard
                   key={comanda.comandaId}
@@ -510,88 +584,79 @@ export function CommissionBarberSelfView({
           )}
         </TabsContent>
 
-        <TabsContent value="servicos">
-          <Card className="overflow-hidden">
-            <CardContent className="p-0">
+        <TabsContent value="servicos" className="mt-4">
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
               <ServiceTable rows={serviceRows} earnLabel={earnLabel} />
-            </CardContent>
-          </Card>
+            </div>
         </TabsContent>
 
-        {!isSingleDay && (
-          <TabsContent value="dias">
+        {!isSingleDay ? (
+          <TabsContent value="dias" className="mt-4">
             {dayRows.length === 0 ? (
-              <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+              <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
                 Nenhum dia com atendimento no período.
               </p>
             ) : (
-              <Card className="overflow-hidden">
-                <CardContent className="p-0">
+              <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                   <DayTable
                     rows={dayRows}
                     maxDayCommission={maxDayCommission}
                     buildDayHref={buildDayHref}
                     earnLabel={earnLabel}
                   />
-                </CardContent>
-              </Card>
+                </div>
             )}
           </TabsContent>
-        )}
+        ) : null}
 
-        <TabsContent value="pagamentos">
+        <TabsContent value="repasses" className="mt-4">
           <CommissionPayoutHistory
             payouts={payouts}
             viewer={isOwnerView ? "owner" : "self"}
           />
         </TabsContent>
 
-        <TabsContent value="resumo" className="space-y-4">
-          {!isSingleDay && chartDays.length > 0 && (
+        <TabsContent value="resumo" className="mt-4 space-y-4">
+          {!isSingleDay && chartDays.length > 0 ? (
             <section className="flex flex-col gap-2">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-medium">
                   <TrendingUp className="size-4" />
                   Comissão dia a dia
                 </h2>
-                <p className="text-xs text-muted-foreground">{dayChartHint}</p>
+                <p className="text-xs text-[#8b8d93]">{dayChartHint}</p>
               </div>
-              <Card>
-                <CardContent className="pt-5">
+              <div className={cn(ADMIN_SURFACE.panel, "px-4 pt-5 pb-4")}>
                   <VerticalBarChart items={chartDays} height={160} />
-                </CardContent>
-              </Card>
+                </div>
             </section>
-          )}
+          ) : null}
 
-          {topServices.length > 0 && (
+          {topServices.length > 0 ? (
             <section className="flex flex-col gap-2">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-medium">
                   <Scissors className="size-4" />
                   O que mais rendeu
                 </h2>
-                <p className="text-xs text-muted-foreground">{topServicesHint}</p>
+                <p className="text-xs text-[#8b8d93]">{topServicesHint}</p>
               </div>
-              <Card>
-                <CardContent className="pt-5">
+              <div className={cn(ADMIN_SURFACE.panel, "px-4 pt-5 pb-4")}>
                   <HorizontalBarChart items={topServices} />
-                </CardContent>
-              </Card>
+                </div>
             </section>
-          )}
+          ) : null}
 
-          {activePaymentMethods.length > 0 && (
+          {activePaymentMethods.length > 0 ? (
             <section className="flex flex-col gap-2">
               <div>
                 <h2 className="flex items-center gap-2 text-sm font-medium">
                   <Wallet className="size-4" />
                   Formas de pagamento
                 </h2>
-                <p className="text-xs text-muted-foreground">{paymentsHint}</p>
+                <p className="text-xs text-[#8b8d93]">{paymentsHint}</p>
               </div>
-              <Card>
-                <CardContent className="flex flex-col gap-3 pt-5">
+              <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-3 px-4 pt-5 pb-4")}>
                   {activePaymentMethods.map((method) => {
                     const amount = paymentRows[method];
                     const pct =
@@ -601,38 +666,45 @@ export function CommissionBarberSelfView({
                     return (
                       <div key={method} className="space-y-1.5">
                         <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="text-muted-foreground">
+                          <span className="text-[#8b8d93]">
                             {formatPaymentMethodLabel(method)}
                           </span>
                           <span className="font-medium tabular-nums">
                             {formatPriceBRL(amount)}
-                            <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            <span className="ml-1 text-xs font-normal text-[#8b8d93]">
                               {pct}%
                             </span>
                           </span>
                         </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn(
+                            "h-1.5 overflow-hidden rounded-full",
+                            ADMIN_SURFACE.progress
+                          )}
+                        >
                           <div
-                            className="h-full rounded-full bg-foreground/80"
+                            className={cn(
+                              "h-full rounded-full",
+                              ADMIN_SURFACE.progressBar
+                            )}
                             style={{ width: `${pct}%` }}
                           />
                         </div>
                       </div>
                     );
                   })}
-                </CardContent>
-              </Card>
+                </div>
             </section>
-          )}
+          ) : null}
 
           {!isSingleDay &&
-            chartDays.length === 0 &&
-            topServices.length === 0 &&
-            activePaymentMethods.length === 0 && (
-              <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-                Nada para resumir neste período.
-              </p>
-            )}
+          chartDays.length === 0 &&
+          topServices.length === 0 &&
+          activePaymentMethods.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
+              Nada para resumir neste período.
+            </p>
+          ) : null}
         </TabsContent>
       </Tabs>
     </div>

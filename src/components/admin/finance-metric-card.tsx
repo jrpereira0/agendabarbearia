@@ -5,6 +5,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 type FinanceMetricCardProps = {
@@ -13,6 +14,8 @@ type FinanceMetricCardProps = {
   hint?: string;
   tooltip?: ReactNode;
   className?: string;
+  /** "dark" = identidade agenda/login; default = tema claro do financeiro. */
+  tone?: "default" | "dark";
 };
 
 /** Card de métrica padrão das telas de financeiro, caixa e comissões. */
@@ -22,17 +25,41 @@ export function FinanceMetricCard({
   hint,
   tooltip,
   className,
+  tone = "default",
 }: FinanceMetricCardProps) {
+  const dark = tone === "dark";
+
   return (
-    <div className={cn("rounded-xl border bg-card px-5 py-4", className)}>
+    <div
+      data-slot="finance-metric-card"
+      className={cn(
+        "rounded-xl border px-5 py-4",
+        dark
+          ? ADMIN_SURFACE.panel
+          : "bg-card",
+        className
+      )}
+    >
       <div className="flex items-center gap-1.5">
-        <p className="text-sm text-muted-foreground">{label}</p>
+        <p
+          className={cn(
+            "text-sm",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        >
+          {label}
+        </p>
         {tooltip ? (
           <Tooltip delayDuration={150}>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="inline-flex size-4 items-center justify-center text-muted-foreground/70 transition hover:text-foreground"
+                className={cn(
+                  "inline-flex size-4 items-center justify-center transition",
+                  dark
+                    ? "text-[#8b8d93] hover:text-[#f5f5f5]"
+                    : "text-muted-foreground/70 hover:text-foreground"
+                )}
                 aria-label={`Explicar ${label.toLowerCase()}`}
               >
                 <CircleHelp className="size-3.5" />
@@ -44,11 +71,24 @@ export function FinanceMetricCard({
           </Tooltip>
         ) : null}
       </div>
-      <p className="mt-1 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl">
+      <p
+        data-slot="finance-metric-value"
+        className={cn(
+          "mt-1 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl",
+          dark && "text-[#f5f5f5]"
+        )}
+      >
         {value}
       </p>
       {hint ? (
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
+        <p
+          className={cn(
+            "mt-1 text-xs",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        >
+          {hint}
+        </p>
       ) : null}
     </div>
   );

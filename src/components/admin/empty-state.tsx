@@ -1,8 +1,11 @@
+import { cn } from "@/lib/utils";
+
 type EmptyStateProps = {
   icon: React.ElementType;
   title: string;
   description: string;
   action?: React.ReactNode;
+  className?: string;
 };
 
 // Estado vazio padrão das listagens do painel.
@@ -11,9 +14,15 @@ export function EmptyState({
   title,
   description,
   action,
+  className,
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center">
+    <div
+      className={cn(
+        "page-empty flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center",
+        className
+      )}
+    >
       <div className="flex size-12 items-center justify-center rounded-full border bg-muted/50">
         <Icon className="size-5 text-muted-foreground" />
       </div>
