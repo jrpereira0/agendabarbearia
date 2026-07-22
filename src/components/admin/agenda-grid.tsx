@@ -41,7 +41,7 @@ type AgendaGridProps = {
   isOwner: boolean;
   canBookClients: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
-  onAppointmentClick: (appointment: AppointmentItem) => void;
+  onAppointmentClick: (appointment: AppointmentItem, serviceIndex?: number) => void;
   /** Colunas mais largas e linhas mais altas (uso no celular). */
   mobileLayout?: boolean;
   className?: string;
@@ -344,7 +344,9 @@ export function AgendaGrid({
               showBookingSource={card.serviceIndex === 0}
               segmentStartTime={card.startTime}
               segmentEndTime={card.endTime}
-              onClick={() => onAppointmentClick(apt)}
+              serviceIndex={card.serviceIndex}
+              serviceCount={card.serviceCount}
+              onClick={() => onAppointmentClick(apt, card.serviceIndex)}
               onHoverTime={(clientY, top, height) => {
                 if (height <= 0) {
                   setHoverMinute(

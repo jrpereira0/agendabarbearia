@@ -11,7 +11,7 @@ import {
   type AppointmentStatus,
 } from "@/lib/appointment-status";
 import { agendaStatusSwatchClass } from "@/lib/agenda-colors";
-import { updateAppointmentStatus } from "@/app/admin/(panel)/agenda/actions";
+import { updateAppointmentStatus, cancelAppointmentService } from "@/app/admin/(panel)/agenda/actions";
 
 type ContextMenuStatus = (typeof CONTEXT_MENU_STATUSES)[number];
 
@@ -21,6 +21,9 @@ type AppointmentStatusMenuProps = {
   open: boolean;
   position: { x: number; y: number };
   onClose: () => void;
+  /** Quando o card é um serviço específico de um agendamento com vários. */
+  serviceIndex?: number | null;
+  serviceCount?: number;
 };
 
 const MENU_WIDTH = 176;
@@ -48,6 +51,8 @@ export function AppointmentStatusMenu({
   open,
   position,
   onClose,
+  serviceIndex = null,
+  serviceCount = 1,
 }: AppointmentStatusMenuProps) {
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement>(null);
@@ -97,11 +102,28 @@ export function AppointmentStatusMenu({
     }
 
     busyRef.current = true;
-    const result = await updateAppointmentStatus(appointmentId, status);
+
+    const cancelOnlyThisService =
+      status === "cancelled" &&
+      serviceCount > 1 &&
+      typeof serviceIndex === "number";
+
+    const result = cancelOnlyThisService
+      ? await cancelAppointmentService({
+          appointmentId,
+          serviceIndex,
+          reason: "Cancelado pelo status na agenda",
+        })
+      : await updateAppointmentStatus(appointmentId, status);
+
     busyRef.current = false;
 
     if (result.ok) {
-      toast.success(`Status: ${STATUS_LABELS[status]}`);
+      toast.success(
+        cancelOnlyThisService
+          ? "Serviço cancelado."
+          : `Status: ${STATUS_LABELS[status]}`
+      );
       onClose();
       router.refresh();
     } else {

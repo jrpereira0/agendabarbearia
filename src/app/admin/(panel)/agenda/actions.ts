@@ -1015,6 +1015,190 @@ export async function cancelAppointment(input: {
   return { ok: true };
 }
 
+const cancelAppointmentServiceSchema = z.object({
+  appointmentId: z.uuid(),
+  serviceIndex: z.number().int().min(0),
+  reason: z
+    .string()
+    .trim()
+    .min(3, "Informe o motivo do cancelamento (mínimo 3 caracteres)."),
+});
+
+/**
+ * Cancela só um serviço do card (ex.: 2 cortes → remove 1).
+ * Se for o último serviço, cancela o agendamento inteiro.
+ */
+export async function cancelAppointmentService(input: {
+  appointmentId: string;
+  serviceIndex: number;
+  reason: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const denied = assertPermission(session, "canCancelAppointments");
+  if (denied) return denied;
+
+  const parsed = cancelAppointmentServiceSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const { appointmentId, serviceIndex, reason } = parsed.data;
+
+  const check = await assertCanManageAppointment(appointmentId, session, [
+    ...ACTIVE_APPOINTMENT_STATUSES,
+    "done",
+  ]);
+  if (!("professionalId" in check)) return check;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { data: appointment } = await admin
+    .from("appointments")
+    .select(
+      `
+      id,
+      start_time,
+      is_squeeze_in,
+      appointment_services ( service_id, quantity )
+    `
+    )
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (!appointment) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  const expandedIds = expandServiceIdsFromRows(
+    appointment.appointment_services ?? []
+  );
+
+  if (expandedIds.length <= 1) {
+    return cancelAppointment({ appointmentId, reason });
+  }
+
+  if (serviceIndex < 0 || serviceIndex >= expandedIds.length) {
+    return { ok: false, error: "Serviço não encontrado neste agendamento." };
+  }
+
+  const { data: link } = await admin
+    .from("comanda_appointments")
+    .select("comanda_id, comandas ( id, status )")
+    .eq("appointment_id", appointmentId)
+    .maybeSingle();
+
+  const comanda = Array.isArray(link?.comandas)
+    ? link?.comandas[0]
+    : link?.comandas;
+
+  if (comanda?.status === "closed") {
+    return {
+      ok: false,
+      error:
+        "Esta comanda está fechada. Reabra a comanda antes de cancelar o horário.",
+    };
+  }
+
+  if (appointment.is_squeeze_in) {
+    const { data: squeezeItemLink } = await admin
+      .from("comanda_items")
+      .select("comandas ( status )")
+      .eq("squeeze_appointment_id", appointmentId)
+      .limit(1)
+      .maybeSingle();
+
+    const squeezeComanda = Array.isArray(squeezeItemLink?.comandas)
+      ? squeezeItemLink?.comandas[0]
+      : squeezeItemLink?.comandas;
+
+    if (squeezeComanda?.status === "closed") {
+      return {
+        ok: false,
+        error:
+          "Esta comanda está fechada. Reabra a comanda antes de cancelar o horário.",
+      };
+    }
+  }
+
+  const remainingIds = expandedIds.filter((_, index) => index !== serviceIndex);
+  const uniqueIds = uniqueServiceIds(remainingIds);
+
+  const { data: foundServices } = await admin
+    .from("services")
+    .select("id, duration_minutes")
+    .in("id", uniqueIds);
+
+  if (!foundServices || foundServices.length !== uniqueIds.length) {
+    return { ok: false, error: "Não foi possível recalcular o horário." };
+  }
+
+  const durationById = new Map(
+    foundServices.map((row) => [row.id, row.duration_minutes])
+  );
+  const durationMinutes = sumDurationForServiceIds(remainingIds, durationById);
+  const startMinutes = timeToMinutes(formatTime(appointment.start_time));
+  const endTime = minutesToTime(startMinutes + durationMinutes);
+
+  const snapshot = await captureAppointmentUpdateSnapshot(admin, appointmentId);
+
+  await admin
+    .from("appointment_services")
+    .delete()
+    .eq("appointment_id", appointmentId);
+
+  const { error: linkError } = await admin.from("appointment_services").insert(
+    appointmentServiceRowsFromIds(appointmentId, remainingIds)
+  );
+
+  if (linkError) {
+    return { ok: false, error: "Não foi possível remover o serviço." };
+  }
+
+  const { error: updateError } = await admin
+    .from("appointments")
+    .update({ end_time: endTime })
+    .eq("id", appointmentId);
+
+  if (updateError) {
+    return { ok: false, error: "Não foi possível atualizar o horário." };
+  }
+
+  try {
+    await syncOpenComandaAfterAppointmentEdit(admin, appointmentId);
+  } catch (error) {
+    console.error(
+      "[admin-appointment-cancel-service] erro ao sincronizar comanda:",
+      { appointmentId, error }
+    );
+  }
+
+  after(() => {
+    void (async () => {
+      try {
+        if (snapshot) {
+          await notifyAppointmentUpdated(
+            appointmentId,
+            "admin_update",
+            snapshot
+          );
+        }
+      } catch (error) {
+        console.error(
+          "[admin-appointment-cancel-service] erro ao enviar webhook:",
+          { appointmentId, error }
+        );
+      }
+      revalidatePath("/admin");
+      revalidatePath("/agenda");
+    })();
+  });
+
+  return { ok: true };
+}
+
 export async function deleteAppointment(
   appointmentId: string
 ): Promise<ActionResult> {

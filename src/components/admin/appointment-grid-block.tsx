@@ -40,6 +40,8 @@ type AppointmentGridBlockProps = {
   showBookingSource?: boolean;
   segmentStartTime?: string;
   segmentEndTime?: string;
+  serviceIndex?: number;
+  serviceCount?: number;
   /** Informa o horário sob o mouse enquanto passa pelo bloco. */
   onHoverTime?: (clientY: number, top: number, height: number) => void;
 };
@@ -130,6 +132,8 @@ export function AppointmentGridBlock({
   showBookingSource = true,
   segmentStartTime,
   segmentEndTime,
+  serviceIndex = 0,
+  serviceCount = 1,
   onHoverTime,
 }: AppointmentGridBlockProps) {
   const isMobile = useIsMobile();
@@ -256,6 +260,8 @@ export function AppointmentGridBlock({
         open={statusMenu !== null}
         position={statusMenu ?? { x: 0, y: 0 }}
         onClose={() => setStatusMenu(null)}
+        serviceIndex={serviceIndex}
+        serviceCount={serviceCount}
       />
     </>
   );

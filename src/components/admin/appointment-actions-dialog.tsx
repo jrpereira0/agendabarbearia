@@ -32,6 +32,7 @@ import {
 import { agendaAppointmentClass } from "@/lib/agenda-colors";
 import {
   cancelAppointment,
+  cancelAppointmentService,
   updateAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
 import {
@@ -57,6 +58,8 @@ type AppointmentActionsDialogProps = {
   sessionProfessionalId: string | null;
   onOpenComanda: () => void;
   onEditAppointment: () => void;
+  /** Índice do serviço do card clicado (quando há vários no mesmo horário). */
+  focusedServiceIndex?: number | null;
 };
 
 type SubView = "main" | "cancel" | "changeClient";
@@ -96,6 +99,7 @@ export function AppointmentActionsDialog({
   sessionProfessionalId,
   onOpenComanda,
   onEditAppointment,
+  focusedServiceIndex = null,
 }: AppointmentActionsDialogProps) {
   const router = useRouter();
   // Estado reinicia a cada agendamento aberto — ver `key` no componente-pai.
@@ -135,19 +139,35 @@ export function AppointmentActionsDialog({
   const canEdit =
     isActive && canManage && (isOwner || permissions.canEditAppointments);
   const canOpenComanda = isOwner || permissions.canOpenComanda;
-  const totalPrice = appointment.services.reduce(
-    (sum, service) => sum + service.priceCents,
-    0
-  );
-  const totalMinutes = appointment.services.reduce(
-    (sum, service) => sum + service.durationMinutes,
-    0
-  );
+  const focusedService =
+    focusedServiceIndex != null
+      ? appointment.services[focusedServiceIndex] ?? null
+      : null;
+  const cancelOnlyFocusedService =
+    Boolean(focusedService) && appointment.services.length > 1;
+  const totalPrice = cancelOnlyFocusedService
+    ? focusedService!.priceCents
+    : appointment.services.reduce(
+        (sum, service) => sum + service.priceCents,
+        0
+      );
+  const totalMinutes = cancelOnlyFocusedService
+    ? focusedService!.durationMinutes
+    : appointment.services.reduce(
+        (sum, service) => sum + service.durationMinutes,
+        0
+      );
   const whatsappLink = `https://wa.me/55${appointment.customerWhatsapp}`;
   const customerName = `${appointment.customerFirstName} ${appointment.customerLastName}`;
-  const serviceNames = appointment.services
-    .map((service) => service.name)
-    .join(" · ");
+  const serviceNames = cancelOnlyFocusedService
+    ? focusedService!.name
+    : appointment.services.map((service) => service.name).join(" · ");
+  const cancelButtonLabel = cancelOnlyFocusedService
+    ? "Cancelar este serviço"
+    : "Cancelar";
+  const cancelSuccessMessage = cancelOnlyFocusedService
+    ? "Serviço cancelado."
+    : "Agendamento cancelado.";
 
   async function handleCancel() {
     const reason = cancelReason.trim();
@@ -157,14 +177,21 @@ export function AppointmentActionsDialog({
     }
 
     setBusy(true);
-    const result = await cancelAppointment({
-      appointmentId: appointment!.id,
-      reason,
-    });
+    const result =
+      cancelOnlyFocusedService && focusedServiceIndex != null
+        ? await cancelAppointmentService({
+            appointmentId: appointment!.id,
+            serviceIndex: focusedServiceIndex,
+            reason,
+          })
+        : await cancelAppointment({
+            appointmentId: appointment!.id,
+            reason,
+          });
     setBusy(false);
 
     if (result.ok) {
-      toast.success("Agendamento cancelado.");
+      toast.success(cancelSuccessMessage);
       onOpenChange(false);
       router.refresh();
     } else {
@@ -398,7 +425,7 @@ export function AppointmentActionsDialog({
                     onClick={() => setSubView("cancel")}
                   >
                     <X className="size-4" />
-                    Cancelar
+                    {cancelButtonLabel}
                   </Button>
                 )}
               </div>
@@ -432,12 +459,19 @@ export function AppointmentActionsDialog({
         endTime={appointment.endTime}
         serviceLabel={serviceNames}
         dateLabel={formatDateBR(appointment.date)}
+        detailNote={
+          cancelOnlyFocusedService
+            ? "Só este serviço será removido. Os outros do mesmo horário continuam."
+            : null
+        }
         kind={
-          appointment.isComandaExtra
-            ? "extra"
-            : appointment.isSqueezeIn
-              ? "squeeze"
-              : "normal"
+          cancelOnlyFocusedService
+            ? "service"
+            : appointment.isComandaExtra
+              ? "extra"
+              : appointment.isSqueezeIn
+                ? "squeeze"
+                : "normal"
         }
       />
 

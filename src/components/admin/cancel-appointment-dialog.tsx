@@ -24,7 +24,7 @@ const QUICK_REASONS = [
 
 const MIN_REASON_LENGTH = 3;
 
-export type CancelAppointmentKind = "normal" | "squeeze" | "extra";
+export type CancelAppointmentKind = "normal" | "squeeze" | "extra" | "service";
 
 type CancelAppointmentDialogProps = {
   open: boolean;
@@ -46,6 +46,7 @@ type CancelAppointmentDialogProps = {
 function titleForKind(kind: CancelAppointmentKind): string {
   if (kind === "extra") return "Cancelar serviço extra?";
   if (kind === "squeeze") return "Cancelar encaixe?";
+  if (kind === "service") return "Cancelar este serviço?";
   return "Cancelar agendamento?";
 }
 

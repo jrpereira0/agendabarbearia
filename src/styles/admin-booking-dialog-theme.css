@@ -41,13 +41,16 @@ body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
   color: var(--booking-muted);
 }
 
-.admin-booking-dialog [data-slot="dialog-close"] {
+.admin-booking-dialog .booking-close {
   color: var(--booking-muted);
+  background: var(--booking-elevated);
+  border: 1px solid var(--booking-border);
 }
 
-.admin-booking-dialog [data-slot="dialog-close"]:hover {
-  background: rgb(255 255 255 / 8%);
+.admin-booking-dialog .booking-close:hover {
+  background: #1a1b1e;
   color: var(--booking-accent);
+  border-color: rgb(236 241 94 / 35%);
 }
 
 .admin-booking-dialog .booking-header {

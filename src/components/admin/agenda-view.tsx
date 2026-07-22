@@ -290,7 +290,7 @@ function AgendaMainContent({
   isOwner: boolean;
   canBookClients: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
-  onAppointmentClick: (apt: AppointmentItem) => void;
+  onAppointmentClick: (apt: AppointmentItem, serviceIndex?: number) => void;
   mobileLayout?: boolean;
   focusProfessionalId?: string | null;
   date: string;
@@ -346,6 +346,9 @@ export function AgendaView({
   const [newOpen, setNewOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentItem | null>(null);
+  const [selectedServiceIndex, setSelectedServiceIndex] = useState<number | null>(
+    null
+  );
   const [actionsOpen, setActionsOpen] = useState(false);
   const [comandaOpen, setComandaOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -466,17 +469,21 @@ export function AgendaView({
 
   function openBooking(
     mode: BookingMode,
-    proId?: string,
+    proId?: string | null,
     startTime?: string
   ) {
     if (mode === "normal" && !canBookNormal) return;
     if (mode === "encaixe" && !canBookEncaixe) return;
 
     setBookingMode(mode);
+    // proId undefined = botão Agendar/Encaixe (dono começa no passo do barbeiro).
+    // proId informado = clique na grade ou FAB mobile com barbeiro já escolhido.
     setBookingProfessionalId(
-      proId ??
-        resolvedMobileProId ??
-        (isOwner ? null : professionalId ?? professionals[0]?.id ?? null)
+      proId !== undefined
+        ? proId
+        : isOwner
+          ? null
+          : (professionalId ?? professionals[0]?.id ?? null)
     );
     setBookingStartTime(startTime ?? null);
     setNewOpen(true);
@@ -486,8 +493,11 @@ export function AgendaView({
     openBooking("normal", proId, startTime);
   }
 
-  function handleAppointmentClick(apt: AppointmentItem) {
+  function handleAppointmentClick(apt: AppointmentItem, serviceIndex?: number) {
     setSelectedAppointment(apt);
+    setSelectedServiceIndex(
+      typeof serviceIndex === "number" ? serviceIndex : null
+    );
     setActionsOpen(true);
   }
 
@@ -696,10 +706,14 @@ export function AgendaView({
       />
 
       <AppointmentActionsDialog
-        key={`${actionsOpen}-${selectedAppointment?.id}-${selectedAppointment?.status}`}
+        key={`${actionsOpen}-${selectedAppointment?.id}-${selectedAppointment?.status}-${selectedServiceIndex}`}
         appointment={selectedAppointment}
+        focusedServiceIndex={selectedServiceIndex}
         open={actionsOpen}
-        onOpenChange={setActionsOpen}
+        onOpenChange={(open) => {
+          setActionsOpen(open);
+          if (!open) setSelectedServiceIndex(null);
+        }}
         isOwner={isOwner}
         permissions={permissions}
         sessionProfessionalId={professionalId}

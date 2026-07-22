@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check, Minus, Plus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -812,14 +812,25 @@ export function NewAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="admin-booking-dialog flex max-h-[min(92dvh,760px)] w-full max-w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg">
-        <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <DialogContent
+        showCloseButton={false}
+        className="admin-booking-dialog flex max-h-[min(92dvh,760px)] w-full max-w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+      >
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={() => onOpenChange(false)}
+          className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+        >
+          <X className="size-4" strokeWidth={2} />
+        </button>
+        <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:pl-6 sm:pr-14 sm:pt-6">
+          <div className="flex items-center justify-between gap-3 pr-1 text-xs text-muted-foreground">
             <span>
               Passo {currentStep} de {stepsTotal}
             </span>
             {!(selectedProfessional && step !== "professional") && (
-              <span>{formatDateBR(date)}</span>
+              <span className="truncate">{formatDateBR(date)}</span>
             )}
           </div>
           <StepProgress current={currentStep} total={stepsTotal} />
