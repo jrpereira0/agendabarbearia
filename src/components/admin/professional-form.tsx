@@ -93,7 +93,7 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 
 function FormPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-4 sm:gap-6 sm:p-6")}>
       {children}
     </div>
   );
@@ -231,29 +231,31 @@ export function ProfessionalForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex w-full flex-col gap-5"
+      className="flex w-full flex-col gap-4"
       autoComplete="off"
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-          <TabsTrigger value="dados" className="flex-none px-3">
-            Dados
-          </TabsTrigger>
-          <TabsTrigger value="acesso" className="flex-none px-3">
-            Acesso
-          </TabsTrigger>
-          <TabsTrigger value="servicos" className="flex-none px-3">
-            Serviços
-          </TabsTrigger>
-          <TabsTrigger value="horario" className="flex-none px-3">
-            Horário
-          </TabsTrigger>
-          {isEdit && commissions ? (
-            <TabsTrigger value="comissoes" className="flex-none px-3">
-              Comissões
+        <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+          <TabsList className="h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+            <TabsTrigger value="dados" className="flex-none px-3">
+              Dados
             </TabsTrigger>
-          ) : null}
-        </TabsList>
+            <TabsTrigger value="acesso" className="flex-none px-3">
+              Acesso
+            </TabsTrigger>
+            <TabsTrigger value="servicos" className="flex-none px-3">
+              Serviços
+            </TabsTrigger>
+            <TabsTrigger value="horario" className="flex-none px-3">
+              Horário
+            </TabsTrigger>
+            {isEdit && commissions ? (
+              <TabsTrigger value="comissoes" className="flex-none px-3">
+                Comissões
+              </TabsTrigger>
+            ) : null}
+          </TabsList>
+        </div>
 
         <TabsContent
           value="dados"
@@ -543,7 +545,7 @@ export function ProfessionalForm({
           className="mt-4 data-[state=inactive]:hidden"
         >
           <FormPanel>
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
               <FormSectionTitle
                 tone="dark"
                 icon={CalendarClock}
@@ -555,7 +557,10 @@ export function ProfessionalForm({
                 variant="outline"
                 size="sm"
                 disabled={saving}
-                className={ADMIN_SURFACE.btnGhost}
+                className={cn(
+                  "h-10 w-full sm:h-8 sm:w-auto",
+                  ADMIN_SURFACE.btnGhost
+                )}
                 onClick={() =>
                   setSchedule(
                     businessDays.map((day) => ({
@@ -581,6 +586,7 @@ export function ProfessionalForm({
               days={schedule}
               businessDays={businessDays}
               onChange={setSchedule}
+              tone="dark"
             />
           </FormPanel>
         </TabsContent>

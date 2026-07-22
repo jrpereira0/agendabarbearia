@@ -11,7 +11,6 @@ import {
   CatalogListEmpty,
   CatalogListShell,
   CatalogListToolbar,
-  CatalogMobileList,
   CatalogTable,
   CatalogTableBody,
   CatalogTableHead,
@@ -96,7 +95,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
               onChange={handleQueryChange}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
-              placeholder="Nome ou últimos dígitos do WhatsApp..."
+              placeholder="Nome ou últimos dígitos do WhatsApp…"
               inputClassName={ADMIN_SURFACE.input}
             />
             {suggestionsOpen && suggestions.length > 0 && (
@@ -164,7 +163,13 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
           />
         }
         actions={
-          <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+          <Button
+            asChild
+            className={cn(
+              "h-10 w-full sm:h-9 sm:w-auto",
+              ADMIN_SURFACE.btnPrimary
+            )}
+          >
             <Link href="/admin/clientes/novo">
               <Plus />
               Novo cliente
@@ -196,7 +201,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
               </CatalogTableHeadCell>
               <CatalogTableHeadCell className="w-12" />
             </CatalogTableHead>
-            <CatalogTableBody>
+            <CatalogTableBody tone="dark">
               {filtered.map((customer) => (
                 <CustomerListRow
                   key={customer.id}
@@ -207,15 +212,19 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
             </CatalogTableBody>
           </CatalogTable>
 
-          <CatalogMobileList>
-            {filtered.map((customer) => (
-              <CustomerMobileCard
-                key={customer.id}
-                customer={customer}
-                tone="dark"
-              />
-            ))}
-          </CatalogMobileList>
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden md:hidden")}>
+            <ul className="divide-y divide-white/10">
+              {filtered.map((customer) => (
+                <li key={customer.id}>
+                  <CustomerMobileCard
+                    customer={customer}
+                    tone="dark"
+                    embedded
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         </>
       )}
     </CatalogListShell>

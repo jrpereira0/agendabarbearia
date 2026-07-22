@@ -133,7 +133,7 @@ export default async function CaixaDetalhePage({
   const professionals = (professionalsResult.data ?? []).map((pro) => ({
     id: pro.id,
     nickname: pro.nickname,
-    photoUrl: pro.photo_url,
+    photoUrl: pro.photo_url ?? null,
     photoPosition: pro.photo_position,
     commissionPercent: pro.commission_percent ?? 50,
     serviceIds: (pro.professional_services ?? []).map(

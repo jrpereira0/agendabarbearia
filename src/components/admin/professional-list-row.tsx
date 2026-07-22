@@ -333,14 +333,22 @@ export function ProfessionalListRow({
 export function ProfessionalMobileCard({
   professional,
   tone = "default",
+  embedded = false,
 }: {
   professional: ProfessionalListItem;
   tone?: Tone;
+  /** Dentro de um painel com divide-y — sem borda própria. */
+  embedded?: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const dark = tone === "dark";
+
+  const servicesMeta =
+    professional.serviceNames.length > 0
+      ? `${professional.serviceNames.length} serviço${professional.serviceNames.length === 1 ? "" : "s"}`
+      : "Sem serviços";
 
   async function handleDelete() {
     setBusy(true);
@@ -359,10 +367,15 @@ export function ProfessionalMobileCard({
     <>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border p-4",
-          dark
-            ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
-            : "bg-card shadow-sm",
+          "flex items-center gap-3",
+          embedded
+            ? "px-4 py-3.5"
+            : cn(
+                "rounded-lg border p-4",
+                dark
+                  ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
+                  : "bg-card shadow-sm"
+              ),
           !professional.active && "opacity-60"
         )}
       >
@@ -376,7 +389,7 @@ export function ProfessionalMobileCard({
               <CatalogStatusDot active={professional.active} />
               <p
                 className={cn(
-                  "truncate font-medium",
+                  "truncate text-[15px] font-medium tracking-tight",
                   dark && "text-[#f5f5f5]"
                 )}
               >
@@ -385,11 +398,13 @@ export function ProfessionalMobileCard({
             </div>
             <p
               className={cn(
-                "mt-1 truncate text-sm tabular-nums",
+                "mt-0.5 truncate text-xs",
                 dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
               )}
             >
               {formatWhatsapp(professional.whatsapp)}
+              {" · "}
+              {servicesMeta}
             </p>
           </div>
           <ChevronRight

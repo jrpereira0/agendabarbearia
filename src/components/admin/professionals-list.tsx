@@ -10,7 +10,6 @@ import {
   CatalogListEmpty,
   CatalogListShell,
   CatalogListToolbar,
-  CatalogMobileList,
   CatalogTable,
   CatalogTableBody,
   CatalogTableHead,
@@ -23,6 +22,7 @@ import {
 } from "@/components/admin/professional-list-row";
 import { matchesSearch } from "@/lib/text";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type Professional = {
   id: string;
@@ -45,7 +45,7 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
     () => ({
       all: items.length,
       active: items.filter((item) => item.active).length,
-      inactive: items.filter((item) => !item.active).length,
+      inactive: items.filter((item) => item.active === false).length,
     }),
     [items]
   );
@@ -67,17 +67,28 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
     });
   }, [items, filter, query]);
 
+  const showSearch = items.length > 5 || query.trim().length > 0;
+
   return (
     <CatalogListShell>
       <CatalogListToolbar
         tone="dark"
         search={
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Buscar profissional..."
-            inputClassName={ADMIN_SURFACE.input}
-          />
+          showSearch ? (
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar profissional…"
+              inputClassName={ADMIN_SURFACE.input}
+            />
+          ) : (
+            <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+              {counts.active} ativo{counts.active === 1 ? "" : "s"}
+              {counts.inactive > 0
+                ? ` · ${counts.inactive} inativo${counts.inactive === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          )
         }
         filters={
           <CatalogFilterSegment
@@ -88,7 +99,10 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
           />
         }
         actions={
-          <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+          <Button
+            asChild
+            className={cn("h-10 w-full sm:h-9 sm:w-auto", ADMIN_SURFACE.btnPrimary)}
+          >
             <Link href="/admin/profissionais/novo">
               <Plus />
               Novo profissional
@@ -127,15 +141,24 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
             </CatalogTableBody>
           </CatalogTable>
 
-          <CatalogMobileList>
-            {filtered.map((professional) => (
-              <ProfessionalMobileCard
-                key={professional.id}
-                professional={professional}
-                tone="dark"
-              />
-            ))}
-          </CatalogMobileList>
+          <div
+            className={cn(
+              ADMIN_SURFACE.panel,
+              "overflow-hidden md:hidden"
+            )}
+          >
+            <ul className="divide-y divide-white/10">
+              {filtered.map((professional) => (
+                <li key={professional.id}>
+                  <ProfessionalMobileCard
+                    professional={professional}
+                    tone="dark"
+                    embedded
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         </>
       )}
     </CatalogListShell>

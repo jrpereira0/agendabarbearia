@@ -130,7 +130,7 @@ export function FinanceView({
         ADMIN_SURFACE.page
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <PageHeader
           tone="dark"
           title="Financeiro"
@@ -146,12 +146,13 @@ export function FinanceView({
           onSubmit={applyFilter}
           onPreset={applyPreset}
           tone="dark"
+          mobilePresetsFirst
           extraFields={
             <Select value={selectedMetric} onValueChange={onMetricChange}>
               <SelectTrigger
                 aria-label="Analisar métrica"
                 className={cn(
-                  "h-8 w-full sm:w-[13.5rem]",
+                  "h-10 w-full sm:h-8 sm:w-[13.5rem]",
                   ADMIN_SURFACE.selectTrigger
                 )}
               >
@@ -215,11 +216,11 @@ export function FinanceView({
             />
           )
         ) : (
-          <div className="flex flex-col gap-6">
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="flex flex-col gap-4 sm:gap-6">
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
               <FinanceMetricCard
                 tone="dark"
-                label="Faturamento total"
+                label="Faturamento"
                 value={formatPriceBRL(report.totals.servicesGrossCents)}
                 hint="Serviços do período"
                 tooltip="Soma do valor dos serviços realizados no período selecionado."
@@ -230,8 +231,8 @@ export function FinanceView({
                 value={String(attendanceCount)}
                 hint={
                   attendanceCount === 1
-                    ? "1 comanda finalizada"
-                    : `${attendanceCount} comandas finalizadas`
+                    ? "1 comanda"
+                    : `${attendanceCount} comandas`
                 }
                 tooltip="Quantidade de comandas finalizadas no período."
               />
@@ -244,7 +245,7 @@ export function FinanceView({
               />
               <FinanceMetricCard
                 tone="dark"
-                label="Comissão dos barbeiros"
+                label="Comissões"
                 value={formatPriceBRL(report.totals.commissionCents)}
                 hint={`${report.commissionRatePercent}% do faturamento`}
                 tooltip="Quanto do faturamento vai para os barbeiros em comissão."
@@ -253,24 +254,26 @@ export function FinanceView({
 
             <section className="flex flex-col gap-3">
               <div className="flex flex-wrap items-end justify-between gap-2">
-                <div>
+                <div className="min-w-0">
                   <p className={cn(ADMIN_SURFACE.sectionLabel)}>
                     Últimos 7 dias
                   </p>
                   <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
-                    Faturamento por dia · {formatPeriodLabel(
-                      shiftDate(today, -6),
-                      today
-                    )}
+                    {formatPeriodLabel(shiftDate(today, -6), today)}
                   </p>
                 </div>
-                <p className="text-sm font-semibold tabular-nums text-[#f5f5f5]">
+                <p
+                  className={cn(
+                    "shrink-0 text-sm font-semibold tabular-nums",
+                    ADMIN_SURFACE.accent
+                  )}
+                >
                   {formatPriceBRL(last7TotalCents)}
                 </p>
               </div>
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
-                  <VerticalBarChart items={last7Chart} height={180} />
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart items={last7Chart} height={148} />
                 </CardContent>
               </Card>
             </section>

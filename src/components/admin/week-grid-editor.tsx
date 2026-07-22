@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { WEEKDAYS } from "@/lib/format";
 import type { BusinessDay } from "@/components/admin/business-hours-form";
 import type { DayRanges, TimeRange } from "@/lib/week-schedule";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type { DayRanges, TimeRange } from "@/lib/week-schedule";
 export { emptyWeek, fillWeek } from "@/lib/week-schedule";
@@ -16,6 +18,8 @@ type WeekGridEditorProps = {
   businessDays: BusinessDay[];
   onChange?: (days: DayRanges[]) => void;
   readOnly?: boolean;
+  /** "dark" = formulário do painel escuro. */
+  tone?: "default" | "dark";
 };
 
 // Editor da grade semanal de um profissional. Dia sem faixa = folga.
@@ -24,7 +28,10 @@ export function WeekGridEditor({
   businessDays,
   onChange,
   readOnly = false,
+  tone = "default",
 }: WeekGridEditorProps) {
+  const dark = tone === "dark";
+
   function updateDay(weekday: number, ranges: TimeRange[]) {
     onChange?.(
       days.map((d) => (d.weekday === weekday ? { ...d, ranges } : d))
@@ -45,14 +52,22 @@ export function WeekGridEditor({
   }
 
   return (
-    <div className="flex flex-col divide-y">
+    <div
+      className={cn(
+        "flex flex-col divide-y",
+        dark && "divide-white/10"
+      )}
+    >
       {days.map((day) => {
         const businessDay = businessDays.find((b) => b.weekday === day.weekday);
         const shopClosed = !businessDay?.active;
 
         return (
-          <div key={day.weekday} className="flex flex-wrap items-start gap-3 py-3">
-            <div className="flex w-32 items-center gap-3 pt-1.5">
+          <div
+            key={day.weekday}
+            className="flex flex-col gap-2.5 py-3 sm:flex-row sm:flex-wrap sm:items-start sm:gap-3"
+          >
+            <div className="flex w-full items-center gap-3 sm:w-32 sm:pt-1.5">
               <Switch
                 checked={day.ranges.length > 0}
                 disabled={readOnly || shopClosed}
@@ -61,21 +76,41 @@ export function WeekGridEditor({
                 }
                 aria-label={`${WEEKDAYS[day.weekday]} trabalha`}
               />
-              <span className="text-sm font-medium">
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  dark && "text-[#f5f5f5]"
+                )}
+              >
                 {WEEKDAYS[day.weekday]}
               </span>
             </div>
 
             {shopClosed ? (
-              <span className="pt-1.5 text-sm text-muted-foreground">
+              <span
+                className={cn(
+                  "text-sm sm:pt-1.5",
+                  dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                )}
+              >
                 Barbearia fechada
               </span>
             ) : day.ranges.length === 0 ? (
-              <span className="pt-1.5 text-sm text-muted-foreground">Folga</span>
+              <span
+                className={cn(
+                  "text-sm sm:pt-1.5",
+                  dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                )}
+              >
+                Folga
+              </span>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex w-full flex-col gap-2 sm:w-auto">
                 {day.ranges.map((range, i) => (
-                  <div key={i} className="flex items-center gap-2">
+                  <div
+                    key={i}
+                    className="flex flex-wrap items-center gap-2"
+                  >
                     <Input
                       type="time"
                       value={range.startTime}
@@ -88,9 +123,19 @@ export function WeekGridEditor({
                           )
                         )
                       }
-                      className="w-28"
+                      className={cn(
+                        "h-10 w-[7.25rem] sm:h-9 sm:w-28",
+                        dark && ADMIN_SURFACE.input
+                      )}
                     />
-                    <span className="text-sm text-muted-foreground">às</span>
+                    <span
+                      className={cn(
+                        "text-sm",
+                        dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                      )}
+                    >
+                      às
+                    </span>
                     <Input
                       type="time"
                       value={range.endTime}
@@ -103,7 +148,10 @@ export function WeekGridEditor({
                           )
                         )
                       }
-                      className="w-28"
+                      className={cn(
+                        "h-10 w-[7.25rem] sm:h-9 sm:w-28",
+                        dark && ADMIN_SURFACE.input
+                      )}
                     />
                     {!readOnly && (
                       <>
@@ -111,6 +159,10 @@ export function WeekGridEditor({
                           type="button"
                           variant="ghost"
                           size="icon-sm"
+                          className={cn(
+                            dark &&
+                              "text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
+                          )}
                           onClick={() =>
                             updateDay(
                               day.weekday,
@@ -121,17 +173,22 @@ export function WeekGridEditor({
                         >
                           <Trash2 />
                         </Button>
-                        {i === day.ranges.length - 1 && day.ranges.length < 4 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => addRange(day.weekday)}
-                            aria-label="Adicionar faixa"
-                          >
-                            <Plus />
-                          </Button>
-                        )}
+                        {i === day.ranges.length - 1 &&
+                          day.ranges.length < 4 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              className={cn(
+                                dark &&
+                                  "text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+                              )}
+                              onClick={() => addRange(day.weekday)}
+                              aria-label="Adicionar faixa"
+                            >
+                              <Plus />
+                            </Button>
+                          )}
                       </>
                     )}
                   </div>

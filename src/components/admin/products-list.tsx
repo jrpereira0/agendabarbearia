@@ -10,7 +10,6 @@ import {
   CatalogListEmpty,
   CatalogListShell,
   CatalogListToolbar,
-  CatalogMobileList,
   CatalogTable,
   CatalogTableBody,
   CatalogTableHead,
@@ -23,6 +22,7 @@ import {
 } from "@/components/admin/product-list-row";
 import { matchesSearch } from "@/lib/text";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type Product = {
   id: string;
@@ -67,17 +67,28 @@ export function ProductsList({ items }: { items: Product[] }) {
     });
   }, [items, filter, query]);
 
+  const showSearch = items.length > 5 || query.trim().length > 0;
+
   return (
     <CatalogListShell>
       <CatalogListToolbar
         tone="dark"
         search={
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Buscar produto..."
-            inputClassName={ADMIN_SURFACE.input}
-          />
+          showSearch ? (
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar produto…"
+              inputClassName={ADMIN_SURFACE.input}
+            />
+          ) : (
+            <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+              {counts.active} ativo{counts.active === 1 ? "" : "s"}
+              {counts.inactive > 0
+                ? ` · ${counts.inactive} inativo${counts.inactive === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          )
         }
         filters={
           <CatalogFilterSegment
@@ -89,13 +100,26 @@ export function ProductsList({ items }: { items: Product[] }) {
         }
         actions={
           <>
-            <Button asChild variant="outline" className={ADMIN_SURFACE.btnGhost}>
+            <Button
+              asChild
+              variant="outline"
+              className={cn(
+                "h-10 w-full sm:h-9 sm:w-auto",
+                ADMIN_SURFACE.btnGhost
+              )}
+            >
               <Link href="/admin/produtos/categorias">
                 <Tags />
                 Categorias
               </Link>
             </Button>
-            <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+            <Button
+              asChild
+              className={cn(
+                "h-10 w-full sm:h-9 sm:w-auto",
+                ADMIN_SURFACE.btnPrimary
+              )}
+            >
               <Link href="/admin/produtos/novo">
                 <Plus />
                 Novo produto
@@ -127,7 +151,7 @@ export function ProductsList({ items }: { items: Product[] }) {
               </CatalogTableHeadCell>
               <CatalogTableHeadCell className="w-12" />
             </CatalogTableHead>
-            <CatalogTableBody>
+            <CatalogTableBody tone="dark">
               {filtered.map((product) => (
                 <ProductListRow
                   key={product.id}
@@ -138,15 +162,19 @@ export function ProductsList({ items }: { items: Product[] }) {
             </CatalogTableBody>
           </CatalogTable>
 
-          <CatalogMobileList>
-            {filtered.map((product) => (
-              <ProductMobileCard
-                key={product.id}
-                product={product}
-                tone="dark"
-              />
-            ))}
-          </CatalogMobileList>
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden md:hidden")}>
+            <ul className="divide-y divide-white/10">
+              {filtered.map((product) => (
+                <li key={product.id}>
+                  <ProductMobileCard
+                    product={product}
+                    tone="dark"
+                    embedded
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         </>
       )}
     </CatalogListShell>

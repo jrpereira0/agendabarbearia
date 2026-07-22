@@ -133,8 +133,13 @@ export function ProductCategoriesManager({
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
+    <div className="flex flex-col gap-4">
+      <div
+        className={cn(
+          ADMIN_SURFACE.panel,
+          "flex flex-col gap-5 p-4 sm:gap-5 sm:p-6"
+        )}
+      >
         <FormSectionTitle
           tone="dark"
           icon={Tags}
@@ -144,7 +149,7 @@ export function ProductCategoriesManager({
 
         <form
           onSubmit={handleCreate}
-          className="grid gap-4 sm:grid-cols-[1fr_120px_auto] sm:items-end"
+          className="grid gap-3 sm:grid-cols-[1fr_120px_auto] sm:items-end sm:gap-4"
           autoComplete="off"
         >
           <div className="space-y-2">
@@ -175,7 +180,10 @@ export function ProductCategoriesManager({
           <Button
             type="submit"
             disabled={busy}
-            className={ADMIN_SURFACE.btnPrimary}
+            className={cn(
+              "h-10 w-full sm:h-9 sm:w-auto",
+              ADMIN_SURFACE.btnPrimary
+            )}
           >
             Adicionar
           </Button>
@@ -192,43 +200,44 @@ export function ProductCategoriesManager({
           Nenhuma categoria ainda. Cadastre a primeira acima.
         </div>
       ) : (
-        <ul className="flex flex-col gap-2.5">
-          {categories.map((category) => (
-            <li
-              key={category.id}
-              className={cn(
-                "flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#1a1b1e]/80 px-4 py-3.5",
-                !category.active && "opacity-60"
-              )}
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-[#f5f5f5]">
-                  {category.name}
-                </p>
-                <p className={cn("mt-0.5 text-sm", ADMIN_SURFACE.muted)}>
-                  Ordem {category.sortOrder} · {category.productCount} produto
-                  {category.productCount === 1 ? "" : "s"}
-                </p>
-              </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    disabled={busy}
-                    className="text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+        <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+          <ul className="divide-y divide-white/10">
+            {categories.map((category) => (
+              <li
+                key={category.id}
+                className={cn(
+                  "flex items-center justify-between gap-3 px-4 py-3.5",
+                  !category.active && "opacity-60"
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                    {category.name}
+                  </p>
+                  <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                    Ordem {category.sortOrder} · {category.productCount} produto
+                    {category.productCount === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={busy}
+                      className="text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+                    >
+                      <MoreVertical />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className={ADMIN_SURFACE.popover}
                   >
-                    <MoreVertical />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className={ADMIN_SURFACE.popover}
-                >
-                  <DropdownMenuItem onSelect={() => setEditing(category)}>
-                    <Pencil />
-                    Editar
-                  </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setEditing(category)}>
+                      <Pencil />
+                      Editar
+                    </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={() => handleToggleActive(category)}
                   >
@@ -244,9 +253,10 @@ export function ProductCategoriesManager({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <Dialog

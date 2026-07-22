@@ -30,7 +30,12 @@ export function CustomerAppointmentsHistory({
   appointments,
 }: CustomerAppointmentsHistoryProps) {
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
+    <div
+      className={cn(
+        ADMIN_SURFACE.panel,
+        "flex flex-col gap-4 p-4 sm:gap-5 sm:p-6"
+      )}
+    >
       <FormSectionTitle
         tone="dark"
         icon={CalendarDays}
@@ -52,14 +57,14 @@ export function CustomerAppointmentsHistory({
           Quando um atendimento for concluído, a visita aparece aqui.
         </div>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="-mx-4 divide-y divide-white/10 sm:-mx-6">
           {appointments.map((a) => {
             const barColor = agendaStatusBarColor[a.status];
 
             return (
               <li
                 key={a.id}
-                className="relative overflow-hidden rounded-xl border border-white/10 bg-[#1a1b1e]/80"
+                className="relative overflow-hidden"
               >
                 <span
                   aria-hidden
@@ -67,10 +72,10 @@ export function CustomerAppointmentsHistory({
                   style={{ backgroundColor: barColor }}
                 />
 
-                <div className="flex flex-col gap-3 py-3.5 pl-4 pr-3.5 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pl-5">
-                  <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex flex-col gap-2.5 py-3.5 pl-4 pr-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:pl-5 sm:pr-6">
+                  <div className="min-w-0 flex-1 space-y-1.5">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                      <p className="text-sm font-semibold tracking-tight text-[#f5f5f5]">
+                      <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
                         {formatDateBR(a.date)}
                       </p>
                       <span

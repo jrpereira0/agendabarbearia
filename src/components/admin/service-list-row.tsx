@@ -349,9 +349,11 @@ export function ServiceListRow({
 export function ServiceMobileCard({
   service,
   tone = "default",
+  embedded = false,
 }: {
   service: ServiceListItem;
   tone?: Tone;
+  embedded?: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -375,10 +377,15 @@ export function ServiceMobileCard({
     <>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border p-4",
-          dark
-            ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
-            : "bg-card shadow-sm",
+          "flex items-center gap-3",
+          embedded
+            ? "px-4 py-3.5"
+            : cn(
+                "rounded-lg border p-4",
+                dark
+                  ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
+                  : "bg-card shadow-sm"
+              ),
           !service.active && "opacity-60"
         )}
       >
@@ -392,7 +399,7 @@ export function ServiceMobileCard({
               <CatalogStatusDot active={service.active} />
               <p
                 className={cn(
-                  "truncate font-medium",
+                  "truncate text-[15px] font-medium tracking-tight",
                   dark && "text-[#f5f5f5]"
                 )}
               >
@@ -401,7 +408,7 @@ export function ServiceMobileCard({
             </div>
             <p
               className={cn(
-                "mt-1 text-sm",
+                "mt-0.5 truncate text-xs",
                 dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
               )}
             >

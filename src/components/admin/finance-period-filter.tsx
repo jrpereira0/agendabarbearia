@@ -25,6 +25,12 @@ type FinancePeriodFilterProps = {
   embedded?: boolean;
   /** "dark" = identidade agenda/login. */
   tone?: "default" | "dark";
+  /**
+   * No celular: só atalhos visíveis; datas personalizadas ficam
+   * atrás de "Outras datas" pra não poluir a tela.
+   * Campos extras (ex.: métrica) ficam sempre visíveis.
+   */
+  mobilePresetsFirst?: boolean;
 };
 
 type PresetId = "today" | "7days" | "month";
@@ -45,6 +51,7 @@ export function FinancePeriodFilter({
   className,
   embedded = false,
   tone = "default",
+  mobilePresetsFirst = false,
 }: FinancePeriodFilterProps) {
   const dark = tone === "dark" || Boolean(className?.includes("page-filter"));
   const activePreset: PresetId | null =
@@ -68,6 +75,76 @@ export function FinancePeriodFilter({
   ];
 
   const Root: ElementType = embedded ? "div" : "form";
+
+  const dateFields = (
+    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+      <label className="sr-only" htmlFor="finance-from">
+        Data inicial
+      </label>
+      <DatePickerField
+        id="finance-from"
+        value={fromDate}
+        onChange={onFromChange}
+        tone={dark ? "dark" : "default"}
+      />
+      <span
+        className={cn(
+          "px-0.5 text-xs sm:shrink-0",
+          dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+        )}
+      >
+        até
+      </span>
+      <label className="sr-only" htmlFor="finance-to">
+        Data final
+      </label>
+      <DatePickerField
+        id="finance-to"
+        value={toDate}
+        onChange={onToChange}
+        tone={dark ? "dark" : "default"}
+      />
+    </div>
+  );
+
+  const filterButton = (
+    <Button
+      type={embedded ? "button" : "submit"}
+      className={cn(
+        "h-10 w-full shrink-0 px-4 sm:h-8 sm:w-auto",
+        dark && ADMIN_SURFACE.btnPrimary
+      )}
+      onClick={
+        embedded
+          ? (event) => {
+              event.preventDefault();
+              onSubmit(event);
+            }
+          : undefined
+      }
+    >
+      {submitLabel}
+    </Button>
+  );
+
+  const customRange = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
+      {dateFields}
+      {(extraFields || submitLabel) && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {extraFields}
+          {filterButton}
+        </div>
+      )}
+    </div>
+  );
+
+  const datesOnlyRange = (
+    <div className="flex flex-col gap-2">
+      {dateFields}
+      {filterButton}
+    </div>
+  );
 
   return (
     <Root
@@ -122,59 +199,46 @@ export function FinancePeriodFilter({
           })}
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center lg:justify-end">
-          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
-            <label className="sr-only" htmlFor="finance-from">
-              Data inicial
-            </label>
-            <DatePickerField
-              id="finance-from"
-              value={fromDate}
-              onChange={onFromChange}
-              tone={dark ? "dark" : "default"}
-            />
-            <span
+        {mobilePresetsFirst ? (
+          <>
+            {extraFields ? (
+              <div className="w-full lg:hidden">{extraFields}</div>
+            ) : null}
+            <details
               className={cn(
-                "px-0.5 text-xs sm:shrink-0",
-                dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                "group rounded-xl border lg:hidden",
+                dark ? "border-white/10" : "border"
               )}
+              open={activePreset === null ? true : undefined}
             >
-              até
-            </span>
-            <label className="sr-only" htmlFor="finance-to">
-              Data final
-            </label>
-            <DatePickerField
-              id="finance-to"
-              value={toDate}
-              onChange={onToChange}
-              tone={dark ? "dark" : "default"}
-            />
-          </div>
-
-          {(extraFields || submitLabel) && (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              {extraFields}
-              <Button
-                type={embedded ? "button" : "submit"}
+              <summary
                 className={cn(
-                  "h-10 w-full shrink-0 px-4 sm:h-8 sm:w-auto",
-                  dark && ADMIN_SURFACE.btnPrimary
+                  "cursor-pointer list-none px-3 py-2.5 text-sm marker:content-none [&::-webkit-details-marker]:hidden",
+                  dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
                 )}
-                onClick={
-                  embedded
-                    ? (event) => {
-                        event.preventDefault();
-                        onSubmit(event);
-                      }
-                    : undefined
-                }
               >
-                {submitLabel}
-              </Button>
-            </div>
-          )}
-        </div>
+                <span className="flex items-center justify-between gap-2">
+                  Outras datas
+                  <span className="text-xs group-open:hidden">Abrir</span>
+                  <span className="hidden text-xs group-open:inline">
+                    Fechar
+                  </span>
+                </span>
+              </summary>
+              <div
+                className={cn(
+                  "border-t px-3 py-3",
+                  dark ? "border-white/10" : "border-border"
+                )}
+              >
+                {datesOnlyRange}
+              </div>
+            </details>
+            <div className="hidden lg:block">{customRange}</div>
+          </>
+        ) : (
+          customRange
+        )}
       </div>
     </Root>
   );

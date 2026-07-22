@@ -39,6 +39,8 @@ type CommissionBarberSelfViewProps = {
   hideIdentityHeader?: boolean;
   /** Dentro do painel lista+detalhe: tipografia e listas mais limpas. */
   embedded?: boolean;
+  /** No celular: esconde grade de métricas e abas extras. */
+  mobileSimple?: boolean;
 };
 
 const tabTriggerClass =
@@ -546,6 +548,7 @@ export function CommissionBarberSelfView({
   payouts = [],
   hideIdentityHeader = false,
   embedded = false,
+  mobileSimple = false,
 }: CommissionBarberSelfViewProps) {
   const isOwnerView = viewer === "owner";
   const isSingleDay = from === to;
@@ -639,12 +642,17 @@ export function CommissionBarberSelfView({
             ) : null}
           </div>
         </div>
-      ) : (
-        <div>
+      ) : mobileSimple ? null : (
+        <div className="hidden lg:block">
           <p className={ADMIN_SURFACE.sectionLabel}>
             {isOwnerView ? "A pagar no período" : "Você recebe"}
           </p>
-          <p className={cn("mt-2 text-4xl font-semibold tabular-nums tracking-tight", ADMIN_SURFACE.accent)}>
+          <p
+            className={cn(
+              "mt-2 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl",
+              ADMIN_SURFACE.accent
+            )}
+          >
             {formatPriceBRL(summary.commissionCents)}
           </p>
           <p className={cn("mt-1.5 text-xs", ADMIN_SURFACE.muted)}>{heroHint}</p>
@@ -654,6 +662,7 @@ export function CommissionBarberSelfView({
       <div
         className={cn(
           "grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10",
+          mobileSimple && "hidden lg:grid",
           summary.tipCents > 0 && bestDay && !isSingleDay
             ? "grid-cols-2 sm:grid-cols-4"
             : summary.tipCents > 0 || (bestDay && !isSingleDay)
@@ -698,7 +707,7 @@ export function CommissionBarberSelfView({
       </div>
 
       {isSingleDay && activeDay ? (
-        <div>
+        <div className={cn(mobileSimple && "hidden lg:block")}>
           <Button
             variant="outline"
             size="sm"
@@ -721,11 +730,23 @@ export function CommissionBarberSelfView({
             <TabsTrigger value="atendimentos" className={tabTriggerClass}>
               Atendimentos
             </TabsTrigger>
-            <TabsTrigger value="servicos" className={tabTriggerClass}>
+            <TabsTrigger
+              value="servicos"
+              className={cn(
+                tabTriggerClass,
+                mobileSimple && "hidden lg:inline-flex"
+              )}
+            >
               Serviços
             </TabsTrigger>
             {!isSingleDay ? (
-              <TabsTrigger value="dias" className={tabTriggerClass}>
+              <TabsTrigger
+                value="dias"
+                className={cn(
+                  tabTriggerClass,
+                  mobileSimple && "hidden lg:inline-flex"
+                )}
+              >
                 Por dia
               </TabsTrigger>
             ) : null}

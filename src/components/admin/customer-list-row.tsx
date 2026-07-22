@@ -363,9 +363,11 @@ export function CustomerListRow({
 export function CustomerMobileCard({
   customer,
   tone = "default",
+  embedded = false,
 }: {
   customer: CustomerListItem;
   tone?: Tone;
+  embedded?: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -391,10 +393,15 @@ export function CustomerMobileCard({
     <>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border p-4",
-          dark
-            ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
-            : "bg-card shadow-sm"
+          "flex items-center gap-3",
+          embedded
+            ? "px-4 py-3.5"
+            : cn(
+                "rounded-lg border p-4",
+                dark
+                  ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
+                  : "bg-card shadow-sm"
+              )
         )}
       >
         <Link
@@ -407,7 +414,7 @@ export function CustomerMobileCard({
               <CatalogStatusDot active={hasVisits} />
               <p
                 className={cn(
-                  "truncate font-medium",
+                  "truncate text-[15px] font-medium tracking-tight",
                   dark && "text-[#f5f5f5]"
                 )}
               >
@@ -416,13 +423,14 @@ export function CustomerMobileCard({
             </div>
             <p
               className={cn(
-                "mt-1 truncate text-sm tabular-nums",
+                "mt-0.5 truncate text-xs",
                 dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
               )}
             >
-              {formatWhatsapp(customer.whatsapp)}
-            </p>
-            <p className="mt-0.5 truncate">
+              <span className="tabular-nums">
+                {formatWhatsapp(customer.whatsapp)}
+              </span>
+              {" · "}
               <VisitsCell customer={customer} tone={tone} compact />
             </p>
           </div>

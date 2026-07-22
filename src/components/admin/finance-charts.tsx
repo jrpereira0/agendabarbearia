@@ -83,7 +83,7 @@ export function VerticalBarChart({
               key={item.label}
               className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
             >
-              <span className="text-[10px] font-medium tabular-nums text-[#b4b6bb] sm:text-xs">
+              <span className="max-w-full truncate text-center text-[9px] font-medium tabular-nums text-[#b4b6bb] sm:text-xs">
                 {item.value > 0 ? formatValue(item.value) : "—"}
               </span>
               <div

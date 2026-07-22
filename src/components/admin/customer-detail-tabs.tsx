@@ -44,22 +44,24 @@ export function CustomerDetailTabs({
 
   return (
     <Tabs defaultValue="dados" className="w-full">
-      <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-        <TabsTrigger value="dados" className="flex-none px-3">
-          Dados
-        </TabsTrigger>
-        <TabsTrigger value="agendamentos" className="flex-none px-3">
-          Agendamentos
-          {completedAppointments.length > 0 ? (
-            <span className={cn("tabular-nums", ADMIN_SURFACE.muted)}>
-              ({completedAppointments.length})
-            </span>
-          ) : null}
-        </TabsTrigger>
-        <TabsTrigger value="financeiro" className="flex-none px-3">
-          Financeiro
-        </TabsTrigger>
-      </TabsList>
+      <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+        <TabsList className="h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          <TabsTrigger value="dados" className="flex-none px-3">
+            Dados
+          </TabsTrigger>
+          <TabsTrigger value="agendamentos" className="flex-none px-3">
+            Agendamentos
+            {completedAppointments.length > 0 ? (
+              <span className={cn("tabular-nums", ADMIN_SURFACE.muted)}>
+                ({completedAppointments.length})
+              </span>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="financeiro" className="flex-none px-3">
+            Financeiro
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
       <TabsContent value="dados" className="mt-4">
         <CustomerForm

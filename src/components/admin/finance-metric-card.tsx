@@ -33,17 +33,15 @@ export function FinanceMetricCard({
     <div
       data-slot="finance-metric-card"
       className={cn(
-        "rounded-xl border px-5 py-4",
-        dark
-          ? ADMIN_SURFACE.panel
-          : "bg-card",
+        "rounded-xl border px-3.5 py-3 sm:px-5 sm:py-4",
+        dark ? ADMIN_SURFACE.panel : "bg-card",
         className
       )}
     >
       <div className="flex items-center gap-1.5">
         <p
           className={cn(
-            "text-sm",
+            "text-xs sm:text-sm",
             dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
           )}
         >
@@ -74,7 +72,7 @@ export function FinanceMetricCard({
       <p
         data-slot="finance-metric-value"
         className={cn(
-          "mt-1 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl",
+          "mt-1 text-xl font-semibold tabular-nums tracking-tight sm:text-3xl",
           dark && "text-[#f5f5f5]"
         )}
       >
@@ -83,7 +81,7 @@ export function FinanceMetricCard({
       {hint ? (
         <p
           className={cn(
-            "mt-1 text-xs",
+            "mt-1 text-[11px] leading-snug sm:text-xs",
             dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
           )}
         >

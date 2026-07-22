@@ -83,7 +83,12 @@ function FieldHint({ children }: { children: React.ReactNode }) {
 
 function FormPanel({ children }: { children: React.ReactNode }) {
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+    <div
+      className={cn(
+        ADMIN_SURFACE.panel,
+        "flex flex-col gap-5 p-4 sm:gap-6 sm:p-6"
+      )}
+    >
       {children}
     </div>
   );
@@ -245,21 +250,23 @@ export function ServiceForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex w-full flex-col gap-5"
+      className="flex w-full flex-col gap-4"
       autoComplete="off"
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-          <TabsTrigger value="info" className="flex-none px-3">
-            Dados
-          </TabsTrigger>
-          <TabsTrigger value="precos" className="flex-none px-3">
-            Preços
-          </TabsTrigger>
-          <TabsTrigger value="agenda" className="flex-none px-3">
-            Agenda
-          </TabsTrigger>
-        </TabsList>
+        <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+          <TabsList className="h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+            <TabsTrigger value="info" className="flex-none px-3">
+              Dados
+            </TabsTrigger>
+            <TabsTrigger value="precos" className="flex-none px-3">
+              Preços
+            </TabsTrigger>
+            <TabsTrigger value="agenda" className="flex-none px-3">
+              Agenda
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent
           value="info"

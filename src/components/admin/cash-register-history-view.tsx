@@ -66,7 +66,6 @@ export function CashRegisterHistoryView({
   const mountedRef = useRef(true);
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
-  const [appliedRange, setAppliedRange] = useState({ from, to });
   const [search, setSearch] = useState("");
   const [busyDate, setBusyDate] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
@@ -76,6 +75,7 @@ export function CashRegisterHistoryView({
     null
   );
   const [confirmCloseDate, setConfirmCloseDate] = useState<string | null>(null);
+  const [appliedRange, setAppliedRange] = useState({ from, to });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -111,24 +111,9 @@ export function CashRegisterHistoryView({
     [filtered]
   );
 
-  const periodServiceCents = useMemo(
-    () => filtered.reduce((sum, row) => sum + row.totalCents, 0),
-    [filtered]
-  );
-
   const openCount = useMemo(
     () => filtered.filter((s) => s.status === "open").length,
     [filtered]
-  );
-
-  const closedCount = filtered.length - openCount;
-
-  const avgPerSession = useMemo(
-    () =>
-      filtered.length > 0
-        ? Math.round(periodCashInflowCents / filtered.length)
-        : 0,
-    [filtered.length, periodCashInflowCents]
   );
 
   const defaultResponsibleId = dialogSession
@@ -180,6 +165,7 @@ export function CashRegisterHistoryView({
   }
 
   const hasSearchNoResults = sessions.length > 0 && filtered.length === 0;
+  const showSearch = sessions.length > 5 || search.trim().length > 0;
 
   return (
     <div
@@ -211,13 +197,13 @@ export function CashRegisterHistoryView({
           <div
             className={cn(
               ADMIN_SURFACE.panel,
-              "flex flex-col gap-1 border-dashed px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+              "border-dashed px-4 py-3 text-sm"
             )}
           >
             <p className={ADMIN_SURFACE.muted}>
               Caixa aberto em{" "}
               <Link
-                href={`/admin?date=${openCashRegister.serviceDate}`}
+                href={`/admin/financeiro/caixas/${openCashRegister.serviceDate}`}
                 className={cn(
                   "font-medium underline-offset-4 hover:underline",
                   ADMIN_SURFACE.accent
@@ -225,12 +211,10 @@ export function CashRegisterHistoryView({
               >
                 {formatDateBR(openCashRegister.serviceDate)}
               </Link>
-              {openCashRegister.responsibleName ? (
-                <> · {openCashRegister.responsibleName}</>
-              ) : null}
-            </p>
-            <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
-              Feche este caixa antes de abrir outro dia.
+              {openCashRegister.responsibleName
+                ? ` · ${openCashRegister.responsibleName}`
+                : ""}
+              . Feche antes de abrir outro.
             </p>
           </div>
         ) : null}
@@ -244,49 +228,50 @@ export function CashRegisterHistoryView({
           onSubmit={applyFilter}
           onPreset={applyPreset}
           tone="dark"
+          mobilePresetsFirst
         />
 
-        {sessions.length > 0 ? (
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            {filtered.length > 0 ? (
-              <div>
-                <p className={ADMIN_SURFACE.sectionLabel}>Entradas no caixa</p>
-                <p
-                  className={cn(
-                    "mt-1 text-2xl font-semibold tabular-nums tracking-tight",
-                    ADMIN_SURFACE.accent
-                  )}
-                >
-                  {formatPriceBRL(periodCashInflowCents)}
-                </p>
-                <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
-                  {filtered.length} caixa{filtered.length === 1 ? "" : "s"}
-                  {" · "}
-                  média {formatPriceBRL(avgPerSession)}
-                  {periodServiceCents < periodCashInflowCents
-                    ? ` · ${formatPriceBRL(periodServiceCents)} em serviços`
-                    : ""}
-                  {" · "}
-                  {openCount > 0
-                    ? `${openCount} aberto${openCount === 1 ? "" : "s"}`
-                    : `${closedCount} fechado${closedCount === 1 ? "" : "s"}`}
-                  {openCount > 0 && closedCount > 0
-                    ? ` · ${closedCount} fechado${closedCount === 1 ? "" : "s"}`
-                    : ""}
-                </p>
-              </div>
-            ) : (
-              <div />
+        {sessions.length > 0 && filtered.length > 0 ? (
+          <div
+            className={cn(
+              ADMIN_SURFACE.panel,
+              "flex items-center justify-between gap-3 rounded-xl px-4 py-3"
             )}
-            <div className="w-full sm:max-w-xs">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Buscar data ou responsável…"
-                inputClassName={ADMIN_SURFACE.input}
-              />
+          >
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "text-[10px] uppercase tracking-wide",
+                  ADMIN_SURFACE.muted
+                )}
+              >
+                Entradas no período
+              </p>
+              <p
+                className={cn(
+                  "mt-0.5 text-lg font-semibold tabular-nums",
+                  ADMIN_SURFACE.accent
+                )}
+              >
+                {formatPriceBRL(periodCashInflowCents)}
+              </p>
             </div>
+            <p className={cn("shrink-0 text-xs", ADMIN_SURFACE.muted)}>
+              {filtered.length} caixa{filtered.length === 1 ? "" : "s"}
+              {openCount > 0
+                ? ` · ${openCount} aberto${openCount === 1 ? "" : "s"}`
+                : ""}
+            </p>
           </div>
+        ) : null}
+
+        {showSearch ? (
+          <SearchInput
+            value={search}
+            onChange={setSearch}
+            placeholder="Buscar data ou responsável…"
+            inputClassName={ADMIN_SURFACE.input}
+          />
         ) : null}
 
         {sessions.length === 0 ? (
@@ -330,7 +315,7 @@ export function CashRegisterHistoryView({
                     <div
                       role="link"
                       tabIndex={0}
-                      className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5"
+                      className="flex cursor-pointer items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.03] active:bg-white/[0.05] sm:px-5"
                       onClick={() => router.push(detailHref)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
@@ -341,7 +326,7 @@ export function CashRegisterHistoryView({
                     >
                       <span
                         className={cn(
-                          "mt-0.5 size-2 shrink-0 self-start rounded-full",
+                          "size-2 shrink-0 rounded-full",
                           isOpen ? "bg-emerald-400" : "bg-white/25"
                         )}
                         aria-hidden
@@ -351,19 +336,21 @@ export function CashRegisterHistoryView({
                         <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
                           {formatDateBR(session.serviceDate)}
                         </p>
-                        <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                        <p
+                          className={cn(
+                            "mt-0.5 truncate text-xs",
+                            ADMIN_SURFACE.muted
+                          )}
+                        >
                           {isOpen ? "Aberto" : "Fechado"}
                           {" · "}
                           {operator}
-                          {session.creditDepositsCents > 0
-                            ? ` · +${formatPriceBRL(session.creditDepositsCents)} crédito`
-                            : ""}
                         </p>
                       </div>
 
                       <p
                         className={cn(
-                          "shrink-0 text-sm font-semibold tabular-nums sm:text-base",
+                          "shrink-0 text-[15px] font-semibold tabular-nums",
                           ADMIN_SURFACE.accent
                         )}
                       >

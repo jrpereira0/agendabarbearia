@@ -10,7 +10,6 @@ import {
   CatalogListEmpty,
   CatalogListShell,
   CatalogListToolbar,
-  CatalogMobileList,
   CatalogTable,
   CatalogTableBody,
   CatalogTableHead,
@@ -24,6 +23,7 @@ import {
 import { matchesSearch } from "@/lib/text";
 import type { ServiceWeekdayPrice } from "@/lib/service-weekday-prices";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type Service = {
   id: string;
@@ -69,17 +69,28 @@ export function ServicesList({ items }: { items: Service[] }) {
     });
   }, [items, filter, query]);
 
+  const showSearch = items.length > 5 || query.trim().length > 0;
+
   return (
     <CatalogListShell>
       <CatalogListToolbar
         tone="dark"
         search={
-          <SearchInput
-            value={query}
-            onChange={setQuery}
-            placeholder="Buscar serviço..."
-            inputClassName={ADMIN_SURFACE.input}
-          />
+          showSearch ? (
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Buscar serviço…"
+              inputClassName={ADMIN_SURFACE.input}
+            />
+          ) : (
+            <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+              {counts.active} ativo{counts.active === 1 ? "" : "s"}
+              {counts.inactive > 0
+                ? ` · ${counts.inactive} inativo${counts.inactive === 1 ? "" : "s"}`
+                : ""}
+            </p>
+          )
         }
         filters={
           <CatalogFilterSegment
@@ -90,7 +101,13 @@ export function ServicesList({ items }: { items: Service[] }) {
           />
         }
         actions={
-          <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+          <Button
+            asChild
+            className={cn(
+              "h-10 w-full sm:h-9 sm:w-auto",
+              ADMIN_SURFACE.btnPrimary
+            )}
+          >
             <Link href="/admin/servicos/novo">
               <Plus />
               Novo serviço
@@ -129,15 +146,19 @@ export function ServicesList({ items }: { items: Service[] }) {
             </CatalogTableBody>
           </CatalogTable>
 
-          <CatalogMobileList>
-            {filtered.map((service) => (
-              <ServiceMobileCard
-                key={service.id}
-                service={service}
-                tone="dark"
-              />
-            ))}
-          </CatalogMobileList>
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden md:hidden")}>
+            <ul className="divide-y divide-white/10">
+              {filtered.map((service) => (
+                <li key={service.id}>
+                  <ServiceMobileCard
+                    service={service}
+                    tone="dark"
+                    embedded
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
         </>
       )}
     </CatalogListShell>

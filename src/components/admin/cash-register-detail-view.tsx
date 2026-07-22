@@ -54,7 +54,7 @@ import { cn } from "@/lib/utils";
 type ComandaProfessionalOption = {
   id: string;
   nickname: string;
-  photoUrl?: string | null;
+  photoUrl: string | null;
   photoPosition?: string | null;
   serviceIds: string[];
   commissionPercent: number;
@@ -213,7 +213,7 @@ export function CashRegisterDetailView({
         ADMIN_SURFACE.page
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <PageHeader
           tone="dark"
           title={formatDateBR(date)}
@@ -290,79 +290,78 @@ export function CashRegisterDetailView({
           </div>
         ) : null}
 
-        <div className={cn(ADMIN_SURFACE.panel, "px-4 py-5 sm:px-5")}>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                "size-2 rounded-full",
-                isCashOpen ? "bg-emerald-400" : "bg-white/25"
-              )}
-              aria-hidden
-            />
-            <p className={ADMIN_SURFACE.sectionLabel}>Total do dia</p>
+        <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+          <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "size-2 rounded-full",
+                    isCashOpen ? "bg-emerald-400" : "bg-white/25"
+                  )}
+                  aria-hidden
+                />
+                <p className={ADMIN_SURFACE.sectionLabel}>Total do dia</p>
+              </div>
+              <p
+                className={cn(
+                  "mt-1.5 text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl",
+                  ADMIN_SURFACE.accent
+                )}
+              >
+                {formatPriceBRL(cash.cashInflowCents)}
+              </p>
+              <p className={cn("mt-1 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
+                {cash.comandaCount} comanda
+                {cash.comandaCount === 1 ? "" : "s"}
+                {cash.creditDepositsCents > 0
+                  ? ` · ${formatPriceBRL(cash.creditDepositsCents)} em créditos`
+                  : ""}
+              </p>
+            </div>
           </div>
-          <p
-            className={cn(
-              "mt-2 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl",
-              ADMIN_SURFACE.accent
-            )}
-          >
-            {formatPriceBRL(cash.cashInflowCents)}
-          </p>
-          <p className={cn("mt-1.5 text-sm", ADMIN_SURFACE.muted)}>
-            {cash.comandaCount} comanda
-            {cash.comandaCount === 1 ? "" : "s"}
-            {cash.creditDepositsCents > 0
-              ? ` · ${formatPriceBRL(cash.creditDepositsCents)} em créditos`
-              : ""}
-          </p>
-        </div>
 
-        <section className="flex flex-col gap-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className={ADMIN_SURFACE.sectionLabel}>Meios de pagamento</p>
-            {activePaymentMethods.length > 0 ? (
-              <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
-                {activePaymentMethods.length} forma
-                {activePaymentMethods.length === 1 ? "" : "s"}
-              </span>
-            ) : null}
-          </div>
-          {activePaymentMethods.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
-              Nenhuma entrada ainda neste dia.
-            </div>
-          ) : (
-            <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-              <ul className="divide-y divide-white/10">
-                {activePaymentMethods.map((method) => {
-                  const Icon = PAYMENT_ICONS[method];
-                  return (
-                    <li
-                      key={method}
-                      className="flex items-center gap-3 px-4 py-3.5 sm:px-5"
+          {activePaymentMethods.length > 0 ? (
+            <ul className="divide-y divide-white/10 border-t border-white/10">
+              {activePaymentMethods.map((method) => {
+                const Icon = PAYMENT_ICONS[method];
+                return (
+                  <li
+                    key={method}
+                    className="flex items-center gap-2.5 px-4 py-2.5 sm:gap-3 sm:px-5 sm:py-3"
+                  >
+                    <Icon
+                      className={cn(
+                        "hidden size-4 shrink-0 sm:block",
+                        ADMIN_SURFACE.muted
+                      )}
+                    />
+                    <span className="min-w-0 flex-1 text-sm text-[#f5f5f5]">
+                      {formatPaymentMethodLabel(method)}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-sm font-semibold tabular-nums sm:text-base",
+                        ADMIN_SURFACE.accent
+                      )}
                     >
-                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#1a1b1e]">
-                        <Icon className={cn("size-4", ADMIN_SURFACE.muted)} />
-                      </div>
-                      <span className="min-w-0 flex-1 text-sm font-medium text-[#f5f5f5]">
-                        {formatPaymentMethodLabel(method)}
-                      </span>
-                      <span
-                        className={cn(
-                          "text-base font-semibold tabular-nums",
-                          ADMIN_SURFACE.accent
-                        )}
-                      >
-                        {formatPriceBRL(paymentMethodTotal(cash, method))}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </section>
+                      {formatPriceBRL(paymentMethodTotal(cash, method))}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : cash.comandaCount === 0 ? (
+            <p
+              className={cn(
+                "border-t border-white/10 px-4 py-4 text-center text-sm sm:px-5",
+                ADMIN_SURFACE.muted
+              )}
+            >
+              Nenhuma entrada ainda neste dia.
+            </p>
+          ) : null}
+        </div>
 
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -439,12 +438,7 @@ export function CashRegisterDetailView({
                       ? null
                       : comanda.payments.length === 1
                         ? formatPaymentMethodLabel(comanda.payments[0]!.method)
-                        : comanda.payments
-                            .map(
-                              (p) =>
-                                `${formatPaymentMethodLabel(p.method)} ${formatPriceBRL(p.amountCents)}`
-                            )
-                            .join(" · ");
+                        : `${comanda.payments.length} formas`;
 
                   const meta = [
                     comanda.professionalNickname,

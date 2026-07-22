@@ -215,16 +215,18 @@ export function FinanceMetricDetail({
                     : undefined;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       <div>
         <p className={cn(ADMIN_SURFACE.sectionLabel)}>
           {financeMetricLabel(metric)}
         </p>
-        <p className="page-display mt-1 text-3xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-4xl">
+        <p className="page-display mt-1 text-2xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-4xl">
           {hero}
         </p>
         {heroHint ? (
-          <p className={cn("mt-1 text-sm", ADMIN_SURFACE.muted)}>{heroHint}</p>
+          <p className={cn("mt-1 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
+            {heroHint}
+          </p>
         ) : null}
       </div>
 
@@ -233,8 +235,8 @@ export function FinanceMetricDetail({
           <Section title="Evolução no período" description="Faturamento por dia">
             {dayEvolutionGross.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
-                  <VerticalBarChart items={dayEvolutionGross} height={180} />
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart items={dayEvolutionGross} height={148} />
                 </CardContent>
               </Card>
             ) : (
@@ -244,8 +246,8 @@ export function FinanceMetricDetail({
 
           <Section title="Por dia da semana">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
-                <VerticalBarChart items={weekdayGross} height={160} />
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                <VerticalBarChart items={weekdayGross} height={132} />
               </CardContent>
             </Card>
           </Section>
@@ -253,7 +255,7 @@ export function FinanceMetricDetail({
           {topServices.length > 0 && (
             <Section title="Top serviços" description="Maior faturamento">
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart items={topServices} />
                 </CardContent>
               </Card>
@@ -287,7 +289,7 @@ export function FinanceMetricDetail({
           >
             {paymentItems.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart items={paymentItems} />
                 </CardContent>
               </Card>
@@ -299,8 +301,8 @@ export function FinanceMetricDetail({
           <Section title="Entradas por dia">
             {dayEvolutionCash.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
-                  <VerticalBarChart items={dayEvolutionCash} height={180} />
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart items={dayEvolutionCash} height={148} />
                 </CardContent>
               </Card>
             ) : (
@@ -310,52 +312,45 @@ export function FinanceMetricDetail({
 
           <Section title="Dia a dia">
             <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Dia</th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        Entradas
-                      </th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        Créditos
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {daysWithActivity.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-4 py-8 text-center text-muted-foreground"
-                        >
-                          Sem entradas neste período.
-                        </td>
-                      </tr>
-                    ) : (
-                      daysWithActivity.map((day) => (
-                        <tr
-                          key={day.date}
-                          className="border-b last:border-b-0"
-                        >
-                          <td className="px-4 py-3 whitespace-nowrap">
-                            {formatDateBR(day.date)}
-                          </td>
-                          <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                            {formatPriceBRL(day.cashInflowCents)}
-                          </td>
-                          <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                            {day.creditDepositsCents > 0
-                              ? formatPriceBRL(day.creditDepositsCents)
-                              : "—"}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {daysWithActivity.length === 0 ? (
+                <p
+                  className={cn(
+                    "px-4 py-8 text-center text-sm",
+                    ADMIN_SURFACE.muted
+                  )}
+                >
+                  Sem entradas neste período.
+                </p>
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {daysWithActivity.map((day) => (
+                    <li
+                      key={day.date}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                          {formatDateBR(day.date)}
+                        </p>
+                        {day.creditDepositsCents > 0 ? (
+                          <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                            Créditos{" "}
+                            {formatPriceBRL(day.creditDepositsCents)}
+                          </p>
+                        ) : null}
+                      </div>
+                      <p
+                        className={cn(
+                          "shrink-0 text-sm font-semibold tabular-nums",
+                          ADMIN_SURFACE.accent
+                        )}
+                      >
+                        {formatPriceBRL(day.cashInflowCents)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
           </Section>
         </>
@@ -369,8 +364,8 @@ export function FinanceMetricDetail({
           >
             {dayEvolutionTicket.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
-                  <VerticalBarChart items={dayEvolutionTicket} height={180} />
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart items={dayEvolutionTicket} height={148} />
                 </CardContent>
               </Card>
             ) : (
@@ -380,49 +375,49 @@ export function FinanceMetricDetail({
 
           <Section title="Ticket por dia da semana">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
-                <VerticalBarChart items={weekdayTicket} height={160} />
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                <VerticalBarChart items={weekdayTicket} height={132} />
               </CardContent>
             </Card>
           </Section>
 
           <Section title="Ticket por dia">
             <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[420px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Dia</th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        Serviços
-                      </th>
-                      <th className="px-4 py-3 font-medium text-right">
-                        Ticket
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {daysWithActivity.map((day) => (
-                      <tr key={day.date} className="border-b last:border-b-0">
-                        <td className="px-4 py-3 whitespace-nowrap">
+              {daysWithActivity.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {daysWithActivity.map((day) => (
+                    <li
+                      key={day.date}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
                           {formatDateBR(day.date)}
-                        </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                          {day.serviceItemCount}
-                        </td>
-                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                          {formatPriceBRL(
-                            ticketAverageCents(
-                              day.totalCents,
-                              day.serviceItemCount
-                            )
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </p>
+                        <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                          {day.serviceItemCount} serviço
+                          {day.serviceItemCount === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <p
+                        className={cn(
+                          "shrink-0 text-sm font-semibold tabular-nums",
+                          ADMIN_SURFACE.accent
+                        )}
+                      >
+                        {formatPriceBRL(
+                          ticketAverageCents(
+                            day.totalCents,
+                            day.serviceItemCount
+                          )
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </Card>
           </Section>
 
@@ -455,10 +450,10 @@ export function FinanceMetricDetail({
           <Section title="Serviços por dia">
             {dayEvolutionServices.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <VerticalBarChart
                     items={dayEvolutionServices}
-                    height={180}
+                    height={148}
                     formatValue={formatCount}
                   />
                 </CardContent>
@@ -470,10 +465,10 @@ export function FinanceMetricDetail({
 
           <Section title="Por dia da semana">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                 <VerticalBarChart
                   items={weekdayServices}
-                  height={160}
+                  height={132}
                   formatValue={formatCount}
                 />
               </CardContent>
@@ -483,7 +478,7 @@ export function FinanceMetricDetail({
           {topServicesByQty.length > 0 && (
             <Section title="Serviços mais feitos">
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart
                     items={topServicesByQty}
                     formatValue={formatCount}
@@ -496,53 +491,17 @@ export function FinanceMetricDetail({
           {report.professionals.length > 0 && (
             <Section title="Por barbeiro">
               <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[360px] text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                        <th className="px-4 py-3 font-medium">Barbeiro</th>
-                        <th className="px-4 py-3 font-medium text-right">
-                          Serviços
-                        </th>
-                        <th className="w-10 px-2 py-3" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...report.professionals]
-                        .sort(
-                          (a, b) => b.serviceItemCount - a.serviceItemCount
-                        )
-                        .map((pro) => (
-                          <tr
-                            key={pro.professionalId}
-                            className="border-b last:border-b-0"
-                          >
-                            <td className="px-4 py-3 font-medium">
-                              {pro.professionalNickname}
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                              {pro.serviceItemCount}
-                            </td>
-                            <td className="px-2 py-3 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-8"
-                                asChild
-                              >
-                                <Link
-                                  href={`/admin/financeiro/comissoes?from=${from}&to=${to}&professionalId=${pro.professionalId}`}
-                                  aria-label={`Comissões de ${pro.professionalNickname}`}
-                                >
-                                  <ArrowRight className="size-4" />
-                                </Link>
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
+                <MetricRowList
+                  rows={[...report.professionals]
+                    .sort((a, b) => b.serviceItemCount - a.serviceItemCount)
+                    .map((pro) => ({
+                      id: pro.professionalId,
+                      title: pro.professionalNickname,
+                      value: String(pro.serviceItemCount),
+                      href: `/admin/financeiro/comissoes?from=${from}&to=${to}&professionalId=${pro.professionalId}`,
+                      ariaLabel: `Comissões de ${pro.professionalNickname}`,
+                    }))}
+                />
               </Card>
             </Section>
           )}
@@ -553,7 +512,7 @@ export function FinanceMetricDetail({
         <>
           <Section title="Divisão do faturamento">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                 <DonutChart
                   slices={[
                     {
@@ -577,10 +536,10 @@ export function FinanceMetricDetail({
           <Section title="Comissão por dia">
             {dayEvolutionCommission.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <VerticalBarChart
                     items={dayEvolutionCommission}
-                    height={180}
+                    height={148}
                   />
                 </CardContent>
               </Card>
@@ -611,7 +570,7 @@ export function FinanceMetricDetail({
           <Button
             variant="outline"
             size="sm"
-            className={cn("w-fit", ADMIN_SURFACE.btnGhost)}
+            className={cn("h-10 w-full sm:h-8 sm:w-fit", ADMIN_SURFACE.btnGhost)}
             asChild
           >
             <Link href={`/admin/financeiro/comissoes?from=${from}&to=${to}`}>
@@ -631,7 +590,7 @@ export function FinanceMetricDetail({
           >
             {paymentItems.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart items={paymentItems} />
                 </CardContent>
               </Card>
@@ -640,57 +599,54 @@ export function FinanceMetricDetail({
             )}
           </Section>
 
-          <Section title="Tabela">
+          <Section title="Detalhe por forma">
             <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[360px] text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                      <th className="px-4 py-3 font-medium">Forma</th>
-                      <th className="px-4 py-3 font-medium text-right">Valor</th>
-                      <th className="px-4 py-3 font-medium text-right">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentItems.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          className="px-4 py-8 text-center text-muted-foreground"
-                        >
-                          Sem entradas neste período.
-                        </td>
-                      </tr>
-                    ) : (
-                      paymentItems.map((item) => {
-                        const pct =
-                          report.totals.cashInflowCents > 0
-                            ? Math.round(
-                                (item.value / report.totals.cashInflowCents) *
-                                  100
-                              )
-                            : 0;
-                        return (
-                          <tr
-                            key={item.label}
-                            className="border-b last:border-b-0"
+              {paymentItems.length === 0 ? (
+                <p
+                  className={cn(
+                    "px-4 py-8 text-center text-sm",
+                    ADMIN_SURFACE.muted
+                  )}
+                >
+                  Sem entradas neste período.
+                </p>
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {paymentItems.map((item) => {
+                    const pct =
+                      report.totals.cashInflowCents > 0
+                        ? Math.round(
+                            (item.value / report.totals.cashInflowCents) * 100
+                          )
+                        : 0;
+                    return (
+                      <li
+                        key={item.label}
+                        className="flex items-center gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                            {item.label}
+                          </p>
+                          <p
+                            className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}
                           >
-                            <td className="px-4 py-3 font-medium">
-                              {item.label}
-                            </td>
-                            <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                              {formatPriceBRL(item.value)}
-                            </td>
-                            <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-                              {pct}%
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                            {pct}% do total
+                          </p>
+                        </div>
+                        <p
+                          className={cn(
+                            "shrink-0 text-sm font-semibold tabular-nums",
+                            ADMIN_SURFACE.accent
+                          )}
+                        >
+                          {formatPriceBRL(item.value)}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Card>
           </Section>
         </>
@@ -725,7 +681,7 @@ export function FinanceMetricDetail({
           <Section title="Comissão gerada">
             {report.professionals.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart
                     items={[...report.professionals]
                       .map((pro) => ({
@@ -751,18 +707,18 @@ export function FinanceMetricDetail({
             description="Qual dia da semana rende mais"
           >
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
-                <VerticalBarChart items={weekdayGross} height={180} />
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                <VerticalBarChart items={weekdayGross} height={148} />
               </CardContent>
             </Card>
           </Section>
 
           <Section title="Serviços por dia da semana">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                 <VerticalBarChart
                   items={weekdayServices}
-                  height={160}
+                  height={132}
                   formatValue={formatCount}
                 />
               </CardContent>
@@ -771,13 +727,13 @@ export function FinanceMetricDetail({
 
           <Section title="Entradas no caixa">
             <Card className={ADMIN_SURFACE.panel}>
-              <CardContent className="pt-5">
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                 <VerticalBarChart
                   items={report.weekdayBreakdown.map((row) => ({
                     label: row.label.slice(0, 3),
                     value: row.cashInflowCents,
                   }))}
-                  height={160}
+                  height={132}
                 />
               </CardContent>
             </Card>
@@ -793,7 +749,7 @@ export function FinanceMetricDetail({
           >
             {topServices.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart items={topServices} />
                 </CardContent>
               </Card>
@@ -808,7 +764,7 @@ export function FinanceMetricDetail({
           >
             {topServicesByQty.length > 0 ? (
               <Card className={ADMIN_SURFACE.panel}>
-                <CardContent className="pt-5">
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
                   <HorizontalBarChart
                     items={topServicesByQty}
                     formatValue={formatCount}
@@ -827,9 +783,66 @@ export function FinanceMetricDetail({
 
 function EmptyBlock() {
   return (
-    <p className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+    <p
+      className={cn(
+        "rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm",
+        ADMIN_SURFACE.muted
+      )}
+    >
       Sem dados neste período.
     </p>
+  );
+}
+
+function MetricRowList({
+  rows,
+}: {
+  rows: {
+    id: string;
+    title: string;
+    subtitle?: string;
+    value: string;
+    href?: string;
+    ariaLabel?: string;
+  }[];
+}) {
+  return (
+    <ul className="divide-y divide-white/10">
+      {rows.map((row) => (
+        <li key={row.id} className="flex items-center gap-3 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium text-[#f5f5f5]">
+              {row.title}
+            </p>
+            {row.subtitle ? (
+              <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                {row.subtitle}
+              </p>
+            ) : null}
+          </div>
+          <p
+            className={cn(
+              "shrink-0 text-sm font-semibold tabular-nums",
+              ADMIN_SURFACE.accent
+            )}
+          >
+            {row.value}
+          </p>
+          {row.href ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-9 shrink-0 text-[#8b8d93] hover:bg-white/5 hover:text-[#f5f5f5] sm:size-8"
+              asChild
+            >
+              <Link href={row.href} aria-label={row.ariaLabel ?? row.title}>
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -844,46 +857,15 @@ function ProfessionalMoneyTable({
   linkLabel?: string;
 }) {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[400px] text-sm">
-        <thead>
-          <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-            <th className="px-4 py-3 font-medium">Barbeiro</th>
-            <th className="px-4 py-3 font-medium text-right">Valor</th>
-            <th className="w-10 px-2 py-3" />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-b last:border-b-0">
-              <td className="px-4 py-3">
-                <p className="font-medium">{row.name}</p>
-                {row.sub ? (
-                  <p className="text-xs text-muted-foreground">{row.sub}</p>
-                ) : null}
-              </td>
-              <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                {formatPriceBRL(row.value)}
-              </td>
-              <td className="px-2 py-3 text-right">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  asChild
-                >
-                  <Link
-                    href={`/admin/financeiro/comissoes?from=${from}&to=${to}&professionalId=${row.id}`}
-                    aria-label={`Detalhar ${row.name}`}
-                  >
-                    <ArrowRight className="size-4" />
-                  </Link>
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <MetricRowList
+      rows={rows.map((row) => ({
+        id: row.id,
+        title: row.name,
+        subtitle: row.sub,
+        value: formatPriceBRL(row.value),
+        href: `/admin/financeiro/comissoes?from=${from}&to=${to}&professionalId=${row.id}`,
+        ariaLabel: `Detalhar ${row.name}`,
+      }))}
+    />
   );
 }

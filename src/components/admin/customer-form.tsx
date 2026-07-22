@@ -98,10 +98,15 @@ export function CustomerForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex w-full flex-col gap-5"
+      className="flex w-full flex-col gap-4"
       autoComplete="off"
     >
-      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+      <div
+        className={cn(
+          ADMIN_SURFACE.panel,
+          "flex flex-col gap-5 p-4 sm:gap-6 sm:p-6"
+        )}
+      >
         <FormSectionTitle
           tone="dark"
           icon={Contact}

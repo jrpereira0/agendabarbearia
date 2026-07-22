@@ -33,7 +33,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -78,6 +77,7 @@ import {
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { adminComandaDialogClassName } from "@/lib/admin-dialog";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { matchesSearch } from "@/lib/text";
 import type { ProductOption } from "@/lib/product-types";
 import { encaixeTimeSlots, findAppointmentConflicts } from "@/lib/encaixe";
@@ -935,9 +935,7 @@ export function ComandaDialog({
     : false;
 
   const hasSecondaryActions =
-    Boolean(canEdit && onEditSchedule) ||
-    canCancelFocused ||
-    Boolean(isOwner && isClosed);
+    Boolean(canEdit && onEditSchedule) || canCancelFocused;
 
   const paymentShortfall = canEdit && paymentShortfallCents > 0;
 
@@ -1812,57 +1810,80 @@ export function ComandaDialog({
                     Pagamento
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Quanto falta receber para finalizar
+                    {isClosed
+                      ? "Como o cliente pagou"
+                      : "Quanto falta receber para finalizar"}
                   </p>
                 </div>
 
                 <div className="booking-pay-hero shrink-0 space-y-2 rounded-xl px-3.5 py-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Total</span>
-                    <span className="font-semibold tabular-nums text-[#f5f5f5]">
-                      {formatPriceBRL(totals.totalCents)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Já pago</span>
-                    <span
-                      className={cn(
-                        "font-semibold tabular-nums",
-                        paymentShortfall ? "booking-pay-short" : "text-[#f5f5f5]"
+                  {isClosed ? (
+                    <>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        Total pago
+                      </p>
+                      <p className="text-2xl font-semibold tabular-nums tracking-tight text-[var(--booking-accent,#ecf15e)]">
+                        {formatPriceBRL(totals.totalCents)}
+                      </p>
+                      {paymentOverpayCents > 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          Inclui {formatPriceBRL(paymentOverpayCents)} em
+                          troco/crédito
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="font-semibold tabular-nums text-[#f5f5f5]">
+                          {formatPriceBRL(totals.totalCents)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Já pago</span>
+                        <span
+                          className={cn(
+                            "font-semibold tabular-nums",
+                            paymentShortfall
+                              ? "booking-pay-short"
+                              : "text-[#f5f5f5]"
+                          )}
+                        >
+                          {formatPriceBRL(paymentsSum)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-[var(--booking-border)] pt-2">
+                        <span className="text-sm font-medium text-[#f5f5f5]">
+                          {paymentOverpayCents > 0
+                            ? "Troco / crédito"
+                            : paymentShortfall
+                              ? "Falta"
+                              : "Em dia"}
+                        </span>
+                        <span
+                          className={cn(
+                            "text-lg font-semibold tabular-nums",
+                            paymentOverpayCents > 0
+                              ? "booking-pay-due"
+                              : paymentShortfall
+                                ? "booking-pay-short"
+                                : "booking-pay-due"
+                          )}
+                        >
+                          {paymentOverpayCents > 0
+                            ? formatPriceBRL(paymentOverpayCents)
+                            : paymentShortfall
+                              ? formatPriceBRL(paymentShortfallCents)
+                              : formatPriceBRL(0)}
+                        </span>
+                      </div>
+                      {canEdit && paymentOverpayCents > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Pode virar crédito do cliente ao finalizar.
+                        </p>
                       )}
-                    >
-                      {formatPriceBRL(paymentsSum)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-[var(--booking-border)] pt-2">
-                    <span className="text-sm font-medium text-[#f5f5f5]">
-                      {paymentOverpayCents > 0
-                        ? "Troco / crédito"
-                        : paymentShortfall
-                          ? "Falta"
-                          : "Em dia"}
-                    </span>
-                    <span
-                      className={cn(
-                        "text-lg font-semibold tabular-nums",
-                        paymentOverpayCents > 0
-                          ? "booking-pay-due"
-                          : paymentShortfall
-                            ? "booking-pay-short"
-                            : "booking-pay-due"
-                      )}
-                    >
-                      {paymentOverpayCents > 0
-                        ? formatPriceBRL(paymentOverpayCents)
-                        : paymentShortfall
-                          ? formatPriceBRL(paymentShortfallCents)
-                          : formatPriceBRL(0)}
-                    </span>
-                  </div>
-                  {canEdit && paymentOverpayCents > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Pode virar crédito do cliente ao finalizar.
-                    </p>
+                    </>
                   )}
                 </div>
 
@@ -1885,10 +1906,10 @@ export function ComandaDialog({
                       <>
                         Sem caixa aberto em {formatDateBR(serviceDate)}. Abra em{" "}
                         <Link
-                          href={`/admin/financeiro?date=${serviceDate}`}
+                          href={`/admin/financeiro/caixas/${serviceDate}`}
                           className="font-medium text-[#f5f5f5] underline-offset-4 hover:underline"
                         >
-                          Financeiro
+                          Caixas
                         </Link>
                         .
                       </>
@@ -1956,151 +1977,186 @@ export function ComandaDialog({
                     )}
 
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Forma de pagamento
-                      </p>
-                      {payments.map((row) => (
-                        <div
-                          key={row.localKey}
-                          className="booking-context flex flex-col gap-2 rounded-xl p-2.5"
-                        >
-                          <div className="flex min-w-0 gap-2">
-                            <Select
-                              value={row.paymentMethod}
-                              onValueChange={(v) => {
-                                const method = v as PaymentMethod;
-                                setPayments((prev) =>
-                                  prev.map((p) => {
-                                    if (p.localKey !== row.localKey) return p;
-                                    const next = {
-                                      ...p,
-                                      paymentMethod: method,
-                                    };
-                                    if (method === "store_credit") {
-                                      const withoutThis = prev
-                                        .filter(
-                                          (payment) =>
-                                            payment.localKey !== row.localKey &&
-                                            payment.paymentMethod !==
-                                              "store_credit"
-                                        )
-                                        .reduce(
-                                          (sum, payment) =>
-                                            sum + payment.amountCents,
-                                          0
-                                        );
-                                      const remainingDue = Math.max(
-                                        0,
-                                        totals.totalCents - withoutThis
-                                      );
-                                      next.amountCents = Math.min(
-                                        remainingDue,
-                                        customerCreditBalanceCents
-                                      );
-                                    }
-                                    return next;
-                                  })
-                                );
-                              }}
-                              disabled={!canEdit || busy}
-                            >
-                              <SelectTrigger className="h-9 min-w-0 flex-1">
-                                <SelectValue placeholder="Escolha a forma" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availablePaymentMethods.map((m) => (
-                                  <SelectItem key={m} value={m}>
-                                    {PAYMENT_METHOD_LABELS[m]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            {canEdit && payments.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="size-9 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
-                                onClick={() =>
-                                  setPayments((prev) =>
-                                    prev.filter(
-                                      (p) => p.localKey !== row.localKey
-                                    )
-                                  )
-                                }
-                              >
-                                <Trash2 className="size-4" />
-                              </Button>
-                            )}
-                          </div>
-                          <Input
-                            className="h-9 w-full tabular-nums"
-                            value={
-                              row.amountCents > 0
-                                ? formatPriceBRL(row.amountCents)
-                                : ""
-                            }
-                            onChange={(e) => {
-                              const cents = parsePriceInput(e.target.value);
-                              const withoutThisCredit = payments
-                                .filter(
-                                  (payment) =>
-                                    payment.localKey !== row.localKey &&
-                                    payment.paymentMethod !== "store_credit"
-                                )
-                                .reduce(
-                                  (sum, payment) => sum + payment.amountCents,
-                                  0
-                                );
-                              const maxForCredit =
-                                row.paymentMethod === "store_credit"
-                                  ? Math.min(
-                                      Math.max(
-                                        0,
-                                        totals.totalCents - withoutThisCredit
-                                      ),
-                                      customerCreditBalanceCents
-                                    )
-                                  : cents;
-                              const capped =
-                                row.paymentMethod === "store_credit"
-                                  ? Math.min(cents, maxForCredit)
-                                  : cents;
-                              setPayments((prev) =>
-                                prev.map((p) =>
-                                  p.localKey === row.localKey
-                                    ? { ...p, amountCents: capped }
-                                    : p
-                                )
-                              );
-                            }}
-                            disabled={!canEdit || busy}
-                          />
+                      {!isClosed ? (
+                        <p className="text-xs font-medium text-muted-foreground">
+                          Forma de pagamento
+                        </p>
+                      ) : null}
+
+                      {!canEdit ? (
+                        <div className="overflow-hidden rounded-xl border border-[var(--booking-border)]">
+                          {payments.length === 0 ? (
+                            <p className="px-3.5 py-3 text-sm text-muted-foreground">
+                              Sem formas de pagamento registradas.
+                            </p>
+                          ) : (
+                            <ul className="divide-y divide-[var(--booking-border)]">
+                              {payments.map((row) => (
+                                <li
+                                  key={row.localKey}
+                                  className="flex items-center justify-between gap-3 px-3.5 py-2.5"
+                                >
+                                  <span className="min-w-0 truncate text-sm text-[#f5f5f5]">
+                                    {PAYMENT_METHOD_LABELS[row.paymentMethod]}
+                                  </span>
+                                  <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--booking-accent,#ecf15e)]">
+                                    {formatPriceBRL(row.amountCents)}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
-                      ))}
-                      {canEdit && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="booking-btn-ghost h-8 w-full"
-                          onClick={() =>
-                            setPayments((prev) => [
-                              ...prev,
-                              {
-                                localKey: newLocalKey(),
-                                paymentMethod: "cash",
-                                amountCents: Math.max(
-                                  0,
-                                  totals.totalCents - paymentsSum
-                                ),
-                              },
-                            ])
-                          }
-                        >
-                          <Plus className="size-4" />
-                          Outra forma
-                        </Button>
+                      ) : (
+                        <>
+                          {payments.map((row) => (
+                            <div
+                              key={row.localKey}
+                              className="booking-context flex flex-col gap-2 rounded-xl p-2.5"
+                            >
+                              <div className="flex min-w-0 gap-2">
+                                <Select
+                                  value={row.paymentMethod}
+                                  onValueChange={(v) => {
+                                    const method = v as PaymentMethod;
+                                    setPayments((prev) =>
+                                      prev.map((p) => {
+                                        if (p.localKey !== row.localKey)
+                                          return p;
+                                        const next = {
+                                          ...p,
+                                          paymentMethod: method,
+                                        };
+                                        if (method === "store_credit") {
+                                          const withoutThis = prev
+                                            .filter(
+                                              (payment) =>
+                                                payment.localKey !==
+                                                  row.localKey &&
+                                                payment.paymentMethod !==
+                                                  "store_credit"
+                                            )
+                                            .reduce(
+                                              (sum, payment) =>
+                                                sum + payment.amountCents,
+                                              0
+                                            );
+                                          const remainingDue = Math.max(
+                                            0,
+                                            totals.totalCents - withoutThis
+                                          );
+                                          next.amountCents = Math.min(
+                                            remainingDue,
+                                            customerCreditBalanceCents
+                                          );
+                                        }
+                                        return next;
+                                      })
+                                    );
+                                  }}
+                                  disabled={busy}
+                                >
+                                  <SelectTrigger className="h-9 min-w-0 flex-1">
+                                    <SelectValue placeholder="Escolha a forma" />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    className={ADMIN_SURFACE.popover}
+                                  >
+                                    {availablePaymentMethods.map((m) => (
+                                      <SelectItem key={m} value={m}>
+                                        {PAYMENT_METHOD_LABELS[m]}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {payments.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-9 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
+                                    onClick={() =>
+                                      setPayments((prev) =>
+                                        prev.filter(
+                                          (p) => p.localKey !== row.localKey
+                                        )
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="size-4" />
+                                  </Button>
+                                )}
+                              </div>
+                              <Input
+                                className="h-9 w-full tabular-nums"
+                                value={
+                                  row.amountCents > 0
+                                    ? formatPriceBRL(row.amountCents)
+                                    : ""
+                                }
+                                onChange={(e) => {
+                                  const cents = parsePriceInput(e.target.value);
+                                  const withoutThisCredit = payments
+                                    .filter(
+                                      (payment) =>
+                                        payment.localKey !== row.localKey &&
+                                        payment.paymentMethod !== "store_credit"
+                                    )
+                                    .reduce(
+                                      (sum, payment) =>
+                                        sum + payment.amountCents,
+                                      0
+                                    );
+                                  const maxForCredit =
+                                    row.paymentMethod === "store_credit"
+                                      ? Math.min(
+                                          Math.max(
+                                            0,
+                                            totals.totalCents -
+                                              withoutThisCredit
+                                          ),
+                                          customerCreditBalanceCents
+                                        )
+                                      : cents;
+                                  const capped =
+                                    row.paymentMethod === "store_credit"
+                                      ? Math.min(cents, maxForCredit)
+                                      : cents;
+                                  setPayments((prev) =>
+                                    prev.map((p) =>
+                                      p.localKey === row.localKey
+                                        ? { ...p, amountCents: capped }
+                                        : p
+                                    )
+                                  );
+                                }}
+                                disabled={busy}
+                              />
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="booking-btn-ghost h-8 w-full"
+                            onClick={() =>
+                              setPayments((prev) => [
+                                ...prev,
+                                {
+                                  localKey: newLocalKey(),
+                                  paymentMethod: "cash",
+                                  amountCents: Math.max(
+                                    0,
+                                    totals.totalCents - paymentsSum
+                                  ),
+                                },
+                              ])
+                            }
+                          >
+                            <Plus className="size-4" />
+                            Outra forma
+                          </Button>
+                        </>
                       )}
                     </div>
 
@@ -2152,7 +2208,10 @@ export function ComandaDialog({
                           <MoreHorizontal className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
+                      <DropdownMenuContent
+                        align="start"
+                        className={ADMIN_SURFACE.popover}
+                      >
                         {canEdit && onEditSchedule && (
                           <DropdownMenuItem
                             disabled={busy}
@@ -2178,20 +2237,6 @@ export function ComandaDialog({
                             Cancelar horário
                           </DropdownMenuItem>
                         )}
-                        {isOwner && isClosed && (
-                          <>
-                            {(canEdit && onEditSchedule) || canCancelFocused ? (
-                              <DropdownMenuSeparator />
-                            ) : null}
-                            <DropdownMenuItem
-                              disabled={busy}
-                              onSelect={() => void handleReopen()}
-                            >
-                              <RotateCcw className="size-4" />
-                              Reabrir comanda
-                            </DropdownMenuItem>
-                          </>
-                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
@@ -2199,30 +2244,46 @@ export function ComandaDialog({
 
                 <div className="min-w-0 text-right sm:mr-auto sm:flex-1 sm:px-3">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {paymentShortfall
-                      ? "Falta"
-                      : paymentOverpayCents > 0
-                        ? "Troco"
-                        : "Total"}
+                    {isClosed
+                      ? "Total"
+                      : paymentShortfall
+                        ? "Falta"
+                        : paymentOverpayCents > 0
+                          ? "Troco"
+                          : "Total"}
                   </p>
                   <p
                     className={cn(
                       "text-lg font-semibold tabular-nums",
-                      paymentShortfall
+                      !isClosed && paymentShortfall
                         ? "text-[#f87171]"
                         : "text-[var(--booking-accent,#ecf15e)]"
                     )}
                   >
                     {formatPriceBRL(
-                      paymentShortfall
-                        ? paymentShortfallCents
-                        : paymentOverpayCents > 0
-                          ? paymentOverpayCents
-                          : totals.totalCents
+                      isClosed
+                        ? totals.totalCents
+                        : paymentShortfall
+                          ? paymentShortfallCents
+                          : paymentOverpayCents > 0
+                            ? paymentOverpayCents
+                            : totals.totalCents
                     )}
                   </p>
                 </div>
               </div>
+
+              {isOwner && isClosed ? (
+                <Button
+                  type="button"
+                  className="booking-btn-primary h-11 w-full shrink-0 sm:h-9 sm:w-auto sm:min-w-40"
+                  onClick={() => void handleReopen()}
+                  disabled={busy}
+                >
+                  <RotateCcw className="size-4" />
+                  Reabrir comanda
+                </Button>
+              ) : null}
 
               {(canFinalize ||
                 (loading &&
@@ -2554,7 +2615,7 @@ export function ComandaDialog({
                 <SelectTrigger id="tip-draft-professional" className="h-11">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={ADMIN_SURFACE.popover}>
                   {tipEligibleProfessionals.map((pro) => (
                     <SelectItem key={pro.id} value={pro.id}>
                       {pro.nickname}
@@ -2790,7 +2851,7 @@ export function ComandaDialog({
                 <SelectTrigger id="extra-professional" className="h-11 w-full">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={ADMIN_SURFACE.popover}>
                   {eligibleExtraProfessionals.map((pro) => (
                     <SelectItem key={pro.id} value={pro.id}>
                       {pro.nickname}
@@ -2945,7 +3006,7 @@ export function ComandaDialog({
                 <SelectTrigger id="product-professional" className="h-11 w-full">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={ADMIN_SURFACE.popover}>
                   <SelectItem value={PRODUCT_NO_PROFESSIONAL}>
                     Sem profissional
                   </SelectItem>

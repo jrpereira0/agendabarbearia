@@ -39,7 +39,14 @@ export function ProfessionalCommissionsPanel({
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
+  const [applied, setApplied] = useState({ from, to });
   const dark = tone === "dark";
+
+  if (applied.from !== from || applied.to !== to) {
+    setApplied({ from, to });
+    setFromDate(from);
+    setToDate(to);
+  }
 
   function buildHref(nextFrom: string, nextTo: string) {
     const params = new URLSearchParams({ from: nextFrom, to: nextTo });
@@ -59,9 +66,15 @@ export function ProfessionalCommissionsPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={cn(dark ? ADMIN_SURFACE.panel : "rounded-lg border bg-card shadow-sm", dark && "p-5 sm:p-6", !dark && "overflow-hidden")}>
-        {!dark ? null : (
-          <div className="mb-5">
+      <div
+        className={cn(
+          dark
+            ? cn(ADMIN_SURFACE.panel, "p-4 sm:p-6")
+            : "overflow-hidden rounded-lg border bg-card shadow-sm"
+        )}
+      >
+        {dark ? (
+          <div className="mb-4 sm:mb-5">
             <FormSectionTitle
               tone="dark"
               icon={Wallet}
@@ -69,15 +82,14 @@ export function ProfessionalCommissionsPanel({
               description={`Comissão em aberto de ${formatPeriodLabel(from, to)}.`}
             />
           </div>
-        )}
-        {!dark ? (
+        ) : (
           <div className="border-b bg-muted/20 px-5 py-4">
             <h2 className="text-sm font-semibold">A pagar no período</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Comissão em aberto de {formatPeriodLabel(from, to)}.
             </p>
           </div>
-        ) : null}
+        )}
         <div className={cn("flex flex-col gap-4", !dark && "p-5")}>
           <FinancePeriodFilter
             today={today}
@@ -89,6 +101,7 @@ export function ProfessionalCommissionsPanel({
             onPreset={applyPreset}
             embedded
             tone={dark ? "dark" : "default"}
+            mobilePresetsFirst={dark}
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -103,8 +116,8 @@ export function ProfessionalCommissionsPanel({
               </p>
               <p
                 className={cn(
-                  "text-2xl font-semibold tabular-nums tracking-tight",
-                  dark && "text-[#f5f5f5]"
+                  "text-xl font-semibold tabular-nums tracking-tight sm:text-2xl",
+                  dark ? ADMIN_SURFACE.accent : undefined
                 )}
               >
                 {formatPriceBRL(openCommissionCents)}
@@ -146,12 +159,12 @@ export function ProfessionalCommissionsPanel({
       <div
         className={cn(
           dark
-            ? cn(ADMIN_SURFACE.panel, "p-5 sm:p-6")
+            ? cn(ADMIN_SURFACE.panel, "p-4 sm:p-6")
             : "overflow-hidden rounded-lg border bg-card shadow-sm"
         )}
       >
         {dark ? (
-          <div className="mb-5">
+          <div className="mb-4 sm:mb-5">
             <FormSectionTitle
               tone="dark"
               icon={History}
@@ -168,7 +181,11 @@ export function ProfessionalCommissionsPanel({
           </div>
         )}
         <div className={cn(!dark && "p-5")}>
-          <CommissionPayoutHistory payouts={payouts} viewer="owner" />
+          <CommissionPayoutHistory
+            payouts={payouts}
+            viewer="owner"
+            embedded={dark}
+          />
         </div>
       </div>
     </div>
