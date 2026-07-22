@@ -719,8 +719,12 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       ref={rootRef}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className={cn("shrink-0 px-5", step === "professional" ? "pb-1.5 pt-3" : "pb-2 pt-5")}>
-        <div className="flex items-center justify-between gap-3">
+      <div
+        className={cn(
+          "relative z-10 shrink-0 bg-[#0e0f11] px-5",
+          step === "professional" ? "pb-2 pt-3" : "pb-2 pt-5"
+        )}
+      >        <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
           <span className="text-[11px] tabular-nums text-muted-foreground">
             {currentStep} de {stepOrder.length}
@@ -788,22 +792,17 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         className={cn(
           "min-h-0 flex-1 px-5",
           step === "professional"
-            ? "flex flex-col overflow-hidden pb-2"
+            ? "overflow-hidden pt-2 pb-2"
             : "overflow-y-auto overscroll-y-contain pb-8 [-webkit-overflow-scrolling:touch]"
         )}
       >
         {step === "professional" && (
-          <div
-            className="grid h-full min-h-0 grid-cols-2 gap-2"
-            style={{
-              gridTemplateRows: `repeat(${Math.ceil((professionals.length + 1) / 2)}, minmax(0, 1fr))`,
-            }}
-          >
+          <div className="grid grid-cols-2 content-start gap-2">
             <button
               type="button"
               onClick={() => selectProfessional(NO_PREFERENCE_ID)}
               className={cn(
-                "flex h-full min-h-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-center transition-colors ring-1",
+                "flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
                 anyPreference
                   ? "bg-primary/10 ring-primary/50"
                   : "bg-[#151618] ring-white/8"
@@ -811,15 +810,15 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             >
               <div
                 className={cn(
-                  "flex size-9 shrink-0 items-center justify-center rounded-full",
+                  "flex size-14 shrink-0 items-center justify-center rounded-full",
                   anyPreference
                     ? "bg-primary text-primary-foreground"
                     : "bg-white/10"
                 )}
               >
-                <Users className="size-4" strokeWidth={1.5} />
+                <Users className="size-6" strokeWidth={1.5} />
               </div>
-              <span className="text-[0.8125rem] font-semibold leading-tight">
+              <span className="text-[0.9375rem] font-semibold leading-tight">
                 Qualquer
               </span>
               <span className="px-0.5 text-[10px] leading-tight text-muted-foreground">
@@ -835,7 +834,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   type="button"
                   onClick={() => selectProfessional(pro.id)}
                   className={cn(
-                    "flex h-full min-h-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-center transition-colors ring-1",
+                    "flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
                     selected
                       ? "bg-primary/10 ring-primary/50"
                       : "bg-[#151618] ring-white/8"
@@ -846,16 +845,16 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                       photoUrl={pro.photoUrl}
                       photoPosition={pro.photoPosition}
                       name={pro.nickname}
-                      size="sm"
-                      className="!size-9"
+                      size="lg"
+                      className="!size-14 border-white/10"
                     />
                     {selected ? (
-                      <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-[#151618]">
-                        <Check className="size-2.5" strokeWidth={2.5} />
+                      <span className="absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-[#151618]">
+                        <Check className="size-3" strokeWidth={2.5} />
                       </span>
                     ) : null}
                   </div>
-                  <span className="line-clamp-1 max-w-full px-0.5 text-[0.8125rem] font-semibold leading-tight">
+                  <span className="line-clamp-1 max-w-full px-0.5 text-[0.9375rem] font-semibold leading-tight">
                     {pro.nickname}
                   </span>
                 </button>
