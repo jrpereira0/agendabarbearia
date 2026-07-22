@@ -19,7 +19,6 @@ export type CustomerAppointment = {
   status:
     | "scheduled"
     | "confirmed"
-    | "on_site"
     | "cancelled"
     | "done";
   professionalName: string;

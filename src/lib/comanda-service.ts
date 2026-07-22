@@ -2087,8 +2087,7 @@ function squeezeStatusFromMain(mainStatus: string): string {
   }
   if (
     mainStatus === "scheduled" ||
-    mainStatus === "confirmed" ||
-    mainStatus === "on_site"
+    mainStatus === "confirmed"
   ) {
     return mainStatus;
   }

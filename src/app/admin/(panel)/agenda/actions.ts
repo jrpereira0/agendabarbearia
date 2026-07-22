@@ -1208,7 +1208,6 @@ export async function moveAppointmentToDate(input: {
 const workflowStatusSchema = z.enum([
   "scheduled",
   "confirmed",
-  "on_site",
   "cancelled",
   "done",
 ]);

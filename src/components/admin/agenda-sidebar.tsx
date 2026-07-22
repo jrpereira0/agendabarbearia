@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { AgendaMiniCalendar } from "@/components/admin/agenda-mini-calendar";
 import { ScheduleBlocksPanel } from "@/components/admin/schedule-blocks-panel";
@@ -34,26 +34,49 @@ const LEGEND_GROUPS = [
   {
     title: "Grade",
     items: [
-      { swatchClass: agendaLegend.free, label: "Livre" },
-      { swatchClass: agendaLegend.outside, label: "Fora do expediente" },
-      { swatchClass: agendaLegend.blocked, label: "Bloqueado" },
+      { swatchClass: agendaLegend.free, label: "Livre", bar: null },
+      { swatchClass: agendaLegend.outside, label: "Fora do expediente", bar: null },
+      {
+        swatchClass: agendaLegend.blocked,
+        label: "Bloqueado",
+        bar: "#ecf15e",
+      },
     ],
   },
   {
     title: "Status",
     items: [
-      { swatchClass: agendaLegend.scheduled, label: "Agendado" },
-      { swatchClass: agendaLegend.confirmed, label: "Confirmado" },
-      { swatchClass: agendaLegend.onSite, label: "No local" },
-      { swatchClass: agendaLegend.done, label: "Atendido" },
-      { swatchClass: agendaLegend.cancelled, label: "Cancelado" },
+      {
+        swatchClass: agendaLegend.scheduled,
+        label: "Agendado",
+        bar: "#5c6208",
+      },
+      {
+        swatchClass: agendaLegend.confirmed,
+        label: "Confirmado",
+        bar: "#0f4c56",
+      },
+      { swatchClass: agendaLegend.done, label: "Atendido", bar: "#14532d" },
+      {
+        swatchClass: agendaLegend.cancelled,
+        label: "Cancelado",
+        bar: "#7f1d1d",
+      },
     ],
   },
   {
     title: "Especiais",
     items: [
-      { swatchClass: agendaLegend.squeezeIn, label: "Encaixe" },
-      { swatchClass: agendaLegend.comandaExtra, label: "Serviço extra" },
+      {
+        swatchClass: agendaLegend.squeezeIn,
+        label: "Encaixe",
+        bar: "#5c6208",
+      },
+      {
+        swatchClass: agendaLegend.comandaExtra,
+        label: "Serviço extra",
+        bar: "#3f3f46",
+      },
     ],
   },
 ] as const;
@@ -111,7 +134,7 @@ function LegendGrid({ compact }: { compact?: boolean }) {
         <div key={group.title}>
           <p
             className={cn(
-              "mb-2 font-medium tracking-wide text-[var(--agenda-muted,#8b8d93)] uppercase",
+              "agenda-display mb-2.5 font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase",
               compact ? "text-[10px]" : "text-[11px]"
             )}
           >
@@ -119,21 +142,30 @@ function LegendGrid({ compact }: { compact?: boolean }) {
           </p>
           <ul
             className={cn(
-              "grid gap-2",
-              compact ? "grid-cols-1 text-xs" : "grid-cols-1 text-[13px]"
+              "grid gap-x-3 gap-y-2",
+              compact
+                ? "grid-cols-1 text-xs"
+                : group.title === "Status"
+                  ? "grid-cols-2 text-[13px]"
+                  : "grid-cols-1 text-[13px]"
             )}
           >
             {group.items.map((item) => (
               <li key={item.label} className="flex items-center gap-2.5">
                 <span
                   className={cn(
-                    "shrink-0 rounded-md shadow-[0_0_0_1px_rgb(255_255_255_/_18%)]",
+                    "agenda-legend-swatch relative shrink-0 overflow-hidden rounded-md",
                     compact ? "size-4" : "size-[1.125rem]",
                     item.swatchClass
                   )}
+                  style={
+                    item.bar
+                      ? ({ ["--apt-bar"]: item.bar } as CSSProperties)
+                      : undefined
+                  }
                   aria-hidden
                 />
-                <span className="leading-snug text-[#f5f5f5]">{item.label}</span>
+                <span className="leading-snug text-[#e8e8ea]">{item.label}</span>
               </li>
             ))}
           </ul>
@@ -143,7 +175,7 @@ function LegendGrid({ compact }: { compact?: boolean }) {
       <div className="border-t border-white/10 pt-3.5">
         <p
           className={cn(
-            "mb-2 font-medium tracking-wide text-[var(--agenda-muted,#8b8d93)] uppercase",
+            "agenda-display mb-2.5 font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase",
             compact ? "text-[10px]" : "text-[11px]"
           )}
         >
@@ -161,7 +193,7 @@ function LegendGrid({ compact }: { compact?: boolean }) {
               <li key={source} className="flex items-center gap-2.5">
                 <span
                   className={cn(
-                    "inline-flex shrink-0 items-center justify-center rounded-md border border-white/12 bg-[#1a1b1e] text-[#ecf15e]",
+                    "inline-flex shrink-0 items-center justify-center rounded-md border border-white/12 bg-[#121316] text-[var(--agenda-accent,#ecf15e)]",
                     compact ? "size-3.5" : "size-4"
                   )}
                   aria-hidden
@@ -357,9 +389,16 @@ export function AgendaSidebar({
 
       {canManageScheduleBlocks && (
         <div className="agenda-panel rounded-2xl border p-3.5">
-          <p className="agenda-display mb-3 text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-muted,#8b8d93)] uppercase">
-            Bloqueios
-          </p>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="agenda-display text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
+              Bloqueios
+            </p>
+            {scheduleBlocks.length > 0 && (
+              <span className="rounded-md bg-[rgb(236_241_94_/_12%)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-[var(--agenda-accent,#ecf15e)]">
+                {scheduleBlocks.length}
+              </span>
+            )}
+          </div>
           <ScheduleBlocksPanel
             date={date}
             blocks={scheduleBlocks}
@@ -379,7 +418,7 @@ export function AgendaSidebar({
           aria-expanded={legendOpen}
           aria-controls="agenda-legend-list"
         >
-          <span className="agenda-display text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-muted,#8b8d93)] uppercase">
+          <span className="agenda-display text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
             Legenda
           </span>
           <ChevronDown

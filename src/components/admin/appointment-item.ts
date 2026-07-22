@@ -13,7 +13,6 @@ export type AppointmentItem = {
   status:
     | "scheduled"
     | "confirmed"
-    | "on_site"
     | "cancelled"
     | "done";
   isSqueezeIn?: boolean;

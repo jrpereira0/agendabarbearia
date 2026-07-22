@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   buildTimeSlots,
@@ -51,18 +51,6 @@ function slotLineClass(minute: number): string {
     : `border-t border-dashed ${gridLineSlot}`;
 }
 
-function isOutsideForAll(
-  minute: number,
-  slotStepMinutes: number,
-  professionals: AgendaProfessionalColumn[]
-): boolean {
-  if (professionals.length === 0) return true;
-  return professionals.every(
-    (pro) =>
-      !isSlotStartAvailable(minute, slotStepMinutes, pro.availableRanges, [])
-  );
-}
-
 export function AgendaGrid({
   gridStart,
   gridEnd,
@@ -76,22 +64,15 @@ export function AgendaGrid({
   mobileLayout = false,
   className,
 }: AgendaGridProps) {
+  const [hoverMinute, setHoverMinute] = useState<number | null>(null);
+
   const rowHeight = mobileLayout
     ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
     : rowHeightForStep(slotStepMinutes);
-  const outsideRowHeight = Math.max(6, Math.round(rowHeight * 0.35));
 
   const timeSlots = useMemo(
     () => buildTimeSlots(gridStart, gridEnd, slotStepMinutes),
     [gridStart, gridEnd, slotStepMinutes]
-  );
-
-  const slotOutside = useMemo(
-    () =>
-      timeSlots.map((minute) =>
-        isOutsideForAll(minute, slotStepMinutes, professionals)
-      ),
-    [timeSlots, slotStepMinutes, professionals]
   );
 
   const appointmentsByPro = useMemo(() => {
@@ -139,15 +120,9 @@ export function AgendaGrid({
       : "minmax(10rem, 1fr)"
     : "minmax(7.5rem, 1fr)";
 
-  const rowTracks = timeSlots
-    .map((_, index) =>
-      slotOutside[index] ? `${outsideRowHeight}px` : `${rowHeight}px`
-    )
-    .join(" ");
-
   const gridStyle = {
     gridTemplateColumns: `3.25rem repeat(${professionals.length}, ${colMin})`,
-    gridTemplateRows: `auto ${rowTracks} auto`,
+    gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 
   const visibleAppointments = appointments;
@@ -159,6 +134,7 @@ export function AgendaGrid({
         gridLineOuter,
         className
       )}
+      onMouseLeave={() => setHoverMinute(null)}
     >
       <div className="grid min-w-max" style={gridStyle}>
         {/* Cabeçalho fixo no scroll vertical */}
@@ -194,7 +170,6 @@ export function AgendaGrid({
         {timeSlots.map((minute, index) => {
           const row = index + 2;
           const isLast = index === timeSlots.length - 1;
-          const outside = slotOutside[index];
 
           return (
             <TimeSlotCells
@@ -202,22 +177,26 @@ export function AgendaGrid({
               minute={minute}
               row={row}
               isLast={isLast}
-              outside={outside}
-              gridEnd={gridEnd}
+              isHovered={hoverMinute === minute}
               slotStepMinutes={slotStepMinutes}
               professionals={professionals}
               appointmentsByPro={appointmentsByPro}
               isOwner={isOwner}
               canBookClients={canBookClients}
               onSlotClick={onSlotClick}
+              onHoverMinute={setHoverMinute}
             />
           );
         })}
 
         <div
-          className="agenda-grid-header sticky left-0 z-30"
+          className="agenda-grid-header relative sticky left-0 z-30"
           style={{ gridRow: footerRow, gridColumn: 1 }}
-        />
+        >
+          <span className="absolute top-1.5 right-1.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
+            {timeLabel(gridEnd)}
+          </span>
+        </div>
         {professionals.map((pro, i) => (
           <div
             key={`foot-${pro.id}`}
@@ -255,6 +234,8 @@ export function AgendaGrid({
           const layout = overlapLayoutsByPro.get(apt.professionalId)?.get(
             apt.id
           );
+          const aptStart = timeToMinutes(apt.startTime);
+          const aptEnd = timeToMinutes(apt.endTime);
 
           return (
             <AppointmentGridBlock
@@ -266,6 +247,26 @@ export function AgendaGrid({
               columnIndex={layout?.columnIndex}
               columnCount={layout?.columnCount}
               onClick={() => onAppointmentClick(apt)}
+              onHoverTime={(clientY, top, height) => {
+                if (height <= 0) {
+                  setHoverMinute(
+                    Math.floor(aptStart / slotStepMinutes) * slotStepMinutes
+                  );
+                  return;
+                }
+                const ratio = Math.min(
+                  1,
+                  Math.max(0, (clientY - top) / height)
+                );
+                const raw = aptStart + ratio * (aptEnd - aptStart);
+                const snapped =
+                  Math.floor(raw / slotStepMinutes) * slotStepMinutes;
+                const clamped = Math.min(
+                  Math.max(snapped, gridStart),
+                  gridEnd - slotStepMinutes
+                );
+                setHoverMinute(clamped);
+              }}
             />
           );
         })}
@@ -278,53 +279,51 @@ type TimeSlotCellsProps = {
   minute: number;
   row: number;
   isLast: boolean;
-  outside: boolean;
-  gridEnd: number;
+  isHovered: boolean;
   slotStepMinutes: number;
   professionals: AgendaProfessionalColumn[];
   appointmentsByPro: Map<string, AppointmentItem[]>;
   isOwner: boolean;
   canBookClients: boolean;
   onSlotClick: (professionalId: string, startTime: string) => void;
+  onHoverMinute: (minute: number | null) => void;
 };
 
 function TimeSlotCells({
   minute,
   row,
   isLast,
-  outside,
-  gridEnd,
+  isHovered,
   slotStepMinutes,
   professionals,
   appointmentsByPro,
   isOwner,
   canBookClients,
   onSlotClick,
+  onHoverMinute,
 }: TimeSlotCellsProps) {
   return (
     <>
       <div
         className={cn(
-          "agenda-grid-header relative sticky left-0 z-20 overflow-visible",
+          "agenda-grid-header relative sticky left-0 z-20",
           slotLineClass(minute),
           isLast && `border-b border-solid ${gridLineHour}`,
-          outside && "opacity-70"
+          isHovered && "bg-[rgb(236_241_94_/_10%)]"
         )}
         style={{ gridRow: row, gridColumn: 1 }}
+        onMouseEnter={() => onHoverMinute(minute)}
       >
-        {shouldShowTimeLabel(minute, slotStepMinutes) && !outside && (
-          <span className="absolute -top-px right-1.5 -translate-y-1/2 bg-[var(--agenda-bg,#0e0f11)] px-0.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
+        {shouldShowTimeLabel(minute, slotStepMinutes) && (
+          <span
+            className={cn(
+              "absolute top-0.5 right-1.5 text-[10px] leading-none tabular-nums sm:right-2 sm:text-[11px]",
+              isHovered
+                ? "font-semibold text-[var(--agenda-accent,#ecf15e)]"
+                : "text-[var(--agenda-muted,#8b8d93)]"
+            )}
+          >
             {timeLabel(minute)}
-          </span>
-        )}
-        {shouldShowTimeLabel(minute, slotStepMinutes) && outside && (
-          <span className="absolute -top-px right-1.5 -translate-y-1/2 px-0.5 text-[9px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)]/70 sm:right-2">
-            {timeLabel(minute)}
-          </span>
-        )}
-        {isLast && (
-          <span className="absolute -bottom-px right-1.5 translate-y-1/2 bg-[var(--agenda-bg,#0e0f11)] px-0.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
-            {timeLabel(gridEnd)}
           </span>
         )}
       </div>
@@ -371,6 +370,8 @@ function TimeSlotCells({
               agendaCellClass({ inSchedule, occupied, blocked })
             )}
             style={{ gridRow: row, gridColumn: i + 2 }}
+            onMouseEnter={() => onHoverMinute(minute)}
+            title={timeLabel(minute)}
           >
             {available && canBookClients && (
               <button

@@ -147,3 +147,59 @@
   border-color: var(--agenda-border);
   background: var(--agenda-bg);
 }
+
+/* Card de agendamento — barra + hover bem visível */
+.admin-agenda .agenda-apt-card {
+  position: relative;
+  isolation: isolate;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.admin-agenda .agenda-apt-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  border-radius: 2px 0 0 2px;
+  background: var(--apt-bar, #5c6208);
+  z-index: 1;
+}
+
+.admin-agenda .agenda-apt-card:hover,
+.admin-agenda .agenda-apt-card:focus-visible {
+  z-index: 50;
+  transform: translateY(-1px) scale(1.015);
+  filter: brightness(1.08);
+  box-shadow:
+    0 0 0 2px rgb(236 241 94 / 70%),
+    0 10px 24px rgb(0 0 0 / 45%);
+  outline: none;
+}
+
+.admin-agenda .agenda-apt-tooltip {
+  border: 1px solid rgb(255 255 255 / 12%);
+  background: #151618;
+  color: #f5f5f5;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 55%);
+}
+
+.admin-agenda .agenda-apt-tooltip [data-slot="tooltip-arrow"],
+.admin-agenda .agenda-apt-tooltip svg {
+  fill: #151618;
+  background: #151618;
+}
+
+.admin-agenda .agenda-legend-swatch::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--apt-bar, transparent);
+}

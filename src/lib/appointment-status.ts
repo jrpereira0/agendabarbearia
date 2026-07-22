@@ -1,7 +1,6 @@
 export const APPOINTMENT_STATUSES = [
   "scheduled",
   "confirmed",
-  "on_site",
   "cancelled",
   "done",
 ] as const;
@@ -12,7 +11,6 @@ export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
 export const ACTIVE_APPOINTMENT_STATUSES = [
   "scheduled",
   "confirmed",
-  "on_site",
 ] as const;
 
 export type ActiveAppointmentStatus =
@@ -22,7 +20,6 @@ export type ActiveAppointmentStatus =
 export const CONTEXT_MENU_STATUSES = [
   "scheduled",
   "confirmed",
-  "on_site",
   "cancelled",
   "done",
 ] as const;
@@ -30,7 +27,6 @@ export const CONTEXT_MENU_STATUSES = [
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   scheduled: "Agendado",
   confirmed: "Confirmado",
-  on_site: "No local",
   cancelled: "Cancelado",
   done: "Atendido",
 };

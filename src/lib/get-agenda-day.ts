@@ -231,15 +231,36 @@ export async function getAgendaDayContext(
     };
   });
 
-  let gridStart = ENCAIXE_DAY_START;
-  let gridEnd = ENCAIXE_DAY_END;
+  // Grade só no expediente (união dos horários dos profissionais / loja).
+  // Encaixe fora do expediente continua pelo formulário dedicado.
+  let gridStart: number;
+  let gridEnd: number;
 
-  gridStart = roundDown(gridStart, slotStepMinutes);
-  gridEnd = roundUp(gridEnd, slotStepMinutes);
+  if (shopClosed) {
+    gridStart = 0;
+    gridEnd = 0;
+  } else {
+    const rangeBounds = columns.flatMap((column) => column.availableRanges);
+    const boundSource =
+      rangeBounds.length > 0
+        ? rangeBounds
+        : shopWindow
+          ? [shopWindow]
+          : [{ start: ENCAIXE_DAY_START, end: ENCAIXE_DAY_END }];
 
-  if (gridEnd <= gridStart) {
-    gridStart = ENCAIXE_DAY_START;
-    gridEnd = ENCAIXE_DAY_END;
+    gridStart = roundDown(
+      Math.min(...boundSource.map((range) => range.start)),
+      slotStepMinutes
+    );
+    gridEnd = roundUp(
+      Math.max(...boundSource.map((range) => range.end)),
+      slotStepMinutes
+    );
+
+    if (gridEnd <= gridStart) {
+      gridStart = 0;
+      gridEnd = 0;
+    }
   }
 
   return {

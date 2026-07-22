@@ -757,7 +757,7 @@ Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
 }
 ```
 
-Lista só agendamentos **futuros**, status ativo (`scheduled`, `confirmed`, `on_site`), **sem encaixe**. Array vazio se não houver nenhum.
+Lista só agendamentos **futuros**, status ativo (`scheduled`, `confirmed`), **sem encaixe**. Array vazio se não houver nenhum.
 
 ---
 

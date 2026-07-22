@@ -19,7 +19,11 @@ import {
   BOOKING_SOURCE_ICONS,
   BOOKING_SOURCE_LABELS,
 } from "@/lib/booking-source";
-import { agendaAppointmentClass } from "@/lib/agenda-colors";
+import {
+  agendaAppointmentClass,
+  agendaStatusBarColor,
+  agendaStatusBarKey,
+} from "@/lib/agenda-colors";
 import { STATUS_LABELS } from "@/lib/appointment-status";
 import { AppointmentStatusMenu } from "@/components/admin/appointment-status-menu";
 
@@ -31,6 +35,8 @@ type AppointmentGridBlockProps = {
   gridRow: string;
   columnIndex?: number;
   columnCount?: number;
+  /** Informa o horário sob o mouse enquanto passa pelo bloco. */
+  onHoverTime?: (clientY: number, top: number, height: number) => void;
 };
 
 function BookingSourceBadge({ source }: { source: BookingSource }) {
@@ -39,7 +45,7 @@ function BookingSourceBadge({ source }: { source: BookingSource }) {
 
   return (
     <span
-      className="pointer-events-none absolute right-0.5 top-0.5 z-10 inline-flex size-3 shrink-0 items-center justify-center rounded-sm bg-background/20 text-current opacity-80"
+      className="pointer-events-none absolute top-0.5 right-0.5 z-10 inline-flex size-3 shrink-0 items-center justify-center rounded-sm bg-black/15 text-current opacity-80"
       aria-label={`Agendado: ${label}`}
       title={`Agendado: ${label}`}
     >
@@ -61,39 +67,36 @@ function AppointmentTooltipContent({
 
   return (
     <div className="flex flex-col gap-1.5 text-left">
-      <p className="font-medium leading-snug">{name}</p>
+      <p className="font-medium leading-snug text-[#f5f5f5]">{name}</p>
 
       {services.length > 0 && (
-        <p className="leading-snug opacity-90">
-          {services.join(" · ")}
-        </p>
+        <p className="leading-snug text-[#c8c9cc]">{services.join(" · ")}</p>
       )}
 
-      <p className="tabular-nums opacity-90">{timeRange}</p>
+      <p className="tabular-nums text-[#e8e8ea]">{timeRange}</p>
 
-      <p className="opacity-75">
+      <p className="text-[var(--agenda-muted,#8b8d93)]">
         {formatDuration(totalMinutes)} · {formatPriceBRL(totalPrice)}
       </p>
 
       <div className="flex flex-wrap gap-1.5 pt-0.5">
-        <span className="rounded-sm bg-background/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+        <span className="rounded-md bg-[rgb(236_241_94_/_16%)] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[var(--agenda-accent,#ecf15e)] uppercase">
           {STATUS_LABELS[apt.status]}
         </span>
-        {apt.isComandaExtra &&
-          apt.status !== "cancelled" && (
-          <span className="rounded-sm border border-dashed border-background/50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+        {apt.isComandaExtra && apt.status !== "cancelled" && (
+          <span className="rounded-md border border-dashed border-white/25 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#e8e8ea] uppercase">
             Serviço extra
           </span>
         )}
         {apt.isSqueezeIn &&
           !apt.isComandaExtra &&
           apt.status !== "cancelled" && (
-          <span className="rounded-sm border border-dashed border-background/50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-            Encaixe
-          </span>
-        )}
+            <span className="rounded-md border border-dashed border-white/25 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#e8e8ea] uppercase">
+              Encaixe
+            </span>
+          )}
         {apt.bookingSource && (
-          <span className="rounded-sm bg-background/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+          <span className="rounded-md bg-white/8 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#c8c9cc] uppercase">
             {BOOKING_SOURCE_LABELS[apt.bookingSource]}
           </span>
         )}
@@ -110,6 +113,7 @@ export function AppointmentGridBlock({
   gridRow,
   columnIndex = 0,
   columnCount = 1,
+  onHoverTime,
 }: AppointmentGridBlockProps) {
   const isMobile = useIsMobile();
   const [statusMenu, setStatusMenu] = useState<{
@@ -122,20 +126,22 @@ export function AppointmentGridBlock({
   const endTime = formatTime(apt.endTime);
   const sideBySide = columnCount > 1;
   const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
+  const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
 
   const blockButton = (
     <button
       type="button"
       className={cn(
-        "relative z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left shadow-sm transition-[opacity,box-shadow,z-index] hover:z-50 hover:opacity-100 hover:shadow-md focus-visible:z-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "agenda-apt-card relative z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left",
         sideBySide ? "mx-0.5" : "mx-1",
-        tight ? "px-0.5 py-0" : "px-1 py-0.5 sm:px-1.5",
+        tight ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
         agendaAppointmentClass(apt)
       )}
       style={{
         gridColumn,
         gridRow,
         zIndex: 20 + columnIndex,
+        ["--apt-bar" as string]: barColor,
         ...(sideBySide
           ? {
               width: `calc(${100 / columnCount}% - 6px)`,
@@ -144,6 +150,14 @@ export function AppointmentGridBlock({
           : {}),
       }}
       onClick={onClick}
+      onMouseMove={
+        onHoverTime
+          ? (event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              onHoverTime(event.clientY, rect.top, rect.height);
+            }
+          : undefined
+      }
       onContextMenu={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -153,7 +167,7 @@ export function AppointmentGridBlock({
       {apt.bookingSource ? (
         <BookingSourceBadge source={apt.bookingSource} />
       ) : null}
-      <div className="flex min-h-0 w-full flex-col justify-center gap-px">
+      <div className="relative z-[2] flex min-h-0 w-full flex-col justify-center gap-px">
         <p
           className={cn(
             "truncate font-medium leading-none",
@@ -187,7 +201,7 @@ export function AppointmentGridBlock({
             side="right"
             align="start"
             sideOffset={6}
-            className="max-w-[240px] items-start p-3 text-xs"
+            className="agenda-apt-tooltip max-w-[240px] items-start p-3 text-xs"
           >
             <AppointmentTooltipContent appointment={apt} />
           </TooltipContent>
