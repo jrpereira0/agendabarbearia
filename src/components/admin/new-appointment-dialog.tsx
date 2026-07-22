@@ -760,9 +760,7 @@ export function NewAppointmentDialog({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function submitAppointment() {
     if (!firstName.trim() || !lastName.trim() || !whatsapp.replace(/\D/g, "")) {
       toast.error("Preencha os dados do cliente.");
       return;
@@ -791,6 +789,11 @@ export function NewAppointmentDialog({
       toast.error(result.error);
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await submitAppointment();
   }
 
   const stepMeta = getStepMeta(step, presetFromGrid, isEncaixe);
@@ -1052,8 +1055,9 @@ export function NewAppointmentDialog({
               onBack={goBack}
               onCancel={() => onOpenChange(false)}
               primaryLabel={isEncaixe ? "Confirmar encaixe" : "Confirmar agendamento"}
-              primaryType="submit"
-              formId="new-appointment-form"
+              onPrimary={() => {
+                void submitAppointment();
+              }}
               loading={saving}
             />
           ) : (

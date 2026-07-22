@@ -63,7 +63,7 @@ export default async function SettingsPage() {
         ADMIN_SURFACE.page
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 pb-8">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 pb-8">
         <PageHeader
           tone="dark"
           title="Configurações"

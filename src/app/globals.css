@@ -6,6 +6,7 @@
 @import "../styles/admin-agenda-theme.css";
 @import "../styles/admin-page-theme.css"; /* painel escuro: financeiro, comissões, caixas */
 @import "../styles/admin-booking-dialog-theme.css";
+@import "../styles/admin-toast-theme.css";
 
 @custom-variant dark (&:is(.dark *));
 

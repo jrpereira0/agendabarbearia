@@ -139,10 +139,15 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-4"
       autoComplete="off"
     >
-      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+      <div
+        className={cn(
+          ADMIN_SURFACE.panel,
+          "flex flex-col gap-5 p-4 sm:gap-6 sm:p-6"
+        )}
+      >
         <FormSectionTitle
           tone="dark"
           icon={Store}
@@ -154,7 +159,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#0e0f11] transition-opacity hover:opacity-90"
+            className="relative flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#0e0f11] transition-opacity hover:opacity-90 sm:size-20"
           >
             {preview ? (
               <Image
@@ -178,7 +183,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
             onChange={handleLogoChange}
           />
 
-          <div className="grid min-w-0 flex-1 gap-4">
+          <div className="grid min-w-0 flex-1 gap-3 sm:gap-4">
             <div className="space-y-2">
               <DarkLabel htmlFor="shopName">Nome da barbearia</DarkLabel>
               <Input
@@ -210,7 +215,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           <div className="space-y-2">
             <DarkLabel htmlFor="shopWhatsapp">WhatsApp da barbearia</DarkLabel>
             <div className="relative">
@@ -254,7 +259,12 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
         </div>
       </div>
 
-      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+      <div
+        className={cn(
+          ADMIN_SURFACE.panel,
+          "flex flex-col gap-5 p-4 sm:gap-6 sm:p-6"
+        )}
+      >
         <FormSectionTitle
           tone="dark"
           icon={MapPin}
@@ -262,7 +272,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
           description="Digite o CEP para preencher rua, bairro e cidade automaticamente."
         />
 
-        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:gap-4">
           <div className="space-y-2">
             <DarkLabel htmlFor="cep">CEP</DarkLabel>
             <Input
@@ -281,7 +291,10 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
               variant="outline"
               onClick={() => lookupCep()}
               disabled={loadingCep || saving}
-              className={cn("w-full sm:w-auto", ADMIN_SURFACE.btnGhost)}
+              className={cn(
+                "h-10 w-full sm:h-9 sm:w-auto",
+                ADMIN_SURFACE.btnGhost
+              )}
             >
               {loadingCep ? (
                 <>
@@ -308,7 +321,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           <div className="space-y-2">
             <DarkLabel htmlFor="addressNumber">Número</DarkLabel>
             <Input
@@ -333,7 +346,7 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
           <div className="space-y-2">
             <DarkLabel htmlFor="neighborhood">Bairro</DarkLabel>
             <Input
@@ -373,12 +386,15 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
         </div>
       </div>
 
-      <div className="sticky bottom-0 z-10 -mx-4 border-t border-white/10 bg-[#0e0f11]/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#0e0f11]/80 sm:-mx-0 sm:rounded-2xl sm:border sm:px-5">
+      <div className="sticky bottom-0 z-10 -mx-4 border-t border-white/10 bg-[#0e0f11]/95 px-4 py-3.5 backdrop-blur supports-[backdrop-filter]:bg-[#0e0f11]/80 sm:-mx-0 sm:rounded-2xl sm:border sm:px-5 sm:py-4">
         <div className="flex justify-end">
           <Button
             type="submit"
             disabled={saving}
-            className={ADMIN_SURFACE.btnPrimary}
+            className={cn(
+              "h-10 w-full sm:h-9 sm:w-auto",
+              ADMIN_SURFACE.btnPrimary
+            )}
           >
             {saving ? "Salvando..." : "Salvar perfil"}
           </Button>

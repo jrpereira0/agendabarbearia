@@ -80,7 +80,12 @@ export function BusinessHoursForm({
   }
 
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
+    <div
+      className={cn(
+        ADMIN_SURFACE.panel,
+        "flex flex-col gap-4 p-4 sm:gap-5 sm:p-6"
+      )}
+    >
       <FormSectionTitle
         tone="dark"
         icon={Clock}
@@ -88,13 +93,13 @@ export function BusinessHoursForm({
         description="Os barbeiros só atendem dentro desse horário."
       />
 
-      <div className="flex flex-col divide-y divide-white/10">
+      <div className="-mx-4 flex flex-col divide-y divide-white/10 sm:-mx-6">
         {days.map((day) => (
           <div
             key={day.weekday}
-            className="flex flex-wrap items-center gap-3 py-3.5"
+            className="flex flex-col gap-2.5 px-4 py-3.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-6"
           >
-            <div className="flex w-32 items-center gap-3">
+            <div className="flex w-full items-center gap-3 sm:w-32 sm:shrink-0">
               <Switch
                 checked={day.active}
                 disabled={readOnly}
@@ -103,13 +108,13 @@ export function BusinessHoursForm({
                 }
                 aria-label={`${WEEKDAYS[day.weekday]} aberto`}
               />
-              <span className="text-sm font-medium text-[#f5f5f5]">
+              <span className="text-[15px] font-medium tracking-tight text-[#f5f5f5] sm:text-sm">
                 {WEEKDAYS[day.weekday]}
               </span>
             </div>
 
             {day.active ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 pl-11 sm:pl-0">
                 <Input
                   type="time"
                   value={day.openTime}
@@ -117,7 +122,10 @@ export function BusinessHoursForm({
                   onChange={(e) =>
                     updateDay(day.weekday, { openTime: e.target.value })
                   }
-                  className={cn("w-28", ADMIN_SURFACE.input)}
+                  className={cn(
+                    "h-10 w-[7.25rem] sm:h-9 sm:w-28",
+                    ADMIN_SURFACE.input
+                  )}
                 />
                 <span className={cn("text-sm", ADMIN_SURFACE.muted)}>às</span>
                 <Input
@@ -127,11 +135,19 @@ export function BusinessHoursForm({
                   onChange={(e) =>
                     updateDay(day.weekday, { closeTime: e.target.value })
                   }
-                  className={cn("w-28", ADMIN_SURFACE.input)}
+                  className={cn(
+                    "h-10 w-[7.25rem] sm:h-9 sm:w-28",
+                    ADMIN_SURFACE.input
+                  )}
                 />
               </div>
             ) : (
-              <span className={cn("text-sm", ADMIN_SURFACE.muted)}>
+              <span
+                className={cn(
+                  "pl-11 text-sm sm:pl-0",
+                  ADMIN_SURFACE.muted
+                )}
+              >
                 Fechado
               </span>
             )}
@@ -141,10 +157,10 @@ export function BusinessHoursForm({
 
       <Separator className="bg-white/10" />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
           <DarkLabel>Intervalo da agenda</DarkLabel>
-          <p className={cn("mt-1 text-sm", ADMIN_SURFACE.muted)}>
+          <p className={cn("mt-1 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
             De quantos em quantos minutos os horários aparecem pro cliente.
           </p>
         </div>
@@ -154,7 +170,7 @@ export function BusinessHoursForm({
           disabled={readOnly}
         >
           <SelectTrigger
-            className={cn("w-40", ADMIN_SURFACE.selectTrigger)}
+            className={cn("w-full sm:w-40", ADMIN_SURFACE.selectTrigger)}
           >
             <SelectValue />
           </SelectTrigger>
@@ -173,7 +189,10 @@ export function BusinessHoursForm({
           <Button
             onClick={handleSave}
             disabled={saving}
-            className={ADMIN_SURFACE.btnPrimary}
+            className={cn(
+              "h-10 w-full sm:h-9 sm:w-auto",
+              ADMIN_SURFACE.btnPrimary
+            )}
           >
             {saving ? "Salvando..." : "Salvar horário"}
           </Button>

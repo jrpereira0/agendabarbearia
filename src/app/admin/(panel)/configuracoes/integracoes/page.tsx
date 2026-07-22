@@ -17,7 +17,7 @@ export default async function IntegrationsPage() {
         ADMIN_SURFACE.page
       )}
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <PageHeader
           tone="dark"
           title="Integrações"
@@ -29,17 +29,17 @@ export default async function IntegrationsPage() {
         <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden p-0")}>
           <Link
             href="/admin/configuracoes/integracoes/chaves"
-            className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-white/[0.04] sm:px-6"
+            className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.04] sm:gap-4 sm:px-5 sm:py-4"
           >
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e]">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e] sm:size-10">
                 <KeyRound className={cn("size-4", ADMIN_SURFACE.accent)} />
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#f5f5f5]">
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
                   Chaves de API
                 </p>
-                <p className={cn("mt-0.5 text-sm", ADMIN_SURFACE.muted)}>
+                <p className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
                   Gere chaves para o n8n e outras integrações acessarem a API com
                   segurança.
                 </p>

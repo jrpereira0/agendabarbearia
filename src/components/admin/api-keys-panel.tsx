@@ -241,16 +241,16 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
   function renderPermissionFields() {
     return (
       <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label>Permissões</Label>
+        <div className="space-y-2">
+          <Label className="text-[#f5f5f5]">Permissões</Label>
           <Select
             value={preset}
             onValueChange={(v) => setPreset(v as ApiKeyPermissionPreset)}
           >
-            <SelectTrigger>
+            <SelectTrigger className={ADMIN_SURFACE.selectTrigger}>
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className={ADMIN_SURFACE.popover}>
               <SelectItem value="full">
                 {API_KEY_PRESET_LABELS.full}
               </SelectItem>
@@ -263,11 +263,11 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
         </div>
 
         {preset === "custom" && (
-          <div className="grid gap-2 rounded-lg border p-3">
+          <div className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
             {ALL_API_SCOPES.map((scope) => (
               <label
                 key={scope}
-                className="flex cursor-pointer items-center gap-2 text-sm"
+                className="flex cursor-pointer items-center gap-2 text-sm text-[#d4d5d8]"
               >
                 <Checkbox
                   checked={customScopes.includes(scope)}
@@ -281,25 +281,75 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           </div>
         )}
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="expiresAt">Expira em (opcional)</Label>
+        <div className="space-y-2">
+          <Label htmlFor="expiresAt" className="text-[#f5f5f5]">
+            Expira em (opcional)
+          </Label>
           <Input
             id="expiresAt"
             type="date"
             value={expiresAt}
             onChange={(e) => setExpiresAt(e.target.value)}
+            className={ADMIN_SURFACE.input}
           />
         </div>
       </div>
     );
   }
 
+  function keyMenu(key: ApiKeyListItem) {
+    if (key.revokedAt) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className={ADMIN_SURFACE.popover}>
+          <DropdownMenuItem
+            onClick={() => {
+              resetCreateForm();
+              setName(`${key.name} (nova)`);
+              setPreset(
+                key.scopes.length === ALL_API_SCOPES.length
+                  ? "full"
+                  : key.scopes.length === 4
+                    ? "readonly"
+                    : "custom"
+              );
+              setCustomScopes(key.scopes as ApiScope[]);
+              setRotateTarget(key);
+            }}
+          >
+            <RefreshCw />
+            Gerar substituta
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => setRevokeTarget(key)}
+          >
+            <ShieldOff />
+            Revogar
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button
           onClick={() => setCreateOpen(true)}
-          className={ADMIN_SURFACE.btnPrimary}
+          className={cn(
+            "h-10 w-full sm:h-9 sm:w-auto",
+            ADMIN_SURFACE.btnPrimary
+          )}
         >
           <Plus />
           Nova chave
@@ -315,7 +365,10 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           action={
             <Button
               onClick={() => setCreateOpen(true)}
-              className={ADMIN_SURFACE.btnPrimary}
+              className={cn(
+                "h-10 w-full sm:h-9 sm:w-auto",
+                ADMIN_SURFACE.btnPrimary
+              )}
             >
               <Plus />
               Criar primeira chave
@@ -323,95 +376,98 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {keys.map((key) => {
-            const status = keyStatus(key);
-            return (
-              <Card
-                key={key.id}
-                className={cn(ADMIN_SURFACE.panel, "shadow-none")}
-              >
-                <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate text-base text-[#f5f5f5]">
-                      {key.name}
-                    </CardTitle>
-                    <p
-                      className={cn(
-                        "mt-1 font-mono text-xs",
-                        ADMIN_SURFACE.muted
-                      )}
-                    >
-                      {key.keyPrefix}…
-                    </p>
-                  </div>
-                  {!key.revokedAt && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-8 text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+        <>
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden md:hidden")}>
+            <ul className="divide-y divide-white/10">
+              {keys.map((key) => {
+                const status = keyStatus(key);
+                return (
+                  <li
+                    key={key.id}
+                    className="flex items-start gap-3 px-4 py-3.5"
+                  >
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                          {key.name}
+                        </p>
+                        <Badge
+                          variant={status.variant}
+                          className="font-normal"
                         >
-                          <MoreHorizontal className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className={ADMIN_SURFACE.popover}
+                          {status.label}
+                        </Badge>
+                      </div>
+                      <p
+                        className={cn(
+                          "font-mono text-xs",
+                          ADMIN_SURFACE.muted
+                        )}
                       >
-                        <DropdownMenuItem
-                          onClick={() => {
-                            resetCreateForm();
-                            setName(`${key.name} (nova)`);
-                            setPreset(
-                              key.scopes.length === ALL_API_SCOPES.length
-                                ? "full"
-                                : key.scopes.length === 4
-                                  ? "readonly"
-                                  : "custom"
-                            );
-                            setCustomScopes(key.scopes as ApiScope[]);
-                            setRotateTarget(key);
-                          }}
-                        >
-                          <RefreshCw />
-                          Gerar substituta
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onClick={() => setRevokeTarget(key)}
-                        >
-                          <ShieldOff />
-                          Revogar
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant={status.variant}>{status.label}</Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {formatScopesSummary(key.scopes)}
-                    </span>
-                  </div>
-                  <div className="grid gap-1 text-xs text-muted-foreground">
-                    <p>Criada: {formatDateTime(key.createdAt)}</p>
-                    <p>Último uso: {formatDateTime(key.lastUsedAt)}</p>
-                    {key.expiresAt && (
-                      <p>Expira: {formatDateTime(key.expiresAt)}</p>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
+                        {key.keyPrefix}…
+                      </p>
+                      <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                        {formatScopesSummary(key.scopes)} · Criada{" "}
+                        {formatDateTime(key.createdAt)}
+                      </p>
+                    </div>
+                    {keyMenu(key)}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div className="hidden gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
+            {keys.map((key) => {
+              const status = keyStatus(key);
+              return (
+                <Card
+                  key={key.id}
+                  className={cn(ADMIN_SURFACE.panel, "shadow-none")}
+                >
+                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate text-base text-[#f5f5f5]">
+                        {key.name}
+                      </CardTitle>
+                      <p
+                        className={cn(
+                          "mt-1 font-mono text-xs",
+                          ADMIN_SURFACE.muted
+                        )}
+                      >
+                        {key.keyPrefix}…
+                      </p>
+                    </div>
+                    {keyMenu(key)}
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant={status.variant} className="font-normal">
+                        {status.label}
+                      </Badge>
+                      <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                        {formatScopesSummary(key.scopes)}
+                      </span>
+                    </div>
+                    <div className={cn("grid gap-1 text-xs", ADMIN_SURFACE.muted)}>
+                      <p>Criada: {formatDateTime(key.createdAt)}</p>
+                      <p>Último uso: {formatDateTime(key.lastUsedAt)}</p>
+                      {key.expiresAt && (
+                        <p>Expira: {formatDateTime(key.expiresAt)}</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {activeKeys.length > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
           {activeKeys.length} chave{activeKeys.length === 1 ? "" : "s"} ativa
           {activeKeys.length === 1 ? "" : "s"}. Durante a rotação, você pode
           manter duas chaves ativas até revogar a antiga.
@@ -419,30 +475,43 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Nova chave de API</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">
+              Nova chave de API
+            </DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               Dê um nome para identificar onde essa chave será usada.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="keyName">Nome</Label>
+            <div className="space-y-2">
+              <Label htmlFor="keyName" className="text-[#f5f5f5]">
+                Nome
+              </Label>
               <Input
                 id="keyName"
                 placeholder="WhatsApp n8n"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className={ADMIN_SURFACE.input}
               />
             </div>
             {renderPermissionFields()}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              className={ADMIN_SURFACE.btnGhost}
+            >
               Cancelar
             </Button>
-            <Button onClick={handleCreate} disabled={busy}>
+            <Button
+              onClick={handleCreate}
+              disabled={busy}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
               Criar chave
             </Button>
           </DialogFooter>
@@ -453,25 +522,30 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
         open={!!rotateTarget}
         onOpenChange={(open) => !open && setRotateTarget(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Gerar chave substituta</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">
+              Gerar chave substituta
+            </DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               Crie uma nova chave para substituir &quot;{rotateTarget?.name}
               &quot;. Você pode manter a antiga ativa durante a troca no n8n.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="rotateName">Nome da nova chave</Label>
+            <div className="space-y-2">
+              <Label htmlFor="rotateName" className="text-[#f5f5f5]">
+                Nome da nova chave
+              </Label>
               <Input
                 id="rotateName"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className={ADMIN_SURFACE.input}
               />
             </div>
             {renderPermissionFields()}
-            <label className="flex items-start gap-2 text-sm">
+            <label className="flex items-start gap-2 text-sm text-[#d4d5d8]">
               <Checkbox
                 checked={revokeOldOnRotate}
                 onCheckedChange={(checked) =>
@@ -486,10 +560,18 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
             </label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRotateTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setRotateTarget(null)}
+              className={ADMIN_SURFACE.btnGhost}
+            >
               Cancelar
             </Button>
-            <Button onClick={handleRotate} disabled={busy}>
+            <Button
+              onClick={handleRotate}
+              disabled={busy}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
               Gerar nova chave
             </Button>
           </DialogFooter>
@@ -502,40 +584,54 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           if (!open) closeReveal();
         }}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Copie sua chave agora</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">
+              Copie sua chave agora
+            </DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               Esta é a única vez que a chave completa será exibida. Guarde em
               local seguro — não será possível recuperá-la depois.
             </DialogDescription>
           </DialogHeader>
           {revealed && (
             <div className="flex flex-col gap-3">
-              <p className="text-sm font-medium">{revealed.name}</p>
+              <p className="text-sm font-medium text-[#f5f5f5]">
+                {revealed.name}
+              </p>
               <div className="flex gap-2">
                 <Input
                   readOnly
                   value={revealed.fullKey}
-                  className="font-mono text-xs"
+                  className={cn("font-mono text-xs", ADMIN_SURFACE.input)}
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => copyKey(revealed.fullKey)}
+                  className={ADMIN_SURFACE.btnGhost}
                 >
                   <Copy />
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
                 No n8n: credencial Header Auth, header{" "}
-                <span className="font-mono">Authorization</span>, valor{" "}
-                <span className="font-mono">Bearer SUA_CHAVE</span>.
+                <span className="font-mono text-[#d4d5d8]">Authorization</span>,
+                valor{" "}
+                <span className="font-mono text-[#d4d5d8]">
+                  Bearer SUA_CHAVE
+                </span>
+                .
               </p>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={closeReveal}>Já copiei, fechar</Button>
+            <Button
+              onClick={closeReveal}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
+              Já copiei, fechar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -544,17 +640,21 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
         open={!!revokeTarget}
         onOpenChange={(open) => !open && setRevokeTarget(null)}
       >
-        <DialogContent>
+        <DialogContent className="border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Revogar chave?</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">Revogar chave?</DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               A chave &quot;{revokeTarget?.name}&quot; deixará de funcionar na
               hora. Integrações que a usam precisarão de outra chave. Não é
               possível reativar — crie uma nova se precisar.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRevokeTarget(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setRevokeTarget(null)}
+              className={ADMIN_SURFACE.btnGhost}
+            >
               Cancelar
             </Button>
             <Button
@@ -567,6 +667,6 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

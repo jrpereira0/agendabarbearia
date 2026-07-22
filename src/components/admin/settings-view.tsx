@@ -34,60 +34,62 @@ export function SettingsView({
   professionals,
 }: SettingsViewProps) {
   return (
-    <Tabs defaultValue="perfil" className="w-full">
-      <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-        <TabsTrigger value="perfil" className="flex-none px-3">
-          Perfil
-        </TabsTrigger>
-        <TabsTrigger value="horarios" className="flex-none px-3">
-          Horários
-        </TabsTrigger>
-        <TabsTrigger value="excecoes" className="flex-none px-3">
-          Dias especiais
-          {exceptions.length > 0 ? (
-            <span className={cn("tabular-nums", ADMIN_SURFACE.muted)}>
-              ({exceptions.length})
-            </span>
-          ) : null}
-        </TabsTrigger>
-        <TabsTrigger value="integracoes" className="flex-none px-3">
-          Integrações
-        </TabsTrigger>
-      </TabsList>
+    <Tabs defaultValue="perfil" className="flex w-full flex-col gap-4">
+      <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+        <TabsList className="h-auto w-max min-w-full flex-nowrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          <TabsTrigger value="perfil" className="flex-none px-3">
+            Perfil
+          </TabsTrigger>
+          <TabsTrigger value="horarios" className="flex-none px-3">
+            Horários
+          </TabsTrigger>
+          <TabsTrigger value="excecoes" className="flex-none px-3">
+            Dias especiais
+            {exceptions.length > 0 ? (
+              <span className={cn("tabular-nums", ADMIN_SURFACE.muted)}>
+                ({exceptions.length})
+              </span>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="integracoes" className="flex-none px-3">
+            Integrações
+          </TabsTrigger>
+        </TabsList>
+      </div>
 
-      <TabsContent value="perfil" className="mt-4">
+      <TabsContent value="perfil" className="mt-0">
         <ShopProfileForm initialValues={profile} />
       </TabsContent>
 
-      <TabsContent value="horarios" className="mt-4">
+      <TabsContent value="horarios" className="mt-0">
         <BusinessHoursForm
           initialDays={businessDays}
           initialSlotStep={slotStepMinutes}
         />
       </TabsContent>
 
-      <TabsContent value="excecoes" className="mt-4">
+      <TabsContent value="excecoes" className="mt-0">
         <ExceptionsCard
           exceptions={exceptions}
           professionals={professionals}
         />
       </TabsContent>
 
-      <TabsContent value="integracoes" className="mt-4">
+      <TabsContent value="integracoes" className="mt-0">
         <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden p-0")}>
           <Link
             href="/admin/configuracoes/integracoes"
-            className="flex items-center justify-between gap-4 px-5 py-4 transition-colors hover:bg-white/[0.04] sm:px-6"
+            className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.04] sm:gap-4 sm:px-5 sm:py-4"
           >
-            <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e]">
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e] sm:size-10">
                 <KeyRound className={cn("size-4", ADMIN_SURFACE.accent)} />
               </div>
-              <div>
-                <p className="text-sm font-medium text-[#f5f5f5]">
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
                   Integrações e API
                 </p>
-                <p className={cn("mt-0.5 text-sm", ADMIN_SURFACE.muted)}>
+                <p className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
                   Chaves para n8n e outras automações.
                 </p>
               </div>

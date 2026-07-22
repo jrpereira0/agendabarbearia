@@ -408,8 +408,7 @@ export function EditAppointmentDialog({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitAppointment() {
     if (!appointment) return;
 
     if (!firstName.trim() || !lastName.trim() || !whatsapp.replace(/\D/g, "")) {
@@ -452,6 +451,11 @@ export function EditAppointmentDialog({
       toast.error(result.error);
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await submitAppointment();
   }
 
   if (!appointment) return null;
@@ -728,8 +732,9 @@ export function EditAppointmentDialog({
               onBack={goBack}
               onCancel={() => onOpenChange(false)}
               primaryLabel="Salvar alterações"
-              primaryType="submit"
-              formId="edit-appointment-form"
+              onPrimary={() => {
+                void submitAppointment();
+              }}
               loading={saving}
             />
           ) : (

@@ -128,8 +128,13 @@ export function ExceptionsCard({
   }
 
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div
+      className={cn(
+        ADMIN_SURFACE.panel,
+        "flex flex-col gap-4 p-4 sm:gap-5 sm:p-6"
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
         <FormSectionTitle
           tone="dark"
           icon={CalendarOff}
@@ -139,9 +144,11 @@ export function ExceptionsCard({
         {!readOnly && (
           <Button
             variant="outline"
-            size="sm"
             onClick={() => setOpen(true)}
-            className={ADMIN_SURFACE.btnGhost}
+            className={cn(
+              "h-10 w-full sm:h-8 sm:w-auto",
+              ADMIN_SURFACE.btnGhost
+            )}
           >
             <Plus />
             Nova exceção
@@ -160,40 +167,37 @@ export function ExceptionsCard({
           de festa atendendo até mais tarde.
         </div>
       ) : (
-        <ul className="flex flex-col gap-2.5">
+        <ul className="-mx-4 divide-y divide-white/10 sm:-mx-6">
           {exceptions.map((e) => (
             <li
               key={e.id}
-              className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-[#1a1b1e]/80 px-4 py-3"
+              className="flex items-start gap-3 px-4 py-3.5 sm:items-center sm:px-6"
             >
-              <span className="min-w-[7.5rem] text-sm font-medium text-[#f5f5f5]">
-                {formatDateBR(e.date)}
-              </span>
-              <Badge
-                variant="outline"
-                className="border-white/10 bg-transparent font-normal text-[#b4b6bb]"
-              >
-                {e.professionalNickname ?? "Barbearia toda"}
-              </Badge>
-              {e.kind === "closed" ? (
-                <Badge className="border-[rgb(248_113_113_/_22%)] bg-[rgb(248_113_113_/_12%)] font-normal text-[#fca5a5]">
-                  Fechado
-                </Badge>
-              ) : (
-                <Badge className="border-[rgb(236_241_94_/_22%)] bg-[rgb(236_241_94_/_12%)] font-normal text-[#ecf15e]">
-                  {formatTime(e.startTime!)} às {formatTime(e.endTime!)}
-                </Badge>
-              )}
-              {e.note ? (
-                <span className={cn("text-sm", ADMIN_SURFACE.muted)}>
-                  {e.note}
-                </span>
-              ) : null}
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                    {formatDateBR(e.date)}
+                  </span>
+                  {e.kind === "closed" ? (
+                    <Badge className="border-[rgb(248_113_113_/_22%)] bg-[rgb(248_113_113_/_12%)] font-normal text-[#fca5a5]">
+                      Fechado
+                    </Badge>
+                  ) : (
+                    <Badge className="border-[rgb(236_241_94_/_22%)] bg-[rgb(236_241_94_/_12%)] font-normal text-[#ecf15e]">
+                      {formatTime(e.startTime!)} às {formatTime(e.endTime!)}
+                    </Badge>
+                  )}
+                </div>
+                <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                  {e.professionalNickname ?? "Barbearia toda"}
+                  {e.note ? ` · ${e.note}` : ""}
+                </p>
+              </div>
               {!readOnly && (
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="ml-auto text-[#fca5a5] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fecaca]"
+                  className="shrink-0 text-[#fca5a5] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fecaca]"
                   onClick={() => handleDelete(e.id)}
                   disabled={busy}
                   aria-label="Remover exceção"
