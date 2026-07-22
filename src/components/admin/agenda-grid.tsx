@@ -86,10 +86,7 @@ export function AgendaGrid({
   );
 
   useEffect(() => {
-    if (date !== today) {
-      setNowMinutes(null);
-      return;
-    }
+    if (date !== today) return;
 
     function tick() {
       setNowMinutes(nowMinutesInTimezone());
@@ -100,19 +97,21 @@ export function AgendaGrid({
     return () => window.clearInterval(id);
   }, [date, today]);
 
+  const displayNowMinutes = date === today ? nowMinutes : null;
+
   const nowLine = useMemo(() => {
-    if (nowMinutes == null) return null;
-    if (nowMinutes < gridStart || nowMinutes >= gridEnd) return null;
-    const fromStart = nowMinutes - gridStart;
+    if (displayNowMinutes == null) return null;
+    if (displayNowMinutes < gridStart || displayNowMinutes >= gridEnd) return null;
+    const fromStart = displayNowMinutes - gridStart;
     const slotIndex = Math.floor(fromStart / slotStepMinutes);
     const offset =
       ((fromStart % slotStepMinutes) / slotStepMinutes) * rowHeight;
     return {
       row: slotIndex + 2,
       offset,
-      label: timeLabel(nowMinutes),
+      label: timeLabel(displayNowMinutes),
     };
-  }, [nowMinutes, gridStart, gridEnd, slotStepMinutes, rowHeight]);
+  }, [displayNowMinutes, gridStart, gridEnd, slotStepMinutes, rowHeight]);
 
   const appointmentsByPro = useMemo(() => {
     const map = new Map<string, AppointmentItem[]>();

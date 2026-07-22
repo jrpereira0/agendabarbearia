@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Percent, UserRound } from "lucide-react";
@@ -179,12 +179,22 @@ export function CommissionsView({
   const [toDate, setToDate] = useState(to);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(professionalId);
+  const [appliedFilters, setAppliedFilters] = useState({
+    from,
+    to,
+    professionalId,
+  });
 
-  useEffect(() => {
+  if (
+    appliedFilters.from !== from ||
+    appliedFilters.to !== to ||
+    appliedFilters.professionalId !== professionalId
+  ) {
+    setAppliedFilters({ from, to, professionalId });
     setFromDate(from);
     setToDate(to);
     setSelectedId(professionalId);
-  }, [from, to, professionalId]);
+  }
 
   const sortedProfessionals = useMemo(
     () =>

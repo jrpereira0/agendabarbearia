@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -320,11 +320,17 @@ function AtendimentosList({
   const dayGroups = useMemo(() => groupComandasByDay(comandas), [comandas]);
   const [showAllDays, setShowAllDays] = useState(false);
   const [dayIndex, setDayIndex] = useState(0);
+  const comandasKey = useMemo(
+    () => comandas.map((comanda) => comanda.comandaId).join("|"),
+    [comandas]
+  );
+  const [appliedComandasKey, setAppliedComandasKey] = useState(comandasKey);
 
-  useEffect(() => {
+  if (appliedComandasKey !== comandasKey) {
+    setAppliedComandasKey(comandasKey);
     setShowAllDays(false);
     setDayIndex(0);
-  }, [comandas]);
+  }
 
   if (comandas.length === 0) {
     return (

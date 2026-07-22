@@ -128,15 +128,28 @@ export function AppointmentActionsDialog({
   );
   const [creditBalanceCents, setCreditBalanceCents] = useState(0);
   const [customerSummaryLoading, setCustomerSummaryLoading] = useState(false);
+  const [customerSummaryKey, setCustomerSummaryKey] = useState<string | null>(
+    null
+  );
+
+  const nextCustomerSummaryKey =
+    open && appointment ? appointment.id : null;
+
+  if (customerSummaryKey !== nextCustomerSummaryKey) {
+    setCustomerSummaryKey(nextCustomerSummaryKey);
+    if (open && appointment) {
+      setCustomerId(appointment.customerId ?? null);
+      setCreditBalanceCents(0);
+      setCustomerSummaryLoading(true);
+    } else {
+      setCustomerSummaryLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!open || !appointment) return;
 
-    // Já vem na agenda — botão "Ver cliente" aparece na hora.
-    setCustomerId(appointment.customerId ?? null);
-
     let cancelled = false;
-    setCustomerSummaryLoading(true);
 
     void getCustomerAgendaSummary(appointment.customerWhatsapp).then(
       (result) => {
