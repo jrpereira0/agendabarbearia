@@ -267,7 +267,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
     bodyRef.current?.scrollTo({ top: 0 });
     const card = rootRef.current;
-    if (!card) return;
+    if (!card || card.offsetParent === null) return;
 
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -664,7 +664,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             </p>
           </div>
           <p className="text-center text-xs text-muted-foreground">
-            Precisa mudar? Use a aba Meus horários.
+            Precisa mudar? Use Horários no menu de baixo.
           </p>
         </div>
       </div>
@@ -682,9 +682,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   return (
     <div
       ref={rootRef}
-      className="scroll-mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
+      className="flex h-[calc(100dvh-5.75rem-env(safe-area-inset-bottom))] max-h-[calc(100dvh-5.75rem-env(safe-area-inset-bottom))] scroll-mt-3 flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
     >
-      <div className="border-b border-white/10 px-4 py-4 sm:px-5">
+      <div className="shrink-0 border-b border-white/10 px-4 py-4 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
           <span className="text-xs tabular-nums text-muted-foreground">
@@ -736,7 +736,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
       <div
         ref={bodyRef}
-        className="max-h-[min(72dvh,42rem)] overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
       >
         {step === "professional" && (
           <div className="grid grid-cols-2 gap-2.5">
@@ -979,7 +979,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
       </div>
 
-      <div className="flex gap-2 border-t border-white/10 px-4 py-3 sm:px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex shrink-0 gap-2 border-t border-white/10 bg-[#151618] px-4 py-3 sm:px-5">
         {step !== "professional" && (
           <Button
             type="button"

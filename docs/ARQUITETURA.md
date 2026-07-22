@@ -14,7 +14,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | --- | --- |
 | `src/app/login-admin` | Login do painel admin |
 | `src/app/page.tsx` | Redireciona `/` → `/login-admin` |
-| `src/app/agenda` | Página do cliente: perfil da barbearia e agendamento |
+| `src/app/agenda` | Página do cliente: agendamento estilo app (menu inferior) |
 | `src/app/admin/(panel)` | Painel protegido (exige login) |
 | `src/lib/actions/login.ts` | Ação de login (e-mail e senha) |
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais (inclui permissões no painel por barbeiro) |
@@ -160,14 +160,15 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## Página do cliente (`/agenda`)
 
-- Mostra o **perfil da barbearia** (nome, bio, endereço, horários, WhatsApp, Instagram, logo) e o fluxo de agendamento
+- Layout estilo app: abre direto no **agendamento**, com menu inferior **Agendar · Horários · Local**
+- Aba **Local**: nome, bio, endereço, horários de funcionamento, WhatsApp e Instagram
 - A **prévia do link no WhatsApp** (Open Graph) usa nome, bio curta e logo de `shop_settings`, com imagem gerada em `/agenda/opengraph-image` (1200×630). Se a prévia ficar desatualizada após um deploy, force a atualização no [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
 - Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
 - **Sem preferência:** o site mostra a união dos horários livres de quem faz os serviços; na hora de confirmar, o servidor escolhe o barbeiro **com menos agendamentos ativos naquele dia** (empate: ordem do apelido)
 - **Preços na escolha de serviços:** como o dia ainda não foi escolhido, cada serviço mostra a **faixa de preço** (ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`). O total aparece como **“a partir de …”** quando há variação por dia
 - **Serviços mais agendados:** no topo da lista aparece a seção **“Mais agendados”** (até 5 serviços com histórico de marcações); o restante fica em **“Outros serviços”**, ordenado pela mesma contagem
 - **Preços após escolher a data:** na etapa de data/horário e na confirmação, o total passa a usar o **valor exato** do dia selecionado (mesma regra da API ao gravar)
-- Aba **Meus horários**: cliente digita WhatsApp, vê agendamentos futuros (total já pelo preço do dia do horário), pode **remarcar** (data, horário, serviços) ou **cancelar**
+- Aba **Horários** (Meus horários): cliente digita WhatsApp, vê agendamentos futuros (total já pelo preço do dia do horário), pode **remarcar** (data, horário, serviços) ou **cancelar**
 - Se o número já existir e não for a pessoa, o cliente troca o WhatsApp (não edita o nome de outro cadastro)
 - Usa a mesma regra de horários livres da API (`GET /api/v1/availability`)
 - Confirmação via `POST /api/v1/appointments` (servidor valida de novo antes de gravar)
