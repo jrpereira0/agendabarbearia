@@ -40,6 +40,7 @@ import {
 import { signOut } from "@/app/admin/(panel)/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { BOOKING_PATH } from "@/lib/booking-path";
+import { cn } from "@/lib/utils";
 
 const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
@@ -103,25 +104,26 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
         const label =
           !isOwner && item.barberTitle ? item.barberTitle : item.title;
         return (
-      <SidebarMenuItem key={item.url}>
-        <SidebarMenuButton
-          asChild
-          isActive={
-            item.url === "/admin"
-              ? pathname === "/admin"
-              : item.url === "/admin/financeiro"
-                ? pathname === "/admin/financeiro"
-                : pathname === item.url || pathname.startsWith(`${item.url}/`)
-          }
-          tooltip={label}
-          onClick={() => setOpenMobile(false)}
-        >
-          <Link href={item.url}>
-            <item.icon />
-            <span>{label}</span>
-          </Link>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+          <SidebarMenuItem key={item.url}>
+            <SidebarMenuButton
+              asChild
+              isActive={
+                item.url === "/admin"
+                  ? pathname === "/admin"
+                  : item.url === "/admin/financeiro"
+                    ? pathname === "/admin/financeiro"
+                    : pathname === item.url ||
+                      pathname.startsWith(`${item.url}/`)
+              }
+              tooltip={label}
+              onClick={() => setOpenMobile(false)}
+            >
+              <Link href={item.url}>
+                <item.icon />
+                <span>{label}</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         );
       });
   }
@@ -130,7 +132,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
     <Sidebar
       collapsible="icon"
       mobileSide="right"
-      className="border-sidebar-border"
+      className={cn("admin-sidebar border-sidebar-border")}
     >
       <SidebarHeader className="border-b border-sidebar-border">
         <SidebarMenu>
@@ -139,10 +141,10 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
               <Link href="/admin" className="min-w-0">
                 <BrandLogo
                   size="sm"
-                  subtitle="Painel administrativo"
+                  subtitle="Painel"
                   className="min-w-0 text-sidebar-foreground"
-                  nameClassName="text-sidebar-foreground"
-                  subtitleClassName="text-sidebar-foreground/55"
+                  nameClassName="admin-sidebar-brand-name text-sidebar-foreground"
+                  subtitleClassName="text-sidebar-foreground/50"
                 />
               </Link>
             </SidebarMenuButton>
@@ -173,7 +175,11 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Página de agendamento">
-                  <a href={BOOKING_PATH} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={BOOKING_PATH}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     <ExternalLink />
                     <span>Página de agendamento</span>
                   </a>
@@ -196,16 +202,16 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                     pathname === "/admin/minha-conta"
                   }
                 >
-                  <Avatar className="size-8 rounded-md ring-1 ring-sidebar-border">
-                    <AvatarFallback className="rounded-md bg-sidebar-accent text-xs font-medium text-sidebar-foreground">
-                      {initials || "AB"}
+                  <Avatar className="size-8 rounded-md ring-1 ring-[rgb(236_241_94_/_25%)]">
+                    <AvatarFallback className="admin-sidebar-avatar rounded-md text-xs font-medium">
+                      {initials || "DB"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left leading-tight">
                     <span className="truncate text-sm font-medium">
                       {userName}
                     </span>
-                    <span className="truncate text-xs text-sidebar-foreground/55">
+                    <span className="truncate text-xs text-sidebar-foreground/50">
                       {isOwner ? "Dono" : "Barbeiro"}
                     </span>
                   </div>
@@ -229,7 +235,9 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link
-                    href={isOwner ? "/admin/configuracoes" : "/admin/minha-conta"}
+                    href={
+                      isOwner ? "/admin/configuracoes" : "/admin/minha-conta"
+                    }
                     onClick={() => setOpenMobile(false)}
                   >
                     <Settings />

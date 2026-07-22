@@ -1,21 +1,33 @@
 import type { AppointmentStatus } from "@/lib/appointment-status";
 
-/** Cores da grade e dos status dos agendamentos. */
-
-const outsideCell = "bg-neutral-700";
+/**
+ * Paleta da grade — identidade escura.
+ * Fora do expediente: cinza. Em funcionamento: preto.
+ * Agendado: verde do sistema.
+ */
 
 export const agendaLegend = {
-  free: "border border-neutral-300 bg-white",
-  outside: outsideCell,
-  blocked: outsideCell,
-  occupied: "bg-blue-50",
-  scheduled: "bg-[#1e40af]",
-  confirmed: "bg-[#0d9488]",
-  onSite: "bg-[#d97706]",
-  cancelled: "bg-[#c41e3a]",
-  squeezeIn: "border-2 border-dashed border-[#c41e3a] bg-white",
-  comandaExtra: "border-2 border-dashed border-neutral-900 bg-neutral-100",
+  /** Horário disponível (barbearia aberta) */
+  free: "border border-white/10 bg-[#0e0f11]",
+  /** Fora do expediente */
+  outside: "bg-[#1c1d21]",
+  /** Bloqueio manual — mesmo tom do fora do expediente */
+  blocked: "bg-[#1c1d21]",
+  occupied: "bg-[#0e0f11]",
+  /** Ainda não confirmado — cor de destaque da marca */
+  scheduled: "bg-[#ecf15e]",
+  /** Cliente confirmou */
+  confirmed: "bg-[#0891b2]",
+  /** Cliente chegou */
+  onSite: "bg-[#ea580c]",
+  /** Cancelado */
+  cancelled: "bg-[#dc2626]",
+  /** Atendido / finalizado */
   done: "bg-[#15803d]",
+  /** Encaixe — destaque da marca */
+  squeezeIn: "border-2 border-dashed border-[#0e0f11] bg-[#ecf15e]",
+  /** Serviço extra na comanda */
+  comandaExtra: "border-2 border-dashed border-[#ecf15e] bg-[#f4f4f5]",
 } as const;
 
 export function agendaCellClass({
@@ -33,14 +45,16 @@ export function agendaCellClass({
   return agendaLegend.free;
 }
 
-export const agendaCellHoverFree = "hover:bg-blue-50/80";
+export const agendaCellHoverFree =
+  "hover:bg-[rgb(236_241_94_/_18%)] hover:ring-2 hover:ring-inset hover:ring-[#ecf15e]";
 
 const statusCardClass: Record<AppointmentStatus, string> = {
-  scheduled: "bg-[#1e40af] text-white",
-  confirmed: "bg-[#0d9488] text-white",
-  on_site: "bg-[#d97706] text-white",
-  cancelled: "bg-[#c41e3a] text-white line-through opacity-90",
-  done: "bg-[#15803d] text-white",
+  scheduled: "bg-[#ecf15e] text-[#0e0f11] ring-1 ring-black/10",
+  confirmed: "bg-[#0891b2] text-white ring-1 ring-white/20",
+  on_site: "bg-[#ea580c] text-white ring-1 ring-black/15",
+  cancelled:
+    "bg-[#dc2626] text-white line-through opacity-95 ring-1 ring-white/15",
+  done: "bg-[#15803d] text-white ring-1 ring-white/20",
 };
 
 export function agendaStatusSwatchClass(
@@ -66,18 +80,18 @@ export function agendaAppointmentClass(appointment: {
   }
   if (appointment.status === "done") {
     if (appointment.isComandaExtra) {
-      return "border-2 border-dashed border-neutral-900 bg-[#15803d] text-white";
+      return "border-2 border-dashed border-[#ecf15e] bg-[#15803d] text-white";
     }
     if (appointment.isSqueezeIn) {
-      return "border-2 border-dashed border-[#c41e3a] bg-[#15803d] text-white";
+      return "border-2 border-dashed border-[#ecf15e] bg-[#15803d] text-white";
     }
     return statusCardClass.done;
   }
   if (appointment.isComandaExtra) {
-    return "border-2 border-dashed border-neutral-900 bg-neutral-100 text-neutral-900";
+    return "border-2 border-dashed border-[#0e0f11] bg-[#f4f4f5] text-[#0e0f11]";
   }
   if (appointment.isSqueezeIn) {
-    return "border-2 border-dashed border-[#c41e3a] bg-white text-[#9f1239]";
+    return "border-2 border-dashed border-[#0e0f11] bg-[#ecf15e] text-[#0e0f11]";
   }
   return statusCardClass[appointment.status];
 }

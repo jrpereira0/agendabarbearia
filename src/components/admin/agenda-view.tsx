@@ -52,11 +52,11 @@ type AgendaViewProps = {
 function AgendaNavProgress() {
   return (
     <div
-      className="h-px w-full overflow-hidden bg-border"
+      className="agenda-progress h-px w-full overflow-hidden"
       role="progressbar"
       aria-hidden
     >
-      <div className="h-full w-1/4 bg-foreground/25 [animation:agenda-indeterminate_1.1s_ease-in-out_infinite] motion-reduce:animate-none" />
+      <div className="agenda-progress-bar h-full w-1/4 [animation:agenda-indeterminate_1.1s_ease-in-out_infinite] motion-reduce:animate-none" />
     </div>
   );
 }
@@ -95,12 +95,12 @@ function AgendaToolbar({
 
   if (mobile) {
     return (
-      <div className="shrink-0 border-b bg-background">
+      <div className="agenda-toolbar shrink-0 border-b">
         <div className="flex items-center gap-2 px-4 pt-3">
           <Button
             variant="outline"
             size="icon"
-            className="size-10"
+            className="agenda-btn-outline size-10"
             onClick={onPrevDay}
             disabled={busy}
             aria-label="Dia anterior"
@@ -109,7 +109,7 @@ function AgendaToolbar({
           </Button>
           <Button
             variant="outline"
-            className="h-10 px-3"
+            className="agenda-btn-outline h-10 px-3"
             onClick={onToday}
             disabled={isToday || busy}
           >
@@ -118,7 +118,7 @@ function AgendaToolbar({
           <Button
             variant="outline"
             size="icon"
-            className="size-10"
+            className="agenda-btn-outline size-10"
             onClick={onNextDay}
             disabled={busy}
             aria-label="Próximo dia"
@@ -128,7 +128,7 @@ function AgendaToolbar({
           <Button
             variant="ghost"
             size="icon"
-            className="ml-auto size-10 shrink-0"
+            className="agenda-btn-ghost ml-auto size-10 shrink-0"
             onClick={onRefresh}
             disabled={busy}
             aria-label="Atualizar"
@@ -137,17 +137,17 @@ function AgendaToolbar({
           </Button>
         </div>
         <p
-          className="px-4 pb-2.5 pt-1.5 text-center text-base font-semibold capitalize"
+          className="agenda-display px-4 pb-2.5 pt-1.5 text-center text-base font-medium capitalize"
           aria-live="polite"
         >
           {dateLabel}
         </p>
         {isNavigating ? <AgendaNavProgress /> : null}
         {(canBookNormal || canBookEncaixe) && (
-          <div className="flex gap-2 border-t px-4 py-2.5">
+          <div className="flex gap-2 border-t border-white/10 px-4 py-2.5">
             {canBookNormal && (
               <Button
-                className="h-10 flex-1"
+                className="agenda-btn-primary h-10 flex-1"
                 onClick={onBookNormal}
                 disabled={busy}
               >
@@ -157,7 +157,7 @@ function AgendaToolbar({
             {canBookEncaixe && (
               <Button
                 variant="outline"
-                className="h-10 flex-1"
+                className="agenda-btn-encaixe h-10 flex-1"
                 onClick={onBookEncaixe}
                 disabled={busy}
               >
@@ -171,13 +171,13 @@ function AgendaToolbar({
   }
 
   return (
-    <div className="shrink-0 border-b bg-background">
+    <div className="agenda-toolbar shrink-0 border-b">
       <div className="flex shrink-0 flex-wrap items-center gap-2 px-4 py-3 md:px-6">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className="agenda-btn-outline size-8"
             onClick={onPrevDay}
             disabled={busy}
             aria-label="Dia anterior"
@@ -187,6 +187,7 @@ function AgendaToolbar({
           <Button
             variant="outline"
             size="sm"
+            className="agenda-btn-outline"
             onClick={onToday}
             disabled={isToday || busy}
           >
@@ -195,7 +196,7 @@ function AgendaToolbar({
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className="agenda-btn-outline size-8"
             onClick={onNextDay}
             disabled={busy}
             aria-label="Próximo dia"
@@ -205,7 +206,12 @@ function AgendaToolbar({
         </div>
 
         {canBookNormal && (
-          <Button size="sm" onClick={onBookNormal} disabled={busy}>
+          <Button
+            size="sm"
+            className="agenda-btn-primary"
+            onClick={onBookNormal}
+            disabled={busy}
+          >
             + Agendar
           </Button>
         )}
@@ -213,6 +219,7 @@ function AgendaToolbar({
           <Button
             size="sm"
             variant="outline"
+            className="agenda-btn-encaixe"
             onClick={onBookEncaixe}
             disabled={busy}
           >
@@ -221,7 +228,7 @@ function AgendaToolbar({
         )}
 
         <p
-          className="min-w-0 flex-1 text-center text-sm font-medium sm:text-base"
+          className="agenda-display min-w-0 flex-1 text-center text-sm font-medium sm:text-base"
           aria-live="polite"
         >
           {dateLabel}
@@ -230,7 +237,7 @@ function AgendaToolbar({
         <Button
           variant="ghost"
           size="icon"
-          className="size-8"
+          className="agenda-btn-ghost size-8"
           onClick={onRefresh}
           disabled={busy}
           aria-label="Atualizar"
@@ -268,9 +275,14 @@ function AgendaMainContent({
       : dayContext.professionals.filter((p) => p.id === focusProfessionalId);
 
   return (
-    <>
+    <div
+      className={cn(
+        "flex min-h-0 flex-col",
+        mobileLayout ? "h-full" : "flex-1"
+      )}
+    >
       {dayContext.shopClosed ? (
-        <div className="mb-4 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <div className="agenda-closed-banner mb-4 shrink-0 rounded-lg border border-dashed p-6 text-center text-sm">
           A barbearia está fechada neste dia.
         </div>
       ) : null}
@@ -286,8 +298,9 @@ function AgendaMainContent({
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
         mobileLayout={mobileLayout}
+        className="min-h-0 flex-1"
       />
-    </>
+    </div>
   );
 }
 
@@ -449,8 +462,6 @@ export function AgendaView({
     displayDate,
     today,
     isNavigating,
-    canBookNormal,
-    canBookEncaixe,
     isOwner,
     professionalId,
     canManageScheduleBlocks: permissions.canManageScheduleBlocks,
@@ -461,8 +472,6 @@ export function AgendaView({
       nickname: p.nickname,
     })),
     onDateChange: goToDate,
-    onNewAppointment: () => openBooking("normal"),
-    onEncaixe: () => openBooking("encaixe"),
   };
 
   const toolbarProps = {
@@ -498,7 +507,7 @@ export function AgendaView({
   );
 
   return (
-    <div className="-m-4 md:-m-8">
+    <div className="admin-agenda -m-4 md:-m-8 min-h-full">
       {/* Mobile: grade com altura fixa e scroll próprio; calendário e extras rolam com a página */}
       <div className="flex flex-col lg:hidden">
         <AgendaToolbar {...toolbarProps} mobile />
@@ -514,9 +523,7 @@ export function AgendaView({
               onClick={() => setMobileProFocus(null)}
               className={cn(
                 "h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors",
-                mobileProFocus == null
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-foreground"
+                mobileProFocus == null ? "agenda-chip-active" : "agenda-chip"
               )}
             >
               Todos
@@ -530,9 +537,7 @@ export function AgendaView({
                   onClick={() => setMobileProFocus(pro.id)}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-sm font-medium transition-colors",
-                    selected
-                      ? "border-foreground bg-foreground text-background"
-                      : "border-border bg-background text-foreground"
+                    selected ? "agenda-chip-active" : "agenda-chip"
                   )}
                 >
                   <ProfessionalAvatar
@@ -550,12 +555,12 @@ export function AgendaView({
         ) : null}
 
         {showMobileProFilter && mobileProFocus == null ? (
-          <p className="px-4 pt-2 text-xs text-muted-foreground">
+          <p className="px-4 pt-2 text-xs text-[var(--agenda-muted)]">
             Deslize a grade → para ver todos os barbeiros, ou escolha um acima.
           </p>
         ) : null}
 
-        <div className="h-[min(62dvh,calc(100dvh-14rem))] min-h-[240px] shrink-0 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] touch-pan-y">
+        <div className="h-[min(62dvh,calc(100dvh-14rem))] min-h-[240px] shrink-0 overflow-hidden px-4 py-3">
           {isNavigating ? (
             gridSkeleton
           ) : (
@@ -567,16 +572,16 @@ export function AgendaView({
           )}
         </div>
 
-        <div className="border-t bg-muted/15 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <div className="border-t border-white/10 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <AgendaSidebar {...sidebarProps} layout="mobile" mobileSection="tools" />
         </div>
       </div>
 
-      {/* Desktop: grade fixa à esquerda com scroll próprio; calendário à direita rola com a página */}
-      <div className="hidden lg:flex lg:items-start lg:gap-6 lg:p-6">
-        <section className="sticky top-0 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Desktop: grade fixa à esquerda; painel à direita */}
+      <div className="hidden lg:flex lg:items-start lg:gap-5 lg:p-5 xl:gap-6 xl:p-6">
+        <section className="agenda-main-frame sticky top-0 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border">
           <AgendaToolbar {...toolbarProps} />
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 pb-6 pt-4">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-5 pt-4 xl:px-5">
             {isNavigating ? (
               gridSkeleton
             ) : (
@@ -585,7 +590,7 @@ export function AgendaView({
           </div>
         </section>
 
-        <aside className="w-56 shrink-0 pb-6">
+        <aside className="w-72 shrink-0 pb-6">
           <AgendaSidebar {...sidebarProps} layout="desktop" />
         </aside>
       </div>

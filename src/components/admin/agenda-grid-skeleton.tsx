@@ -17,7 +17,7 @@ export function AgendaGridSkeleton({
   return (
     <div
       className={cn(
-        "animate-in fade-in duration-300 overflow-hidden rounded-lg border bg-white dark:bg-neutral-950",
+        "agenda-grid-shell animate-in fade-in duration-300 overflow-hidden rounded-2xl border",
         className
       )}
       role="status"
@@ -25,7 +25,7 @@ export function AgendaGridSkeleton({
       aria-label="Carregando agenda do dia"
     >
       <div
-        className="grid min-w-max border-b bg-neutral-100 dark:bg-neutral-900"
+        className="agenda-grid-header grid min-w-max border-b"
         style={{
           gridTemplateColumns: `3.25rem repeat(${columns}, minmax(7.5rem, 1fr))`,
         }}
@@ -46,7 +46,7 @@ export function AgendaGridSkeleton({
         {Array.from({ length: rowCount }).map((_, row) => (
           <div
             key={`row-${row}`}
-            className="grid border-t border-neutral-200 first:border-t-0 dark:border-neutral-800"
+            className="grid border-t border-white/10 first:border-t-0"
             style={{
               gridTemplateColumns: `3.25rem repeat(${columns}, minmax(7.5rem, 1fr))`,
             }}
@@ -57,7 +57,7 @@ export function AgendaGridSkeleton({
             {Array.from({ length: columns }).map((_, col) => (
               <div
                 key={`cell-${row}-${col}`}
-                className="border-l border-neutral-200 px-1 py-1 dark:border-neutral-800"
+                className="border-l border-white/10 px-1 py-1"
               >
                 <Skeleton
                   className={cn(

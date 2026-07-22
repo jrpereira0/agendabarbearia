@@ -81,21 +81,32 @@ export function AgendaMiniCalendar({
           type="button"
           variant="ghost"
           size="icon"
-          className={compact ? "size-8" : "size-7"}
+          className={cn(
+            "agenda-btn-ghost",
+            compact ? "size-8" : "size-7"
+          )}
           onClick={() => shiftMonth(-1)}
           disabled={disabled || loading}
           aria-label="Mês anterior"
         >
           <ChevronLeft className="size-4" />
         </Button>
-        <p className={cn("font-medium", compact ? "text-sm" : "text-sm")}>
+        <p
+          className={cn(
+            "agenda-display font-medium",
+            compact ? "text-sm" : "text-sm"
+          )}
+        >
           {monthLabel(year, month)}
         </p>
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className={compact ? "size-8" : "size-7"}
+          className={cn(
+            "agenda-btn-ghost",
+            compact ? "size-8" : "size-7"
+          )}
           onClick={() => shiftMonth(1)}
           disabled={disabled || loading}
           aria-label="Próximo mês"
@@ -106,7 +117,7 @@ export function AgendaMiniCalendar({
 
       <div
         className={cn(
-          "grid grid-cols-7 text-center text-muted-foreground",
+          "grid grid-cols-7 text-center text-[var(--agenda-muted,#8b8d93)]",
           compact ? "gap-1 text-xs" : "gap-1 text-xs"
         )}
       >
@@ -140,18 +151,15 @@ export function AgendaMiniCalendar({
                     : `Dia ${day}`
               }
               className={cn(
-                "flex items-center justify-center rounded-full font-medium tabular-nums transition-colors duration-150",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "agenda-cal-day flex items-center justify-center rounded-full font-medium tabular-nums transition-colors duration-150",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--agenda-accent,#ecf15e)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--agenda-bg,#0e0f11)]",
                 "active:scale-[0.97] motion-reduce:active:scale-100",
                 compact ? "size-9 text-sm" : "size-8 text-sm",
-                isSelected &&
-                  "cursor-default bg-foreground text-background shadow-sm",
-                !isSelected &&
-                  isToday &&
-                  "bg-background text-foreground ring-1 ring-foreground [@media(hover:hover)]:hover:bg-foreground/6",
+                isSelected && "cursor-default shadow-sm",
+                !isSelected && isToday && "agenda-cal-today",
                 !isSelected &&
                   !isToday &&
-                  "text-muted-foreground [@media(hover:hover)]:hover:bg-foreground/8 [@media(hover:hover)]:hover:text-foreground"
+                  "text-[var(--agenda-muted,#8b8d93)] hover:bg-white/5 hover:text-[#f5f5f5]"
               )}
             >
               {day}
@@ -166,7 +174,7 @@ export function AgendaMiniCalendar({
           variant="link"
           size="sm"
           className={cn(
-            "h-auto p-0 text-muted-foreground",
+            "h-auto p-0 text-[var(--agenda-muted,#8b8d93)] hover:text-[var(--agenda-accent,#ecf15e)]",
             compact && "text-xs"
           )}
           disabled={disabled || loading}

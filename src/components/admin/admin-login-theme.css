@@ -1,41 +1,5 @@
 /* Tema local da login — escuro + #ECF15E, sóbrio.
-   Fontes: public/fonts/ (veja README). */
-
-@font-face {
-  font-family: "Aeonik";
-  src: url("/fonts/aeonik/Aeonik-Regular.woff2") format("woff2"),
-    url("/fonts/aeonik/Aeonik-Regular.woff") format("woff");
-  font-weight: 400 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Neue Montreal";
-  src: url("/fonts/neue-montreal/NeueMontreal-Regular.woff2") format("woff2"),
-    url("/fonts/neue-montreal/NeueMontreal-Regular.woff") format("woff");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Neue Montreal";
-  src: url("/fonts/neue-montreal/NeueMontreal-Medium.woff2") format("woff2"),
-    url("/fonts/neue-montreal/NeueMontreal-Medium.woff") format("woff");
-  font-weight: 500;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Neue Montreal";
-  src: url("/fonts/neue-montreal/NeueMontreal-Bold.woff2") format("woff2"),
-    url("/fonts/neue-montreal/NeueMontreal-Bold.woff") format("woff");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+   Fontes: src/styles/brand-fonts.css (via globals). */
 
 .login-theme {
   --login-bg: #0e0f11;

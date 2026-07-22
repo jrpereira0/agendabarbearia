@@ -1,0 +1,74 @@
+/* Identidade do menu lateral do painel — alinhada à login (#0E0F11 + #ECF15E). */
+
+.admin-sidebar {
+  --admin-font-body: "Aeonik", var(--font-outfit), var(--font-sans), system-ui,
+    sans-serif;
+  --admin-font-display: "Neue Montreal", "Aeonik", var(--font-outfit),
+    var(--font-sans), system-ui, sans-serif;
+
+  font-family: var(--admin-font-body);
+}
+
+.admin-sidebar [data-slot="sidebar-inner"] {
+  background: var(--sidebar);
+}
+
+.admin-sidebar .admin-sidebar-brand-name {
+  font-family: var(--admin-font-display);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.admin-sidebar [data-sidebar="group-label"] {
+  color: rgb(139 141 147 / 90%);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-sidebar [data-sidebar="menu-button"] {
+  color: rgb(245 245 245 / 78%);
+  transition: background-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.admin-sidebar [data-sidebar="menu-button"] svg {
+  color: rgb(245 245 245 / 55%);
+  transition: color 160ms ease;
+}
+
+.admin-sidebar [data-sidebar="menu-button"]:hover {
+  background: rgb(255 255 255 / 5%);
+  color: #f5f5f5;
+}
+
+.admin-sidebar [data-sidebar="menu-button"]:hover svg {
+  color: #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: rgb(236 241 94 / 14%);
+  color: #ecf15e;
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-button"][data-active="true"] svg {
+  color: #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-button"][data-active="true"]:hover {
+  background: rgb(236 241 94 / 18%);
+  color: #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="header"],
+.admin-sidebar [data-sidebar="footer"] {
+  border-color: rgb(255 255 255 / 8%);
+}
+
+.admin-sidebar .admin-sidebar-avatar {
+  background: #1a1b1e;
+  color: #ecf15e;
+}

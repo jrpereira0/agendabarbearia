@@ -17,7 +17,7 @@ export function AdminSidebarToggle() {
       onClick={toggleSidebar}
       aria-label={expanded ? "Fechar menu" : "Abrir menu"}
       className={cn(
-        "fixed top-4 z-30 hidden size-7 -translate-x-1/2 rounded-md border bg-background shadow-sm transition-[left] duration-200 ease-linear md:inline-flex",
+        "fixed top-4 z-30 hidden size-7 -translate-x-1/2 rounded-md border border-white/10 bg-[#0e0f11] text-[#f5f5f5] shadow-sm transition-[left] duration-200 ease-linear hover:bg-[#1a1b1e] hover:text-[#ecf15e] md:inline-flex",
         expanded ? "left-(--sidebar-width)" : "left-(--sidebar-width-icon)"
       )}
     >

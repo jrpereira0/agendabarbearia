@@ -37,17 +37,30 @@ type AgendaGridProps = {
   onAppointmentClick: (appointment: AppointmentItem) => void;
   /** Colunas mais largas e linhas mais altas (uso no celular). */
   mobileLayout?: boolean;
+  className?: string;
 };
 
-const gridLineHour = "border-neutral-400 dark:border-neutral-500";
-const gridLineSlot = "border-neutral-300 dark:border-neutral-600";
-const gridLineColumn = "border-neutral-300 dark:border-neutral-600";
-const gridLineOuter = "border-neutral-400 dark:border-neutral-500";
+const gridLineHour = "agenda-grid-line-hour";
+const gridLineSlot = "agenda-grid-line-slot";
+const gridLineColumn = "agenda-grid-line-col";
+const gridLineOuter = "border-white/10";
 
 function slotLineClass(minute: number): string {
   return minute % 60 === 0
     ? `border-t border-solid ${gridLineHour}`
     : `border-t border-dashed ${gridLineSlot}`;
+}
+
+function isOutsideForAll(
+  minute: number,
+  slotStepMinutes: number,
+  professionals: AgendaProfessionalColumn[]
+): boolean {
+  if (professionals.length === 0) return true;
+  return professionals.every(
+    (pro) =>
+      !isSlotStartAvailable(minute, slotStepMinutes, pro.availableRanges, [])
+  );
 }
 
 export function AgendaGrid({
@@ -61,14 +74,24 @@ export function AgendaGrid({
   onSlotClick,
   onAppointmentClick,
   mobileLayout = false,
+  className,
 }: AgendaGridProps) {
   const rowHeight = mobileLayout
     ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
     : rowHeightForStep(slotStepMinutes);
+  const outsideRowHeight = Math.max(6, Math.round(rowHeight * 0.35));
 
   const timeSlots = useMemo(
     () => buildTimeSlots(gridStart, gridEnd, slotStepMinutes),
     [gridStart, gridEnd, slotStepMinutes]
+  );
+
+  const slotOutside = useMemo(
+    () =>
+      timeSlots.map((minute) =>
+        isOutsideForAll(minute, slotStepMinutes, professionals)
+      ),
+    [timeSlots, slotStepMinutes, professionals]
   );
 
   const appointmentsByPro = useMemo(() => {
@@ -116,9 +139,15 @@ export function AgendaGrid({
       : "minmax(10rem, 1fr)"
     : "minmax(7.5rem, 1fr)";
 
+  const rowTracks = timeSlots
+    .map((_, index) =>
+      slotOutside[index] ? `${outsideRowHeight}px` : `${rowHeight}px`
+    )
+    .join(" ");
+
   const gridStyle = {
     gridTemplateColumns: `3.25rem repeat(${professionals.length}, ${colMin})`,
-    gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
+    gridTemplateRows: `auto ${rowTracks} auto`,
   } as React.CSSProperties;
 
   const visibleAppointments = appointments;
@@ -126,15 +155,16 @@ export function AgendaGrid({
   return (
     <div
       className={cn(
-        "overflow-x-auto rounded-lg border bg-white dark:bg-neutral-950",
-        gridLineOuter
+        "agenda-grid-shell min-h-0 overflow-auto rounded-2xl border",
+        gridLineOuter,
+        className
       )}
     >
       <div className="grid min-w-max" style={gridStyle}>
-        {/* Cabeçalho — posição explícita pra não quebrar com agendamentos */}
+        {/* Cabeçalho fixo no scroll vertical */}
         <div
           className={cn(
-            "sticky top-0 left-0 z-40 border-b bg-neutral-100 dark:bg-neutral-900",
+            "agenda-grid-header agenda-grid-pro-header sticky top-0 left-0 z-50 border-b",
             gridLineHour
           )}
           style={{ gridRow: 1, gridColumn: 1 }}
@@ -143,7 +173,7 @@ export function AgendaGrid({
           <div
             key={pro.id}
             className={cn(
-              "sticky top-0 z-40 flex flex-col items-center gap-2 border-b border-l bg-neutral-100 px-2 py-2.5 dark:bg-neutral-900",
+              "agenda-grid-header agenda-grid-pro-header sticky top-0 z-50 flex flex-col items-center gap-2 border-b border-l px-2 py-2.5",
               gridLineHour,
               gridLineColumn
             )}
@@ -161,10 +191,10 @@ export function AgendaGrid({
           </div>
         ))}
 
-        {/* Células da grade — cada uma com linha/coluna fixas */}
         {timeSlots.map((minute, index) => {
           const row = index + 2;
           const isLast = index === timeSlots.length - 1;
+          const outside = slotOutside[index];
 
           return (
             <TimeSlotCells
@@ -172,6 +202,7 @@ export function AgendaGrid({
               minute={minute}
               row={row}
               isLast={isLast}
+              outside={outside}
               gridEnd={gridEnd}
               slotStepMinutes={slotStepMinutes}
               professionals={professionals}
@@ -183,16 +214,15 @@ export function AgendaGrid({
           );
         })}
 
-        {/* Rodapé */}
         <div
-          className="sticky left-0 z-30 bg-muted/30"
+          className="agenda-grid-header sticky left-0 z-30"
           style={{ gridRow: footerRow, gridColumn: 1 }}
         />
         {professionals.map((pro, i) => (
           <div
             key={`foot-${pro.id}`}
             className={cn(
-              "flex flex-col items-center gap-1.5 border-l bg-muted/30 px-2 py-2",
+              "agenda-grid-header flex flex-col items-center gap-1.5 border-l px-2 py-2",
               gridLineColumn
             )}
             style={{ gridRow: footerRow, gridColumn: i + 2 }}
@@ -203,13 +233,12 @@ export function AgendaGrid({
               name={pro.nickname}
               size="sm"
             />
-            <span className="line-clamp-1 text-center text-xs text-muted-foreground">
+            <span className="line-clamp-1 text-center text-xs text-[var(--agenda-muted,#8b8d93)]">
               {pro.nickname}
             </span>
           </div>
         ))}
 
-        {/* Agendamentos por cima — depois da estrutura, com posição explícita */}
         {visibleAppointments.map((apt) => {
           const col = proColumnIndex.get(apt.professionalId);
           if (!col) return null;
@@ -249,6 +278,7 @@ type TimeSlotCellsProps = {
   minute: number;
   row: number;
   isLast: boolean;
+  outside: boolean;
   gridEnd: number;
   slotStepMinutes: number;
   professionals: AgendaProfessionalColumn[];
@@ -262,6 +292,7 @@ function TimeSlotCells({
   minute,
   row,
   isLast,
+  outside,
   gridEnd,
   slotStepMinutes,
   professionals,
@@ -274,19 +305,25 @@ function TimeSlotCells({
     <>
       <div
         className={cn(
-          "relative sticky left-0 z-20 overflow-visible bg-white dark:bg-neutral-950",
+          "agenda-grid-header relative sticky left-0 z-20 overflow-visible",
           slotLineClass(minute),
-          isLast && `border-b border-solid ${gridLineHour}`
+          isLast && `border-b border-solid ${gridLineHour}`,
+          outside && "opacity-70"
         )}
         style={{ gridRow: row, gridColumn: 1 }}
       >
-        {shouldShowTimeLabel(minute, slotStepMinutes) && (
-          <span className="absolute -top-px right-1.5 -translate-y-1/2 bg-background px-0.5 text-[10px] leading-none tabular-nums text-muted-foreground sm:right-2 sm:text-[11px]">
+        {shouldShowTimeLabel(minute, slotStepMinutes) && !outside && (
+          <span className="absolute -top-px right-1.5 -translate-y-1/2 bg-[var(--agenda-bg,#0e0f11)] px-0.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
+            {timeLabel(minute)}
+          </span>
+        )}
+        {shouldShowTimeLabel(minute, slotStepMinutes) && outside && (
+          <span className="absolute -top-px right-1.5 -translate-y-1/2 px-0.5 text-[9px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)]/70 sm:right-2">
             {timeLabel(minute)}
           </span>
         )}
         {isLast && (
-          <span className="absolute -bottom-px right-1.5 translate-y-1/2 bg-background px-0.5 text-[10px] leading-none tabular-nums text-muted-foreground sm:right-2 sm:text-[11px]">
+          <span className="absolute -bottom-px right-1.5 translate-y-1/2 bg-[var(--agenda-bg,#0e0f11)] px-0.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
             {timeLabel(gridEnd)}
           </span>
         )}
