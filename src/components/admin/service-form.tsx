@@ -3,18 +3,20 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { CalendarClock, CircleDollarSign, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import {
   AdminFormActions,
   AdminFormFields,
-  AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
+import { FormSectionTitle } from "@/components/admin/form-section";
 import { PhotoField } from "@/components/admin/photo-field";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
@@ -25,6 +27,8 @@ import {
 import { formatServiceCatalogPriceLabel } from "@/lib/public-service-prices";
 import { weekdayPriceInputsFromRows } from "@/lib/service-weekday-prices";
 import type { ActionResult } from "@/lib/require-owner";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type ProfessionalOption = { id: string; nickname: string };
 
@@ -71,6 +75,32 @@ function buildInitialWeekdayRows(
     offered: row.priceCents !== null,
     priceCents: row.priceCents ?? 0,
   }));
+}
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className={cn("text-xs", ADMIN_SURFACE.muted)}>{children}</p>;
+}
+
+function FormPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+      {children}
+    </div>
+  );
+}
+
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
 }
 
 export function ServiceForm({
@@ -213,214 +243,272 @@ export function ServiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form
+      onSubmit={handleSubmit}
+      className="flex w-full flex-col gap-5"
+      autoComplete="off"
+    >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="info">Dados</TabsTrigger>
-          <TabsTrigger value="precos">Preços</TabsTrigger>
-          <TabsTrigger value="agenda">Agenda</TabsTrigger>
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          <TabsTrigger value="info" className="flex-none px-3">
+            Dados
+          </TabsTrigger>
+          <TabsTrigger value="precos" className="flex-none px-3">
+            Preços
+          </TabsTrigger>
+          <TabsTrigger value="agenda" className="flex-none px-3">
+            Agenda
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent
           value="info"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <AdminFormSectionCard
-            title="Informações do serviço"
-            description="Nome, foto e descrição que o cliente vê ao escolher."
-          >
-            <div className="flex flex-col gap-6">
-              <PhotoField
-                preview={preview}
-                position={photoPosition}
-                onPreviewChange={setPreview}
-                onPositionChange={setPhotoPosition}
-              />
+          <FormPanel>
+            <FormSectionTitle
+              tone="dark"
+              icon={Scissors}
+              title="Informações do serviço"
+              description="Nome, foto e descrição que o cliente vê ao escolher."
+            />
 
-              <AdminFormFields columns={1}>
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome do serviço</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    placeholder="Ex: Corte degradê"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    disabled={saving}
-                  />
-                </div>
+            <PhotoField
+              preview={preview}
+              position={photoPosition}
+              onPreviewChange={setPreview}
+              onPositionChange={setPhotoPosition}
+              tone="dark"
+            />
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Descrição (opcional)</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    placeholder="Ex: Corte na tesoura e máquina, com acabamento na navalha."
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    rows={3}
-                    disabled={saving}
-                  />
-                </div>
-              </AdminFormFields>
-            </div>
-          </AdminFormSectionCard>
+            <AdminFormFields columns={1}>
+              <div className="space-y-2">
+                <DarkLabel htmlFor="name">Nome do serviço</DarkLabel>
+                <Input
+                  id="name"
+                  name="name"
+                  placeholder="Ex: Corte degradê"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <DarkLabel htmlFor="description">Descrição (opcional)</DarkLabel>
+                <Textarea
+                  id="description"
+                  name="description"
+                  placeholder="Ex: Corte na tesoura e máquina, com acabamento na navalha."
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  rows={3}
+                  disabled={saving}
+                  className={cn(
+                    "min-h-[5.5rem] resize-y",
+                    ADMIN_SURFACE.input
+                  )}
+                />
+              </div>
+            </AdminFormFields>
+          </FormPanel>
         </TabsContent>
 
         <TabsContent
           value="precos"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <AdminFormSectionCard
-            title="Preço por dia da semana"
-            description="Marque os dias em que o serviço é oferecido e defina o preço de cada um."
-          >
-            <div className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-4 rounded-lg border px-4 py-3.5">
-                <div className="min-w-0 space-y-1">
-                  <Label htmlFor="priceFrom" className="text-sm font-medium">
-                    Valor a partir de
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Marque quando o preço final varia no atendimento — por exemplo,
-                    progressiva conforme o tamanho do cabelo. O valor cadastrado é
-                    só referência mínima para o cliente.
-                  </p>
-                </div>
-                <Switch
-                  id="priceFrom"
-                  checked={priceFrom}
-                  onCheckedChange={setPriceFrom}
+          <FormPanel>
+            <FormSectionTitle
+              tone="dark"
+              icon={CircleDollarSign}
+              title="Preço por dia da semana"
+              description="Marque os dias em que o serviço é oferecido e defina o preço de cada um."
+            />
+
+            <div
+              className={cn(
+                "flex items-start justify-between gap-4 rounded-xl border px-4 py-3.5",
+                "border-white/10 bg-[#1a1b1e]/60"
+              )}
+            >
+              <div className="min-w-0 space-y-1">
+                <DarkLabel htmlFor="priceFrom">Valor a partir de</DarkLabel>
+                <FieldHint>
+                  Marque quando o preço final varia no atendimento — por
+                  exemplo, progressiva conforme o tamanho do cabelo. O valor
+                  cadastrado é só referência mínima para o cliente.
+                </FieldHint>
+              </div>
+              <Switch
+                id="priceFrom"
+                checked={priceFrom}
+                onCheckedChange={setPriceFrom}
+                disabled={saving}
+                className="shrink-0"
+              />
+            </div>
+
+            <div
+              className={cn(
+                "flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-end",
+                "border-white/10 bg-white/[0.03]"
+              )}
+            >
+              <div className="min-w-0 flex-1 space-y-2">
+                <DarkLabel htmlFor="bulkPrice">
+                  Mesmo preço em todos os dias abertos
+                </DarkLabel>
+                <Input
+                  id="bulkPrice"
+                  inputMode="numeric"
+                  placeholder="R$ 0,00"
+                  value={
+                    bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""
+                  }
+                  onChange={handleBulkPriceChange}
                   disabled={saving}
-                  className="shrink-0"
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
                 />
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={applyBulkPrice}
+                disabled={saving}
+                className={ADMIN_SURFACE.btnGhost}
+              >
+                Aplicar
+              </Button>
+            </div>
 
-              <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-end">
-                <div className="min-w-0 flex-1 space-y-2">
-                  <Label htmlFor="bulkPrice">Mesmo preço em todos os dias abertos</Label>
-                  <Input
-                    id="bulkPrice"
-                    inputMode="numeric"
-                    placeholder="R$ 0,00"
-                    value={bulkPriceCents > 0 ? formatPriceBRL(bulkPriceCents) : ""}
-                    onChange={handleBulkPriceChange}
-                    disabled={saving}
-                  />
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={applyBulkPrice}
-                  disabled={saving}
-                >
-                  Aplicar
-                </Button>
-              </div>
-
-              {openWeekdays.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  A barbearia não tem dias abertos cadastrados. Ajuste em
-                  Configurações antes de cadastrar serviços.
-                </p>
-              ) : (
-                <div className="overflow-x-auto rounded-lg border">
-                  <table className="w-full min-w-[480px] text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/30 text-left text-xs text-muted-foreground">
-                        <th className="px-4 py-3 font-medium">Dia</th>
-                        <th className="px-4 py-3 font-medium">Oferece</th>
-                        <th className="px-4 py-3 font-medium">Preço</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {weekdayRows.map((row) => (
-                        <tr
-                          key={row.weekday}
-                          className={
-                            row.shopOpen
-                              ? "border-b last:border-0"
-                              : "border-b bg-muted/20 text-muted-foreground last:border-0"
-                          }
-                        >
-                          <td className="px-4 py-3 font-medium">
-                            {WEEKDAYS[row.weekday]}
-                            {!row.shopOpen ? (
-                              <span className="ml-2 text-xs font-normal">
-                                (fechado)
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="px-4 py-3">
-                            {row.shopOpen ? (
-                              <Checkbox
-                                id={`weekday-offered-${row.weekday}`}
-                                checked={row.offered}
-                                disabled={saving}
-                                onCheckedChange={(checked) =>
-                                  updateWeekdayRow(row.weekday, {
-                                    offered: checked === true,
-                                  })
-                                }
-                              />
-                            ) : (
-                              <span className="text-xs">—</span>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <Input
-                              inputMode="numeric"
-                              placeholder="R$ 0,00"
-                              disabled={!row.shopOpen || !row.offered || saving}
-                              value={
-                                row.offered && row.priceCents > 0
-                                  ? formatPriceBRL(row.priceCents)
-                                  : ""
-                              }
-                              onChange={(event) => {
-                                const digits = event.target.value
-                                  .replace(/\D/g, "")
-                                  .slice(0, 8);
+            {openWeekdays.length === 0 ? (
+              <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+                A barbearia não tem dias abertos cadastrados. Ajuste em
+                Configurações antes de cadastrar serviços.
+              </p>
+            ) : (
+              <div
+                className={cn(
+                  "overflow-x-auto rounded-xl border",
+                  "border-white/10"
+                )}
+              >
+                <table className="w-full min-w-[480px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 bg-white/[0.03] text-left text-xs text-[#b4b6bb]">
+                      <th className="px-4 py-3 font-medium">Dia</th>
+                      <th className="px-4 py-3 font-medium">Oferece</th>
+                      <th className="px-4 py-3 font-medium">Preço</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {weekdayRows.map((row) => (
+                      <tr
+                        key={row.weekday}
+                        className={cn(
+                          !row.shopOpen && "bg-white/[0.02] text-[#8b8d93]"
+                        )}
+                      >
+                        <td className="px-4 py-3 font-medium text-[#f5f5f5]">
+                          {WEEKDAYS[row.weekday]}
+                          {!row.shopOpen ? (
+                            <span
+                              className={cn(
+                                "ml-2 text-xs font-normal",
+                                ADMIN_SURFACE.muted
+                              )}
+                            >
+                              (fechado)
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3">
+                          {row.shopOpen ? (
+                            <Checkbox
+                              id={`weekday-offered-${row.weekday}`}
+                              checked={row.offered}
+                              disabled={saving}
+                              onCheckedChange={(checked) =>
                                 updateWeekdayRow(row.weekday, {
-                                  priceCents: Number(digits),
-                                });
-                              }}
-                              className="max-w-[140px]"
+                                  offered: checked === true,
+                                })
+                              }
                             />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                          ) : (
+                            <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                              —
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            inputMode="numeric"
+                            placeholder="R$ 0,00"
+                            disabled={
+                              !row.shopOpen || !row.offered || saving
+                            }
+                            value={
+                              row.offered && row.priceCents > 0
+                                ? formatPriceBRL(row.priceCents)
+                                : ""
+                            }
+                            onChange={(event) => {
+                              const digits = event.target.value
+                                .replace(/\D/g, "")
+                                .slice(0, 8);
+                              updateWeekdayRow(row.weekday, {
+                                priceCents: Number(digits),
+                              });
+                            }}
+                            className={cn("max-w-[140px]", ADMIN_SURFACE.input)}
+                            autoComplete="off"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
-              {catalogPriceLabel ? (
-                <p className="text-sm text-muted-foreground">
+            {catalogPriceLabel ? (
+              <>
+                <Separator className="bg-white/10" />
+                <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
                   Na listagem aparece como{" "}
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-[#ecf15e]">
                     {catalogPriceLabel}
                   </span>
                 </p>
-              ) : null}
-            </div>
-          </AdminFormSectionCard>
+              </>
+            ) : null}
+          </FormPanel>
         </TabsContent>
 
         <TabsContent
           value="agenda"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <AdminFormSectionCard
-            title="Agenda"
-            description="Duração do atendimento e quem pode fazer esse serviço."
-          >
+          <FormPanel>
+            <FormSectionTitle
+              tone="dark"
+              icon={CalendarClock}
+              title="Agenda"
+              description="Duração do atendimento e quem pode fazer esse serviço."
+            />
+
             <AdminFormFields columns={2}>
               <div className="space-y-2">
-                <Label htmlFor="durationMinutes">Duração (minutos)</Label>
+                <DarkLabel htmlFor="durationMinutes">
+                  Duração (minutos)
+                </DarkLabel>
                 <Input
                   id="durationMinutes"
                   name="durationMinutes"
@@ -432,21 +520,30 @@ export function ServiceForm({
                   value={durationMinutes}
                   onChange={(event) => setDurationMinutes(event.target.value)}
                   disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
                 />
-                <p className="text-xs text-muted-foreground">
+                <FieldHint>
                   Define quais horários aparecem livres na agenda.
-                </p>
+                </FieldHint>
               </div>
 
               <div className="space-y-3 sm:col-span-2">
-                <Label>Profissionais que fazem</Label>
+                <DarkLabel>Profissionais que fazem</DarkLabel>
                 {professionals.length === 0 ? (
-                  <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                  <div
+                    className={cn(
+                      "rounded-xl border border-dashed px-4 py-8 text-center text-sm",
+                      "border-white/10",
+                      ADMIN_SURFACE.muted
+                    )}
+                  >
                     Nenhum profissional cadastrado. Cadastre em Profissionais e
                     volte aqui para marcar.
                   </div>
                 ) : (
                   <CheckboxGroup
+                    tone="dark"
                     name="professionalIds"
                     options={professionals.map((professional) => ({
                       id: professional.id,
@@ -458,11 +555,12 @@ export function ServiceForm({
                 )}
               </div>
             </AdminFormFields>
-          </AdminFormSectionCard>
+          </FormPanel>
         </TabsContent>
       </Tabs>
 
       <AdminFormActions
+        tone="dark"
         onCancel={() => router.push("/admin/servicos")}
         submitLabel={submitLabel}
         saving={saving}

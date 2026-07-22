@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { ServicesList } from "@/components/admin/services-list";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Serviços" };
 
@@ -40,55 +42,64 @@ export default async function ServicesPage() {
   const activeCount = list.filter((s) => s.active).length;
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Serviços"
-        description={
-          list.length === 0
-            ? "Monte o catálogo de serviços da barbearia."
-            : `${list.length} cadastrado${list.length > 1 ? "s" : ""} · ${activeCount} ativo${activeCount === 1 ? "" : "s"}`
-        }
-      />
-
-      {list.length === 0 ? (
-        <EmptyState
-          icon={Scissors}
-          title="Nenhum serviço ainda"
-          description="Cadastre os serviços com preço e duração. A duração é o que define os horários livres na agenda."
-          action={
-            <Button asChild>
-              <Link href="/admin/servicos/novo">
-                <Plus />
-                Cadastrar o primeiro
-              </Link>
-            </Button>
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <PageHeader
+          tone="dark"
+          title="Serviços"
+          description={
+            list.length === 0
+              ? "Monte o catálogo de serviços da barbearia."
+              : `${list.length} cadastrado${list.length > 1 ? "s" : ""} · ${activeCount} ativo${activeCount === 1 ? "" : "s"}`
           }
         />
-      ) : (
-        <ServicesList
-          items={list.map((s) => ({
-            id: s.id,
-            name: s.name,
-            description: s.description,
-            priceCents: s.price_cents,
-            priceFrom: s.price_from ?? false,
-            weekdayPrices: weekdayPricesByService.get(s.id) ?? [],
-            durationMinutes: s.duration_minutes,
-            photoUrl: s.photo_url,
-            photoPosition: s.photo_position,
-            active: s.active,
-            professionalNames: (s.professional_services ?? [])
-              .map((ps) => {
-                const pro = ps.professionals as
-                  | { nickname: string }
-                  | { nickname: string }[]
-                  | null;
-                return Array.isArray(pro) ? pro[0]?.nickname : pro?.nickname;
-              })
-              .filter((n): n is string => Boolean(n)),
-          }))}
-        />
-      )}
+
+        {list.length === 0 ? (
+          <EmptyState
+            icon={Scissors}
+            className="border-white/10 text-[#f5f5f5]"
+            title="Nenhum serviço ainda"
+            description="Cadastre os serviços com preço e duração. A duração é o que define os horários livres na agenda."
+            action={
+              <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+                <Link href="/admin/servicos/novo">
+                  <Plus />
+                  Cadastrar o primeiro
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <ServicesList
+            items={list.map((s) => ({
+              id: s.id,
+              name: s.name,
+              description: s.description,
+              priceCents: s.price_cents,
+              priceFrom: s.price_from ?? false,
+              weekdayPrices: weekdayPricesByService.get(s.id) ?? [],
+              durationMinutes: s.duration_minutes,
+              photoUrl: s.photo_url,
+              photoPosition: s.photo_position,
+              active: s.active,
+              professionalNames: (s.professional_services ?? [])
+                .map((ps) => {
+                  const pro = ps.professionals as
+                    | { nickname: string }
+                    | { nickname: string }[]
+                    | null;
+                  return Array.isArray(pro) ? pro[0]?.nickname : pro?.nickname;
+                })
+                .filter((n): n is string => Boolean(n)),
+            }))}
+          />
+        )}
+      </div>
     </div>
   );
 }

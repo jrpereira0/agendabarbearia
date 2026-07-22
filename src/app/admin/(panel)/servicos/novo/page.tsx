@@ -3,6 +3,8 @@ import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { ServiceForm } from "@/components/admin/service-form";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 import { createService } from "../actions";
 
 export const metadata = { title: "Novo serviço" };
@@ -21,20 +23,28 @@ export default async function NewServicePage() {
   ]);
 
   return (
-    <AdminFormPage>
-      <PageHeader
-        title="Novo serviço"
-        description="Cadastre o serviço com preço por dia e duração."
-        backHref="/admin/servicos"
-        backLabel="Serviços"
-      />
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <AdminFormPage tone="dark">
+        <PageHeader
+          tone="dark"
+          title="Novo serviço"
+          description="Cadastre o serviço com preço por dia e duração."
+          backHref="/admin/servicos"
+          backLabel="Serviços"
+        />
 
-      <ServiceForm
-        professionals={professionals ?? []}
-        businessHours={businessHours ?? []}
-        onSubmit={createService}
-        submitLabel="Cadastrar serviço"
-      />
-    </AdminFormPage>
+        <ServiceForm
+          professionals={professionals ?? []}
+          businessHours={businessHours ?? []}
+          onSubmit={createService}
+          submitLabel="Cadastrar serviço"
+        />
+      </AdminFormPage>
+    </div>
   );
 }
