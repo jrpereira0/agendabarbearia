@@ -21,6 +21,7 @@ import {
   type AdminCustomerMatch,
 } from "@/app/admin/(panel)/agenda/lookup-customer-action";
 import { formatWhatsapp } from "@/lib/format";
+import { capitalizePersonName } from "@/lib/text";
 import {
   normalizeWhatsapp,
   whatsappLookupDelayMs,
@@ -173,8 +174,10 @@ export function AdminCustomerFields({
         onWhatsappChange(formatWhatsapp(digits));
       } else if (hasLetters) {
         const parts = q.split(/\s+/).filter(Boolean);
-        onFirstNameChange(parts[0] ?? "");
-        if (parts.length > 1) onLastNameChange(parts.slice(1).join(" "));
+        onFirstNameChange(capitalizePersonName(parts[0] ?? ""));
+        if (parts.length > 1) {
+          onLastNameChange(capitalizePersonName(parts.slice(1).join(" ")));
+        }
       }
     }
     setSearchQuery("");
@@ -502,6 +505,9 @@ export function AdminCustomerFields({
                   onFirstNameChange(e.target.value);
                   if (customerFound === true) setCustomerFound(null);
                 }}
+                onBlur={() =>
+                  onFirstNameChange(capitalizePersonName(firstName))
+                }
                 autoComplete="given-name"
                 placeholder="João"
                 className="h-11"
@@ -516,6 +522,9 @@ export function AdminCustomerFields({
                   onLastNameChange(e.target.value);
                   if (customerFound === true) setCustomerFound(null);
                 }}
+                onBlur={() =>
+                  onLastNameChange(capitalizePersonName(lastName))
+                }
                 autoComplete="family-name"
                 placeholder="Silva"
                 className="h-11"

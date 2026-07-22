@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { CustomersList } from "@/components/admin/customers-list";
-import { compareAlphabetically } from "@/lib/text";
+import { compareAlphabetically, capitalizePersonName } from "@/lib/text";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Clientes" };
 
@@ -29,17 +31,17 @@ function mapCustomer(c: {
       )
     : [];
 
-  const appointmentCount = appts.length;
+  const doneAppts = appts.filter((a) => a.status === "done");
+  const appointmentCount = doneAppts.length;
 
   const lastVisitDate =
-    appts
-      .filter((a) => a.status === "done")
-      .sort((a, b) => b.date.localeCompare(a.date))[0]?.date ?? null;
+    [...doneAppts].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ??
+    null;
 
   return {
     id: c.id,
-    firstName: c.first_name,
-    lastName: c.last_name,
+    firstName: capitalizePersonName(c.first_name),
+    lastName: capitalizePersonName(c.last_name),
     whatsapp: c.whatsapp,
     appointmentCount,
     lastVisitDate,
@@ -78,33 +80,42 @@ export default async function CustomersPage() {
   const withVisits = list.filter((c) => c.appointmentCount > 0).length;
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Clientes"
-        description={
-          list.length === 0
-            ? "Cadastre clientes ou eles entram sozinhos ao agendar."
-            : `${list.length} cadastrado${list.length === 1 ? "" : "s"} · ${withVisits} com visita${withVisits === 1 ? "" : "s"}`
-        }
-      />
-
-      {list.length === 0 ? (
-        <EmptyState
-          icon={Contact}
-          title="Nenhum cliente ainda"
-          description="Cadastre manualmente ou aguarde o primeiro agendamento pela página."
-          action={
-            <Button asChild>
-              <Link href="/admin/clientes/novo">
-                <Plus />
-                Cadastrar o primeiro
-              </Link>
-            </Button>
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <PageHeader
+          tone="dark"
+          title="Clientes"
+          description={
+            list.length === 0
+              ? "Cadastre clientes ou eles entram sozinhos ao agendar."
+              : `${list.length} cadastrado${list.length === 1 ? "" : "s"} · ${withVisits} com visita${withVisits === 1 ? "" : "s"}`
           }
         />
-      ) : (
-        <CustomersList items={list} />
-      )}
+
+        {list.length === 0 ? (
+          <EmptyState
+            icon={Contact}
+            className="border-white/10 text-[#f5f5f5]"
+            title="Nenhum cliente ainda"
+            description="Cadastre manualmente ou aguarde o primeiro agendamento pela página."
+            action={
+              <Button asChild className={ADMIN_SURFACE.btnPrimary}>
+                <Link href="/admin/clientes/novo">
+                  <Plus />
+                  Cadastrar o primeiro
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <CustomersList items={list} />
+        )}
+      </div>
     </div>
   );
 }

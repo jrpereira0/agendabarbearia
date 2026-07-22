@@ -7,6 +7,31 @@ export function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+/**
+ * Nome de pessoa com a primeira letra de cada palavra maiúscula.
+ * "ailton" -> "Ailton", "maria da silva" -> "Maria Da Silva"
+ */
+export function capitalizePersonName(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "";
+
+  return trimmed
+    .split(" ")
+    .map((word) =>
+      word
+        .split("-")
+        .map((part) => {
+          if (!part) return part;
+          const lower = part.toLocaleLowerCase("pt-BR");
+          return (
+            lower.charAt(0).toLocaleUpperCase("pt-BR") + lower.slice(1)
+          );
+        })
+        .join("-")
+    )
+    .join(" ");
+}
+
 // Compara nomes em ordem alfabética (pt-BR, ignora acentos e maiúsculas).
 export function compareAlphabetically(a: string, b: string): number {
   return normalizeText(a).localeCompare(normalizeText(b));

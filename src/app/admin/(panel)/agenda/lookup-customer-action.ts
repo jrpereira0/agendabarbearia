@@ -3,7 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lookupCustomerByWhatsapp } from "@/lib/lookup-customer";
 import { requireAdmin } from "@/lib/require-admin";
-import { matchesCustomerSearch } from "@/lib/text";
+import { matchesCustomerSearch, capitalizePersonName } from "@/lib/text";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -171,8 +171,8 @@ export async function searchCustomersForAdmin(
   const customers = rows
     .map((row) => ({
       id: row.id,
-      firstName: row.first_name,
-      lastName: row.last_name,
+      firstName: capitalizePersonName(row.first_name),
+      lastName: capitalizePersonName(row.last_name),
       whatsapp: row.whatsapp,
     }))
     .filter((customer) => matchesCustomerSearch(customer, q))

@@ -25,6 +25,7 @@ import {
 } from "@/components/admin/customer-list-row";
 import { formatWhatsapp } from "@/lib/format";
 import { matchesCustomerSearch } from "@/lib/text";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 const SUGGESTION_LIMIT = 8;
@@ -87,6 +88,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
   return (
     <CatalogListShell>
       <CatalogListToolbar
+        tone="dark"
         search={
           <div className="relative w-full">
             <SearchInput
@@ -95,10 +97,14 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
               placeholder="Nome ou últimos dígitos do WhatsApp..."
+              inputClassName={ADMIN_SURFACE.input}
             />
             {suggestionsOpen && suggestions.length > 0 && (
               <ul
-                className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 overflow-hidden rounded-xl border bg-card shadow-md"
+                className={cn(
+                  "absolute left-0 right-0 top-[calc(100%+0.35rem)] z-20 overflow-hidden rounded-xl border shadow-md",
+                  "border-white/10 bg-[#151618]"
+                )}
                 onMouseDown={(e) => e.preventDefault()}
               >
                 {suggestions.map((customer) => {
@@ -110,14 +116,19 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
                         onClick={() => openCustomer(customer.id)}
                         className={cn(
                           "flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors",
-                          "hover:bg-muted/60"
+                          "hover:bg-white/[0.04]"
                         )}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
+                          <p className="truncate text-sm font-medium text-[#f5f5f5]">
                             {fullName}
                           </p>
-                          <p className="truncate text-xs tabular-nums text-muted-foreground">
+                          <p
+                            className={cn(
+                              "truncate text-xs tabular-nums",
+                              ADMIN_SURFACE.muted
+                            )}
+                          >
                             {formatWhatsapp(customer.whatsapp)}
                           </p>
                         </div>
@@ -126,7 +137,12 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
                   );
                 })}
                 {filtered.length > SUGGESTION_LIMIT && (
-                  <li className="border-t px-3.5 py-2 text-xs text-muted-foreground">
+                  <li
+                    className={cn(
+                      "border-t border-white/10 px-3.5 py-2 text-xs",
+                      ADMIN_SURFACE.muted
+                    )}
+                  >
                     +{filtered.length - SUGGESTION_LIMIT} na lista abaixo
                   </li>
                 )}
@@ -136,6 +152,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
         }
         filters={
           <CatalogFilterSegment
+            tone="dark"
             value={filter}
             onChange={setFilter}
             counts={counts}
@@ -147,7 +164,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
           />
         }
         actions={
-          <Button asChild>
+          <Button asChild className={ADMIN_SURFACE.btnPrimary}>
             <Link href="/admin/clientes/novo">
               <Plus />
               Novo cliente
@@ -158,6 +175,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
 
       {filtered.length === 0 ? (
         <CatalogListEmpty
+          tone="dark"
           title="Nenhum cliente encontrado"
           description={
             query.trim()
@@ -167,8 +185,8 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
         />
       ) : (
         <>
-          <CatalogTable>
-            <CatalogTableHead>
+          <CatalogTable tone="dark">
+            <CatalogTableHead tone="dark">
               <CatalogTableHeadCell>Cliente</CatalogTableHeadCell>
               <CatalogTableHeadCell className="hidden md:table-cell">
                 WhatsApp
@@ -180,14 +198,22 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
             </CatalogTableHead>
             <CatalogTableBody>
               {filtered.map((customer) => (
-                <CustomerListRow key={customer.id} customer={customer} />
+                <CustomerListRow
+                  key={customer.id}
+                  customer={customer}
+                  tone="dark"
+                />
               ))}
             </CatalogTableBody>
           </CatalogTable>
 
           <CatalogMobileList>
             {filtered.map((customer) => (
-              <CustomerMobileCard key={customer.id} customer={customer} />
+              <CustomerMobileCard
+                key={customer.id}
+                customer={customer}
+                tone="dark"
+              />
             ))}
           </CatalogMobileList>
         </>

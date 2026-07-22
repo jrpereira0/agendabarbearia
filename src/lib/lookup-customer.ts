@@ -3,6 +3,7 @@ import {
   normalizeWhatsapp,
   whatsappLookupKeys,
 } from "@/lib/whatsapp";
+import { capitalizePersonName } from "@/lib/text";
 
 export type CustomerLookupResult =
   | { found: true; firstName: string; lastName: string }
@@ -61,8 +62,8 @@ export async function getCustomerByWhatsapp(
     found: true,
     customer: {
       id: data.id,
-      firstName: data.first_name,
-      lastName: data.last_name,
+      firstName: capitalizePersonName(data.first_name),
+      lastName: capitalizePersonName(data.last_name),
       whatsapp,
     },
   };

@@ -17,6 +17,7 @@ import {
 } from "@/lib/cash-register-service";
 import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { formatTime } from "@/lib/format";
+import { capitalizePersonName } from "@/lib/text";
 import { getAdminSession } from "@/lib/require-admin";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 import { AgendaView } from "@/components/admin/agenda-view";
@@ -153,8 +154,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     professionalId: a.professional_id,
     professionalNickname,
     customerId: a.customer_id ?? null,
-    customerFirstName: a.customer_first_name,
-    customerLastName: a.customer_last_name,
+    customerFirstName: capitalizePersonName(a.customer_first_name),
+    customerLastName: capitalizePersonName(a.customer_last_name),
     customerWhatsapp: a.customer_whatsapp,
     startTime: formatTime(a.start_time),
     endTime: formatTime(a.end_time),

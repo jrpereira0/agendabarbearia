@@ -3,24 +3,25 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Contact, Phone, User } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Contact, Phone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import {
+  AdminFormActions,
+  AdminFormFields,
+} from "@/components/admin/admin-form-layout";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { formatWhatsapp } from "@/lib/format";
+import { capitalizePersonName } from "@/lib/text";
 import type { ActionResult } from "@/lib/require-owner";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type CustomerAppointment = {
   id: string;
   date: string;
   startTime: string;
-  status:
-    | "scheduled"
-    | "confirmed"
-    | "cancelled"
-    | "done";
+  status: "scheduled" | "confirmed" | "cancelled" | "done";
   professionalName: string;
   serviceNames: string[];
 };
@@ -36,6 +37,20 @@ type CustomerFormProps = {
   isEdit?: boolean;
 };
 
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
+}
+
 export function CustomerForm({
   initialValues,
   onSubmit,
@@ -43,6 +58,8 @@ export function CustomerForm({
   isEdit = false,
 }: CustomerFormProps) {
   const router = useRouter();
+  const [firstName, setFirstName] = useState(initialValues?.firstName ?? "");
+  const [lastName, setLastName] = useState(initialValues?.lastName ?? "");
   const [whatsapp, setWhatsapp] = useState(
     initialValues?.whatsapp ? formatWhatsapp(initialValues.whatsapp) : ""
   );
@@ -52,7 +69,14 @@ export function CustomerForm({
     e.preventDefault();
     setSaving(true);
 
+    const normalizedFirstName = capitalizePersonName(firstName);
+    const normalizedLastName = capitalizePersonName(lastName);
+    setFirstName(normalizedFirstName);
+    setLastName(normalizedLastName);
+
     const formData = new FormData(e.currentTarget);
+    formData.set("firstName", normalizedFirstName);
+    formData.set("lastName", normalizedLastName);
     formData.set("whatsapp", whatsapp.replace(/\D/g, ""));
 
     const result = await onSubmit(formData);
@@ -72,66 +96,84 @@ export function CustomerForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="flex flex-col gap-6 pt-6">
-          <FormSectionTitle
-            icon={Contact}
-            title="Dados do cliente"
-            description={
-              isEdit
-                ? "Alterações aqui também atualizam os agendamentos vinculados."
-                : "Nome e WhatsApp identificam o cliente nos agendamentos."
-            }
-          />
+    <form
+      onSubmit={handleSubmit}
+      className="flex w-full flex-col gap-5"
+      autoComplete="off"
+    >
+      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+        <FormSectionTitle
+          tone="dark"
+          icon={Contact}
+          title="Dados do cliente"
+          description={
+            isEdit
+              ? "Alterações aqui também atualizam os agendamentos vinculados."
+              : "Nome e WhatsApp identificam o cliente nos agendamentos."
+          }
+        />
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="firstName">Nome</Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                defaultValue={initialValues?.firstName ?? ""}
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="lastName">Sobrenome</Label>
-              <Input
-                id="lastName"
-                name="lastName"
-                defaultValue={initialValues?.lastName ?? ""}
-                required
-              />
-            </div>
+        <AdminFormFields columns={2}>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="firstName">Nome</DarkLabel>
+            <Input
+              id="firstName"
+              name="firstName"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              onBlur={() => setFirstName(capitalizePersonName(firstName))}
+              required
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+              autoComplete="off"
+            />
           </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="whatsapp">WhatsApp</Label>
-            <div className="relative">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="whatsapp"
-                inputMode="numeric"
-                className="pl-9"
-                placeholder="(11) 99999-9999"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="lastName">Sobrenome</DarkLabel>
+            <Input
+              id="lastName"
+              name="lastName"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              onBlur={() => setLastName(capitalizePersonName(lastName))}
+              required
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+              autoComplete="off"
+            />
           </div>
-        </CardContent>
-      </Card>
+        </AdminFormFields>
 
-      <div className="sticky bottom-0 -mx-4 border-t bg-background/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:-mx-6 sm:px-6">
-        <div className="flex justify-end">
-          <Button type="submit" disabled={saving}>
-            <User />
-            {saving ? "Salvando..." : submitLabel}
-          </Button>
+        <div className="space-y-2">
+          <DarkLabel htmlFor="whatsapp">WhatsApp</DarkLabel>
+          <div className="relative">
+            <Phone
+              className={cn(
+                "pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2",
+                ADMIN_SURFACE.muted
+              )}
+            />
+            <Input
+              id="whatsapp"
+              inputMode="numeric"
+              className={cn("pl-9", ADMIN_SURFACE.input)}
+              placeholder="(11) 99999-9999"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
+              required
+              disabled={saving}
+              autoComplete="off"
+            />
+          </div>
         </div>
       </div>
+
+      <AdminFormActions
+        tone="dark"
+        onCancel={() => router.push("/admin/clientes")}
+        submitLabel={submitLabel}
+        saving={saving}
+      />
     </form>
   );
 }

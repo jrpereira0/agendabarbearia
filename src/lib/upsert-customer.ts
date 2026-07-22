@@ -4,6 +4,7 @@ import {
   WHATSAPP_INVALID_MESSAGE,
   whatsappLookupKeys,
 } from "@/lib/whatsapp";
+import { capitalizePersonName } from "@/lib/text";
 
 export type UpsertCustomerInput = {
   firstName: string;
@@ -15,8 +16,10 @@ export type UpsertCustomerResult =
   | { ok: true; customerId: string; firstName: string; lastName: string }
   | { ok: false; error: string };
 
-function normalizeName(value: string): string {
-  return value.trim().toLocaleLowerCase("pt-BR");
+function namesMatch(a: string, b: string): boolean {
+  return (
+    a.trim().toLocaleLowerCase("pt-BR") === b.trim().toLocaleLowerCase("pt-BR")
+  );
 }
 
 export async function upsertCustomer(
@@ -26,6 +29,9 @@ export async function upsertCustomer(
   if (!whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
   }
+
+  const firstName = capitalizePersonName(input.firstName);
+  const lastName = capitalizePersonName(input.lastName);
 
   const admin = createAdminClient();
   if (!admin) {
@@ -45,29 +51,29 @@ export async function upsertCustomer(
 
   if (existing) {
     const nameDiffers =
-      normalizeName(input.firstName) !== normalizeName(existing.first_name) ||
-      normalizeName(input.lastName) !== normalizeName(existing.last_name);
+      !namesMatch(firstName, existing.first_name) ||
+      !namesMatch(lastName, existing.last_name);
 
     if (nameDiffers) {
       return {
         ok: false,
-        error: `Este WhatsApp já pertence a ${existing.first_name} ${existing.last_name}. Verifique o número ou edite o cadastro em Clientes.`,
+        error: `Este WhatsApp já pertence a ${capitalizePersonName(existing.first_name)} ${capitalizePersonName(existing.last_name)}. Verifique o número ou edite o cadastro em Clientes.`,
       };
     }
 
     return {
       ok: true,
       customerId: existing.id,
-      firstName: existing.first_name,
-      lastName: existing.last_name,
+      firstName: capitalizePersonName(existing.first_name),
+      lastName: capitalizePersonName(existing.last_name),
     };
   }
 
   const { data: created, error } = await admin
     .from("customers")
     .insert({
-      first_name: input.firstName,
-      last_name: input.lastName,
+      first_name: firstName,
+      last_name: lastName,
       whatsapp,
     })
     .select("id")
@@ -90,7 +96,7 @@ export async function upsertCustomer(
   return {
     ok: true,
     customerId: created.id,
-    firstName: input.firstName,
-    lastName: input.lastName,
+    firstName,
+    lastName,
   };
 }

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { assertOwnerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
+import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { type CustomerAppointment } from "@/components/admin/customer-form";
 import { CustomerDetailTabs } from "@/components/admin/customer-detail-tabs";
 import type {
@@ -10,6 +11,9 @@ import type {
 } from "@/components/admin/customer-finance-panel";
 import { formatTime } from "@/lib/format";
 import type { PaymentMethod } from "@/lib/comanda-types";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { capitalizePersonName } from "@/lib/text";
+import { cn } from "@/lib/utils";
 import { updateCustomer } from "../actions";
 
 export const metadata = { title: "Cliente" };
@@ -157,28 +161,38 @@ export default async function CustomerDetailPage({
     createdAt: row.created_at,
   }));
 
+  const firstName = capitalizePersonName(customer.first_name);
+  const lastName = capitalizePersonName(customer.last_name);
   const updateWithId = updateCustomer.bind(null, customer.id);
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <PageHeader
-        title={`${customer.first_name} ${customer.last_name}`}
-        description="Dados, visitas e financeiro do cliente"
-        backHref="/admin/clientes"
-        backLabel="Clientes"
-      />
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <AdminFormPage tone="dark">
+        <PageHeader
+          tone="dark"
+          title={`${firstName} ${lastName}`}
+          description="Dados, visitas e financeiro do cliente"
+          backHref="/admin/clientes"
+          backLabel="Clientes"
+        />
 
-      <CustomerDetailTabs
-        firstName={customer.first_name}
-        lastName={customer.last_name}
-        whatsapp={customer.whatsapp}
-        customerId={customer.id}
-        creditBalanceCents={customer.credit_balance_cents ?? 0}
-        appointments={appointments}
-        comandas={comandaHistory}
-        creditTransactions={creditHistory}
-        onSubmit={updateWithId}
-      />
+        <CustomerDetailTabs
+          firstName={firstName}
+          lastName={lastName}
+          whatsapp={customer.whatsapp}
+          customerId={customer.id}
+          creditBalanceCents={customer.credit_balance_cents ?? 0}
+          appointments={appointments}
+          comandas={comandaHistory}
+          creditTransactions={creditHistory}
+          onSubmit={updateWithId}
+        />
+      </AdminFormPage>
     </div>
   );
 }

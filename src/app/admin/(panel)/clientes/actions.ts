@@ -12,12 +12,20 @@ import {
 } from "@/lib/whatsapp";
 import { addCustomerCredit, deductCustomerCredit } from "@/lib/customer-credit-service";
 import { formatPriceBRL } from "@/lib/format";
+import { capitalizePersonName } from "@/lib/text";
 
 const customerSchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
   lastName: z.string().trim().min(1, "Informe o sobrenome."),
   whatsapp: whatsappSchema,
 });
+
+function parsedCustomerNames(data: { firstName: string; lastName: string }) {
+  return {
+    firstName: capitalizePersonName(data.firstName),
+    lastName: capitalizePersonName(data.lastName),
+  };
+}
 
 export async function createCustomer(formData: FormData): Promise<ActionResult> {
   const auth = await requireOwner();
@@ -41,9 +49,11 @@ export async function createCustomer(formData: FormData): Promise<ActionResult> 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
+  const { firstName, lastName } = parsedCustomerNames(parsed.data);
+
   const { error } = await admin.from("customers").insert({
-    first_name: parsed.data.firstName,
-    last_name: parsed.data.lastName,
+    first_name: firstName,
+    last_name: lastName,
     whatsapp: parsed.data.whatsapp,
   });
 
@@ -96,11 +106,13 @@ export async function updateCustomer(
     return { ok: false, error: "Cliente não encontrado." };
   }
 
+  const { firstName, lastName } = parsedCustomerNames(parsed.data);
+
   const { error } = await admin
     .from("customers")
     .update({
-      first_name: parsed.data.firstName,
-      last_name: parsed.data.lastName,
+      first_name: firstName,
+      last_name: lastName,
       whatsapp: parsed.data.whatsapp,
       updated_at: new Date().toISOString(),
     })
@@ -119,8 +131,8 @@ export async function updateCustomer(
   await admin
     .from("appointments")
     .update({
-      customer_first_name: parsed.data.firstName,
-      customer_last_name: parsed.data.lastName,
+      customer_first_name: firstName,
+      customer_last_name: lastName,
       customer_whatsapp: parsed.data.whatsapp,
     })
     .eq("customer_id", customerId);
