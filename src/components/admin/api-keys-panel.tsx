@@ -54,6 +54,8 @@ import {
   revokeApiKeyAction,
   rotateApiKeyAction,
 } from "@/app/admin/(panel)/configuracoes/integracoes/actions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type ApiKeysPanelProps = {
   initialKeys: ApiKeyListItem[];
@@ -295,7 +297,10 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
   return (
     <>
       <div className="flex justify-end">
-        <Button onClick={() => setCreateOpen(true)}>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          className={ADMIN_SURFACE.btnPrimary}
+        >
           <Plus />
           Nova chave
         </Button>
@@ -304,10 +309,14 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
       {keys.length === 0 ? (
         <EmptyState
           icon={KeyRound}
+          className="border-white/10 text-[#f5f5f5]"
           title="Nenhuma chave ainda"
           description="Crie uma chave para conectar o n8n ou outra ferramenta à API."
           action={
-            <Button onClick={() => setCreateOpen(true)}>
+            <Button
+              onClick={() => setCreateOpen(true)}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
               <Plus />
               Criar primeira chave
             </Button>
@@ -318,24 +327,39 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
           {keys.map((key) => {
             const status = keyStatus(key);
             return (
-              <Card key={key.id}>
+              <Card
+                key={key.id}
+                className={cn(ADMIN_SURFACE.panel, "shadow-none")}
+              >
                 <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                   <div className="min-w-0">
-                    <CardTitle className="truncate text-base">
+                    <CardTitle className="truncate text-base text-[#f5f5f5]">
                       {key.name}
                     </CardTitle>
-                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                    <p
+                      className={cn(
+                        "mt-1 font-mono text-xs",
+                        ADMIN_SURFACE.muted
+                      )}
+                    >
                       {key.keyPrefix}…
                     </p>
                   </div>
                   {!key.revokedAt && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="size-8">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+                        >
                           <MoreHorizontal className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent
+                        align="end"
+                        className={ADMIN_SURFACE.popover}
+                      >
                         <DropdownMenuItem
                           onClick={() => {
                             resetCreateForm();

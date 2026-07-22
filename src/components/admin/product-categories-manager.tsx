@@ -3,11 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Tags, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,12 +22,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FormSectionTitle } from "@/components/admin/form-section";
 import {
   createProductCategory,
   deleteProductCategory,
   setProductCategoryActive,
   updateProductCategory,
 } from "@/app/admin/(panel)/produtos/actions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type Category = {
   id: string;
@@ -37,6 +39,20 @@ type Category = {
   active: boolean;
   productCount: number;
 };
+
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
+}
 
 export function ProductCategoriesManager({
   categories,
@@ -87,9 +103,14 @@ export function ProductCategoriesManager({
 
   async function handleToggleActive(category: Category) {
     setBusy(true);
-    const result = await setProductCategoryActive(category.id, !category.active);
+    const result = await setProductCategoryActive(
+      category.id,
+      !category.active
+    );
     if (result.ok) {
-      toast.success(category.active ? "Categoria desativada." : "Categoria ativada.");
+      toast.success(
+        category.active ? "Categoria desativada." : "Categoria ativada."
+      );
       router.refresh();
     } else {
       toast.error(result.error);
@@ -112,66 +133,108 @@ export function ProductCategoriesManager({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-[1fr_120px_auto] sm:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="category-name">Nova categoria</Label>
-              <Input
-                id="category-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Ex.: Geladeira"
-                required
-                disabled={busy}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category-sort">Ordem</Label>
-              <Input
-                id="category-sort"
-                inputMode="numeric"
-                value={sortOrder}
-                onChange={(event) =>
-                  setSortOrder(event.target.value.replace(/\D/g, ""))
-                }
-                disabled={busy}
-              />
-            </div>
-            <Button type="submit" disabled={busy}>
-              Adicionar
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="flex flex-col gap-5">
+      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
+        <FormSectionTitle
+          tone="dark"
+          icon={Tags}
+          title="Nova categoria"
+          description="Use para separar geladeira, pomadas e outros itens."
+        />
 
-      <div className="grid gap-3">
-        {categories.map((category) => (
-          <Card key={category.id} className={category.active ? "" : "opacity-55"}>
-            <CardContent className="flex items-center justify-between gap-3 py-4">
+        <form
+          onSubmit={handleCreate}
+          className="grid gap-4 sm:grid-cols-[1fr_120px_auto] sm:items-end"
+          autoComplete="off"
+        >
+          <div className="space-y-2">
+            <DarkLabel htmlFor="category-name">Nome</DarkLabel>
+            <Input
+              id="category-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex.: Geladeira"
+              required
+              disabled={busy}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="category-sort">Ordem</DarkLabel>
+            <Input
+              id="category-sort"
+              inputMode="numeric"
+              value={sortOrder}
+              onChange={(event) =>
+                setSortOrder(event.target.value.replace(/\D/g, ""))
+              }
+              disabled={busy}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={busy}
+            className={ADMIN_SURFACE.btnPrimary}
+          >
+            Adicionar
+          </Button>
+        </form>
+      </div>
+
+      {categories.length === 0 ? (
+        <div
+          className={cn(
+            "rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm",
+            ADMIN_SURFACE.muted
+          )}
+        >
+          Nenhuma categoria ainda. Cadastre a primeira acima.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {categories.map((category) => (
+            <li
+              key={category.id}
+              className={cn(
+                "flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-[#1a1b1e]/80 px-4 py-3.5",
+                !category.active && "opacity-60"
+              )}
+            >
               <div className="min-w-0">
-                <p className="font-medium">{category.name}</p>
-                <p className="text-sm text-muted-foreground">
+                <p className="truncate font-medium text-[#f5f5f5]">
+                  {category.name}
+                </p>
+                <p className={cn("mt-0.5 text-sm", ADMIN_SURFACE.muted)}>
                   Ordem {category.sortOrder} · {category.productCount} produto
                   {category.productCount === 1 ? "" : "s"}
                 </p>
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" disabled={busy}>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={busy}
+                    className="text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+                  >
                     <MoreVertical />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent
+                  align="end"
+                  className={ADMIN_SURFACE.popover}
+                >
                   <DropdownMenuItem onSelect={() => setEditing(category)}>
                     <Pencil />
                     Editar
                   </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => handleToggleActive(category)}>
+                  <DropdownMenuItem
+                    onSelect={() => handleToggleActive(category)}
+                  >
                     {category.active ? "Desativar" : "Ativar"}
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuSeparator className="bg-white/10" />
                   <DropdownMenuItem
                     variant="destructive"
                     onSelect={() => setDeleteTarget(category)}
@@ -181,20 +244,25 @@ export function ProductCategoriesManager({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
-      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent>
+      <Dialog
+        open={editing !== null}
+        onOpenChange={(open) => !open && setEditing(null)}
+      >
+        <DialogContent className="border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Editar categoria</DialogTitle>
+            <DialogTitle className="text-[#f5f5f5]">
+              Editar categoria
+            </DialogTitle>
           </DialogHeader>
           {editing && (
             <div className="space-y-4 py-1">
               <div className="space-y-2">
-                <Label htmlFor="edit-category-name">Nome</Label>
+                <DarkLabel htmlFor="edit-category-name">Nome</DarkLabel>
                 <Input
                   id="edit-category-name"
                   value={editing.name}
@@ -202,10 +270,11 @@ export function ProductCategoriesManager({
                     setEditing({ ...editing, name: event.target.value })
                   }
                   disabled={busy}
+                  className={ADMIN_SURFACE.input}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-category-sort">Ordem</Label>
+                <DarkLabel htmlFor="edit-category-sort">Ordem</DarkLabel>
                 <Input
                   id="edit-category-sort"
                   inputMode="numeric"
@@ -220,15 +289,25 @@ export function ProductCategoriesManager({
                     })
                   }
                   disabled={busy}
+                  className={ADMIN_SURFACE.input}
                 />
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)} disabled={busy}>
+            <Button
+              variant="outline"
+              onClick={() => setEditing(null)}
+              disabled={busy}
+              className={ADMIN_SURFACE.btnGhost}
+            >
               Cancelar
             </Button>
-            <Button onClick={() => void handleUpdate()} disabled={busy || !editing}>
+            <Button
+              onClick={() => void handleUpdate()}
+              disabled={busy || !editing}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
               Salvar
             </Button>
           </DialogFooter>
@@ -239,10 +318,12 @@ export function ProductCategoriesManager({
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <DialogContent>
+        <DialogContent className="border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Excluir {deleteTarget?.name}?</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">
+              Excluir {deleteTarget?.name}?
+            </DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               Só é possível excluir categorias sem produtos cadastrados.
             </DialogDescription>
           </DialogHeader>
@@ -251,10 +332,15 @@ export function ProductCategoriesManager({
               variant="outline"
               onClick={() => setDeleteTarget(null)}
               disabled={busy}
+              className={ADMIN_SURFACE.btnGhost}
             >
               Cancelar
             </Button>
-            <Button variant="destructive" onClick={() => void handleDelete()} disabled={busy}>
+            <Button
+              variant="destructive"
+              onClick={() => void handleDelete()}
+              disabled={busy}
+            >
               Excluir
             </Button>
           </DialogFooter>

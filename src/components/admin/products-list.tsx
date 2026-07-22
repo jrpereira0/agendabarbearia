@@ -22,6 +22,7 @@ import {
   ProductMobileCard,
 } from "@/components/admin/product-list-row";
 import { matchesSearch } from "@/lib/text";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 
 type Product = {
   id: string;
@@ -69,25 +70,32 @@ export function ProductsList({ items }: { items: Product[] }) {
   return (
     <CatalogListShell>
       <CatalogListToolbar
+        tone="dark"
         search={
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Buscar produto..."
+            inputClassName={ADMIN_SURFACE.input}
           />
         }
         filters={
-          <CatalogFilterSegment value={filter} onChange={setFilter} counts={counts} />
+          <CatalogFilterSegment
+            tone="dark"
+            value={filter}
+            onChange={setFilter}
+            counts={counts}
+          />
         }
         actions={
           <>
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className={ADMIN_SURFACE.btnGhost}>
               <Link href="/admin/produtos/categorias">
                 <Tags />
                 Categorias
               </Link>
             </Button>
-            <Button asChild>
+            <Button asChild className={ADMIN_SURFACE.btnPrimary}>
               <Link href="/admin/produtos/novo">
                 <Plus />
                 Novo produto
@@ -99,31 +107,44 @@ export function ProductsList({ items }: { items: Product[] }) {
 
       {filtered.length === 0 ? (
         <CatalogListEmpty
+          tone="dark"
           title="Nenhum produto encontrado"
           description="Ajuste a busca ou o filtro, ou cadastre um novo produto."
         />
       ) : (
         <>
-          <CatalogTable>
-            <CatalogTableHead>
+          <CatalogTable tone="dark">
+            <CatalogTableHead tone="dark">
               <CatalogTableHeadCell>Produto</CatalogTableHeadCell>
-              <CatalogTableHeadCell className="text-right">Preço</CatalogTableHeadCell>
+              <CatalogTableHeadCell className="text-right">
+                Preço
+              </CatalogTableHeadCell>
               <CatalogTableHeadCell className="hidden text-right sm:table-cell">
                 Comissão
               </CatalogTableHeadCell>
-              <CatalogTableHeadCell className="text-right">Estoque</CatalogTableHeadCell>
+              <CatalogTableHeadCell className="text-right">
+                Estoque
+              </CatalogTableHeadCell>
               <CatalogTableHeadCell className="w-12" />
             </CatalogTableHead>
             <CatalogTableBody>
               {filtered.map((product) => (
-                <ProductListRow key={product.id} product={product} />
+                <ProductListRow
+                  key={product.id}
+                  product={product}
+                  tone="dark"
+                />
               ))}
             </CatalogTableBody>
           </CatalogTable>
 
           <CatalogMobileList>
             {filtered.map((product) => (
-              <ProductMobileCard key={product.id} product={product} />
+              <ProductMobileCard
+                key={product.id}
+                product={product}
+                tone="dark"
+              />
             ))}
           </CatalogMobileList>
         </>

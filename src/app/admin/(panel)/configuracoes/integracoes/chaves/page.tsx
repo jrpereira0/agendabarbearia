@@ -5,6 +5,8 @@ import { PageHeader } from "@/components/admin/page-header";
 import { ApiKeysPanel } from "@/components/admin/api-keys-panel";
 import { SHOP_ID } from "@/lib/api-key-auth";
 import type { ApiKeyListItem } from "@/lib/api-key-service";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Chaves de API" };
 
@@ -41,11 +43,18 @@ export default async function ApiKeysPage() {
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return (
-      <div className="flex flex-col gap-6">
+      <div
+        className={cn(
+          "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+          ADMIN_SURFACE.page
+        )}
+      >
         <PageHeader
+          tone="dark"
           title="Chaves de API"
           description={systemUnavailable().error}
           backHref="/admin/configuracoes/integracoes"
+          backLabel="Integrações"
         />
       </div>
     );
@@ -60,14 +69,23 @@ export default async function ApiKeysPage() {
   const keys = (data ?? []).map(mapRow);
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="Chaves de API"
-        description="Use no n8n ou em outras automações. A chave completa só aparece na criação."
-        backHref="/admin/configuracoes/integracoes"
-      />
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <PageHeader
+          tone="dark"
+          title="Chaves de API"
+          description="Use no n8n ou em outras automações. A chave completa só aparece na criação."
+          backHref="/admin/configuracoes/integracoes"
+          backLabel="Integrações"
+        />
 
-      <ApiKeysPanel initialKeys={keys} />
+        <ApiKeysPanel initialKeys={keys} />
+      </div>
     </div>
   );
 }

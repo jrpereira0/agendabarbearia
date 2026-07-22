@@ -269,3 +269,44 @@
   color: #b4b6bb !important;
 }
 
+.admin-popover [data-slot="dropdown-menu-label"] {
+  color: #f5f5f5 !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-separator"] {
+  background: rgb(255 255 255 / 10%) !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-item"] svg {
+  color: #b4b6bb !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-item"][data-highlighted] svg,
+.admin-popover [data-slot="dropdown-menu-item"]:focus svg {
+  color: #ecf15e !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-item"][data-variant="destructive"] {
+  color: #fca5a5 !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-item"][data-variant="destructive"] svg {
+  color: #fca5a5 !important;
+}
+
+.admin-popover [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted],
+.admin-popover [data-slot="dropdown-menu-item"][data-variant="destructive"]:focus,
+.admin-popover [data-slot="dropdown-menu-item"][data-variant="destructive"]:hover {
+  background: rgb(248 113 113 / 12%) !important;
+  color: #fecaca !important;
+}
+
+.admin-popover
+  [data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted]
+  svg,
+.admin-popover
+  [data-slot="dropdown-menu-item"][data-variant="destructive"]:focus
+  svg {
+  color: #fecaca !important;
+}
+

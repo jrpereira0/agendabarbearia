@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +29,8 @@ import {
   createException,
   deleteException,
 } from "@/app/admin/(panel)/configuracoes/actions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type ExceptionItem = {
   id: string;
@@ -48,6 +49,20 @@ type ExceptionsCardProps = {
 };
 
 const SHOP = "shop";
+
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
+}
 
 export function ExceptionsCard({
   exceptions,
@@ -113,97 +128,112 @@ export function ExceptionsCard({
   }
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <FormSectionTitle
-            icon={CalendarOff}
-            title="Dias especiais"
-            description="Feriados, folgas pontuais e dias com horário diferente."
-          />
-          {!readOnly && (
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-              <Plus />
-              Nova exceção
-            </Button>
-          )}
-        </div>
-
-        {exceptions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Nenhum dia especial cadastrado. Exemplo: feriado fechado, ou véspera
-            de festa atendendo até mais tarde.
-          </p>
-        ) : (
-          <div className="flex flex-col divide-y">
-            {exceptions.map((e) => (
-              <div
-                key={e.id}
-                className="flex flex-wrap items-center gap-3 py-3"
-              >
-                <span className="w-36 text-sm font-medium">
-                  {formatDateBR(e.date)}
-                </span>
-                <Badge variant="outline" className="font-normal">
-                  {e.professionalNickname ?? "Barbearia toda"}
-                </Badge>
-                {e.kind === "closed" ? (
-                  <Badge variant="secondary">Fechado</Badge>
-                ) : (
-                  <Badge variant="secondary">
-                    {formatTime(e.startTime!)} às {formatTime(e.endTime!)}
-                  </Badge>
-                )}
-                {e.note && (
-                  <span className="text-sm text-muted-foreground">
-                    {e.note}
-                  </span>
-                )}
-                {!readOnly && (
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="ml-auto text-destructive hover:text-destructive"
-                    onClick={() => handleDelete(e.id)}
-                    disabled={busy}
-                    aria-label="Remover exceção"
-                  >
-                    <Trash2 />
-                  </Button>
-                )}
-              </div>
-            ))}
-          </div>
+    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-5 p-5 sm:p-6")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <FormSectionTitle
+          tone="dark"
+          icon={CalendarOff}
+          title="Dias especiais"
+          description="Feriados, folgas pontuais e dias com horário diferente."
+        />
+        {!readOnly && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setOpen(true)}
+            className={ADMIN_SURFACE.btnGhost}
+          >
+            <Plus />
+            Nova exceção
+          </Button>
         )}
-      </CardContent>
+      </div>
+
+      {exceptions.length === 0 ? (
+        <div
+          className={cn(
+            "rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm",
+            ADMIN_SURFACE.muted
+          )}
+        >
+          Nenhum dia especial cadastrado. Exemplo: feriado fechado, ou véspera
+          de festa atendendo até mais tarde.
+        </div>
+      ) : (
+        <ul className="flex flex-col gap-2.5">
+          {exceptions.map((e) => (
+            <li
+              key={e.id}
+              className="flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-[#1a1b1e]/80 px-4 py-3"
+            >
+              <span className="min-w-[7.5rem] text-sm font-medium text-[#f5f5f5]">
+                {formatDateBR(e.date)}
+              </span>
+              <Badge
+                variant="outline"
+                className="border-white/10 bg-transparent font-normal text-[#b4b6bb]"
+              >
+                {e.professionalNickname ?? "Barbearia toda"}
+              </Badge>
+              {e.kind === "closed" ? (
+                <Badge className="border-[rgb(248_113_113_/_22%)] bg-[rgb(248_113_113_/_12%)] font-normal text-[#fca5a5]">
+                  Fechado
+                </Badge>
+              ) : (
+                <Badge className="border-[rgb(236_241_94_/_22%)] bg-[rgb(236_241_94_/_12%)] font-normal text-[#ecf15e]">
+                  {formatTime(e.startTime!)} às {formatTime(e.endTime!)}
+                </Badge>
+              )}
+              {e.note ? (
+                <span className={cn("text-sm", ADMIN_SURFACE.muted)}>
+                  {e.note}
+                </span>
+              ) : null}
+              {!readOnly && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="ml-auto text-[#fca5a5] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fecaca]"
+                  onClick={() => handleDelete(e.id)}
+                  disabled={busy}
+                  aria-label="Remover exceção"
+                >
+                  <Trash2 />
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10">
           <DialogHeader>
-            <DialogTitle>Nova exceção</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-[#f5f5f5]">Nova exceção</DialogTitle>
+            <DialogDescription className={ADMIN_SURFACE.muted}>
               Vale só pra data escolhida e substitui o horário normal.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="exception-date">Data</Label>
+              <div className="space-y-2">
+                <DarkLabel htmlFor="exception-date">Data</DarkLabel>
                 <Input
                   id="exception-date"
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
+                  className={ADMIN_SURFACE.input}
                 />
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Vale pra quem?</Label>
+              <div className="space-y-2">
+                <DarkLabel>Vale pra quem?</DarkLabel>
                 <Select value={scope} onValueChange={setScope}>
-                  <SelectTrigger>
+                  <SelectTrigger className={ADMIN_SURFACE.selectTrigger}>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className={ADMIN_SURFACE.popover}>
                     <SelectItem value={SHOP}>Barbearia toda</SelectItem>
                     {professionals.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
@@ -215,16 +245,16 @@ export function ExceptionsCard({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label>O que acontece nesse dia?</Label>
+            <div className="space-y-2">
+              <DarkLabel>O que acontece nesse dia?</DarkLabel>
               <Select
                 value={kind}
                 onValueChange={(v) => setKind(v as "closed" | "custom")}
               >
-                <SelectTrigger>
+                <SelectTrigger className={ADMIN_SURFACE.selectTrigger}>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={ADMIN_SURFACE.popover}>
                   <SelectItem value="closed">
                     Fechado / folga o dia todo
                   </SelectItem>
@@ -241,26 +271,27 @@ export function ExceptionsCard({
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-28"
+                  className={cn("w-28", ADMIN_SURFACE.input)}
                 />
-                <span className="text-sm text-muted-foreground">às</span>
+                <span className={cn("text-sm", ADMIN_SURFACE.muted)}>às</span>
                 <Input
                   type="time"
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-28"
+                  className={cn("w-28", ADMIN_SURFACE.input)}
                 />
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="exception-note">Motivo (opcional)</Label>
+            <div className="space-y-2">
+              <DarkLabel htmlFor="exception-note">Motivo (opcional)</DarkLabel>
               <Input
                 id="exception-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Ex: Feriado, médico, evento..."
                 maxLength={200}
+                className={ADMIN_SURFACE.input}
               />
             </div>
           </div>
@@ -270,15 +301,20 @@ export function ExceptionsCard({
               variant="outline"
               onClick={() => setOpen(false)}
               disabled={busy}
+              className={ADMIN_SURFACE.btnGhost}
             >
               Cancelar
             </Button>
-            <Button onClick={handleCreate} disabled={busy}>
+            <Button
+              onClick={handleCreate}
+              disabled={busy}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
               {busy ? "Salvando..." : "Criar exceção"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }

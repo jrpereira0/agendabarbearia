@@ -4,18 +4,19 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { toast } from "sonner";
-import { Camera, Loader2, MapPin, Store } from "lucide-react";
+import { AtSign, Camera, Loader2, MapPin, Phone, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { compressImage } from "@/lib/compress-image";
 import { BRAND_ICON_PATH } from "@/lib/brand";
 import { formatCep, formatWhatsapp } from "@/lib/format";
 import { fetchAddressByCep } from "@/lib/viacep";
 import { saveShopProfile } from "@/app/admin/(panel)/configuracoes/actions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type ShopProfileValues = {
   shopName: string;
@@ -35,6 +36,24 @@ export type ShopProfileValues = {
 type ShopProfileFormProps = {
   initialValues: ShopProfileValues;
 };
+
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
+}
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className={cn("text-xs", ADMIN_SURFACE.muted)}>{children}</p>;
+}
 
 export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
   const router = useRouter();
@@ -118,202 +137,253 @@ export function ShopProfileForm({ initialValues }: ShopProfileFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <Card>
-        <CardContent className="flex flex-col gap-5">
-          <FormSectionTitle
-            icon={Store}
-            title="Perfil da barbearia"
-            description="Nome, bio e contato que o cliente vê na página de agendamento."
+    <form
+      onSubmit={handleSubmit}
+      className="flex flex-col gap-5"
+      autoComplete="off"
+    >
+      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+        <FormSectionTitle
+          tone="dark"
+          icon={Store}
+          title="Perfil da barbearia"
+          description="Nome, logo e contato que o cliente vê na página de agendamento."
+        />
+
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-[#0e0f11] transition-opacity hover:opacity-90"
+          >
+            {preview ? (
+              <Image
+                src={preview}
+                alt="Logo da barbearia"
+                fill
+                className="object-contain p-1"
+                sizes="80px"
+                unoptimized={preview.startsWith("/")}
+              />
+            ) : (
+              <Camera className={cn("size-6", ADMIN_SURFACE.muted)} />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            name="logo"
+            accept="image/*"
+            className="hidden"
+            onChange={handleLogoChange}
           />
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="relative flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-black transition-opacity hover:opacity-90"
-            >
-              {preview ? (
-                <Image
-                  src={preview}
-                  alt="Logo da barbearia"
-                  fill
-                  className="object-contain p-1"
-                  sizes="80px"
-                  unoptimized={preview.startsWith("/")}
-                />
-              ) : (
-                <Camera className="size-6 text-muted-foreground" />
-              )}
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              name="logo"
-              accept="image/*"
-              className="hidden"
-              onChange={handleLogoChange}
-            />
-
-            <div className="grid flex-1 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="shopName">Nome da barbearia</Label>
-                <Input
-                  id="shopName"
-                  name="shopName"
-                  defaultValue={initialValues.shopName}
-                  placeholder="Ex: Dinho Barber Coffee"
-                  required
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="bio">Bio</Label>
-                <Textarea
-                  id="bio"
-                  name="bio"
-                  defaultValue={initialValues.bio}
-                  placeholder="Conte em poucas linhas o estilo da barbearia, os diferenciais e o que o cliente pode esperar."
-                  rows={3}
-                  maxLength={500}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Aparece logo abaixo do nome na página de agendamento.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4">
-            <FormSectionTitle
-              icon={MapPin}
-              title="Endereço"
-              description="Digite o CEP para preencher rua, bairro e cidade automaticamente."
-            />
-
-            <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="cep">CEP</Label>
-                <Input
-                  id="cep"
-                  inputMode="numeric"
-                  placeholder="00000-000"
-                  value={cep}
-                  onChange={(e) => handleCepChange(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => lookupCep()}
-                  disabled={loadingCep}
-                  className="w-full sm:w-auto"
-                >
-                  {loadingCep ? (
-                    <>
-                      <Loader2 className="animate-spin" />
-                      Buscando...
-                    </>
-                  ) : (
-                    "Buscar CEP"
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="street">Rua</Label>
+          <div className="grid min-w-0 flex-1 gap-4">
+            <div className="space-y-2">
+              <DarkLabel htmlFor="shopName">Nome da barbearia</DarkLabel>
               <Input
-                id="street"
-                name="street"
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                placeholder="Preenchido pelo CEP"
+                id="shopName"
+                name="shopName"
+                defaultValue={initialValues.shopName}
+                placeholder="Ex: Dinho Barber Coffee"
+                required
+                disabled={saving}
+                className={ADMIN_SURFACE.input}
               />
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="addressNumber">Número</Label>
-                <Input
-                  id="addressNumber"
-                  name="addressNumber"
-                  defaultValue={initialValues.addressNumber}
-                  placeholder="Ex: 123"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="addressComplement">Complemento</Label>
-                <Input
-                  id="addressComplement"
-                  name="addressComplement"
-                  defaultValue={initialValues.addressComplement}
-                  placeholder="Sala, loja, etc. (opcional)"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="flex flex-col gap-2 sm:col-span-1">
-                <Label htmlFor="neighborhood">Bairro</Label>
-                <Input
-                  id="neighborhood"
-                  value={neighborhood}
-                  onChange={(e) => setNeighborhood(e.target.value)}
-                  placeholder="Bairro"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="city">Cidade</Label>
-                <Input
-                  id="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="Cidade"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="state">UF</Label>
-                <Input
-                  id="state"
-                  value={state}
-                  onChange={(e) => setState(e.target.value.toUpperCase().slice(0, 2))}
-                  placeholder="SP"
-                  maxLength={2}
-                />
-              </div>
+            <div className="space-y-2">
+              <DarkLabel htmlFor="bio">Bio</DarkLabel>
+              <Textarea
+                id="bio"
+                name="bio"
+                defaultValue={initialValues.bio}
+                placeholder="Conte em poucas linhas o estilo da barbearia, os diferenciais e o que o cliente pode esperar."
+                rows={3}
+                maxLength={500}
+                disabled={saving}
+                className={cn("min-h-[5.5rem] resize-y", ADMIN_SURFACE.input)}
+              />
+              <FieldHint>
+                Aparece logo abaixo do nome na página de agendamento.
+              </FieldHint>
             </div>
           </div>
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="shopWhatsapp">WhatsApp da barbearia</Label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <DarkLabel htmlFor="shopWhatsapp">WhatsApp da barbearia</DarkLabel>
+            <div className="relative">
+              <Phone
+                className={cn(
+                  "pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2",
+                  ADMIN_SURFACE.muted
+                )}
+              />
               <Input
                 id="shopWhatsapp"
                 inputMode="numeric"
+                className={cn("pl-9", ADMIN_SURFACE.input)}
                 placeholder="(11) 99999-9999"
                 value={whatsapp}
                 onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
+                disabled={saving}
               />
             </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="instagram">Instagram</Label>
+          </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="instagram">Instagram</DarkLabel>
+            <div className="relative">
+              <AtSign
+                className={cn(
+                  "pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2",
+                  ADMIN_SURFACE.muted
+                )}
+              />
               <Input
                 id="instagram"
                 name="instagram"
+                className={cn("pl-9", ADMIN_SURFACE.input)}
                 defaultValue={initialValues.instagram}
-                placeholder="@sua_barbearia"
+                placeholder="sua_barbearia"
+                disabled={saving}
+                autoComplete="off"
               />
             </div>
           </div>
+        </div>
+      </div>
 
-          <div className="flex justify-end">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Salvando..." : "Salvar configurações"}
+      <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+        <FormSectionTitle
+          tone="dark"
+          icon={MapPin}
+          title="Endereço"
+          description="Digite o CEP para preencher rua, bairro e cidade automaticamente."
+        />
+
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-2">
+            <DarkLabel htmlFor="cep">CEP</DarkLabel>
+            <Input
+              id="cep"
+              inputMode="numeric"
+              placeholder="00000-000"
+              value={cep}
+              onChange={(e) => handleCepChange(e.target.value)}
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <div className="flex items-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => lookupCep()}
+              disabled={loadingCep || saving}
+              className={cn("w-full sm:w-auto", ADMIN_SURFACE.btnGhost)}
+            >
+              {loadingCep ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Buscando...
+                </>
+              ) : (
+                "Buscar CEP"
+              )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        <div className="space-y-2">
+          <DarkLabel htmlFor="street">Rua</DarkLabel>
+          <Input
+            id="street"
+            name="street"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            placeholder="Preenchido pelo CEP"
+            disabled={saving}
+            className={ADMIN_SURFACE.input}
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <DarkLabel htmlFor="addressNumber">Número</DarkLabel>
+            <Input
+              id="addressNumber"
+              name="addressNumber"
+              defaultValue={initialValues.addressNumber}
+              placeholder="Ex: 123"
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="addressComplement">Complemento</DarkLabel>
+            <Input
+              id="addressComplement"
+              name="addressComplement"
+              defaultValue={initialValues.addressComplement}
+              placeholder="Sala, loja, etc. (opcional)"
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-2">
+            <DarkLabel htmlFor="neighborhood">Bairro</DarkLabel>
+            <Input
+              id="neighborhood"
+              value={neighborhood}
+              onChange={(e) => setNeighborhood(e.target.value)}
+              placeholder="Bairro"
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="city">Cidade</DarkLabel>
+            <Input
+              id="city"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Cidade"
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+          <div className="space-y-2">
+            <DarkLabel htmlFor="state">UF</DarkLabel>
+            <Input
+              id="state"
+              value={state}
+              onChange={(e) =>
+                setState(e.target.value.toUpperCase().slice(0, 2))
+              }
+              placeholder="SP"
+              maxLength={2}
+              disabled={saving}
+              className={ADMIN_SURFACE.input}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="sticky bottom-0 z-10 -mx-4 border-t border-white/10 bg-[#0e0f11]/95 px-4 py-4 backdrop-blur supports-[backdrop-filter]:bg-[#0e0f11]/80 sm:-mx-0 sm:rounded-2xl sm:border sm:px-5">
+        <div className="flex justify-end">
+          <Button
+            type="submit"
+            disabled={saving}
+            className={ADMIN_SURFACE.btnPrimary}
+          >
+            {saving ? "Salvando..." : "Salvar perfil"}
+          </Button>
+        </div>
+      </div>
     </form>
   );
 }

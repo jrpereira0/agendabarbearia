@@ -40,6 +40,7 @@ import {
 import { signOut } from "@/app/admin/(panel)/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { BOOKING_PATH } from "@/lib/booking-path";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 const dayToDayItems = [
@@ -220,19 +221,33 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
               <DropdownMenuContent
                 side="top"
                 align="start"
-                className="w-(--radix-dropdown-menu-trigger-width) min-w-56"
+                sideOffset={8}
+                className={cn(
+                  ADMIN_SURFACE.popover,
+                  "w-(--radix-dropdown-menu-trigger-width) min-w-60 p-1.5"
+                )}
               >
-                <DropdownMenuLabel className="font-normal">
-                  <div className="grid leading-tight">
-                    <span className="truncate text-sm font-medium">
-                      {userName}
-                    </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {userEmail}
-                    </span>
+                <DropdownMenuLabel className="px-2.5 py-2.5 font-normal">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="size-9 rounded-md ring-1 ring-[rgb(236_241_94_/_25%)]">
+                      <AvatarFallback className="admin-sidebar-avatar rounded-md text-xs font-medium">
+                        {initials || "DB"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
+                      <span className="truncate text-sm font-medium text-[#f5f5f5]">
+                        {userName}
+                      </span>
+                      <span className="truncate text-xs text-[#b4b6bb]">
+                        {userEmail}
+                      </span>
+                      <span className="mt-1 w-fit rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#ecf15e] uppercase">
+                        {isOwner ? "Dono" : "Barbeiro"}
+                      </span>
+                    </div>
                   </div>
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator />
+                <DropdownMenuSeparator className="mx-1 my-1.5 bg-white/10" />
                 <DropdownMenuItem asChild>
                   <Link
                     href={
@@ -240,13 +255,16 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                     }
                     onClick={() => setOpenMobile(false)}
                   >
-                    <Settings />
-                    {isOwner ? "Configurações da barbearia" : "Minha conta"}
+                    <Settings className="size-4" />
+                    {isOwner ? "Configurações" : "Minha conta"}
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => signOut()}>
-                  <LogOut />
+                <DropdownMenuSeparator className="mx-1 my-1.5 bg-white/10" />
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => signOut()}
+                >
+                  <LogOut className="size-4" />
                   Sair
                 </DropdownMenuItem>
               </DropdownMenuContent>
