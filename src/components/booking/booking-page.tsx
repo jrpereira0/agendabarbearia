@@ -24,7 +24,7 @@ export function BookingPage({ catalog, today }: BookingPageProps) {
 
       <main
         id="agendar"
-        className="booking-main relative z-10 flex-1 rounded-t-[1.75rem] border-t px-4 pb-8 pt-4 sm:px-6 sm:pb-10 sm:pt-8"
+        className="booking-main relative z-10 flex-1 scroll-mt-3 rounded-t-[1.75rem] border-t px-4 pb-8 pt-2 sm:px-6 sm:pb-10 sm:pt-8"
       >
         <div className="mx-auto w-full max-w-lg">
           <BookingSection catalog={catalog} today={today} />

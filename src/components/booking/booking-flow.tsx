@@ -237,6 +237,9 @@ function SlotGroups({
 
 export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const skipInitialScrollRef = useRef(true);
 
   const [step, setStep] = useState<Step>("professional");
   const [professionalId, setProfessionalId] = useState("");
@@ -255,6 +258,27 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (skipInitialScrollRef.current) {
+      skipInitialScrollRef.current = false;
+      return;
+    }
+
+    bodyRef.current?.scrollTo({ top: 0 });
+    const card = rootRef.current;
+    if (!card) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        card.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "nearest",
+        });
+      });
+    });
+  }, [step, confirmation]);
 
   const { services } = catalog;
   const professionals = catalog.professionals.filter(
@@ -579,7 +603,10 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       confirmation.professionalPhotoPosition;
 
     return (
-      <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]">
+      <div
+        ref={rootRef}
+        className="scroll-mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
+      >
         <div className="bg-primary px-5 py-8 text-center text-primary-foreground">
           <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary-foreground/10">
             <CheckCircle2 className="size-7" strokeWidth={1.5} />
@@ -653,7 +680,10 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]">
+    <div
+      ref={rootRef}
+      className="scroll-mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
+    >
       <div className="border-b border-white/10 px-4 py-4 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
@@ -704,7 +734,10 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           )}
       </div>
 
-      <div className="max-h-[min(58dvh,34rem)] overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+      <div
+        ref={bodyRef}
+        className="max-h-[min(72dvh,42rem)] overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+      >
         {step === "professional" && (
           <div className="grid grid-cols-2 gap-2.5">
             <button

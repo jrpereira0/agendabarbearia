@@ -6,6 +6,7 @@ import { ArrowDown, AtSign, Clock, MapPin, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "@/components/brand-logo";
 import { formatTime, formatWhatsapp } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { BusinessHourRow, ShopProfile } from "@/lib/get-shop-catalog";
 
 type ShopHeroProps = {
@@ -73,10 +74,10 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
 
   return (
     <section className="relative z-10 text-foreground">
-      <div className="relative mx-auto w-full max-w-lg px-5 pb-6 pt-8 sm:px-6 sm:pb-12 sm:pt-14">
+      <div className="relative mx-auto w-full max-w-lg px-4 pb-3 pt-5 sm:px-6 sm:pb-10 sm:pt-14">
         <div className="flex flex-col items-center text-center">
           {shop.logoUrl ? (
-            <div className="relative size-16 overflow-hidden rounded-xl border border-white/10 bg-[#151618] shadow-lg sm:size-24">
+            <div className="relative size-12 overflow-hidden rounded-xl border border-white/10 bg-[#151618] shadow-lg sm:size-24">
               <Image
                 src={shop.logoUrl}
                 alt={shop.name}
@@ -88,24 +89,25 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
               />
             </div>
           ) : (
-            <BrandMark className="size-16 sm:size-24" />
+            <BrandMark className="size-12 sm:size-24" />
           )}
 
-          <p className="mt-4 text-[10px] font-medium uppercase tracking-[0.28em] text-primary sm:mt-5">
+          <p className="mt-2.5 text-[10px] font-medium uppercase tracking-[0.28em] text-primary sm:mt-5">
             Agendamento online
           </p>
 
-          <h1 className="booking-display mt-1.5 max-w-md text-[1.55rem] font-medium leading-tight tracking-tight sm:mt-2 sm:text-4xl">
+          <h1 className="booking-display mt-1 max-w-md text-[1.35rem] font-medium leading-tight tracking-tight sm:mt-2 sm:text-4xl">
             {shop.name}
           </h1>
 
-          <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground sm:mt-3 sm:text-base">
+          <p className="mt-1.5 hidden max-w-sm text-sm leading-relaxed text-muted-foreground sm:mt-3 sm:block sm:text-base">
             {shop.bio?.trim() || "Agende seu horário com praticidade."}
           </p>
 
+          {/* No celular o formulário já aparece abaixo; o botão só ajuda no desktop. */}
           <Button
             size="lg"
-            className="mt-6 h-12 w-full max-w-xs text-base font-semibold sm:mt-8"
+            className="mt-6 hidden h-12 w-full max-w-xs text-base font-semibold sm:mt-8 sm:inline-flex"
             onClick={scrollToBooking}
           >
             Agendar agora
@@ -114,73 +116,108 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
 
           <a
             href="#meus-agendamentos"
-            className="mt-2.5 block text-sm text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline sm:mt-3"
+            className="mt-2 block text-xs text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline sm:mt-3 sm:text-sm"
           >
             Já agendou? Ver ou cancelar
           </a>
         </div>
 
         {hasDetails && (
-          <details className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] sm:mt-8">
-            <summary className="cursor-pointer list-none px-4 py-3 text-center text-xs text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden sm:hidden">
-              Horário, endereço e contato
-            </summary>
-            <div className="space-y-3 px-4 pb-4 text-xs leading-relaxed text-muted-foreground sm:block sm:py-4">
-            {hoursSummary && (
-              <p className="flex items-start gap-2.5">
-                <Clock className="mt-0.5 size-3.5 shrink-0 opacity-70" />
-                <span>{hoursSummary}</span>
-              </p>
-            )}
+          <>
+            <details className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] sm:hidden">
+              <summary className="cursor-pointer list-none px-3 py-2.5 text-center text-xs text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden">
+                Horário, endereço e contato
+              </summary>
+              <ShopContactDetails
+                hoursSummary={hoursSummary}
+                address={shop.address}
+                whatsapp={shop.whatsapp}
+                instagram={instagram}
+                className="px-3 pb-3 pt-1"
+              />
+            </details>
 
-            {shop.address && (
-              <p className="flex items-start gap-2.5">
-                <MapPin className="mt-0.5 size-3.5 shrink-0 opacity-70" />
-                <span>
-                  {shop.address}
-                  {" · "}
-                  <Link
-                    href={mapsHref(shop.address)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-foreground/80 underline-offset-2 hover:text-primary hover:underline"
-                  >
-                    Mapa
-                  </Link>
-                </span>
-              </p>
-            )}
-
-            {(shop.whatsapp || instagram) && (
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-white/10 pt-3 sm:justify-start">
-                {shop.whatsapp && (
-                  <Link
-                    href={whatsappHref(shop.whatsapp)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
-                  >
-                    <MessageCircle className="size-3.5 shrink-0" />
-                    {formatWhatsapp(shop.whatsapp)}
-                  </Link>
-                )}
-                {instagram && (
-                  <Link
-                    href={instagramHref(instagram)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
-                  >
-                    <AtSign className="size-3.5 shrink-0" />
-                    {instagram.startsWith("@") ? instagram : `@${instagram}`}
-                  </Link>
-                )}
-              </div>
-            )}
+            <div className="mt-8 hidden rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4 sm:block">
+              <ShopContactDetails
+                hoursSummary={hoursSummary}
+                address={shop.address}
+                whatsapp={shop.whatsapp}
+                instagram={instagram}
+              />
             </div>
-          </details>
+          </>
         )}
       </div>
     </section>
+  );
+}
+
+function ShopContactDetails({
+  hoursSummary,
+  address,
+  whatsapp,
+  instagram,
+  className,
+}: {
+  hoursSummary: string;
+  address: string;
+  whatsapp: string;
+  instagram: string | undefined;
+  className?: string;
+}) {
+  return (
+    <div className={cn("space-y-3 text-xs leading-relaxed text-muted-foreground", className)}>
+      {hoursSummary && (
+        <p className="flex items-start gap-2.5">
+          <Clock className="mt-0.5 size-3.5 shrink-0 opacity-70" />
+          <span>{hoursSummary}</span>
+        </p>
+      )}
+
+      {address && (
+        <p className="flex items-start gap-2.5">
+          <MapPin className="mt-0.5 size-3.5 shrink-0 opacity-70" />
+          <span>
+            {address}
+            {" · "}
+            <Link
+              href={mapsHref(address)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-foreground/80 underline-offset-2 hover:text-primary hover:underline"
+            >
+              Mapa
+            </Link>
+          </span>
+        </p>
+      )}
+
+      {(whatsapp || instagram) && (
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-white/10 pt-3 sm:justify-start">
+          {whatsapp && (
+            <Link
+              href={whatsappHref(whatsapp)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
+            >
+              <MessageCircle className="size-3.5 shrink-0" />
+              {formatWhatsapp(whatsapp)}
+            </Link>
+          )}
+          {instagram && (
+            <Link
+              href={instagramHref(instagram)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
+            >
+              <AtSign className="size-3.5 shrink-0" />
+              {instagram.startsWith("@") ? instagram : `@${instagram}`}
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
