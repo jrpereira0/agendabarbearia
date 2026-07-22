@@ -522,6 +522,20 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setLookupLoading(false);
   }
 
+  function restartBooking() {
+    setConfirmation(null);
+    setStep("professional");
+    setProfessionalId("");
+    setServiceIds([]);
+    setServiceSearch("");
+    setDate(today);
+    setStartTime(null);
+    setAvailableSlots([]);
+    setSlotsError(null);
+    setLoadingSlots(false);
+    resetCustomer();
+  }
+
   function goBack() {
     if (step === "confirm") {
       resetCustomer();
@@ -669,7 +683,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             {confirmation.customerName}, te esperamos!
           </p>
         </div>
-        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5">
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
             <div className="flex items-end justify-between gap-3">
               <div>
@@ -717,6 +731,20 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           <p className="text-center text-xs text-muted-foreground">
             Precisa mudar? Use Horários no menu de baixo.
           </p>
+        </div>
+        <div className="relative shrink-0 px-5 pb-3 pt-1">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[#0e0f11] to-transparent"
+          />
+          <Button
+            type="button"
+            size="lg"
+            onClick={restartBooking}
+            className="h-12 w-full rounded-2xl text-[0.95rem] font-semibold shadow-none"
+          >
+            Voltar ao início
+          </Button>
         </div>
       </div>
     );
