@@ -59,6 +59,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       `
       id,
       professional_id,
+      customer_id,
       customer_first_name,
       customer_last_name,
       customer_whatsapp,
@@ -151,6 +152,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     date: a.date,
     professionalId: a.professional_id,
     professionalNickname,
+    customerId: a.customer_id ?? null,
     customerFirstName: a.customer_first_name,
     customerLastName: a.customer_last_name,
     customerWhatsapp: a.customer_whatsapp,

@@ -135,8 +135,7 @@ function getStepMeta(
   return meta[step];
 }
 
-/** Faixa compacta no cabeçalho — preço/duração ficam só no rodapé. */
-function BookingContextBar({
+export function BookingContextBar({
   professional,
   date,
   startTime,
@@ -256,7 +255,7 @@ function ServicePickerRow({
   );
 }
 
-function ServicePickerList({
+export function ServicePickerList({
   services,
   quantities,
   onChangeQuantity,
@@ -282,7 +281,7 @@ function ServicePickerList({
   );
 }
 
-function StepProgress({
+export function StepProgress({
   current,
   total,
 }: {
@@ -304,7 +303,7 @@ function StepProgress({
   );
 }
 
-function ModalActions({
+export function ModalActions({
   showBack,
   onBack,
   onCancel,
@@ -955,7 +954,7 @@ export function NewAppointmentDialog({
           {step === "time" && selectedProfessional && (
             <div className="flex flex-col gap-4">
               {ownerFreeMode && (
-                <p className="text-sm text-muted-foreground">
+                <p className="booking-notice rounded-xl px-4 py-3 text-sm">
                   Você pode agendar em qualquer horário. Horários já ocupados
                   precisam ser encaixe ou serviço extra na comanda.
                 </p>
@@ -1022,7 +1021,7 @@ export function NewAppointmentDialog({
             >
               {isEncaixe &&
                 (selectedOutsideSchedule || selectedConflicts.length > 0) && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="booking-notice rounded-xl px-4 py-3 text-sm">
                     Este é um encaixe manual
                     {selectedOutsideSchedule ? ", fora do expediente" : ""}
                     {selectedConflicts.length > 0

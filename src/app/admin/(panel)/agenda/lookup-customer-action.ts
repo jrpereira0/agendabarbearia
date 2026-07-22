@@ -25,6 +25,49 @@ export type AdminCustomerSearchResult =
   | { ok: true; customers: AdminCustomerMatch[] }
   | { ok: false; error: string };
 
+export type CustomerAgendaSummaryResult =
+  | {
+      ok: true;
+      customerId: string | null;
+      creditBalanceCents: number;
+    }
+  | { ok: false; error: string };
+
+/** Saldo de crédito + id do cliente para o modal da agenda. */
+export async function getCustomerAgendaSummary(
+  rawWhatsapp: string
+): Promise<CustomerAgendaSummaryResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return {
+      ok: false,
+      error: "error" in session ? session.error : "Faça login de novo.",
+    };
+  }
+
+  const whatsapp = normalizeWhatsapp(rawWhatsapp);
+  if (!whatsapp) {
+    return { ok: true, customerId: null, creditBalanceCents: 0 };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return { ok: false, error: "Sistema indisponível no momento." };
+  }
+
+  const { data } = await admin
+    .from("customers")
+    .select("id, credit_balance_cents")
+    .eq("whatsapp", whatsapp)
+    .maybeSingle();
+
+  return {
+    ok: true,
+    customerId: data?.id ?? null,
+    creditBalanceCents: data?.credit_balance_cents ?? 0,
+  };
+}
+
 /** Busca cliente pelo WhatsApp completo no painel — sem limite da API pública. */
 export async function lookupCustomerForAdmin(
   rawWhatsapp: string

@@ -1,18 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Check,
   Loader2,
   Phone,
+  Search,
   User,
   UserPlus,
+  UserRoundSearch,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SearchInput } from "@/components/admin/search-input";
 import {
   lookupCustomerForAdmin,
   searchCustomersForAdmin,
@@ -34,7 +36,11 @@ type AdminCustomerFieldsProps = {
   onWhatsappChange: (value: string) => void;
   enabled?: boolean;
   idPrefix?: string;
+  /** Texto curto acima da busca (ex.: trocar cliente). */
+  hint?: string;
 };
+
+type Mode = "search" | "selected" | "form";
 
 function customerInitials(firstName: string, lastName: string): string {
   return [firstName, lastName]
@@ -43,6 +49,16 @@ function customerInitials(firstName: string, lastName: string): string {
     .slice(0, 2)
     .join("")
     .toUpperCase();
+}
+
+function hasCustomerData(
+  firstName: string,
+  lastName: string,
+  whatsapp: string
+): boolean {
+  return Boolean(
+    firstName.trim() && lastName.trim() && whatsapp.replace(/\D/g, "").length >= 10
+  );
 }
 
 function CustomerAvatar({
@@ -77,17 +93,22 @@ export function AdminCustomerFields({
   onWhatsappChange,
   enabled = true,
   idPrefix = "customer",
+  hint,
 }: AdminCustomerFieldsProps) {
+  const [mode, setMode] = useState<Mode>(() =>
+    hasCustomerData(firstName, lastName, whatsapp) ? "selected" : "search"
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<AdminCustomerMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
-  const [customerFound, setCustomerFound] = useState<boolean | null>(null);
+  const [customerFound, setCustomerFound] = useState<boolean | null>(() =>
+    hasCustomerData(firstName, lastName, whatsapp) ? true : null
+  );
   const lastLookupDigitsRef = useRef("");
   const lastSearchRef = useRef("");
   const mountedRef = useRef(false);
-  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [wasEnabled, setWasEnabled] = useState(enabled);
 
   useEffect(() => {
@@ -97,7 +118,6 @@ export function AdminCustomerFields({
     };
   }, []);
 
-  // Refs não entram em render — limpa fora, junto do resto (abaixo).
   useEffect(() => {
     if (!enabled) {
       lastLookupDigitsRef.current = "";
@@ -107,32 +127,59 @@ export function AdminCustomerFields({
     }
   }, [enabled, searchQuery]);
 
-  // Campo desabilitado (ex: já tem cliente selecionado por fora) → limpa a busca.
   if (enabled !== wasEnabled) {
     setWasEnabled(enabled);
     if (!enabled) {
       setSearchQuery("");
       setSuggestions([]);
-      setSuggestionsOpen(false);
       setCustomerFound(null);
       setLookupLoading(false);
       setSearchLoading(false);
+      setMode("search");
+    } else if (hasCustomerData(firstName, lastName, whatsapp)) {
+      setMode("selected");
+      setCustomerFound(true);
+    } else {
+      setMode("search");
     }
   }
 
-  function resetSelection() {
+  function clearFields() {
+    onWhatsappChange("");
+    onFirstNameChange("");
+    onLastNameChange("");
     lastLookupDigitsRef.current = "";
     setCustomerFound(null);
   }
 
-  function clearAll() {
-    onWhatsappChange("");
-    onFirstNameChange("");
-    onLastNameChange("");
+  function goToSearch(options?: { clear?: boolean; focus?: boolean }) {
+    if (options?.clear) clearFields();
     setSearchQuery("");
     setSuggestions([]);
-    setSuggestionsOpen(false);
-    resetSelection();
+    setSearchLoading(false);
+    lastSearchRef.current = "";
+    setMode("search");
+    if (options?.focus !== false) {
+      requestAnimationFrame(() => searchInputRef.current?.focus());
+    }
+  }
+
+  function goToForm(prefillQuery?: string) {
+    const q = (prefillQuery ?? searchQuery).trim();
+    if (!firstName && !lastName && !whatsapp && q) {
+      const digits = q.replace(/\D/g, "");
+      const hasLetters = /[a-zA-ZÀ-ÿ]/.test(q);
+      if (!hasLetters && digits.length >= 8) {
+        onWhatsappChange(formatWhatsapp(digits));
+      } else if (hasLetters) {
+        const parts = q.split(/\s+/).filter(Boolean);
+        onFirstNameChange(parts[0] ?? "");
+        if (parts.length > 1) onLastNameChange(parts.slice(1).join(" "));
+      }
+    }
+    setSearchQuery("");
+    setSuggestions([]);
+    setMode("form");
   }
 
   function selectCustomer(customer: AdminCustomerMatch) {
@@ -143,33 +190,9 @@ export function AdminCustomerFields({
     lastSearchRef.current = "";
     setSearchQuery("");
     setSuggestions([]);
-    setSuggestionsOpen(false);
     setCustomerFound(true);
+    setMode("selected");
   }
-
-  const prefillFromSearchQuery = useCallback(
-    (q: string) => {
-      if (firstName || lastName || whatsapp) return;
-
-      const trimmed = q.trim();
-      const digits = trimmed.replace(/\D/g, "");
-      const hasLetters = /[a-zA-ZÀ-ÿ]/.test(trimmed);
-
-      if (!hasLetters && digits.length >= 8) {
-        onWhatsappChange(formatWhatsapp(digits));
-        return;
-      }
-
-      if (hasLetters) {
-        const parts = trimmed.split(/\s+/).filter(Boolean);
-        onFirstNameChange(parts[0] ?? "");
-        if (parts.length > 1) {
-          onLastNameChange(parts.slice(1).join(" "));
-        }
-      }
-    },
-    [firstName, lastName, whatsapp, onFirstNameChange, onLastNameChange, onWhatsappChange]
-  );
 
   function handleWhatsappChange(raw: string) {
     const formatted = formatWhatsapp(raw);
@@ -186,12 +209,11 @@ export function AdminCustomerFields({
   const searchQueryTooShort = enabled && searchQuery.trim().length < 2;
   if (searchQueryTooShort) {
     if (suggestions.length > 0) setSuggestions([]);
-    if (suggestionsOpen) setSuggestionsOpen(false);
     if (searchLoading) setSearchLoading(false);
   }
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || mode !== "search") return;
 
     const q = searchQuery.trim();
     if (q.length < 2) return;
@@ -209,14 +231,9 @@ export function AdminCustomerFields({
           if (!result.ok) {
             toast.error(result.error);
             setSuggestions([]);
-            setSuggestionsOpen(false);
             return;
           }
           setSuggestions(result.customers);
-          setSuggestionsOpen(true);
-          if (result.customers.length === 0) {
-            prefillFromSearchQuery(q);
-          }
         })
         .catch(() => {
           if (!cancelled && mountedRef.current) {
@@ -232,10 +249,10 @@ export function AdminCustomerFields({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [searchQuery, enabled, prefillFromSearchQuery]);
+  }, [searchQuery, enabled, mode]);
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || mode !== "form") return;
     if (customerFound === true) return;
 
     const delay = whatsappLookupDelayMs(whatsapp);
@@ -269,6 +286,7 @@ export function AdminCustomerFields({
             onFirstNameChange(result.firstName);
             onLastNameChange(result.lastName);
             setCustomerFound(true);
+            setMode("selected");
           } else {
             setCustomerFound(false);
           }
@@ -288,156 +306,175 @@ export function AdminCustomerFields({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [whatsapp, enabled, customerFound, onFirstNameChange, onLastNameChange]);
-
-  function handleSearchBlur() {
-    blurTimerRef.current = setTimeout(() => {
-      setSuggestionsOpen(false);
-    }, 150);
-  }
-
-  function handleSearchFocus() {
-    if (blurTimerRef.current) {
-      clearTimeout(blurTimerRef.current);
-      blurTimerRef.current = null;
-    }
-    if (searchQuery.trim().length >= 2) {
-      setSuggestionsOpen(true);
-    }
-  }
-
-  function handleSearchChange(value: string) {
-    setSearchQuery(value);
-    if (value.trim().length >= 2) {
-      setSuggestionsOpen(true);
-    } else {
-      setSuggestionsOpen(false);
-    }
-  }
+  }, [
+    whatsapp,
+    enabled,
+    mode,
+    customerFound,
+    onFirstNameChange,
+    onLastNameChange,
+  ]);
 
   const trimmedQuery = searchQuery.trim();
-  const showDropdown =
-    suggestionsOpen && trimmedQuery.length >= 2 && customerFound !== true;
+  const showSearchResults = mode === "search" && trimmedQuery.length >= 2;
 
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="border-b bg-muted/25 px-4 py-3">
-        <p className="text-sm font-medium">Cliente</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Busque um cadastro existente ou preencha os dados abaixo.
-        </p>
-      </div>
+    <div className="space-y-4">
+      {hint ? (
+        <p className="text-sm text-muted-foreground">{hint}</p>
+      ) : null}
 
-      <div className="space-y-4 px-4 py-4">
-        <div className="relative">
-          <SearchInput
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onFocus={handleSearchFocus}
-            onBlur={handleSearchBlur}
-            placeholder="Buscar por nome ou 4 últimos dígitos..."
-          />
-
-          {showDropdown && (
-            <div
-              className="absolute left-0 right-0 top-[calc(100%+0.35rem)] z-30 overflow-hidden rounded-xl border bg-card shadow-lg"
-              onMouseDown={(e) => e.preventDefault()}
+      {mode === "selected" && (
+        <div className="booking-context space-y-3 rounded-xl border px-3.5 py-3.5">
+          <div className="flex items-start gap-3">
+            <CustomerAvatar firstName={firstName} lastName={lastName} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <Check className="size-3.5 shrink-0 text-[var(--booking-accent,#16a34a)]" />
+                <p className="text-xs font-medium text-muted-foreground">
+                  Cliente selecionado
+                </p>
+              </div>
+              <p className="mt-0.5 truncate text-base font-medium">
+                {firstName} {lastName}
+              </p>
+              <p className="text-sm tabular-nums text-muted-foreground">
+                {formatWhatsapp(whatsapp)}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="booking-btn-ghost h-8"
+              onClick={() => goToSearch({ clear: true })}
             >
+              <UserRoundSearch className="size-3.5" />
+              Buscar outro
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="booking-btn-ghost h-8"
+              onClick={() => setMode("form")}
+            >
+              Editar dados
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {mode === "search" && (
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Nome ou WhatsApp do cliente..."
+              autoComplete="off"
+              className="h-11 pl-10 pr-3 [&::-webkit-search-cancel-button]:hidden"
+            />
+          </div>
+
+          {!showSearchResults && (
+            <div className="booking-notice rounded-xl px-4 py-5 text-center">
+              <UserRoundSearch className="mx-auto size-5 opacity-80" />
+              <p className="mt-2 text-sm">
+                Digite pelo menos 2 letras ou os últimos dígitos do WhatsApp.
+              </p>
+            </div>
+          )}
+
+          {showSearchResults && (
+            <div className="overflow-hidden rounded-xl border">
               {searchLoading && suggestions.length === 0 ? (
-                <div className="flex items-center gap-2 px-4 py-3.5 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted-foreground">
                   <Loader2 className="size-4 shrink-0 animate-spin" />
-                  Buscando clientes...
+                  Buscando...
                 </div>
               ) : suggestions.length > 0 ? (
-                <>
-                  <ul className="max-h-52 overflow-y-auto">
-                    {suggestions.map((customer) => (
-                      <li key={customer.id}>
-                        <button
-                          type="button"
-                          onClick={() => selectCustomer(customer)}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
-                        >
-                          <CustomerAvatar
-                            firstName={customer.firstName}
-                            lastName={customer.lastName}
-                            className="size-9 text-[11px]"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium">
-                              {customer.firstName} {customer.lastName}
-                            </p>
-                            <p className="truncate text-xs tabular-nums text-muted-foreground">
-                              {formatWhatsapp(customer.whatsapp)}
-                            </p>
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="flex items-center gap-2 border-t bg-muted/15 px-4 py-2.5 text-sm text-muted-foreground">
-                      <UserPlus className="size-4 shrink-0" />
-                    Se não for nenhum desses, preencha os dados abaixo.
-                  </div>
-                </>
+                <ul className="max-h-52 divide-y overflow-y-auto">
+                  {suggestions.map((customer) => (
+                    <li key={customer.id}>
+                      <button
+                        type="button"
+                        onClick={() => selectCustomer(customer)}
+                        className="booking-pick flex w-full items-center gap-3 px-3.5 py-3 text-left"
+                      >
+                        <CustomerAvatar
+                          firstName={customer.firstName}
+                          lastName={customer.lastName}
+                          className="size-9 text-[11px]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">
+                            {customer.firstName} {customer.lastName}
+                          </p>
+                          <p className="truncate text-xs tabular-nums text-muted-foreground">
+                            {formatWhatsapp(customer.whatsapp)}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <div className="px-4 py-4">
-                  <p className="text-sm text-muted-foreground">
+                <div className="booking-notice rounded-none border-0 px-4 py-4 text-center">
+                  <p className="text-sm">
                     Nenhum cliente com{" "}
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium">
                       &ldquo;{trimmedQuery}&rdquo;
                     </span>
-                    .
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Continue preenchendo o cadastro abaixo.
                   </p>
                 </div>
               )}
             </div>
           )}
-        </div>
 
-        {customerFound === true && (
-          <div className="flex items-start gap-3 rounded-xl border bg-muted/25 px-3 py-3">
-            <CustomerAvatar
-              firstName={firstName}
-              lastName={lastName}
-              className="size-9 text-[11px]"
-            />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <Check className="size-3.5 text-muted-foreground" />
-                <p className="text-sm font-medium">Cliente encontrado</p>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {firstName} {lastName} · {formatWhatsapp(whatsapp)}
-              </p>
-            </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="booking-btn-ghost h-10 w-full justify-start gap-2"
+            onClick={() => goToForm()}
+          >
+            <UserPlus className="size-4" />
+            Cadastrar cliente novo
+          </Button>
+        </div>
+      )}
+
+      {mode === "form" && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 shrink-0 px-2"
-              onClick={clearAll}
+              className="booking-btn-ghost -ml-2 h-8 gap-1.5 px-2"
+              onClick={() => goToSearch({ clear: false, focus: true })}
             >
-              Limpar
+              <ArrowLeft className="size-3.5" />
+              Voltar à busca
             </Button>
-          </div>
-        )}
-
-        <div className="space-y-3 border-t pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Dados para o agendamento
-            </p>
             {lookupLoading && (
               <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Loader2 className="size-3.5 animate-spin" />
-                Verificando
+                Verificando WhatsApp
               </span>
             )}
           </div>
+
+          {customerFound === false && (
+            <div className="booking-notice rounded-xl px-3 py-2.5 text-xs">
+              WhatsApp novo — preencha nome e sobrenome para cadastrar.
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor={`${idPrefix}Whatsapp`}>WhatsApp</Label>
@@ -450,12 +487,12 @@ export function AdminCustomerFields({
                 value={whatsapp}
                 onChange={(e) => handleWhatsappChange(e.target.value)}
                 autoComplete="tel"
-                className="pl-9"
+                className="h-11 pl-9"
               />
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor={`${idPrefix}FirstName`}>Nome</Label>
               <Input
@@ -467,6 +504,7 @@ export function AdminCustomerFields({
                 }}
                 autoComplete="given-name"
                 placeholder="João"
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -480,11 +518,12 @@ export function AdminCustomerFields({
                 }}
                 autoComplete="family-name"
                 placeholder="Silva"
+                className="h-11"
               />
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,8 @@ export type AppointmentItem = {
   date: string;
   professionalId: string;
   professionalNickname: string;
+  /** Id do cliente cadastrado, quando existir. */
+  customerId?: string | null;
   customerFirstName: string;
   customerLastName: string;
   customerWhatsapp: string;

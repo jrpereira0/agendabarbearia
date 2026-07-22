@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarX2 } from "lucide-react";
+import { CalendarX2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -90,18 +90,36 @@ export function CancelAppointmentDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="flex max-h-[min(92dvh,720px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:w-full sm:max-w-md">
-        <DialogHeader className="shrink-0 border-b px-4 pb-3 pt-5 pr-12 sm:px-6 sm:pb-4 sm:pt-6">
-          <DialogTitle>{titleForKind(kind)}</DialogTitle>
+      <DialogContent
+        showCloseButton={false}
+        className="admin-booking-dialog flex max-h-[min(92dvh,720px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:w-full sm:max-w-md"
+      >
+        <button
+          type="button"
+          aria-label="Fechar"
+          onClick={handleClose}
+          className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+        >
+          <X className="size-4" strokeWidth={2} />
+        </button>
+        <DialogHeader className="booking-header shrink-0 border-b px-4 pb-3 pt-5 pr-14 sm:pl-6 sm:pr-14 sm:pb-4 sm:pt-6">
+          <DialogTitle className="booking-display text-[#f5f5f5]">
+            {titleForKind(kind)}
+          </DialogTitle>
           <DialogDescription>
             O horário some da agenda e nenhum valor entra no caixa.
-            {detailNote ? ` ${detailNote}` : null}
           </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3 sm:space-y-4 sm:px-6 sm:py-5">
+          {detailNote ? (
+            <p className="booking-notice rounded-xl px-4 py-3 text-sm">
+              {detailNote}
+            </p>
+          ) : null}
+
           {hasSummary && (
-            <div className="rounded-xl border bg-muted/20 px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="booking-context rounded-xl px-3 py-2.5 sm:px-4 sm:py-3">
               <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                 O que será cancelado
               </p>
@@ -158,11 +176,11 @@ export function CancelAppointmentDialog({
                       disabled={busy}
                       onClick={() => onReasonChange(quick)}
                       className={cn(
-                        "h-8 rounded-full border px-2.5 text-left text-xs sm:h-9 sm:px-3 sm:text-sm",
-                        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        "h-8 rounded-lg border px-2.5 text-left text-xs sm:h-9 sm:px-3 sm:text-sm",
+                        "transition-colors focus-visible:outline-none",
                         selected
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-background text-foreground hover:bg-muted/60",
+                          ? "booking-pick-active border-[rgb(236_241_94_/_55%)]"
+                          : "booking-pick",
                         busy && "opacity-50"
                       )}
                     >
@@ -191,7 +209,7 @@ export function CancelAppointmentDialog({
                     "text-xs",
                     canConfirm || trimmed.length === 0
                       ? "text-muted-foreground"
-                      : "text-destructive"
+                      : "text-[#f87171]"
                   )}
                 >
                   {charsLeft > 0
@@ -203,11 +221,11 @@ export function CancelAppointmentDialog({
           </DialogSection>
         </div>
 
-        <div className="flex shrink-0 flex-col-reverse gap-2 border-t bg-muted/20 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+        <div className="booking-footer flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:py-4">
           <Button
             type="button"
             variant="outline"
-            className="h-11 sm:h-9"
+            className="booking-btn-ghost h-11 sm:h-9"
             onClick={handleClose}
             disabled={busy}
           >
@@ -215,8 +233,7 @@ export function CancelAppointmentDialog({
           </Button>
           <Button
             type="button"
-            variant="destructive"
-            className="h-11 sm:h-9"
+            className="booking-btn-danger-solid h-11 sm:h-9"
             onClick={onConfirm}
             disabled={!canConfirm}
           >

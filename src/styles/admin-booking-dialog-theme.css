@@ -22,6 +22,7 @@
   box-shadow: 0 24px 80px rgb(0 0 0 / 55%) !important;
   color-scheme: dark;
   ring-color: transparent;
+  max-height: min(92dvh, 720px);
 }
 
 body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
@@ -132,8 +133,47 @@ body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
   color: var(--booking-accent-fg) !important;
 }
 
-.admin-booking-dialog .booking-btn-primary:disabled {
+.admin-booking-dialog .booking-btn-danger {
+  border-color: rgb(248 113 113 / 40%) !important;
+  background: transparent !important;
+  color: #f87171 !important;
+}
+
+.admin-booking-dialog .booking-btn-danger:hover:not(:disabled) {
+  background: rgb(248 113 113 / 12%) !important;
+  color: #fca5a5 !important;
+  border-color: rgb(248 113 113 / 55%) !important;
+}
+
+.admin-booking-dialog .booking-btn-danger-solid {
+  background: #dc2626 !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+.admin-booking-dialog .booking-btn-danger-solid:hover:not(:disabled) {
+  background: #ef4444 !important;
+  color: #fff !important;
+}
+
+.admin-booking-dialog .booking-btn-danger-solid:disabled {
   opacity: 0.55;
+}
+
+.admin-booking-dialog .booking-section-icon {
+  border-color: var(--booking-border) !important;
+  background: var(--booking-input) !important;
+  color: var(--booking-accent) !important;
+}
+
+.admin-booking-dialog [data-slot="dialog-title"] {
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog .size-9.rounded-md.border {
+  border-color: var(--booking-border);
+  background: var(--booking-input);
+  color: var(--booking-accent);
 }
 
 /* Tokens claros do tema global → escuros dentro do modal */

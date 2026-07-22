@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   MessageCircle,
   Pencil,
   Receipt,
   RotateCcw,
-  Scissors,
   UserRound,
+  Wallet,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { CancelAppointmentDialog } from "@/components/admin/cancel-appointment-dialog";
-import { DialogSection } from "@/components/admin/dialog-section";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import {
   ACTIVE_APPOINTMENT_STATUSES,
@@ -35,6 +35,7 @@ import {
   cancelAppointmentService,
   updateAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
+import { getCustomerAgendaSummary } from "@/app/admin/(panel)/agenda/lookup-customer-action";
 import {
   loadComandaForAppointment,
   reopenComandaAction,
@@ -122,6 +123,39 @@ export function AppointmentActionsDialog({
     number | null
   >(null);
   const [reopenComandaId, setReopenComandaId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string | null>(
+    () => appointment?.customerId ?? null
+  );
+  const [creditBalanceCents, setCreditBalanceCents] = useState(0);
+  const [customerSummaryLoading, setCustomerSummaryLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !appointment) return;
+
+    // Já vem na agenda — botão "Ver cliente" aparece na hora.
+    setCustomerId(appointment.customerId ?? null);
+
+    let cancelled = false;
+    setCustomerSummaryLoading(true);
+
+    void getCustomerAgendaSummary(appointment.customerWhatsapp).then(
+      (result) => {
+        if (cancelled) return;
+        setCustomerSummaryLoading(false);
+        if (!result.ok) {
+          if (!appointment.customerId) setCustomerId(null);
+          setCreditBalanceCents(0);
+          return;
+        }
+        setCustomerId(result.customerId ?? appointment.customerId ?? null);
+        setCreditBalanceCents(result.creditBalanceCents);
+      }
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, appointment]);
 
   if (!appointment) return null;
 
@@ -162,9 +196,6 @@ export function AppointmentActionsDialog({
   const serviceNames = cancelOnlyFocusedService
     ? focusedService!.name
     : appointment.services.map((service) => service.name).join(" · ");
-  const cancelButtonLabel = cancelOnlyFocusedService
-    ? "Cancelar este serviço"
-    : "Cancelar";
   const cancelSuccessMessage = cancelOnlyFocusedService
     ? "Serviço cancelado."
     : "Agendamento cancelado.";
@@ -272,9 +303,23 @@ export function AppointmentActionsDialog({
   return (
     <>
       <Dialog open={open && subView === "main"} onOpenChange={onOpenChange}>
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-2xl lg:max-w-3xl">
-          <DialogHeader className="gap-1 border-b px-4 pb-3 pt-5 pr-12 sm:px-6 sm:pt-6">
-            <DialogTitle>O que deseja fazer?</DialogTitle>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog flex max-h-[min(92dvh,700px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => onOpenChange(false)}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+
+          <DialogHeader className="booking-header shrink-0 gap-1 border-b px-4 pb-3 pt-5 pr-14 sm:pl-6 sm:pr-14 sm:pt-6">
+            <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+              O que deseja fazer?
+            </DialogTitle>
             <DialogDescription>
               {formatDateBR(appointment.date)} ·{" "}
               {formatTime(appointment.startTime)} –{" "}
@@ -288,93 +333,142 @@ export function AppointmentActionsDialog({
           </DialogHeader>
 
           <div className="space-y-4 px-4 py-4 sm:px-6 sm:py-5">
-            <DialogSection icon={UserRound} title="Cliente">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <p className="min-w-0 flex-1 truncate text-base font-medium">
-                    {customerName}
-                  </p>
-                  {canChangeClient && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-8 shrink-0"
-                      onClick={() => setSubView("changeClient")}
-                    >
-                      <UserRound className="size-3.5" />
-                      Trocar cliente
-                    </Button>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm tabular-nums text-muted-foreground">
+            <div className="booking-context space-y-3 rounded-xl px-3.5 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">Cliente</p>
+                  <p className="truncate text-base font-medium">{customerName}</p>
+                  <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
                     {formatWhatsapp(appointment.customerWhatsapp)}
-                  </span>
-                  <Button variant="outline" size="sm" className="h-8" asChild>
-                    <a
-                      href={whatsappLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MessageCircle className="size-3.5" />
-                      Abrir WhatsApp
-                    </a>
-                  </Button>
+                  </p>
                 </div>
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "mt-0.5 shrink-0",
+                    agendaAppointmentClass({
+                      status: appointment.status,
+                      isSqueezeIn: appointment.isSqueezeIn,
+                      isComandaExtra: appointment.isComandaExtra,
+                    })
+                  )}
+                >
+                  {STATUS_LABELS[appointment.status]}
+                </Badge>
               </div>
-            </DialogSection>
 
-            <DialogSection
-              icon={Scissors}
-              title="Atendimento"
-              description="Serviço, profissional e valores deste horário."
-            >
-              <div className="grid gap-4 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-3">
-                <DetailCell label="Barbeiro">
-                  <p className="truncate">{appointment.professionalNickname}</p>
-                </DetailCell>
+              {!customerSummaryLoading && creditBalanceCents > 0 ? (
+                <div className="flex items-center gap-2.5 rounded-lg border border-[rgb(236_241_94_/_28%)] bg-[rgb(236_241_94_/_8%)] px-3 py-2 text-sm">
+                  <Wallet className="size-4 shrink-0 text-[var(--booking-accent,#ecf15e)]" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">
+                      Crédito disponível
+                    </p>
+                    <p className="font-semibold tabular-nums text-[var(--booking-accent,#ecf15e)]">
+                      {formatPriceBRL(creditBalanceCents)}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
 
-                <DetailCell label="Status">
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "w-fit",
-                      agendaAppointmentClass({
-                        status: appointment.status,
-                        isSqueezeIn: appointment.isSqueezeIn,
-                        isComandaExtra: appointment.isComandaExtra,
-                      })
-                    )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="booking-btn-ghost h-8"
+                  asChild
+                >
+                  <a
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    {STATUS_LABELS[appointment.status]}
-                  </Badge>
-                </DetailCell>
-
-                <DetailCell label="Serviço" className="sm:col-span-2">
-                  <p className="line-clamp-2 leading-snug">{serviceNames}</p>
-                  <p className="text-muted-foreground">
-                    {formatDuration(totalMinutes)}
-                  </p>
-                </DetailCell>
-
-                <DetailCell label="Valor">
-                  <p className="text-base font-semibold tabular-nums">
-                    {formatPriceBRL(totalPrice)}
-                  </p>
-                </DetailCell>
+                    <MessageCircle className="size-3.5" />
+                    Abrir WhatsApp
+                  </a>
+                </Button>
+                {customerId ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="booking-btn-ghost h-8"
+                    asChild
+                  >
+                    <Link href={`/admin/clientes/${customerId}`}>
+                      <UserRound className="size-3.5" />
+                      Ver cliente
+                    </Link>
+                  </Button>
+                ) : null}
+                {canChangeClient && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="booking-btn-ghost h-8"
+                    onClick={() => setSubView("changeClient")}
+                  >
+                    <UserRound className="size-3.5" />
+                    Trocar cliente
+                  </Button>
+                )}
               </div>
-            </DialogSection>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3.5">
+              <DetailCell label="Barbeiro">
+                <p className="truncate font-medium">
+                  {appointment.professionalNickname}
+                </p>
+              </DetailCell>
+              <DetailCell label="Duração">
+                <p>{formatDuration(totalMinutes)}</p>
+              </DetailCell>
+              <DetailCell label="Serviços" className="col-span-2">
+                {cancelOnlyFocusedService ? (
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 leading-snug">{serviceNames}</p>
+                    <p className="shrink-0 font-medium tabular-nums">
+                      {formatPriceBRL(totalPrice)}
+                    </p>
+                  </div>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {appointment.services.map((service, index) => (
+                      <li
+                        key={`${service.id}-${index}`}
+                        className="flex items-baseline justify-between gap-3"
+                      >
+                        <span className="min-w-0 leading-snug">
+                          {service.name}
+                          <span className="ml-1.5 text-xs text-muted-foreground">
+                            {formatDuration(service.durationMinutes)}
+                          </span>
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {formatPriceBRL(service.priceCents)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </DetailCell>
+              <DetailCell label="Valor total" className="col-span-2">
+                <p className="text-base font-semibold tabular-nums">
+                  {formatPriceBRL(totalPrice)}
+                </p>
+              </DetailCell>
+            </div>
           </div>
 
-          <div className="border-t bg-muted/20 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap gap-2">
-                {canOpenComanda && (
+          <div className="booking-footer shrink-0 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-3.5">
+            <div className="flex flex-wrap gap-2">
+              {canOpenComanda && (
                 <Button
                   type="button"
                   size="sm"
-                  className="h-9"
+                  className="booking-btn-primary h-9 flex-1 sm:flex-none"
                   disabled={busy}
                   onClick={() => {
                     onOpenChange(false);
@@ -382,63 +476,58 @@ export function AppointmentActionsDialog({
                   }}
                 >
                   <Receipt className="size-4" />
-                  {comandaClosed ? "Ver comanda fechada" : isActive ? "Abrir comanda" : "Ver comanda"}
+                  {comandaClosed
+                    ? "Ver comanda"
+                    : isActive
+                      ? "Abrir comanda"
+                      : "Ver comanda"}
                 </Button>
-                )}
+              )}
 
-                {isOwner && comandaClosed && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    disabled={busy}
-                    onClick={() => void handleReopenComanda()}
-                  >
-                    <RotateCcw className="size-4" />
-                    Reabrir comanda
-                  </Button>
-                )}
+              {isOwner && comandaClosed && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="booking-btn-ghost h-9"
+                  disabled={busy}
+                  onClick={() => void handleReopenComanda()}
+                >
+                  <RotateCcw className="size-4" />
+                  Reabrir comanda
+                </Button>
+              )}
 
-                {canEdit && isActive && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9"
-                    onClick={() => {
-                      onOpenChange(false);
-                      onEditAppointment();
-                    }}
-                  >
-                    <Pencil className="size-4" />
-                    Editar
-                  </Button>
-                )}
+              {canEdit && isActive && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="booking-btn-ghost h-9"
+                  onClick={() => {
+                    onOpenChange(false);
+                    onEditAppointment();
+                  }}
+                >
+                  <Pencil className="size-4" />
+                  Editar
+                </Button>
+              )}
 
-                {canCancel && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-destructive hover:text-destructive"
-                    onClick={() => setSubView("cancel")}
-                  >
-                    <X className="size-4" />
-                    {cancelButtonLabel}
-                  </Button>
-                )}
-              </div>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 w-full sm:w-auto"
-                onClick={() => onOpenChange(false)}
-              >
-                Fechar
-              </Button>
+              {canCancel && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="booking-btn-danger h-9"
+                  onClick={() => setSubView("cancel")}
+                >
+                  <X className="size-4" />
+                  {cancelOnlyFocusedService
+                    ? "Cancelar este serviço"
+                    : "Cancelar"}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -481,15 +570,31 @@ export function AppointmentActionsDialog({
           if (!next) setSubView("main");
         }}
       >
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
-          <DialogHeader className="border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
-            <DialogTitle>Trocar cliente</DialogTitle>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog flex max-h-[min(92dvh,700px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setSubView("main")}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header shrink-0 gap-1 border-b px-4 pb-3 pt-5 pr-14 sm:pl-6 sm:pr-14 sm:pt-6">
+            <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+              Trocar cliente
+            </DialogTitle>
             <DialogDescription>
-              Atualiza nome e WhatsApp deste agendamento.
+              Busque um cadastro ou registre alguém novo neste horário.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleChangeClient}>
-            <div className="px-4 py-4 sm:px-6 sm:py-5">
+          <form
+            onSubmit={handleChangeClient}
+            className="flex min-h-0 flex-1 flex-col"
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
               <AdminCustomerFields
                 firstName={firstName}
                 lastName={lastName}
@@ -499,19 +604,25 @@ export function AppointmentActionsDialog({
                 onWhatsappChange={setWhatsapp}
                 enabled={open && subView === "changeClient"}
                 idPrefix="changeClient"
+                hint="O cliente atual fica selecionado. Use Buscar outro para trocar."
               />
             </div>
-            <div className="flex flex-col-reverse gap-2 border-t bg-muted/20 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+            <div className="booking-footer flex shrink-0 flex-col-reverse gap-2 border-t px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:px-6 sm:py-4">
               <Button
                 type="button"
                 variant="outline"
+                className="booking-btn-ghost"
                 onClick={() => setSubView("main")}
                 disabled={busy}
               >
                 Voltar
               </Button>
-              <Button type="submit" disabled={busy}>
-                {busy ? "Salvando..." : "Salvar cliente"}
+              <Button
+                type="submit"
+                className="booking-btn-primary"
+                disabled={busy}
+              >
+                {busy ? "Salvando..." : "Confirmar cliente"}
               </Button>
             </div>
           </form>
@@ -527,12 +638,14 @@ export function AppointmentActionsDialog({
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="admin-booking-dialog rounded-2xl ring-0 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Crédito já foi usado</DialogTitle>
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Crédito já foi usado
+            </DialogTitle>
             <DialogDescription>
               Esta comanda gerou crédito e o cliente já usou{" "}
-              <strong>
+              <strong className="text-[#f5f5f5]">
                 {formatPriceBRL(confirmCreditShortfallCents ?? 0)}
               </strong>{" "}
               em outro atendimento. Esse valor gasto não volta. Já o crédito
@@ -543,6 +656,7 @@ export function AppointmentActionsDialog({
             <Button
               type="button"
               variant="outline"
+              className="booking-btn-ghost"
               disabled={busy}
               onClick={() => {
                 setConfirmCreditShortfallCents(null);
@@ -553,6 +667,7 @@ export function AppointmentActionsDialog({
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary"
               disabled={busy}
               onClick={() => void handleReopenComanda(true)}
             >
