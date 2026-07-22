@@ -130,7 +130,7 @@ export function AgendaGrid({
   return (
     <div
       className={cn(
-        "agenda-grid-shell min-h-0 overflow-auto rounded-2xl border",
+        "agenda-grid-shell overflow-x-auto rounded-2xl border",
         gridLineOuter,
         className
       )}

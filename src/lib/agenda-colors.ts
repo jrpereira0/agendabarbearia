@@ -20,7 +20,8 @@ export const agendaStatusBarColor: Record<
 export const agendaLegend = {
   free: "border border-white/12 bg-[#0e0f11]",
   outside: "bg-[#1c1d21]",
-  blocked: "bg-[#18191c] ring-1 ring-white/10",
+  /** Bloqueio — fundo oliváceo + barra da marca (bem distinto do cinza) */
+  blocked: "agenda-cell-blocked border-l-[5px] border-l-[#ecf15e] bg-[#24261a]",
   occupied: "bg-[#0e0f11]",
   scheduled: "bg-[#eef2a3]",
   confirmed: "bg-[#c5e4ea]",

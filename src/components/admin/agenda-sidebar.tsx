@@ -342,7 +342,7 @@ export function AgendaSidebar({
   displayDate,
   isNavigating = false,
 }: AgendaSidebarProps) {
-  const [legendOpen, setLegendOpen] = useState(true);
+  const [legendOpen, setLegendOpen] = useState(false);
   const shownDate = displayDate ?? date;
 
   if (layout === "mobile") {

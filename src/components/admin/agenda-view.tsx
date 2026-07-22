@@ -275,14 +275,9 @@ function AgendaMainContent({
       : dayContext.professionals.filter((p) => p.id === focusProfessionalId);
 
   return (
-    <div
-      className={cn(
-        "flex min-h-0 flex-col",
-        mobileLayout ? "h-full" : "flex-1"
-      )}
-    >
+    <div>
       {dayContext.shopClosed ? (
-        <div className="agenda-closed-banner mb-4 shrink-0 rounded-lg border border-dashed p-6 text-center text-sm">
+        <div className="agenda-closed-banner mb-4 rounded-lg border border-dashed p-6 text-center text-sm">
           A barbearia está fechada neste dia.
         </div>
       ) : null}
@@ -298,7 +293,6 @@ function AgendaMainContent({
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
         mobileLayout={mobileLayout}
-        className="min-h-0 flex-1"
       />
     </div>
   );
@@ -508,7 +502,7 @@ export function AgendaView({
 
   return (
     <div className="admin-agenda -m-4 md:-m-8 min-h-full">
-      {/* Mobile: grade com altura fixa e scroll próprio; calendário e extras rolam com a página */}
+      {/* Mobile */}
       <div className="flex flex-col lg:hidden">
         <AgendaToolbar {...toolbarProps} mobile />
 
@@ -560,7 +554,7 @@ export function AgendaView({
           </p>
         ) : null}
 
-        <div className="h-[min(62dvh,calc(100dvh-14rem))] min-h-[240px] shrink-0 overflow-hidden px-4 py-3">
+        <div className="px-4 py-3">
           {isNavigating ? (
             gridSkeleton
           ) : (
@@ -577,11 +571,11 @@ export function AgendaView({
         </div>
       </div>
 
-      {/* Desktop: grade fixa à esquerda; painel à direita */}
+      {/* Desktop: grade e painel rolam com a página */}
       <div className="hidden lg:flex lg:items-start lg:gap-5 lg:p-5 xl:gap-6 xl:p-6">
-        <section className="agenda-main-frame sticky top-0 flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border">
+        <section className="agenda-main-frame min-w-0 flex-1 rounded-2xl border">
           <AgendaToolbar {...toolbarProps} />
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-5 pt-4 xl:px-5">
+          <div className="px-4 pb-5 pt-4 xl:px-5">
             {isNavigating ? (
               gridSkeleton
             ) : (

@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
 import { LOGIN_PATH, loginUrl } from "@/lib/login-path";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppSidebar } from "@/components/admin/app-sidebar";
 import { AdminMobileMenu } from "@/components/admin/admin-mobile-menu";
 import { AdminSidebarToggle } from "@/components/admin/admin-sidebar-toggle";
+import { AdminPanelContent } from "@/components/admin/admin-panel-content";
+import { AdminPanelInset } from "@/components/admin/admin-panel-inset";
 
 // Painel exige sessão e banco: não pré-renderiza no build da Vercel.
 export const dynamic = "force-dynamic";
@@ -48,13 +50,11 @@ export default async function AdminLayout({
           userName={profile?.full_name || "Usuário"}
           userEmail={user.email ?? ""}
         />
-        <SidebarInset className="flex min-h-svh flex-col">
+        <AdminPanelInset>
           <AdminSidebarToggle />
           <AdminMobileMenu />
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 md:p-8">
-            {children}
-          </div>
-        </SidebarInset>
+          <AdminPanelContent>{children}</AdminPanelContent>
+        </AdminPanelInset>
       </SidebarProvider>
     </TooltipProvider>
   );
