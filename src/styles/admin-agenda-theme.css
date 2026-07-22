@@ -145,6 +145,10 @@
   color: #f0f1e8;
 }
 
+.admin-agenda .agenda-mobile-actions {
+  border-color: var(--agenda-border);
+}
+
 .admin-agenda .agenda-main-frame {
   border-color: var(--agenda-border);
   background: var(--agenda-bg);

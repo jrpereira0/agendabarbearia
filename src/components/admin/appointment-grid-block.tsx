@@ -126,6 +126,13 @@ export function AppointmentGridBlock({
   const endTime = formatTime(apt.endTime);
   const sideBySide = columnCount > 1;
   const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
+  const showService = rowSpan >= 2 && !sideBySide;
+  const serviceLabel =
+    apt.services.length === 0
+      ? null
+      : apt.services.length === 1
+        ? apt.services[0]!.name
+        : `${apt.services[0]!.name} +${apt.services.length - 1}`;
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
 
   const blockButton = (
@@ -177,6 +184,16 @@ export function AppointmentGridBlock({
         >
           {name}
         </p>
+        {showService && serviceLabel ? (
+          <p
+            className={cn(
+              "truncate leading-none opacity-75",
+              tight ? "text-[9px]" : "text-[10px]"
+            )}
+          >
+            {serviceLabel}
+          </p>
+        ) : null}
         <p
           className={cn(
             "truncate leading-none tabular-nums opacity-85",

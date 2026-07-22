@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, CircleHelp } from "lucide-react";
 import { AgendaMiniCalendar } from "@/components/admin/agenda-mini-calendar";
 import { ScheduleBlocksPanel } from "@/components/admin/schedule-blocks-panel";
 import { agendaLegend } from "@/lib/agenda-colors";
@@ -13,6 +13,14 @@ import {
 import { formatDateBR } from "@/lib/format";
 import type { ScheduleBlockItem } from "@/lib/get-agenda-day";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type AgendaSidebarProps = {
   date: string;
@@ -25,7 +33,7 @@ type AgendaSidebarProps = {
   professionals: { id: string; nickname: string }[];
   onDateChange: (date: string) => void;
   layout?: "desktop" | "mobile";
-  mobileSection?: "date" | "tools";
+  mobileSection?: "date" | "tools" | "more";
   displayDate?: string;
   isNavigating?: boolean;
 };
@@ -215,6 +223,34 @@ function LegendGrid({ compact }: { compact?: boolean }) {
   );
 }
 
+function LegendHelpButton({ compact }: { compact?: boolean }) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            "inline-flex items-center gap-1.5 text-[var(--agenda-muted,#8b8d93)] transition-colors hover:text-[var(--agenda-accent,#ecf15e)]",
+            compact ? "text-xs" : "text-[13px]"
+          )}
+        >
+          <CircleHelp className="size-3.5" strokeWidth={2} />
+          Cores da agenda
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[min(85dvh,560px)] overflow-y-auto border-white/10 bg-[#151618] text-[#f5f5f5] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="agenda-display">Legenda</DialogTitle>
+          <DialogDescription className="text-[var(--agenda-muted,#8b8d93)]">
+            Cores da grade, status e origem do agendamento.
+          </DialogDescription>
+        </DialogHeader>
+        <LegendGrid />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function AgendaMobileDateSection({
   date,
   displayDate,
@@ -300,7 +336,7 @@ function AgendaMobileToolsSection({
     <div className="flex flex-col gap-2.5">
       {canManageScheduleBlocks && (
         <CollapsiblePanel
-          title="Bloqueios do dia"
+          title="Bloqueios"
           subtitle={blocksLabel}
           defaultOpen={false}
         >
@@ -316,13 +352,81 @@ function AgendaMobileToolsSection({
         </CollapsiblePanel>
       )}
 
-      <CollapsiblePanel
-        title="Legenda"
-        subtitle="Cores da grade e origem"
-        defaultOpen={false}
-      >
-        <LegendGrid compact />
-      </CollapsiblePanel>
+      <div className="px-1 py-1">
+        <LegendHelpButton compact />
+      </div>
+    </div>
+  );
+}
+
+function AgendaMobileMoreSection({
+  date,
+  displayDate,
+  today,
+  scheduleBlocks,
+  professionals,
+  isOwner,
+  professionalId,
+  slotStepMinutes,
+  canManageScheduleBlocks,
+  onDateChange,
+  isNavigating = false,
+}: Pick<
+  AgendaSidebarProps,
+  | "date"
+  | "displayDate"
+  | "today"
+  | "scheduleBlocks"
+  | "professionals"
+  | "isOwner"
+  | "professionalId"
+  | "slotStepMinutes"
+  | "canManageScheduleBlocks"
+  | "onDateChange"
+  | "isNavigating"
+>) {
+  const shownDate = displayDate ?? date;
+  const blocksLabel =
+    scheduleBlocks.length === 0
+      ? "Nenhum bloqueio hoje"
+      : `${scheduleBlocks.length} bloqueio${scheduleBlocks.length === 1 ? "" : "s"} hoje`;
+
+  return (
+    <div className="flex flex-col gap-3 pt-2">
+      <div className="agenda-panel rounded-2xl border p-3.5">
+        <p className="agenda-display mb-2.5 text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
+          Calendário
+        </p>
+        <AgendaMiniCalendar
+          selectedDate={shownDate}
+          today={today}
+          loading={isNavigating}
+          onSelectDate={onDateChange}
+          compact
+        />
+      </div>
+
+      {canManageScheduleBlocks && (
+        <CollapsiblePanel
+          title="Bloqueios"
+          subtitle={blocksLabel}
+          defaultOpen={scheduleBlocks.length > 0}
+        >
+          <ScheduleBlocksPanel
+            date={date}
+            blocks={scheduleBlocks}
+            professionals={professionals}
+            isOwner={isOwner}
+            defaultProfessionalId={professionalId}
+            slotStepMinutes={slotStepMinutes}
+            compact
+          />
+        </CollapsiblePanel>
+      )}
+
+      <div className="px-1 py-1">
+        <LegendHelpButton compact />
+      </div>
     </div>
   );
 }
@@ -342,10 +446,27 @@ export function AgendaSidebar({
   displayDate,
   isNavigating = false,
 }: AgendaSidebarProps) {
-  const [legendOpen, setLegendOpen] = useState(false);
   const shownDate = displayDate ?? date;
 
   if (layout === "mobile") {
+    if (mobileSection === "more") {
+      return (
+        <AgendaMobileMoreSection
+          date={date}
+          displayDate={displayDate}
+          today={today}
+          scheduleBlocks={scheduleBlocks}
+          professionals={professionals}
+          isOwner={isOwner}
+          professionalId={professionalId}
+          slotStepMinutes={slotStepMinutes}
+          canManageScheduleBlocks={canManageScheduleBlocks}
+          onDateChange={onDateChange}
+          isNavigating={isNavigating}
+        />
+      );
+    }
+
     if (mobileSection === "date") {
       return (
         <AgendaMobileDateSection
@@ -389,7 +510,7 @@ export function AgendaSidebar({
 
       {canManageScheduleBlocks && (
         <div className="agenda-panel rounded-2xl border p-3.5">
-          <div className="mb-3 flex items-center justify-between gap-2">
+          <div className="mb-2.5 flex items-center justify-between gap-2">
             <p className="agenda-display text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
               Bloqueios
             </p>
@@ -410,30 +531,8 @@ export function AgendaSidebar({
         </div>
       )}
 
-      <div className="agenda-panel rounded-2xl border p-4">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 text-left"
-          onClick={() => setLegendOpen((open) => !open)}
-          aria-expanded={legendOpen}
-          aria-controls="agenda-legend-list"
-        >
-          <span className="agenda-display text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
-            Legenda
-          </span>
-          <ChevronDown
-            className={cn(
-              "size-4 shrink-0 text-[var(--agenda-muted,#8b8d93)] transition-transform duration-200",
-              legendOpen && "rotate-180"
-            )}
-            aria-hidden
-          />
-        </button>
-        {legendOpen && (
-          <div id="agenda-legend-list" className="mt-3.5">
-            <LegendGrid />
-          </div>
-        )}
+      <div className="px-1">
+        <LegendHelpButton />
       </div>
     </aside>
   );

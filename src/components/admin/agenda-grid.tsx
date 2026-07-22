@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   buildTimeSlots,
@@ -11,7 +11,11 @@ import {
   shouldShowTimeLabel,
   timeLabel,
 } from "@/lib/agenda-grid-utils";
-import { minuteRangeOverlaps, timeToMinutes } from "@/lib/availability";
+import {
+  minuteRangeOverlaps,
+  nowMinutesInTimezone,
+  timeToMinutes,
+} from "@/lib/availability";
 import { AppointmentGridBlock } from "@/components/admin/appointment-grid-block";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
@@ -26,6 +30,8 @@ import {
 import type { AgendaProfessionalColumn } from "@/lib/get-agenda-day";
 
 type AgendaGridProps = {
+  date: string;
+  today: string;
   gridStart: number;
   gridEnd: number;
   slotStepMinutes: number;
@@ -52,6 +58,8 @@ function slotLineClass(minute: number): string {
 }
 
 export function AgendaGrid({
+  date,
+  today,
   gridStart,
   gridEnd,
   slotStepMinutes,
@@ -65,6 +73,7 @@ export function AgendaGrid({
   className,
 }: AgendaGridProps) {
   const [hoverMinute, setHoverMinute] = useState<number | null>(null);
+  const [nowMinutes, setNowMinutes] = useState<number | null>(null);
 
   const rowHeight = mobileLayout
     ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
@@ -74,6 +83,35 @@ export function AgendaGrid({
     () => buildTimeSlots(gridStart, gridEnd, slotStepMinutes),
     [gridStart, gridEnd, slotStepMinutes]
   );
+
+  useEffect(() => {
+    if (date !== today) {
+      setNowMinutes(null);
+      return;
+    }
+
+    function tick() {
+      setNowMinutes(nowMinutesInTimezone());
+    }
+
+    tick();
+    const id = window.setInterval(tick, 30_000);
+    return () => window.clearInterval(id);
+  }, [date, today]);
+
+  const nowLine = useMemo(() => {
+    if (nowMinutes == null) return null;
+    if (nowMinutes < gridStart || nowMinutes >= gridEnd) return null;
+    const fromStart = nowMinutes - gridStart;
+    const slotIndex = Math.floor(fromStart / slotStepMinutes);
+    const offset =
+      ((fromStart % slotStepMinutes) / slotStepMinutes) * rowHeight;
+    return {
+      row: slotIndex + 2,
+      offset,
+      label: timeLabel(nowMinutes),
+    };
+  }, [nowMinutes, gridStart, gridEnd, slotStepMinutes, rowHeight]);
 
   const appointmentsByPro = useMemo(() => {
     const map = new Map<string, AppointmentItem[]>();
@@ -113,6 +151,7 @@ export function AgendaGrid({
   }
 
   const footerRow = timeSlots.length + 2;
+  const compactProHeader = mobileLayout && professionals.length === 1;
 
   const colMin = mobileLayout
     ? professionals.length === 1
@@ -121,7 +160,9 @@ export function AgendaGrid({
     : "minmax(7.5rem, 1fr)";
 
   const gridStyle = {
-    gridTemplateColumns: `3.25rem repeat(${professionals.length}, ${colMin})`,
+    gridTemplateColumns: compactProHeader
+      ? `3rem minmax(0, 1fr)`
+      : `3.25rem repeat(${professionals.length}, ${colMin})`,
     gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 
@@ -130,17 +171,21 @@ export function AgendaGrid({
   return (
     <div
       className={cn(
-        "agenda-grid-shell overflow-x-auto rounded-2xl border",
+        "agenda-grid-shell rounded-2xl border",
+        compactProHeader ? "overflow-visible" : "overflow-x-auto",
         gridLineOuter,
         className
       )}
       onMouseLeave={() => setHoverMinute(null)}
     >
-      <div className="grid min-w-max" style={gridStyle}>
-        {/* Cabeçalho fixo no scroll vertical */}
+      <div
+        className={cn("relative grid", compactProHeader ? "w-full" : "min-w-max")}
+        style={gridStyle}
+      >
         <div
           className={cn(
-            "agenda-grid-header agenda-grid-pro-header sticky top-0 left-0 z-50 border-b",
+            "agenda-grid-header agenda-grid-pro-header border-b",
+            !compactProHeader && "sticky top-0 left-0 z-50",
             gridLineHour
           )}
           style={{ gridRow: 1, gridColumn: 1 }}
@@ -149,9 +194,13 @@ export function AgendaGrid({
           <div
             key={pro.id}
             className={cn(
-              "agenda-grid-header agenda-grid-pro-header sticky top-0 z-50 flex flex-col items-center gap-2 border-b border-l px-2 py-2.5",
+              "agenda-grid-header agenda-grid-pro-header border-b border-l",
+              !compactProHeader && "sticky top-0 z-50",
               gridLineHour,
-              gridLineColumn
+              gridLineColumn,
+              compactProHeader
+                ? "flex flex-row items-center gap-2.5 px-3 py-2"
+                : "flex flex-col items-center gap-2 px-2 py-2.5"
             )}
             style={{ gridRow: 1, gridColumn: i + 2 }}
           >
@@ -159,9 +208,16 @@ export function AgendaGrid({
               photoUrl={pro.photoUrl}
               photoPosition={pro.photoPosition}
               name={pro.nickname}
-              size="md"
+              size={compactProHeader ? "sm" : "md"}
             />
-            <span className="line-clamp-2 text-center text-sm font-medium">
+            <span
+              className={cn(
+                "font-medium",
+                compactProHeader
+                  ? "truncate text-sm"
+                  : "line-clamp-2 text-center text-sm"
+              )}
+            >
               {pro.nickname}
             </span>
           </div>
@@ -178,6 +234,7 @@ export function AgendaGrid({
               row={row}
               isLast={isLast}
               isHovered={hoverMinute === minute}
+              stickyTimeColumn={!compactProHeader}
               slotStepMinutes={slotStepMinutes}
               professionals={professionals}
               appointmentsByPro={appointmentsByPro}
@@ -189,34 +246,64 @@ export function AgendaGrid({
           );
         })}
 
+        {nowLine ? (
+          <div
+            className="pointer-events-none z-40"
+            style={{
+              gridColumn: `1 / -1`,
+              gridRow: nowLine.row,
+              marginTop: nowLine.offset,
+              height: 0,
+            }}
+            aria-hidden
+          >
+            <div className="relative flex items-center">
+              <span className="absolute -left-0.5 z-10 -translate-y-1/2 rounded-full bg-[var(--agenda-accent,#ecf15e)] px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--agenda-accent-fg,#0e0f11)] shadow-sm">
+                {nowLine.label}
+              </span>
+              <div className="ml-10 h-px w-full bg-[var(--agenda-accent,#ecf15e)] shadow-[0_0_8px_rgb(236_241_94_/_45%)]" />
+            </div>
+          </div>
+        ) : null}
+
         <div
-          className="agenda-grid-header relative sticky left-0 z-30"
+          className={cn(
+            "agenda-grid-header relative",
+            !compactProHeader && "sticky left-0 z-30"
+          )}
           style={{ gridRow: footerRow, gridColumn: 1 }}
         >
           <span className="absolute top-1.5 right-1.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
             {timeLabel(gridEnd)}
           </span>
         </div>
-        {professionals.map((pro, i) => (
+        {!compactProHeader &&
+          professionals.map((pro, i) => (
+            <div
+              key={`foot-${pro.id}`}
+              className={cn(
+                "agenda-grid-header flex flex-col items-center gap-1.5 border-l px-2 py-2",
+                gridLineColumn
+              )}
+              style={{ gridRow: footerRow, gridColumn: i + 2 }}
+            >
+              <ProfessionalAvatar
+                photoUrl={pro.photoUrl}
+                photoPosition={pro.photoPosition}
+                name={pro.nickname}
+                size="sm"
+              />
+              <span className="line-clamp-1 text-center text-xs text-[var(--agenda-muted,#8b8d93)]">
+                {pro.nickname}
+              </span>
+            </div>
+          ))}
+        {compactProHeader ? (
           <div
-            key={`foot-${pro.id}`}
-            className={cn(
-              "agenda-grid-header flex flex-col items-center gap-1.5 border-l px-2 py-2",
-              gridLineColumn
-            )}
-            style={{ gridRow: footerRow, gridColumn: i + 2 }}
-          >
-            <ProfessionalAvatar
-              photoUrl={pro.photoUrl}
-              photoPosition={pro.photoPosition}
-              name={pro.nickname}
-              size="sm"
-            />
-            <span className="line-clamp-1 text-center text-xs text-[var(--agenda-muted,#8b8d93)]">
-              {pro.nickname}
-            </span>
-          </div>
-        ))}
+            className={cn("agenda-grid-header border-l", gridLineColumn)}
+            style={{ gridRow: footerRow, gridColumn: 2 }}
+          />
+        ) : null}
 
         {visibleAppointments.map((apt) => {
           const col = proColumnIndex.get(apt.professionalId);
@@ -280,6 +367,7 @@ type TimeSlotCellsProps = {
   row: number;
   isLast: boolean;
   isHovered: boolean;
+  stickyTimeColumn?: boolean;
   slotStepMinutes: number;
   professionals: AgendaProfessionalColumn[];
   appointmentsByPro: Map<string, AppointmentItem[]>;
@@ -294,6 +382,7 @@ function TimeSlotCells({
   row,
   isLast,
   isHovered,
+  stickyTimeColumn = true,
   slotStepMinutes,
   professionals,
   appointmentsByPro,
@@ -306,7 +395,8 @@ function TimeSlotCells({
     <>
       <div
         className={cn(
-          "agenda-grid-header relative sticky left-0 z-20",
+          "agenda-grid-header relative",
+          stickyTimeColumn && "sticky left-0 z-20",
           slotLineClass(minute),
           isLast && `border-b border-solid ${gridLineHour}`,
           isHovered && "bg-[rgb(236_241_94_/_10%)]"

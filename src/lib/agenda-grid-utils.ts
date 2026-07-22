@@ -78,6 +78,24 @@ export function formatAgendaHeaderDate(isoDate: string): string {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
+/** Partes tipográficas do cabeçalho da agenda. */
+export function formatAgendaHeaderParts(isoDate: string): {
+  weekday: string;
+  dayMonth: string;
+} {
+  const base = new Date(`${isoDate}T00:00:00`);
+  const weekday = base.toLocaleDateString("pt-BR", { weekday: "long" });
+  const dayMonth = base.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+  return {
+    weekday: weekday.charAt(0).toUpperCase() + weekday.slice(1),
+    dayMonth,
+  };
+}
+
 export function timeLabel(minute: number): string {
   return minutesToTime(minute);
 }
