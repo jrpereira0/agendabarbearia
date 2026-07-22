@@ -9,16 +9,7 @@ type BookingPageProps = {
 
 export function BookingPage({ catalog, today }: BookingPageProps) {
   return (
-    <div className="booking-theme relative min-h-dvh overflow-x-hidden">
-      <div
-        aria-hidden
-        className="booking-glow pointer-events-none absolute inset-x-0 top-0 h-[40vh]"
-      />
-      <div
-        aria-hidden
-        className="booking-grid pointer-events-none absolute inset-x-0 top-0 h-[35vh]"
-      />
-
+    <div className="booking-theme relative h-dvh overflow-hidden">
       <BookingSection catalog={catalog} today={today} />
     </div>
   );

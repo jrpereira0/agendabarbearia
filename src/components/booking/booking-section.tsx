@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { CalendarClock, CalendarPlus, MapPinned } from "lucide-react";
+import { BrandMark } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 import { BookingFlow } from "@/components/booking/booking-flow";
 import { MyAppointments } from "@/components/booking/my-appointments";
@@ -39,6 +41,7 @@ function modeFromHash(hash: string): Mode {
 
 export function BookingSection({ catalog, today }: BookingSectionProps) {
   const [mode, setMode] = useState<Mode>("book");
+  const shop = catalog.shop;
 
   useEffect(() => {
     function syncFromHash() {
@@ -58,32 +61,63 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
       "",
       tab?.hash ?? window.location.pathname
     );
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="booking-app-shell flex h-dvh flex-col overflow-hidden">
+      <header className="relative z-20 shrink-0 border-b border-white/10 bg-[#0e0f11]/92 pt-[env(safe-area-inset-top)] backdrop-blur-md">
+        <div className="flex h-12 items-center gap-2.5 px-4">
+          {shop.logoUrl ? (
+            <div className="relative size-7 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#151618]">
+              <Image
+                src={shop.logoUrl}
+                alt=""
+                fill
+                className="object-contain p-0.5"
+                sizes="28px"
+                unoptimized={shop.logoUrl.startsWith("/")}
+                priority
+              />
+            </div>
+          ) : (
+            <BrandMark className="size-7 shrink-0" />
+          )}
+          <p className="min-w-0 truncate text-sm font-semibold tracking-tight">
+            {shop.name}
+          </p>
+        </div>
+      </header>
+
       <main
         id="agendar"
-        className="relative z-10 mx-auto w-full max-w-lg flex-1 px-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-6"
+        className="relative z-10 mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col"
       >
-        <div id="meus-agendamentos" className="scroll-mt-4">
+        <div id="meus-agendamentos" className="flex min-h-0 flex-1 flex-col">
           <div
-            className={mode === "book" ? "block" : "hidden"}
+            className={cn(
+              "min-h-0 flex-1 flex-col",
+              mode === "book" ? "flex" : "hidden"
+            )}
             aria-hidden={mode !== "book"}
             inert={mode !== "book" ? true : undefined}
           >
             <BookingFlow catalog={catalog} today={today} />
           </div>
           <div
-            className={mode === "manage" ? "block" : "hidden"}
+            className={cn(
+              "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+              mode === "manage" ? "flex" : "hidden"
+            )}
             aria-hidden={mode !== "manage"}
             inert={mode !== "manage" ? true : undefined}
           >
             <MyAppointments catalog={catalog} today={today} />
           </div>
           <div
-            className={mode === "info" ? "block" : "hidden"}
+            className={cn(
+              "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+              mode === "info" ? "flex" : "hidden"
+            )}
             aria-hidden={mode !== "info"}
             inert={mode !== "info" ? true : undefined}
           >
@@ -97,9 +131,9 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
 
       <nav
         aria-label="Menu principal"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-[#0e0f11]/95 backdrop-blur-md"
+        className="relative z-20 shrink-0 border-t border-white/10 bg-[#0e0f11]/96 backdrop-blur-md"
       >
-        <div className="mx-auto grid max-w-lg grid-cols-3 px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1.5">
+        <div className="mx-auto grid max-w-lg grid-cols-3 px-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = mode === tab.id;
@@ -109,21 +143,18 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
                 type="button"
                 onClick={() => selectMode(tab.id)}
                 className={cn(
-                  "flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[11px] font-medium transition-colors",
+                  "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium tracking-wide transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <span
-                  className={cn(
-                    "flex size-9 items-center justify-center rounded-xl transition-colors",
-                    active ? "bg-primary/15 text-primary" : "text-current"
-                  )}
-                >
-                  <Icon className="size-[1.15rem]" strokeWidth={active ? 2.25 : 1.75} />
-                </span>
-                {tab.label}
+                <Icon
+                  className="size-5"
+                  strokeWidth={active ? 2.35 : 1.7}
+                  absoluteStrokeWidth={false}
+                />
+                <span>{tab.label}</span>
               </button>
             );
           })}

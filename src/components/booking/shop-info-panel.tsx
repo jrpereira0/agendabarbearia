@@ -65,44 +65,42 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
   const hasContact = Boolean(shop.whatsapp || instagram);
 
   return (
-    <div className="overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]">
-      <div className="border-b border-white/10 px-4 py-5 sm:px-5">
-        <div className="flex items-center gap-3.5">
-          {shop.logoUrl ? (
-            <div className="relative size-14 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#0e0f11]">
-              <Image
-                src={shop.logoUrl}
-                alt={shop.name}
-                fill
-                className="object-contain p-1.5"
-                sizes="56px"
-                unoptimized={shop.logoUrl.startsWith("/")}
-                priority
-              />
-            </div>
-          ) : (
-            <BrandMark className="size-14 shrink-0" />
-          )}
-          <div className="min-w-0">
-            <h2 className="booking-display text-xl font-medium tracking-tight">
-              {shop.name}
-            </h2>
-            {shop.bio?.trim() ? (
-              <p className="mt-1 text-sm text-muted-foreground">{shop.bio.trim()}</p>
-            ) : null}
+    <div className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-4">
+      <div className="flex items-center gap-3.5">
+        {shop.logoUrl ? (
+          <div className="relative size-14 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-[#151618]">
+            <Image
+              src={shop.logoUrl}
+              alt={shop.name}
+              fill
+              className="object-contain p-1.5"
+              sizes="56px"
+              unoptimized={shop.logoUrl.startsWith("/")}
+              priority
+            />
           </div>
+        ) : (
+          <BrandMark className="size-14 shrink-0" />
+        )}
+        <div className="min-w-0">
+          <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+            {shop.name}
+          </h2>
+          {shop.bio?.trim() ? (
+            <p className="mt-1 text-sm text-muted-foreground">{shop.bio.trim()}</p>
+          ) : null}
         </div>
       </div>
 
-      <div className="flex flex-col gap-4 px-4 py-5 sm:px-5">
+      <div className="mt-5 flex flex-col gap-3">
         {hoursSummary ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
+          <div className="rounded-2xl bg-white/[0.04] px-4 py-3.5">
             <div className="flex items-start gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
                 <Clock className="size-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Horário
                 </p>
                 <p className="mt-1 text-sm leading-relaxed">{hoursSummary}</p>
@@ -112,13 +110,13 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
         ) : null}
 
         {shop.address ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
+          <div className="rounded-2xl bg-white/[0.04] px-4 py-3.5">
             <div className="flex items-start gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/10">
                 <MapPin className="size-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                   Endereço
                 </p>
                 <p className="mt-1 text-sm leading-relaxed">{shop.address}</p>
@@ -136,17 +134,17 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
         ) : null}
 
         {hasContact ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3.5">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="rounded-2xl bg-white/[0.04] px-4 py-3.5">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
               Contato
             </p>
-            <div className="mt-3 flex flex-col gap-2.5">
+            <div className="mt-3 flex flex-col gap-2">
               {shop.whatsapp ? (
                 <Link
                   href={whatsappHref(shop.whatsapp)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center gap-2.5 rounded-xl border border-white/10 bg-[#0e0f11] px-3.5 text-sm font-medium transition-colors hover:border-primary/40"
+                  className="inline-flex min-h-11 items-center gap-2.5 rounded-xl bg-[#0e0f11] px-3.5 text-sm font-medium ring-1 ring-white/10 transition-colors active:bg-white/[0.04]"
                 >
                   <MessageCircle className="size-4 text-primary" />
                   {formatWhatsapp(shop.whatsapp)}
@@ -157,7 +155,7 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
                   href={instagramHref(instagram)}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex min-h-11 items-center gap-2.5 rounded-xl border border-white/10 bg-[#0e0f11] px-3.5 text-sm font-medium transition-colors hover:border-primary/40"
+                  className="inline-flex min-h-11 items-center gap-2.5 rounded-xl bg-[#0e0f11] px-3.5 text-sm font-medium ring-1 ring-white/10 transition-colors active:bg-white/[0.04]"
                 >
                   <AtSign className="size-4 text-primary" />
                   {instagram.startsWith("@") ? instagram : `@${instagram}`}
@@ -168,7 +166,7 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
         ) : null}
 
         {!hoursSummary && !shop.address && !hasContact ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
+          <p className="py-10 text-center text-sm text-muted-foreground">
             A barbearia ainda não cadastrou endereço e contato.
           </p>
         ) : null}

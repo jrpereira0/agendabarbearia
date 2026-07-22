@@ -160,7 +160,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## Página do cliente (`/agenda`)
 
-- Layout estilo app: abre direto no **agendamento**, com menu inferior **Agendar · Horários · Local**
+- Layout estilo app: tela cheia com barra superior (logo + nome), conteúdo sem “card de site” e menu inferior **Agendar · Horários · Local**
 - Aba **Local**: nome, bio, endereço, horários de funcionamento, WhatsApp e Instagram
 - A **prévia do link no WhatsApp** (Open Graph) usa nome, bio curta e logo de `shop_settings`, com imagem gerada em `/agenda/opengraph-image` (1200×630). Se a prévia ficar desatualizada após um deploy, force a atualização no [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
 - Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome

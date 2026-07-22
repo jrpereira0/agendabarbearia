@@ -605,9 +605,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     return (
       <div
         ref={rootRef}
-        className="scroll-mt-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
-        <div className="bg-primary px-5 py-8 text-center text-primary-foreground">
+        <div className="bg-primary px-5 py-10 text-center text-primary-foreground">
           <div className="mx-auto flex size-14 items-center justify-center rounded-full border border-primary-foreground/20 bg-primary-foreground/10">
             <CheckCircle2 className="size-7" strokeWidth={1.5} />
           </div>
@@ -618,8 +618,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             {confirmation.customerName}, te esperamos!
           </p>
         </div>
-        <div className="space-y-4 p-5">
-          <div className="rounded-2xl border border-white/10 px-4 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-4">
             <div className="flex items-end justify-between gap-3">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -673,7 +673,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
   if (professionals.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/10 px-5 py-8 text-center text-sm text-muted-foreground">
+      <div className="flex flex-1 items-center justify-center px-5 py-8 text-center text-sm text-muted-foreground">
         A barbearia ainda não tem barbeiros disponíveis para agendamento online.
       </div>
     );
@@ -682,23 +682,23 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   return (
     <div
       ref={rootRef}
-      className="flex h-[calc(100dvh-5.75rem-env(safe-area-inset-bottom))] max-h-[calc(100dvh-5.75rem-env(safe-area-inset-bottom))] scroll-mt-3 flex-col overflow-hidden rounded-[1.5rem] border border-white/10 bg-[#151618]"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="shrink-0 border-b border-white/10 px-4 py-4 sm:px-5">
+      <div className="shrink-0 px-4 pb-3 pt-4">
         <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
           <span className="text-xs tabular-nums text-muted-foreground">
             {currentStep}/{stepOrder.length}
           </span>
         </div>
-        <h2 className="booking-display mt-3 text-[1.35rem] font-medium tracking-tight">
+        <h2 className="booking-display mt-3 text-[1.65rem] font-medium tracking-tight">
           {meta.title}
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">{meta.hint}</p>
 
         {(step === "services" || step === "datetime" || step === "confirm") &&
           (anyPreference || selectedProfessional) && (
-            <div className="mt-3 flex items-center gap-2.5 rounded-xl bg-white/[0.04] px-3 py-2">
+            <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/[0.04] px-3 py-2.5">
               {anyPreference ? (
                 <div className="flex size-8 items-center justify-center rounded-full bg-white/10">
                   <Users className="size-3.5 text-muted-foreground" />
@@ -736,7 +736,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
       <div
         ref={bodyRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3"
       >
         {step === "professional" && (
           <div className="grid grid-cols-2 gap-2.5">
@@ -979,7 +979,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 gap-2 border-t border-white/10 bg-[#151618] px-4 py-3 sm:px-5">
+      <div className="flex shrink-0 gap-2 border-t border-white/10 bg-[#0e0f11] px-4 py-3">
         {step !== "professional" && (
           <Button
             type="button"

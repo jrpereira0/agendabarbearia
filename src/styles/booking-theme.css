@@ -50,6 +50,8 @@
   background: #0e0f11 !important;
   color-scheme: dark;
   min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 .booking-theme h1,
@@ -59,33 +61,8 @@
   letter-spacing: -0.02em;
 }
 
-.booking-theme .booking-glow {
-  background: radial-gradient(
-    ellipse 70% 55% at 50% 0%,
-    rgb(236 241 94 / 18%) 0%,
-    rgb(236 241 94 / 6%) 40%,
-    transparent 70%
-  );
-}
-
-.booking-theme .booking-grid {
-  background-image: linear-gradient(
-      to right,
-      rgb(236 241 94 / 8%) 1px,
-      transparent 1px
-    ),
-    linear-gradient(to bottom, rgb(236 241 94 / 8%) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(
-    ellipse 70% 55% at 50% 0%,
-    #000 0%,
-    transparent 75%
-  );
-  -webkit-mask-image: radial-gradient(
-    ellipse 70% 55% at 50% 0%,
-    #000 0%,
-    transparent 75%
-  );
+.booking-theme .booking-app-shell {
+  background: #0e0f11;
 }
 
 .booking-theme .booking-main {
@@ -94,9 +71,9 @@
 }
 
 .booking-theme .booking-card {
-  border-color: var(--border);
-  background: var(--card);
-  box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .booking-theme [data-slot="checkbox"] {

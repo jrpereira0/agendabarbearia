@@ -327,33 +327,32 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   if (step === "phone") {
     return (
-      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
-        <div className="border-b px-5 py-4 sm:px-6">
-          <h2 className="text-lg font-semibold tracking-tight">Meus horários</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Digite seu WhatsApp pra ver, remarcar ou cancelar.
-          </p>
-        </div>
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="myAppointmentsWhatsapp" className="text-xs">
-              Seu WhatsApp
-            </Label>
-            <Input
-              id="myAppointmentsWhatsapp"
-              inputMode="numeric"
-              placeholder="(11) 99999-9999"
-              value={whatsapp}
-              onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
-              autoComplete="tel"
-            />
-            <div className="text-xs text-muted-foreground" aria-live="polite">
-              {lookupLoading || loadingList ? (
-                <Skeleton className="inline-block h-3 w-48" aria-hidden />
-              ) : (
-                "Assim que você terminar de digitar, a gente busca."
-              )}
-            </div>
+      <div className="px-4 pt-4">
+        <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+          Meus horários
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Digite seu WhatsApp pra ver, remarcar ou cancelar.
+        </p>
+        <div className="mt-5 flex flex-col gap-1.5">
+          <Label htmlFor="myAppointmentsWhatsapp" className="text-xs">
+            Seu WhatsApp
+          </Label>
+          <Input
+            id="myAppointmentsWhatsapp"
+            inputMode="numeric"
+            placeholder="(11) 99999-9999"
+            value={whatsapp}
+            onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
+            autoComplete="tel"
+            className="h-12 rounded-xl"
+          />
+          <div className="text-xs text-muted-foreground" aria-live="polite">
+            {lookupLoading || loadingList ? (
+              <Skeleton className="inline-block h-3 w-48" aria-hidden />
+            ) : (
+              "Assim que você terminar de digitar, a gente busca."
+            )}
           </div>
         </div>
       </div>
@@ -362,16 +361,19 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   if (step === "edit" && editing && editingProfessional) {
     return (
-      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
-        <div className="border-b px-5 py-4 sm:px-6">
-          <h2 className="text-lg font-semibold tracking-tight">Remarcar</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 px-4 pt-4">
+          <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+            Remarcar
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             {editingProfessional.nickname} · altere data, horário ou serviços.
           </p>
         </div>
 
-        <div className="flex flex-col gap-4 px-5 py-5 sm:px-6 sm:py-6">
-          <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+          <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] px-3 py-2.5">
             <ProfessionalAvatar
               photoUrl={editingProfessional.photoUrl}
               photoPosition={editingProfessional.photoPosition}
@@ -400,7 +402,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                         "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
                         checked
                           ? "border-primary bg-primary/10"
-                          : "border-transparent bg-muted/30"
+                          : "border-white/10 bg-white/[0.03]"
                       )}
                     >
                       <Checkbox
@@ -438,18 +440,18 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               {loadingSlots ? (
                 <SlotGridSkeleton />
               ) : slotsError ? (
-                <p className="rounded-xl bg-muted/40 px-4 py-5 text-center text-sm text-muted-foreground">
+                <p className="rounded-2xl bg-white/[0.04] px-4 py-5 text-center text-sm text-muted-foreground">
                   {slotsError}
                 </p>
               ) : (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   {availableSlots.map((slot) => (
                     <Button
                       key={slot}
                       type="button"
                       variant={editStartTime === slot ? "default" : "outline"}
                       size="sm"
-                      className="h-9 tabular-nums"
+                      className="h-11 rounded-xl tabular-nums"
                       onClick={() => setEditStartTime(slot)}
                     >
                       {slot}
@@ -466,17 +468,18 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               )}
             </>
           )}
+          </div>
         </div>
 
-        <div className="flex gap-2 border-t bg-muted/20 px-5 py-4 sm:px-6">
-          <Button type="button" variant="ghost" size="lg" onClick={goBack}>
+        <div className="flex shrink-0 gap-2 border-t border-white/10 px-4 py-3">
+          <Button type="button" variant="ghost" size="lg" onClick={goBack} className="h-12 rounded-xl">
             <ArrowLeft className="size-4" />
             Voltar
           </Button>
           <Button
             type="button"
             size="lg"
-            className="ml-auto"
+            className="ml-auto h-12 rounded-xl"
             disabled={saving || !editStartTime || editServiceIds.length === 0}
             onClick={handleSaveEdit}
           >
@@ -489,33 +492,31 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   return (
     <>
-      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
-        <div className="border-b px-5 py-4 sm:px-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">
-                Meus horários
-              </h2>
-              <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                <Phone className="size-3.5 shrink-0" />
-                {formatWhatsapp(whatsappDigits)}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={goBack}
-              className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
-            >
-              Trocar número
-            </button>
+      <div className="px-4 pt-4 pb-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+              Meus horários
+            </h2>
+            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Phone className="size-3.5 shrink-0" />
+              {formatWhatsapp(whatsappDigits)}
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={goBack}
+            className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+          >
+            Trocar número
+          </button>
         </div>
 
-        <div className="px-5 py-5 sm:px-6 sm:py-6">
+        <div className="mt-5">
           {loadingList ? (
             <AppointmentCardsSkeleton />
           ) : appointments.length === 0 ? (
-            <div className="rounded-xl border border-dashed px-4 py-10 text-center">
+            <div className="rounded-2xl bg-white/[0.04] px-4 py-10 text-center">
               <CalendarDays className="mx-auto size-8 text-muted-foreground" />
               <p className="mt-3 font-medium">Nenhum horário marcado</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -527,9 +528,9 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               {appointments.map((a) => (
                 <li
                   key={a.id}
-                  className="overflow-hidden rounded-2xl border bg-card"
+                  className="overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10"
                 >
-                  <div className="flex items-end justify-between gap-3 border-b bg-muted/20 px-4 py-3">
+                  <div className="flex items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
                     <div>
                       <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                         Data
@@ -565,7 +566,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-xl bg-muted/30 px-3 py-2.5">
+                    <div className="mt-4 rounded-xl bg-white/[0.04] px-3 py-2.5">
                       <p className="text-xs text-muted-foreground">Serviços</p>
                       <p className="mt-0.5 text-sm font-medium leading-snug">
                         {a.serviceNames.join(", ")}
