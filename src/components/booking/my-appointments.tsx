@@ -327,16 +327,20 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   if (step === "phone") {
     return (
-      <div className="px-4 pt-4">
-        <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+      <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
+        <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
           Meus horários
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Digite seu WhatsApp pra ver, remarcar ou cancelar.
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Informe o WhatsApp pra consultar, remarcar ou cancelar.
         </p>
-        <div className="mt-5 flex flex-col gap-1.5">
-          <Label htmlFor="myAppointmentsWhatsapp" className="text-xs">
-            Seu WhatsApp
+
+        <div className="mt-8 rounded-2xl bg-[#151618] p-4 ring-1 ring-white/8">
+          <Label
+            htmlFor="myAppointmentsWhatsapp"
+            className="text-[11px] font-medium text-muted-foreground"
+          >
+            WhatsApp
           </Label>
           <Input
             id="myAppointmentsWhatsapp"
@@ -345,15 +349,15 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             value={whatsapp}
             onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
             autoComplete="tel"
-            className="h-12 rounded-xl"
+            className="mt-2 h-12 rounded-xl border-white/10 bg-[#0e0f11] text-base"
           />
-          <div className="text-xs text-muted-foreground" aria-live="polite">
+          <p className="mt-2.5 text-xs text-muted-foreground" aria-live="polite">
             {lookupLoading || loadingList ? (
               <Skeleton className="inline-block h-3 w-48" aria-hidden />
             ) : (
-              "Assim que você terminar de digitar, a gente busca."
+              "Buscamos assim que o número estiver completo."
             )}
-          </div>
+          </p>
         </div>
       </div>
     );
@@ -362,18 +366,18 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   if (step === "edit" && editing && editingProfessional) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 px-4 pt-4">
-          <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+        <div className="shrink-0 px-5 pt-5">
+          <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
             Remarcar
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {editingProfessional.nickname} · altere data, horário ou serviços.
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {editingProfessional.nickname} · data, horário ou serviços.
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] px-3 py-2.5">
+          <div className="flex items-center gap-3 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8">
             <ProfessionalAvatar
               photoUrl={editingProfessional.photoUrl}
               photoPosition={editingProfessional.photoPosition}
@@ -471,20 +475,32 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           </div>
         </div>
 
-        <div className="flex shrink-0 gap-2 border-t border-white/10 px-4 py-3">
-          <Button type="button" variant="ghost" size="lg" onClick={goBack} className="h-12 rounded-xl">
-            <ArrowLeft className="size-4" />
-            Voltar
-          </Button>
-          <Button
-            type="button"
-            size="lg"
-            className="ml-auto h-12 rounded-xl"
-            disabled={saving || !editStartTime || editServiceIds.length === 0}
-            onClick={handleSaveEdit}
-          >
-            {saving ? "Salvando..." : "Salvar alterações"}
-          </Button>
+        <div className="relative shrink-0 px-5 pb-3 pt-2">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0e0f11] to-transparent"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              onClick={goBack}
+              className="h-12 shrink-0 rounded-2xl px-3 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              Voltar
+            </Button>
+            <Button
+              type="button"
+              size="lg"
+              className="h-12 min-w-0 flex-1 rounded-2xl font-semibold"
+              disabled={saving || !editStartTime || editServiceIds.length === 0}
+              onClick={handleSaveEdit}
+            >
+              {saving ? "Salvando..." : "Salvar alterações"}
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -492,13 +508,13 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   return (
     <>
-      <div className="px-4 pt-4 pb-5">
+      <div className="px-5 pb-6 pt-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="booking-display text-[1.45rem] font-medium tracking-tight">
+            <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
               Meus horários
             </h2>
-            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <Phone className="size-3.5 shrink-0" />
               {formatWhatsapp(whatsappDigits)}
             </p>
@@ -506,99 +522,79 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           <button
             type="button"
             onClick={goBack}
-            className="shrink-0 text-xs font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-foreground hover:underline"
+            className="mt-1 shrink-0 rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-white/10"
           >
-            Trocar número
+            Trocar
           </button>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-6">
           {loadingList ? (
             <AppointmentCardsSkeleton />
           ) : appointments.length === 0 ? (
-            <div className="rounded-2xl bg-white/[0.04] px-4 py-10 text-center">
-              <CalendarDays className="mx-auto size-8 text-muted-foreground" />
+            <div className="rounded-2xl bg-[#151618] px-5 py-12 text-center ring-1 ring-white/8">
+              <CalendarDays className="mx-auto size-8 text-muted-foreground" strokeWidth={1.5} />
               <p className="mt-3 font-medium">Nenhum horário marcado</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Você não tem agendamentos futuros com esse WhatsApp.
+                Não há agendamentos futuros com esse WhatsApp.
               </p>
             </div>
           ) : (
-            <ul className="flex flex-col gap-4">
+            <ul className="flex flex-col gap-3">
               {appointments.map((a) => (
                 <li
                   key={a.id}
-                  className="overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-white/10"
+                  className="rounded-2xl bg-[#151618] p-4 ring-1 ring-white/8"
                 >
-                  <div className="flex items-end justify-between gap-3 border-b border-white/10 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                        Data
+                      <p className="text-[1.75rem] font-semibold tabular-nums leading-none tracking-tight">
+                        {a.startTime}
                       </p>
-                      <p className="mt-0.5 text-sm font-semibold capitalize">
+                      <p className="mt-1.5 text-sm capitalize text-muted-foreground">
                         {formatDateBR(a.date)}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                        Horário
-                      </p>
-                      <p className="mt-0.5 text-2xl font-semibold tabular-nums leading-none">
-                        {a.startTime}
-                      </p>
-                    </div>
+                    <ProfessionalAvatar
+                      photoUrl={a.professionalPhotoUrl}
+                      photoPosition={a.professionalPhotoPosition}
+                      name={a.professionalName}
+                      size="md"
+                    />
                   </div>
 
-                  <div className="p-4">
-                    <div className="flex items-center gap-3">
-                      <ProfessionalAvatar
-                        photoUrl={a.professionalPhotoUrl}
-                        photoPosition={a.professionalPhotoPosition}
-                        name={a.professionalName}
-                        size="lg"
-                        className="border-2 border-border"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">Barbeiro</p>
-                        <p className="truncate font-semibold">
-                          {a.professionalName}
-                        </p>
-                      </div>
-                    </div>
+                  <div className="mt-4 border-t border-white/8 pt-3">
+                    <p className="text-sm font-medium">{a.professionalName}</p>
+                    <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
+                      {a.serviceNames.join(", ")}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatDuration(a.totalMinutes)} ·{" "}
+                      {formatPriceBRL(a.totalPriceCents)}
+                    </p>
+                  </div>
 
-                    <div className="mt-4 rounded-xl bg-white/[0.04] px-3 py-2.5">
-                      <p className="text-xs text-muted-foreground">Serviços</p>
-                      <p className="mt-0.5 text-sm font-medium leading-snug">
-                        {a.serviceNames.join(", ")}
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {formatDuration(a.totalMinutes)} ·{" "}
-                        {formatPriceBRL(a.totalPriceCents)}
-                      </p>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-10"
-                        onClick={() => startEdit(a)}
-                      >
-                        <Pencil className="size-3.5" />
-                        Remarcar
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-10 border-destructive/30 text-destructive hover:bg-destructive/5 hover:text-destructive"
-                        onClick={() => setCancelTarget(a)}
-                      >
-                        <Trash2 className="size-3.5" />
-                        Cancelar
-                      </Button>
-                    </div>
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-11 rounded-xl bg-white/[0.06] hover:bg-white/10"
+                      onClick={() => startEdit(a)}
+                    >
+                      <Pencil className="size-3.5" />
+                      Remarcar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-11 rounded-xl bg-white/[0.06] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setCancelTarget(a)}
+                    >
+                      <Trash2 className="size-3.5" />
+                      Cancelar
+                    </Button>
                   </div>
                 </li>
               ))}

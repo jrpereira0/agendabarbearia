@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Check, CheckCircle2, User, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
@@ -107,32 +106,68 @@ function ServicePickerRow({
   onToggle: (checked: boolean) => void;
 }) {
   return (
-    <label
+    <button
+      type="button"
+      onClick={() => onToggle(!checked)}
       className={cn(
-        "flex min-h-14 cursor-pointer items-center gap-3 rounded-2xl border px-3.5 py-3.5 transition-all",
+        "flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors ring-1",
         checked
-          ? "border-primary bg-primary/10"
-          : "border-white/10 bg-white/[0.03] active:bg-white/[0.06]"
+          ? "bg-primary/10 ring-primary/45"
+          : "bg-[#151618] ring-white/8 active:bg-white/[0.04]"
       )}
     >
-      <Checkbox
-        checked={checked}
-        onCheckedChange={(value) => onToggle(value === true)}
-        className="shrink-0"
-      />
       <ServiceThumbnail
         photoUrl={service.photoUrl}
         photoPosition={service.photoPosition}
         name={service.name}
+        size="md"
+        className="border-white/10 bg-[#0e0f11]"
       />
       <div className="min-w-0 flex-1">
-        <p className="font-medium leading-snug">{service.name}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {formatDuration(service.durationMinutes)} ·{" "}
-          {formatPublicServicePriceLabel(service)}
-        </p>
+        <p className="text-[0.95rem] font-medium leading-snug">{service.name}</p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>{formatDuration(service.durationMinutes)}</span>
+          <span className="text-white/20">·</span>
+          <span>{formatPublicServicePriceLabel(service)}</span>
+        </div>
       </div>
-    </label>
+      <span
+        className={cn(
+          "flex size-6 shrink-0 items-center justify-center rounded-full transition-colors",
+          checked
+            ? "bg-primary text-primary-foreground"
+            : "bg-white/[0.06] ring-1 ring-white/12"
+        )}
+      >
+        {checked ? <Check className="size-3.5" strokeWidth={2.5} /> : null}
+      </span>
+    </button>
+  );
+}
+
+function SelectedServiceChips({
+  services,
+  onRemove,
+}: {
+  services: PublicService[];
+  onRemove: (id: string) => void;
+}) {
+  if (services.length === 0) return null;
+
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {services.map((service) => (
+        <button
+          key={service.id}
+          type="button"
+          onClick={() => onRemove(service.id)}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+        >
+          <span className="max-w-[9.5rem] truncate">{service.name}</span>
+          <span className="text-primary-foreground/70">×</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -684,21 +719,35 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       ref={rootRef}
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
     >
-      <div className="shrink-0 px-4 pb-3 pt-4">
+      <div className={cn("shrink-0 px-5", step === "professional" ? "pb-1.5 pt-3" : "pb-2 pt-5")}>
         <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {currentStep}/{stepOrder.length}
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {currentStep} de {stepOrder.length}
           </span>
         </div>
-        <h2 className="booking-display mt-3 text-[1.65rem] font-medium tracking-tight">
+        <h2
+          className={cn(
+            "booking-display font-medium leading-tight tracking-tight",
+            step === "professional"
+              ? "mt-2.5 text-[1.45rem]"
+              : "mt-4 text-[1.75rem]"
+          )}
+        >
           {meta.title}
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">{meta.hint}</p>
+        <p
+          className={cn(
+            "text-muted-foreground",
+            step === "professional" ? "mt-1 text-[13px]" : "mt-1.5 text-sm"
+          )}
+        >
+          {meta.hint}
+        </p>
 
         {(step === "services" || step === "datetime" || step === "confirm") &&
           (anyPreference || selectedProfessional) && (
-            <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-white/[0.04] px-3 py-2.5">
+            <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8">
               {anyPreference ? (
                 <div className="flex size-8 items-center justify-center rounded-full bg-white/10">
                   <Users className="size-3.5 text-muted-foreground" />
@@ -736,33 +785,45 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
       <div
         ref={bodyRef}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-3"
+        className={cn(
+          "min-h-0 flex-1 px-5",
+          step === "professional"
+            ? "flex flex-col overflow-hidden pb-2"
+            : "overflow-y-auto overscroll-y-contain pb-8 [-webkit-overflow-scrolling:touch]"
+        )}
       >
         {step === "professional" && (
-          <div className="grid grid-cols-2 gap-2.5">
+          <div
+            className="grid h-full min-h-0 grid-cols-2 gap-2"
+            style={{
+              gridTemplateRows: `repeat(${Math.ceil((professionals.length + 1) / 2)}, minmax(0, 1fr))`,
+            }}
+          >
             <button
               type="button"
               onClick={() => selectProfessional(NO_PREFERENCE_ID)}
               className={cn(
-                "flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 rounded-2xl border px-3 py-4 text-center transition-colors",
+                "flex h-full min-h-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-center transition-colors ring-1",
                 anyPreference
-                  ? "border-primary bg-primary/10"
-                  : "border-white/10 bg-white/[0.03]"
+                  ? "bg-primary/10 ring-primary/50"
+                  : "bg-[#151618] ring-white/8"
               )}
             >
               <div
                 className={cn(
-                  "flex size-14 items-center justify-center rounded-full",
+                  "flex size-9 shrink-0 items-center justify-center rounded-full",
                   anyPreference
                     ? "bg-primary text-primary-foreground"
                     : "bg-white/10"
                 )}
               >
-                <Users className="size-6" strokeWidth={1.5} />
+                <Users className="size-4" strokeWidth={1.5} />
               </div>
-              <span className="text-sm font-semibold">Qualquer</span>
-              <span className="text-[11px] leading-tight text-muted-foreground">
-                Encaixamos no horário
+              <span className="text-[0.8125rem] font-semibold leading-tight">
+                Qualquer
+              </span>
+              <span className="px-0.5 text-[10px] leading-tight text-muted-foreground">
+                Melhor horário
               </span>
             </button>
 
@@ -774,26 +835,27 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   type="button"
                   onClick={() => selectProfessional(pro.id)}
                   className={cn(
-                    "flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 rounded-2xl border px-3 py-4 text-center transition-colors",
+                    "flex h-full min-h-0 flex-col items-center justify-center gap-0.5 rounded-2xl px-2 py-1.5 text-center transition-colors ring-1",
                     selected
-                      ? "border-primary bg-primary/10"
-                      : "border-white/10 bg-white/[0.03]"
+                      ? "bg-primary/10 ring-primary/50"
+                      : "bg-[#151618] ring-white/8"
                   )}
                 >
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <ProfessionalAvatar
                       photoUrl={pro.photoUrl}
                       photoPosition={pro.photoPosition}
                       name={pro.nickname}
-                      size="lg"
+                      size="sm"
+                      className="!size-9"
                     />
-                    {selected && (
-                      <span className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                        <Check className="size-3" />
+                    {selected ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-[#151618]">
+                        <Check className="size-2.5" strokeWidth={2.5} />
                       </span>
-                    )}
+                    ) : null}
                   </div>
-                  <span className="line-clamp-2 text-sm font-semibold">
+                  <span className="line-clamp-1 max-w-full px-0.5 text-[0.8125rem] font-semibold leading-tight">
                     {pro.nickname}
                   </span>
                 </button>
@@ -803,13 +865,18 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
 
         {step === "services" && (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {availableServices.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 Esse barbeiro ainda não tem serviços disponíveis.
               </p>
             ) : (
               <>
+                <SelectedServiceChips
+                  services={selectedServices}
+                  onRemove={(id) => toggleService(id, false)}
+                />
+
                 {availableServices.length > 6 && (
                   <SearchInput
                     value={serviceSearch}
@@ -817,38 +884,52 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                     placeholder="Buscar serviço..."
                   />
                 )}
+
                 {serviceGroups.popular.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <section className="flex flex-col gap-2.5">
+                    <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
                       Mais pedidos
                     </p>
-                    {serviceGroups.popular.map((svc) => (
-                      <ServicePickerRow
-                        key={svc.id}
-                        service={svc}
-                        checked={serviceIds.includes(svc.id)}
-                        onToggle={(checked) => toggleService(svc.id, checked)}
-                      />
-                    ))}
-                  </div>
+                    <div className="flex flex-col gap-2">
+                      {serviceGroups.popular.map((svc) => (
+                        <ServicePickerRow
+                          key={svc.id}
+                          service={svc}
+                          checked={serviceIds.includes(svc.id)}
+                          onToggle={(checked) => toggleService(svc.id, checked)}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 )}
+
                 {serviceGroups.others.length > 0 && (
-                  <div className="flex flex-col gap-2">
-                    {serviceGroups.popular.length > 0 && (
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Outros
+                  <section className="flex flex-col gap-2.5">
+                    {serviceGroups.popular.length > 0 ? (
+                      <p className="text-[11px] font-medium tracking-wide text-muted-foreground">
+                        Todos os serviços
                       </p>
-                    )}
-                    {serviceGroups.others.map((svc) => (
-                      <ServicePickerRow
-                        key={svc.id}
-                        service={svc}
-                        checked={serviceIds.includes(svc.id)}
-                        onToggle={(checked) => toggleService(svc.id, checked)}
-                      />
-                    ))}
-                  </div>
+                    ) : null}
+                    <div className="flex flex-col gap-2">
+                      {serviceGroups.others.map((svc) => (
+                        <ServicePickerRow
+                          key={svc.id}
+                          service={svc}
+                          checked={serviceIds.includes(svc.id)}
+                          onToggle={(checked) => toggleService(svc.id, checked)}
+                        />
+                      ))}
+                    </div>
+                  </section>
                 )}
+
+                {serviceSearch.trim() &&
+                serviceGroups.popular.length === 0 &&
+                serviceGroups.others.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    Nenhum serviço com esse nome.
+                  </p>
+                ) : null}
               </>
             )}
           </div>
@@ -979,31 +1060,37 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
       </div>
 
-      <div className="flex shrink-0 gap-2 border-t border-white/10 bg-[#0e0f11] px-4 py-3">
-        {step !== "professional" && (
+      <div className="relative shrink-0 px-5 pb-3 pt-1">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[#0e0f11] to-transparent"
+        />
+        <div className="flex items-center gap-2">
+          {step !== "professional" ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="lg"
+              onClick={goBack}
+              className="h-12 shrink-0 rounded-2xl px-3 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              Voltar
+            </Button>
+          ) : null}
           <Button
             type="button"
-            variant="ghost"
             size="lg"
-            onClick={goBack}
-            className="h-12 shrink-0 rounded-xl"
+            disabled={primaryDisabled}
+            onClick={() => {
+              if (step === "confirm") void handleConfirm();
+              else goNext();
+            }}
+            className="h-12 min-w-0 flex-1 rounded-2xl text-[0.95rem] font-semibold shadow-none"
           >
-            <ArrowLeft className="size-4" />
-            Voltar
+            {primaryLabel}
           </Button>
-        )}
-        <Button
-          type="button"
-          size="lg"
-          disabled={primaryDisabled}
-          onClick={() => {
-            if (step === "confirm") void handleConfirm();
-            else goNext();
-          }}
-          className="ml-auto h-12 min-w-0 flex-1 rounded-xl text-base sm:flex-none sm:px-8"
-        >
-          {primaryLabel}
-        </Button>
+        </div>
       </div>
     </div>
   );
