@@ -19,9 +19,11 @@ type ShopInfoPanelProps = {
   businessHours: BusinessHourRow[];
 };
 
-function buildHoursSummary(rows: BusinessHourRow[]): string {
+function buildHoursGroups(
+  rows: BusinessHourRow[]
+): { days: string; hours: string }[] {
   const open = rows.filter((r) => r.active);
-  if (open.length === 0) return "";
+  if (open.length === 0) return [];
 
   const groups: { days: string[]; openTime: string; closeTime: string }[] = [];
 
@@ -42,15 +44,13 @@ function buildHoursSummary(rows: BusinessHourRow[]): string {
     }
   }
 
-  return groups
-    .map((g) => {
-      const days =
-        g.days.length === 1
-          ? g.days[0]
-          : `${g.days[0]}–${g.days[g.days.length - 1]}`;
-      return `${days} ${formatTime(g.openTime)}–${formatTime(g.closeTime)}`;
-    })
-    .join(" · ");
+  return groups.map((g) => ({
+    days:
+      g.days.length === 1
+        ? g.days[0]
+        : `${g.days[0]}–${g.days[g.days.length - 1]}`,
+    hours: `${formatTime(g.openTime)}–${formatTime(g.closeTime)}`,
+  }));
 }
 
 function whatsappHref(digits: string): string {
@@ -67,7 +67,8 @@ function mapsHref(address: string): string {
 }
 
 export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
-  const hoursSummary = buildHoursSummary(businessHours);
+  const hoursGroups = buildHoursGroups(businessHours);
+  const hasHours = hoursGroups.length > 0;
   const instagram = shop.instagram?.trim();
   const hasContact = Boolean(shop.whatsapp || instagram);
 
@@ -100,7 +101,7 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
       </div>
 
       <div className="mt-7 overflow-hidden rounded-2xl bg-[#151618] ring-1 ring-white/8">
-        {hoursSummary ? (
+        {hasHours ? (
           <div className="flex gap-3 px-4 py-3.5">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06]">
               <Clock className="size-4 text-primary" strokeWidth={1.75} />
@@ -109,7 +110,19 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
               <p className="text-[11px] font-medium text-muted-foreground">
                 Funcionamento
               </p>
-              <p className="mt-0.5 text-sm leading-snug">{hoursSummary}</p>
+              <ul className="mt-1.5 space-y-1.5">
+                {hoursGroups.map((group) => (
+                  <li
+                    key={`${group.days}-${group.hours}`}
+                    className="flex items-baseline justify-between gap-3 text-sm"
+                  >
+                    <span className="text-muted-foreground">{group.days}</span>
+                    <span className="font-medium tabular-nums">
+                      {group.hours}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
         ) : null}
@@ -184,7 +197,7 @@ export function ShopInfoPanel({ shop, businessHours }: ShopInfoPanelProps) {
           </Link>
         ) : null}
 
-        {!hoursSummary && !shop.address && !hasContact ? (
+        {!hasHours && !shop.address && !hasContact ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             A barbearia ainda não cadastrou endereço e contato.
           </p>

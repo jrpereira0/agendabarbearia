@@ -163,7 +163,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Layout estilo app: tela cheia, conteúdo limpo (sem barra de marca no topo) e menu inferior **Agendar · Horários · Local**
 - Aba **Local**: perfil da loja, funcionamento, endereço, contatos e botão **Como chegar**
 - A **prévia do link no WhatsApp** (Open Graph) usa nome, bio curta e logo de `shop_settings`, com imagem gerada em `/agenda/opengraph-image` (1200×630). Se a prévia ficar desatualizada após um deploy, force a atualização no [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
-- Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática) → confirmação ou cadastro de nome
+- Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática; se não existir, pede nome/sobrenome pra criar o cadastro) → confirmação
 - **Sem preferência:** o site mostra a união dos horários livres de quem faz os serviços; na hora de confirmar, o servidor escolhe o barbeiro **com menos agendamentos ativos naquele dia** (empate: ordem do apelido)
 - **Preços na escolha de serviços:** como o dia ainda não foi escolhido, cada serviço mostra a **faixa de preço** (ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`). O total aparece como **“a partir de …”** quando há variação por dia
 - **Serviços mais agendados:** no topo da lista aparece a seção **“Mais agendados”** (até 5 serviços com histórico de marcações); o restante fica em **“Outros serviços”**, ordenado pela mesma contagem

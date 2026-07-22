@@ -1,42 +1,67 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import "@/styles/booking-theme.css";
 
 export function BookingPageSkeleton() {
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <div className="bg-foreground px-4 pb-8 pt-6 text-background sm:px-6 sm:pb-10 sm:pt-8">
-        <div className="mx-auto flex w-full max-w-lg flex-col items-center text-center">
-          <Skeleton className="size-16 rounded-2xl bg-background/20" />
-          <Skeleton className="mt-4 h-7 w-48 bg-background/20" />
-          <Skeleton className="mt-2 h-4 w-64 bg-background/20" />
-          <div className="mt-5 flex gap-2">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <Skeleton
+    <div className="booking-theme relative h-dvh overflow-hidden">
+      <div className="booking-app-shell flex h-dvh flex-col overflow-hidden pt-[env(safe-area-inset-top)]">
+        <main className="relative z-10 mx-auto flex min-h-0 w-full max-w-lg flex-1 flex-col">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 px-5 pb-2 pt-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <Skeleton className="h-1.5 w-7 rounded-full bg-primary/70" />
+                  <Skeleton className="size-1.5 rounded-full bg-white/20" />
+                  <Skeleton className="size-1.5 rounded-full bg-white/20" />
+                  <Skeleton className="size-1.5 rounded-full bg-white/20" />
+                </div>
+                <Skeleton className="h-3 w-10 bg-white/15" />
+              </div>
+              <Skeleton className="mt-2.5 h-7 w-52 max-w-full bg-white/15" />
+              <Skeleton className="mt-2 h-4 w-64 max-w-full bg-white/10" />
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-hidden px-5 pt-2 pb-2">
+              <div className="grid grid-cols-2 content-start gap-2">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-[#151618] px-2 py-2.5 ring-1 ring-white/8"
+                  >
+                    <Skeleton className="size-14 rounded-full bg-white/10" />
+                    <Skeleton className="h-3.5 w-16 bg-white/12" />
+                    {index === 0 ? (
+                      <Skeleton className="h-2.5 w-20 bg-white/8" />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="relative shrink-0 px-5 pb-3 pt-1">
+              <Skeleton className="h-12 w-full rounded-2xl bg-primary/35" />
+            </div>
+          </div>
+        </main>
+
+        <nav
+          aria-hidden
+          className="relative z-20 shrink-0 bg-[#0e0f11]"
+        >
+          <div className="mx-auto h-px max-w-lg bg-white/10" />
+          <div className="mx-auto grid max-w-lg grid-cols-3 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <div
                 key={index}
-                className="size-10 rounded-full bg-background/20"
-              />
+                className="flex min-h-[3.35rem] flex-col items-center justify-center gap-1.5"
+              >
+                <Skeleton className="size-5 rounded-md bg-white/12" />
+                <Skeleton className="h-2 w-10 bg-white/10" />
+              </div>
             ))}
           </div>
-        </div>
+        </nav>
       </div>
-      <main className="relative flex-1 rounded-t-[1.75rem] bg-background px-4 pb-8 pt-6 sm:px-6">
-        <div className="mx-auto w-full max-w-lg">
-          <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl border bg-muted/30 p-1">
-            <Skeleton className="h-12 rounded-xl" />
-            <Skeleton className="h-12 rounded-xl" />
-          </div>
-          <div className="overflow-hidden rounded-2xl border bg-card">
-            <div className="border-b px-5 py-4">
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="mt-2 h-4 w-56" />
-            </div>
-            <div className="space-y-3 px-5 py-5">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <Skeleton key={index} className="h-16 w-full rounded-xl" />
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
     </div>
   );
 }

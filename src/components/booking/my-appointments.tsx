@@ -351,13 +351,13 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             autoComplete="tel"
             className="mt-2 h-12 rounded-xl border-white/10 bg-[#0e0f11] text-base"
           />
-          <p className="mt-2.5 text-xs text-muted-foreground" aria-live="polite">
+          <div className="mt-2.5 text-xs text-muted-foreground" aria-live="polite">
             {lookupLoading || loadingList ? (
               <Skeleton className="inline-block h-3 w-48" aria-hidden />
             ) : (
               "Buscamos assim que o número estiver completo."
             )}
-          </p>
+          </div>
         </div>
       </div>
     );

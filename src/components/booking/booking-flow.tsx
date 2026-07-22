@@ -49,7 +49,7 @@ const stepMeta: Record<Step, { title: string; hint: string }> = {
   },
   confirm: {
     title: "Seus dados",
-    hint: "WhatsApp e nome pra confirmar.",
+    hint: "Informe o WhatsApp pra te reconhecer.",
   },
 };
 
@@ -287,6 +287,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [whatsapp, setWhatsapp] = useState("");
   const [customerFound, setCustomerFound] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupDone, setLookupDone] = useState(false);
   const lastLookupDigitsRef = useRef("");
   const [saving, setSaving] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -432,6 +433,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     const delay = whatsappLookupDelayMs(whatsapp);
     if (delay === null) {
       lastLookupDigitsRef.current = "";
+      setLookupLoading(false);
+      setLookupDone(false);
+      setCustomerFound(false);
       return;
     }
 
@@ -443,6 +447,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
       lastLookupDigitsRef.current = current;
       setLookupLoading(true);
+      setLookupDone(false);
+      setCustomerFound(false);
 
       fetch(`/api/v1/customers/lookup?whatsapp=${encodeURIComponent(current)}`)
         .then(async (res) => {
@@ -450,6 +456,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           if (cancelled) return;
           if (!res.ok) {
             lastLookupDigitsRef.current = "";
+            setLookupDone(false);
             toast.error(body.error ?? "Não foi possível buscar seus dados.");
             return;
           }
@@ -458,12 +465,16 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             setLastName(body.lastName);
             setCustomerFound(true);
           } else {
+            setFirstName("");
+            setLastName("");
             setCustomerFound(false);
           }
+          setLookupDone(true);
         })
         .catch(() => {
           if (!cancelled) {
             lastLookupDigitsRef.current = "";
+            setLookupDone(false);
             toast.error("Não foi possível buscar seus dados. Tente de novo.");
           }
         })
@@ -493,6 +504,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
   function resetCustomer() {
     setCustomerFound(false);
+    setLookupDone(false);
+    setLookupLoading(false);
     setFirstName("");
     setLastName("");
     setWhatsapp("");
@@ -505,6 +518,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setFirstName("");
     setLastName("");
     setCustomerFound(false);
+    setLookupDone(false);
+    setLookupLoading(false);
   }
 
   function goBack() {
@@ -621,6 +636,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     (step === "confirm" &&
       (saving ||
         lookupLoading ||
+        !lookupDone ||
         !normalizeWhatsapp(whatsapp) ||
         !firstName.trim() ||
         !lastName.trim()));
@@ -724,7 +740,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           "relative z-10 shrink-0 bg-[#0e0f11] px-5",
           step === "professional" ? "pb-2 pt-3" : "pb-2 pt-5"
         )}
-      >        <div className="flex items-center justify-between gap-3">
+      >
+        <div className="flex items-center justify-between gap-3">
           <StepDots current={currentStep} total={stepOrder.length} />
           <span className="text-[11px] tabular-nums text-muted-foreground">
             {currentStep} de {stepOrder.length}
@@ -994,16 +1011,19 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                 onChange={(e) => {
                   setWhatsapp(formatWhatsapp(e.target.value));
                   setCustomerFound(false);
+                  setLookupDone(false);
                 }}
                 autoComplete="tel"
                 className="h-12 rounded-xl"
               />
               <p className="text-xs text-muted-foreground">
                 {lookupLoading
-                  ? "Buscando..."
+                  ? "Buscando seu cadastro..."
                   : customerFound
                     ? "Encontramos você."
-                    : "Usamos pra te reconhecer e avisar."}
+                    : lookupDone
+                      ? "Não achamos esse número ainda."
+                      : "Usamos pra te reconhecer e avisar."}
               </p>
             </div>
 
@@ -1027,34 +1047,46 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="bookingFirstName" className="text-xs">
-                    Nome
-                  </Label>
-                  <Input
-                    id="bookingFirstName"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    autoComplete="given-name"
-                    className="h-12 rounded-xl"
-                  />
+            ) : null}
+
+            {lookupDone && !customerFound ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-2xl bg-[#151618] px-4 py-3.5 ring-1 ring-white/8">
+                  <p className="text-sm font-medium">Primeiro agendamento?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Não encontramos cadastro com esse WhatsApp. Preencha nome e
+                    sobrenome pra criar o seu e confirmar o horário.
+                  </p>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="bookingLastName" className="text-xs">
-                    Sobrenome
-                  </Label>
-                  <Input
-                    id="bookingLastName"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    autoComplete="family-name"
-                    className="h-12 rounded-xl"
-                  />
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="bookingFirstName" className="text-xs">
+                      Nome
+                    </Label>
+                    <Input
+                      id="bookingFirstName"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      autoComplete="given-name"
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="bookingLastName" className="text-xs">
+                      Sobrenome
+                    </Label>
+                    <Input
+                      id="bookingLastName"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      autoComplete="family-name"
+                      className="h-12 rounded-xl"
+                    />
+                  </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </div>
