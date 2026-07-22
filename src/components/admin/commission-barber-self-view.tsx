@@ -1,32 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
-  Scissors,
-  TrendingUp,
-  Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  HorizontalBarChart,
-  VerticalBarChart,
-} from "@/components/admin/finance-charts";
 import { PayCommissionButton } from "@/components/admin/pay-commission-button";
 import { CommissionPayoutHistory } from "@/components/admin/commission-payout-history";
 import {
   commissionServiceRevenueCents,
-  formatPaymentMethodLabel,
   type CommissionComandaDetail,
   type CommissionDayRow,
   type CommissionProfessionalReport,
   type CommissionServiceBreakdownRow,
 } from "@/lib/finance-reports";
 import type { CommissionPayout } from "@/lib/commission-payout-service";
-import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import {
   formatDateBR,
   formatPriceBRL,
@@ -39,291 +32,509 @@ type CommissionBarberSelfViewProps = {
   professional: CommissionProfessionalReport;
   from: string;
   to: string;
-  buildDayHref: (date: string) => string;
   /** "self" = barbeiro vendo a própria comissão; "owner" = dono detalhando. */
   viewer?: "self" | "owner";
   payouts?: CommissionPayout[];
   /** Quando o PageHeader já mostra nome e CTA de pagamento. */
   hideIdentityHeader?: boolean;
-  /** Dentro do painel lista+detalhe: cards mais leves, sem “caixa dentro de caixa”. */
+  /** Dentro do painel lista+detalhe: tipografia e listas mais limpas. */
   embedded?: boolean;
 };
 
-function shortDate(date: string): string {
-  const [, month, day] = date.split("-");
-  return `${day}/${month}`;
+const tabTriggerClass =
+  "shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] hover:!bg-white/[0.04] hover:!text-[#c8c9cd] data-[state=active]:!bg-[#1a1b1e] data-[state=active]:!text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm";
+
+function MetricCell({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="bg-[#151618] px-4 py-3.5">
+      <p
+        className={cn(
+          "text-[10px] font-medium uppercase tracking-[0.12em]",
+          ADMIN_SURFACE.muted
+        )}
+      >
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
+        {value}
+      </p>
+      <p className={cn("mt-0.5 text-[11px]", ADMIN_SURFACE.muted)}>
+        {hint ?? "\u00a0"}
+      </p>
+    </div>
+  );
 }
 
-function ServiceTable({
+function ServicesBreakdown({
   rows,
-  earnLabel,
+  isOwnerView,
 }: {
   rows: CommissionServiceBreakdownRow[];
-  earnLabel: string;
+  isOwnerView: boolean;
 }) {
-  if (rows.length === 0) {
+  const services = rows.filter((row) => !row.isTip);
+  const tips = rows.filter((row) => row.isTip);
+  const tipTotalCents = tips.reduce((sum, row) => sum + row.commissionCents, 0);
+  const commissionTotalCents = services.reduce(
+    (sum, row) => sum + row.commissionCents,
+    0
+  );
+  const timesTotal = services.reduce((sum, row) => sum + row.quantity, 0);
+
+  if (services.length === 0 && tips.length === 0) {
     return (
-      <p className="px-4 py-8 text-center text-sm text-[#8b8d93]">
+      <p className={cn("px-1 py-8 text-center text-sm", ADMIN_SURFACE.muted)}>
         Nenhum serviço no período.
       </p>
     );
   }
 
   return (
-    <>
-      <ul className="divide-y md:hidden">
-        {rows.map((row) => (
-          <li
-            key={`${row.isTip ? "tip" : "svc"}:${row.serviceName}`}
-            className="flex items-center justify-between gap-3 px-4 py-3"
-          >
-            <div className="min-w-0">
-              <p className="font-medium leading-snug">{row.serviceName}</p>
-              <p className="text-xs text-[#8b8d93]">
-                {row.quantity}x
-                {row.isTip ? " · gorjeta" : ""}
-              </p>
-            </div>
-            <p className="shrink-0 font-semibold tabular-nums">
-              {formatPriceBRL(row.commissionCents)}
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className={ADMIN_SURFACE.sectionLabel}>Serviços</p>
+          {services.length > 0 ? (
+            <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+              {services.length} tipo{services.length === 1 ? "" : "s"}
+              {" · "}
+              {timesTotal} vez{timesTotal === 1 ? "" : "es"}
             </p>
-          </li>
-        ))}
-      </ul>
-
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[420px] text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs text-[#8b8d93]">
-              <th className="px-4 py-3 font-medium">Serviço</th>
-              <th className="px-4 py-3 font-medium text-right">Qtd</th>
-              <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={`${row.isTip ? "tip" : "svc"}:${row.serviceName}`}
-                className="border-b last:border-b-0"
-              >
-                <td className="px-4 py-3 font-medium">
-                  {row.serviceName}
-                  {row.isTip && (
-                    <span className="ml-2 text-xs font-normal text-[#8b8d93]">
-                      gorjeta
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {row.quantity}
-                </td>
-                <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                  {formatPriceBRL(row.commissionCents)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          ) : null}
+        </div>
+        {services.length > 0 ? (
+          <p
+            className={cn(
+              "shrink-0 text-lg font-semibold tabular-nums",
+              ADMIN_SURFACE.accent
+            )}
+          >
+            {formatPriceBRL(commissionTotalCents)}
+          </p>
+        ) : null}
       </div>
-    </>
+
+      {services.length > 0 ? (
+        <ul className="divide-y divide-white/10">
+          {services.map((row, index) => {
+            const sharePct =
+              commissionTotalCents > 0
+                ? Math.round((row.commissionCents / commissionTotalCents) * 100)
+                : 0;
+            const avgGross =
+              row.quantity > 0
+                ? Math.round(row.grossCents / row.quantity)
+                : 0;
+
+            return (
+              <li key={`svc:${row.serviceName}`} className="py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                      <span className={cn("mr-2 tabular-nums", ADMIN_SURFACE.muted)}>
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      {row.serviceName}
+                    </p>
+                    <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                      {row.quantity}×
+                      {avgGross > 0 ? ` · méd. ${formatPriceBRL(avgGross)}` : ""}
+                      {" · "}
+                      {sharePct}%
+                    </p>
+                  </div>
+                  <p
+                    className={cn(
+                      "shrink-0 text-sm font-semibold tabular-nums",
+                      ADMIN_SURFACE.accent
+                    )}
+                  >
+                    {formatPriceBRL(row.commissionCents)}
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "mt-2 h-1 overflow-hidden rounded-full",
+                    ADMIN_SURFACE.progress
+                  )}
+                >
+                  <div
+                    className={cn("h-full rounded-full", ADMIN_SURFACE.progressBar)}
+                    style={{ width: `${sharePct}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {tipTotalCents > 0 ? (
+        <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[#f5f5f5]">Gorjetas</p>
+            <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
+              {isOwnerView ? "100% para o barbeiro" : "100% seu"}
+              {tips.reduce((s, t) => s + t.quantity, 0) > 0
+                ? ` · ${tips.reduce((s, t) => s + t.quantity, 0)}×`
+                : ""}
+            </p>
+          </div>
+          <p
+            className={cn(
+              "shrink-0 text-sm font-semibold tabular-nums",
+              ADMIN_SURFACE.accent
+            )}
+          >
+            {formatPriceBRL(tipTotalCents)}
+          </p>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-function AtendimentoCard({
+function AtendimentoRow({
   comanda,
   receiveLabel,
-  panelClass = ADMIN_SURFACE.panel,
+  hideDate = false,
 }: {
   comanda: CommissionComandaDetail;
   receiveLabel: string;
-  panelClass?: string;
+  hideDate?: boolean;
 }) {
   const customerLabel =
     comanda.customerName?.trim() ||
     formatWhatsapp(comanda.customerWhatsapp) ||
     "Cliente";
 
+  const metaParts: string[] = [];
+  if (!hideDate) metaParts.push(formatDateBR(comanda.serviceDate));
+  if (comanda.serviceItemCount > 0) {
+    metaParts.push(
+      `${comanda.serviceItemCount} serviço${
+        comanda.serviceItemCount === 1 ? "" : "s"
+      }`
+    );
+  }
+
   return (
-    <div className={cn(panelClass, "flex flex-col gap-3 p-4")}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
-              {customerLabel}
+    <li className="px-0 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+            {customerLabel}
+          </p>
+          {metaParts.length > 0 ? (
+            <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+              {metaParts.join(" · ")}
             </p>
-            <p className="mt-0.5 text-xs text-[#8b8d93]">
-              {formatDateBR(comanda.serviceDate)}
-              {comanda.serviceItemCount > 0
-                ? ` · ${comanda.serviceItemCount} serviço${
-                    comanda.serviceItemCount === 1 ? "" : "s"
-                  }`
-                : ""}
+          ) : null}
+        </div>
+        <div className="shrink-0 text-right">
+          <p
+            className={cn(
+              "text-[10px] uppercase tracking-wide",
+              ADMIN_SURFACE.muted
+            )}
+          >
+            {receiveLabel}
+          </p>
+          <p className={cn("text-base font-semibold tabular-nums", ADMIN_SURFACE.accent)}>
+            {formatPriceBRL(comanda.commissionCents)}
+          </p>
+        </div>
+      </div>
+
+      {comanda.items.length > 0 ? (
+        <ul className="mt-2.5 space-y-1.5 border-l border-white/10 pl-3">
+          {comanda.items.map((item, index) => (
+            <li
+              key={`${item.serviceName}-${index}`}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              <span className={cn("min-w-0 truncate", ADMIN_SURFACE.muted)}>
+                {item.serviceName}
+                {item.isTip ? " · gorjeta" : ""}
+              </span>
+              <span className="shrink-0 tabular-nums text-[#f5f5f5]">
+                {formatPriceBRL(item.commissionCents)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+type ComandaDayGroup = {
+  date: string;
+  comandas: CommissionComandaDetail[];
+  totalCents: number;
+};
+
+function groupComandasByDay(
+  comandas: CommissionComandaDetail[]
+): ComandaDayGroup[] {
+  const map = new Map<string, CommissionComandaDetail[]>();
+  for (const comanda of comandas) {
+    const list = map.get(comanda.serviceDate) ?? [];
+    list.push(comanda);
+    map.set(comanda.serviceDate, list);
+  }
+
+  return [...map.entries()]
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([date, dayComandas]) => ({
+      date,
+      comandas: dayComandas,
+      totalCents: dayComandas.reduce(
+        (sum, row) => sum + row.commissionCents,
+        0
+      ),
+    }));
+}
+
+function AtendimentosList({
+  comandas,
+  receiveLabel,
+  isSingleDay,
+  singleDayLabel,
+}: {
+  comandas: CommissionComandaDetail[];
+  receiveLabel: string;
+  isSingleDay: boolean;
+  singleDayLabel?: string;
+}) {
+  const dayGroups = useMemo(() => groupComandasByDay(comandas), [comandas]);
+  const [showAllDays, setShowAllDays] = useState(false);
+  const [dayIndex, setDayIndex] = useState(0);
+
+  useEffect(() => {
+    setShowAllDays(false);
+    setDayIndex(0);
+  }, [comandas]);
+
+  if (comandas.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 px-4 py-10 text-center">
+        <ClipboardList className={cn("size-5", ADMIN_SURFACE.muted)} />
+        <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+          Nenhum atendimento neste período.
+        </p>
+      </div>
+    );
+  }
+
+  const hasMultipleDays = !isSingleDay && dayGroups.length > 1;
+  const activeGroup = dayGroups[Math.min(dayIndex, dayGroups.length - 1)]!;
+  const canGoOlder = dayIndex < dayGroups.length - 1;
+  const canGoNewer = dayIndex > 0;
+
+  if (showAllDays && hasMultipleDays) {
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className={ADMIN_SURFACE.sectionLabel}>Todos os dias</p>
+            <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+              {dayGroups.length} dias · {comandas.length} atendimento
+              {comandas.length === 1 ? "" : "s"}
             </p>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="text-xs text-[#8b8d93]">{receiveLabel}</p>
-            <p className="text-base font-semibold tabular-nums text-[#f5f5f5]">
-              {formatPriceBRL(comanda.commissionCents)}
-            </p>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={ADMIN_SURFACE.btnGhost}
+            onClick={() => setShowAllDays(false)}
+          >
+            Ver um dia
+          </Button>
         </div>
 
-        {comanda.items.length > 0 ? (
-          <ul className="divide-y rounded-lg border border-[var(--page-border,rgb(255_255_255_/_10%))]">
-            {comanda.items.map((item, index) => (
-              <li
-                key={`${item.serviceName}-${index}`}
-                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-              >
-                <span className="min-w-0 truncate">
-                  {item.serviceName}
-                  {item.isTip ? (
-                    <span className="ml-1 text-xs text-[#8b8d93]">
-                      gorjeta
-                    </span>
-                  ) : null}
+        {dayGroups.map((group) => (
+          <section key={group.date} className="space-y-1">
+            <div className="flex items-baseline justify-between gap-2 border-b border-white/10 pb-2">
+              <p className={cn("text-sm font-medium", ADMIN_SURFACE.accent)}>
+                {formatDateBR(group.date)}
+              </p>
+              <p className={cn("text-xs tabular-nums", ADMIN_SURFACE.muted)}>
+                {group.comandas.length} atendimento
+                {group.comandas.length === 1 ? "" : "s"}
+                {" · "}
+                <span className={cn("font-medium", ADMIN_SURFACE.accent)}>
+                  {formatPriceBRL(group.totalCents)}
                 </span>
-                <span className="shrink-0 tabular-nums text-[#8b8d93]">
-                  {formatPriceBRL(item.commissionCents)}
-                </span>
-              </li>
-            ))}
-          </ul>
+              </p>
+            </div>
+            <ul className="divide-y divide-white/10">
+              {group.comandas.map((comanda) => (
+                <AtendimentoRow
+                  key={comanda.comandaId}
+                  comanda={comanda}
+                  receiveLabel={receiveLabel}
+                  hideDate
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  const headerLabel = isSingleDay
+    ? (singleDayLabel ?? formatDateBR(activeGroup.date))
+    : formatDateBR(activeGroup.date);
+
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className={ADMIN_SURFACE.sectionLabel}>{headerLabel}</p>
+          <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+            {activeGroup.comandas.length} atendimento
+            {activeGroup.comandas.length === 1 ? "" : "s"}
+            {" · "}
+            <span className={cn("font-medium", ADMIN_SURFACE.accent)}>
+              {formatPriceBRL(activeGroup.totalCents)}
+            </span>
+          </p>
+        </div>
+
+        {hasMultipleDays ? (
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(ADMIN_SURFACE.btnGhost, "size-8")}
+              disabled={!canGoOlder}
+              onClick={() => setDayIndex((i) => Math.min(i + 1, dayGroups.length - 1))}
+              aria-label="Dia anterior"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <span className={cn("min-w-[3.5rem] text-center text-xs tabular-nums", ADMIN_SURFACE.muted)}>
+              {dayIndex + 1}/{dayGroups.length}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className={cn(ADMIN_SURFACE.btnGhost, "size-8")}
+              disabled={!canGoNewer}
+              onClick={() => setDayIndex((i) => Math.max(i - 1, 0))}
+              aria-label="Próximo dia"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
         ) : null}
+      </div>
+
+      <ul className="divide-y divide-white/10">
+        {activeGroup.comandas.map((comanda) => (
+          <AtendimentoRow
+            key={comanda.comandaId}
+            comanda={comanda}
+            receiveLabel={receiveLabel}
+            hideDate
+          />
+        ))}
+      </ul>
+
+      {hasMultipleDays ? (
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(ADMIN_SURFACE.btnGhost, "w-full sm:w-auto")}
+            onClick={() => setShowAllDays(true)}
+          >
+            Ver mais · {dayGroups.length - 1} outro
+            {dayGroups.length - 1 === 1 ? "" : "s"} dia
+            {dayGroups.length - 1 === 1 ? "" : "s"}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function DayTable({
-  rows,
-  maxDayCommission,
-  buildDayHref,
-  activeDate,
-  earnLabel,
-}: {
-  rows: CommissionDayRow[];
-  maxDayCommission: number;
-  buildDayHref: (date: string) => string;
-  activeDate?: string;
-  earnLabel: string;
-}) {
-  return (
-    <>
-      <ul className="divide-y md:hidden">
-        {rows.map((row) => {
-          const isActive = activeDate === row.date;
-          return (
-            <li key={row.date}>
-              <Link
-                href={buildDayHref(row.date)}
-                className={cn(
-                  "flex items-center justify-between gap-3 px-4 py-3 active:bg-muted/40",
-                  isActive && "bg-muted/30"
-                )}
-              >
-                <div className="min-w-0">
-                  <p className="font-medium">{formatDateBR(row.date)}</p>
-                  <p className="text-xs text-[#8b8d93]">
-                    {row.serviceItemCount} serviço
-                    {row.serviceItemCount === 1 ? "" : "s"}
-                  </p>
-                  <div
-                    className={cn(
-                      "mt-1.5 h-1.5 w-full max-w-[8rem] overflow-hidden rounded-full",
-                      ADMIN_SURFACE.progress
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "h-full rounded-full",
-                        ADMIN_SURFACE.progressBar
-                      )}
-                      style={{
-                        width: `${
-                          maxDayCommission > 0
-                            ? Math.round(
-                                (row.commissionCents / maxDayCommission) * 100
-                              )
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-                <p className="shrink-0 font-semibold tabular-nums">
-                  {formatPriceBRL(row.commissionCents)}
-                </p>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+function DaysBreakdown({ rows }: { rows: CommissionDayRow[] }) {
+  const totalCents = rows.reduce((sum, row) => sum + row.commissionCents, 0);
+  const totalComandas = rows.reduce((sum, row) => sum + row.comandaCount, 0);
 
-      <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[360px] text-sm">
-          <thead>
-            <tr className="border-b bg-muted/30 text-left text-xs text-[#8b8d93]">
-              <th className="px-4 py-3 font-medium">Dia</th>
-              <th className="px-4 py-3 font-medium text-right">Serviços</th>
-              <th className="px-4 py-3 font-medium text-right">{earnLabel}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const isActive = activeDate === row.date;
-              return (
-                <tr
-                  key={row.date}
-                  className={cn(
-                    "border-b last:border-b-0",
-                    isActive && "bg-muted/30"
-                  )}
-                >
-                  <td className="px-4 py-3">
-                    <Link
-                      href={buildDayHref(row.date)}
-                      className="group block font-medium"
-                    >
-                      <span className="group-hover:underline">
-                        {formatDateBR(row.date)}
-                      </span>
-                      <div
-                        className={cn(
-                          "mt-1.5 h-1 w-full max-w-[8rem] overflow-hidden rounded-full",
-                          ADMIN_SURFACE.progress
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "h-full rounded-full",
-                            ADMIN_SURFACE.progressBar
-                          )}
-                          style={{
-                            width: `${
-                              maxDayCommission > 0
-                                ? Math.round(
-                                    (row.commissionCents / maxDayCommission) *
-                                      100
-                                  )
-                                : 0
-                            }%`,
-                          }}
-                        />
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-right tabular-nums">
-                    {row.serviceItemCount}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                    {formatPriceBRL(row.commissionCents)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+  if (rows.length === 0) {
+    return (
+      <p className={cn("px-1 py-8 text-center text-sm", ADMIN_SURFACE.muted)}>
+        Nenhum dia com atendimento no período.
+      </p>
+    );
+  }
+
+  const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className={ADMIN_SURFACE.sectionLabel}>Por dia</p>
+          <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+            {sorted.length} dia{sorted.length === 1 ? "" : "s"}
+            {" · "}
+            {totalComandas} atendimento{totalComandas === 1 ? "" : "s"}
+          </p>
+        </div>
+        <p
+          className={cn(
+            "shrink-0 text-lg font-semibold tabular-nums",
+            ADMIN_SURFACE.accent
+          )}
+        >
+          {formatPriceBRL(totalCents)}
+        </p>
       </div>
-    </>
+
+      <ul className="divide-y divide-white/10">
+        {sorted.map((row) => (
+          <li
+            key={row.date}
+            className="flex items-center justify-between gap-3 py-3.5"
+          >
+            <div className="min-w-0">
+              <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                {formatDateBR(row.date)}
+              </p>
+              <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                {row.comandaCount} atendimento
+                {row.comandaCount === 1 ? "" : "s"}
+              </p>
+            </div>
+            <p
+              className={cn(
+                "shrink-0 text-base font-semibold tabular-nums",
+                ADMIN_SURFACE.accent
+              )}
+            >
+              {formatPriceBRL(row.commissionCents)}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -331,7 +542,6 @@ export function CommissionBarberSelfView({
   professional,
   from,
   to,
-  buildDayHref,
   viewer = "self",
   payouts = [],
   hideIdentityHeader = false,
@@ -347,18 +557,8 @@ export function CommissionBarberSelfView({
     ? professional.comandas.filter((comanda) => comanda.serviceDate === from)
     : professional.comandas;
 
-  const earnLabel = isOwnerView ? "Comissão" : "Seu ganho";
   const receiveLabel = isOwnerView ? "Comissão" : "Você recebe";
   const tipHint = isOwnerView ? "100% para o barbeiro" : "100% seu";
-  const topServicesHint = isOwnerView
-    ? "Serviços que mais geraram comissão"
-    : "Serviços que mais geraram comissão para você";
-  const dayChartHint = isOwnerView
-    ? "Comissão por dia com atendimento"
-    : "Quanto você ganhou em cada dia com atendimento";
-  const paymentsHint = isOwnerView
-    ? "Como os clientes pagaram a parte dos serviços dele"
-    : "Como seus clientes pagaram a parte dos seus serviços";
   const heroHint = isOwnerView
     ? `${professional.commissionPercent}% nos serviços · ${tipHint}`
     : `Sua comissão · ${professional.commissionPercent}% nos serviços`;
@@ -402,50 +602,6 @@ export function CommissionBarberSelfView({
     )[0];
   }, [dayRows]);
 
-  const topServices = useMemo(
-    () =>
-      serviceRows
-        .filter((row) => !row.isTip)
-        .slice(0, 5)
-        .map((row) => ({
-          label: row.serviceName,
-          value: row.commissionCents,
-          sublabel: `${row.quantity}x`,
-        })),
-    [serviceRows]
-  );
-
-  const chartDays = useMemo(() => {
-    const slice = dayRows.length > 14 ? dayRows.slice(-14) : dayRows;
-    return slice.map((row) => ({
-      label: shortDate(row.date),
-      value: row.commissionCents,
-    }));
-  }, [dayRows]);
-
-  const paymentRows = professional.byPaymentMethod;
-  const activePaymentMethods = PAYMENT_METHODS.filter(
-    (method) => paymentRows[method] > 0
-  );
-  const paymentTotal = activePaymentMethods.reduce(
-    (sum, method) => sum + paymentRows[method],
-    0
-  );
-
-  const maxDayCommission = Math.max(
-    ...dayRows.map((day) => day.commissionCents),
-    0
-  );
-
-  const metricCount =
-    2 +
-    (summary.tipCents > 0 ? 1 : 0) +
-    (bestDay && !isSingleDay ? 1 : 0);
-
-  const panelClass = embedded
-    ? "rounded-xl border border-white/10 bg-[#1a1b1e] text-[#f5f5f5]"
-    : ADMIN_SURFACE.panel;
-
   return (
     <div className="flex flex-col gap-5">
       {!hideIdentityHeader ? (
@@ -454,14 +610,16 @@ export function CommissionBarberSelfView({
             <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
               {professional.professionalNickname}
             </p>
-            <p className="mt-0.5 text-xs text-[#8b8d93]">{heroHint}</p>
+            <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+              {heroHint}
+            </p>
           </div>
           <div className="flex flex-col gap-2 sm:items-end">
             <div>
-              <p className="text-xs text-[#8b8d93]">
+              <p className={cn("text-xs", ADMIN_SURFACE.muted)}>
                 {isOwnerView ? "A pagar" : "Você recebe"}
               </p>
-              <p className="text-2xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-3xl">
+              <p className={cn("text-2xl font-semibold tabular-nums tracking-tight sm:text-3xl", ADMIN_SURFACE.accent)}>
                 {formatPriceBRL(summary.commissionCents)}
               </p>
             </div>
@@ -486,61 +644,56 @@ export function CommissionBarberSelfView({
           <p className={ADMIN_SURFACE.sectionLabel}>
             {isOwnerView ? "A pagar no período" : "Você recebe"}
           </p>
-          <p className="mt-2 text-4xl font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
+          <p className={cn("mt-2 text-4xl font-semibold tabular-nums tracking-tight", ADMIN_SURFACE.accent)}>
             {formatPriceBRL(summary.commissionCents)}
           </p>
-          <p className="mt-1.5 text-xs text-[#8b8d93]">{heroHint}</p>
+          <p className={cn("mt-1.5 text-xs", ADMIN_SURFACE.muted)}>{heroHint}</p>
         </div>
       )}
 
       <div
         className={cn(
-          "grid gap-2",
-          metricCount >= 4
-            ? "sm:grid-cols-2 xl:grid-cols-4"
-            : metricCount === 3
-              ? "sm:grid-cols-3"
-              : "sm:grid-cols-2"
+          "grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10",
+          summary.tipCents > 0 && bestDay && !isSingleDay
+            ? "grid-cols-2 sm:grid-cols-4"
+            : summary.tipCents > 0 || (bestDay && !isSingleDay)
+              ? "grid-cols-2 sm:grid-cols-3"
+              : "grid-cols-2"
         )}
       >
-        <div className={cn(panelClass, "px-3.5 py-3")}>
-          <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
-            Atendimentos
-          </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
-            {summary.serviceItemCount}
-          </p>
-        </div>
-        <div className={cn(panelClass, "px-3.5 py-3")}>
-          <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
-            Em serviços
-          </p>
-          <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
-            {formatPriceBRL(serviceRevenueCents)}
-          </p>
-        </div>
+        <MetricCell
+          label="Atendimentos"
+          value={String(summary.comandaCount)}
+          hint={
+            !isSingleDay && dayRows.length > 0
+              ? `em ${dayRows.length} dia${dayRows.length === 1 ? "" : "s"}`
+              : undefined
+          }
+        />
+        <MetricCell
+          label="Em serviços"
+          value={formatPriceBRL(serviceRevenueCents)}
+          hint={
+            summary.comandaCount > 0
+              ? `méd. ${formatPriceBRL(
+                  Math.round(serviceRevenueCents / summary.comandaCount)
+                )} por atendimento`
+              : undefined
+          }
+        />
         {summary.tipCents > 0 ? (
-          <div className={cn(panelClass, "px-3.5 py-3")}>
-            <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
-              Gorjetas
-            </p>
-            <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
-              {formatPriceBRL(summary.tipCents)}
-            </p>
-          </div>
+          <MetricCell
+            label="Gorjetas"
+            value={formatPriceBRL(summary.tipCents)}
+            hint={isOwnerView ? "100% do barbeiro" : "100% suas"}
+          />
         ) : null}
         {bestDay && !isSingleDay ? (
-          <div className={cn(panelClass, "px-3.5 py-3")}>
-            <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
-              Melhor dia
-            </p>
-            <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
-              {formatPriceBRL(bestDay.commissionCents)}
-            </p>
-            <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
-              {formatDateBR(bestDay.date)}
-            </p>
-          </div>
+          <MetricCell
+            label="Melhor dia"
+            value={formatPriceBRL(bestDay.commissionCents)}
+            hint={formatDateBR(bestDay.date)}
+          />
         ) : null}
       </div>
 
@@ -565,192 +718,53 @@ export function CommissionBarberSelfView({
       <Tabs defaultValue="atendimentos" className="w-full">
         <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabsList className="h-auto w-max min-w-full gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-            <TabsTrigger
-              value="atendimentos"
-              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
-            >
+            <TabsTrigger value="atendimentos" className={tabTriggerClass}>
               Atendimentos
             </TabsTrigger>
-            <TabsTrigger
-              value="servicos"
-              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
-            >
-              Por serviço
+            <TabsTrigger value="servicos" className={tabTriggerClass}>
+              Serviços
             </TabsTrigger>
             {!isSingleDay ? (
-              <TabsTrigger
-                value="dias"
-                className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
-              >
+              <TabsTrigger value="dias" className={tabTriggerClass}>
                 Por dia
               </TabsTrigger>
             ) : null}
-            <TabsTrigger
-              value="repasses"
-              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
-            >
-              Repasses
-            </TabsTrigger>
-            <TabsTrigger
-              value="resumo"
-              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
-            >
-              Resumo
+            <TabsTrigger value="pagamentos" className={tabTriggerClass}>
+              Pagamentos
             </TabsTrigger>
           </TabsList>
         </div>
 
         <TabsContent value="atendimentos" className="mt-4">
-          {comandas.length === 0 ? (
-            <div
-              className={cn(
-                panelClass,
-                "flex flex-col items-center gap-2 px-4 py-10 text-center"
-              )}
-            >
-              <ClipboardList className={cn("size-5", ADMIN_SURFACE.muted)} />
-              <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
-                Nenhum atendimento neste período.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {isSingleDay ? (
-                <p className="text-xs text-[#8b8d93]">{formatDateBR(from)}</p>
-              ) : null}
-              {comandas.map((comanda) => (
-                <AtendimentoCard
-                  key={comanda.comandaId}
-                  comanda={comanda}
-                  receiveLabel={receiveLabel}
-                  panelClass={panelClass}
-                />
-              ))}
-            </div>
-          )}
+          <AtendimentosList
+            comandas={comandas}
+            receiveLabel={receiveLabel}
+            isSingleDay={isSingleDay}
+            singleDayLabel={isSingleDay ? formatDateBR(from) : undefined}
+          />
         </TabsContent>
 
         <TabsContent value="servicos" className="mt-4">
-          <div className={cn(panelClass, "overflow-hidden")}>
-            <ServiceTable rows={serviceRows} earnLabel={earnLabel} />
-          </div>
+          <ServicesBreakdown rows={serviceRows} isOwnerView={isOwnerView} />
         </TabsContent>
 
         {!isSingleDay ? (
           <TabsContent value="dias" className="mt-4">
-            {dayRows.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
-                Nenhum dia com atendimento no período.
-              </p>
-            ) : (
-              <div className={cn(panelClass, "overflow-hidden")}>
-                <DayTable
-                  rows={dayRows}
-                  maxDayCommission={maxDayCommission}
-                  buildDayHref={buildDayHref}
-                  earnLabel={earnLabel}
-                />
-              </div>
-            )}
+            <DaysBreakdown rows={dayRows} />
           </TabsContent>
         ) : null}
 
-        <TabsContent value="repasses" className="mt-4">
-          <CommissionPayoutHistory
-            payouts={payouts}
-            viewer={isOwnerView ? "owner" : "self"}
-          />
-        </TabsContent>
-
-        <TabsContent value="resumo" className="mt-4 space-y-4">
-          {!isSingleDay && chartDays.length > 0 ? (
-            <section className="flex flex-col gap-2">
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-medium">
-                  <TrendingUp className="size-4" />
-                  Comissão dia a dia
-                </h2>
-                <p className="text-xs text-[#8b8d93]">{dayChartHint}</p>
-              </div>
-              <div className={cn(panelClass, "px-4 pt-5 pb-4")}>
-                  <VerticalBarChart items={chartDays} height={160} />
-                </div>
-            </section>
-          ) : null}
-
-          {topServices.length > 0 ? (
-            <section className="flex flex-col gap-2">
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-medium">
-                  <Scissors className="size-4" />
-                  O que mais rendeu
-                </h2>
-                <p className="text-xs text-[#8b8d93]">{topServicesHint}</p>
-              </div>
-              <div className={cn(panelClass, "px-4 pt-5 pb-4")}>
-                  <HorizontalBarChart items={topServices} />
-                </div>
-            </section>
-          ) : null}
-
-          {activePaymentMethods.length > 0 ? (
-            <section className="flex flex-col gap-2">
-              <div>
-                <h2 className="flex items-center gap-2 text-sm font-medium">
-                  <Wallet className="size-4" />
-                  Formas de pagamento
-                </h2>
-                <p className="text-xs text-[#8b8d93]">{paymentsHint}</p>
-              </div>
-              <div className={cn(panelClass, "flex flex-col gap-3 px-4 pt-5 pb-4")}>
-                  {activePaymentMethods.map((method) => {
-                    const amount = paymentRows[method];
-                    const pct =
-                      paymentTotal > 0
-                        ? Math.round((amount / paymentTotal) * 100)
-                        : 0;
-                    return (
-                      <div key={method} className="space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="text-[#8b8d93]">
-                            {formatPaymentMethodLabel(method)}
-                          </span>
-                          <span className="font-medium tabular-nums">
-                            {formatPriceBRL(amount)}
-                            <span className="ml-1 text-xs font-normal text-[#8b8d93]">
-                              {pct}%
-                            </span>
-                          </span>
-                        </div>
-                        <div
-                          className={cn(
-                            "h-1.5 overflow-hidden rounded-full",
-                            ADMIN_SURFACE.progress
-                          )}
-                        >
-                          <div
-                            className={cn(
-                              "h-full rounded-full",
-                              ADMIN_SURFACE.progressBar
-                            )}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-            </section>
-          ) : null}
-
-          {!isSingleDay &&
-          chartDays.length === 0 &&
-          topServices.length === 0 &&
-          activePaymentMethods.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
-              Nada para resumir neste período.
+        <TabsContent value="pagamentos" className="mt-4">
+          <section className="space-y-2">
+            <p className={ADMIN_SURFACE.sectionLabel}>
+              {isOwnerView ? "Repasses registrados" : "Seus repasses"}
             </p>
-          ) : null}
+            <CommissionPayoutHistory
+              payouts={payouts}
+              viewer={isOwnerView ? "owner" : "self"}
+              embedded={embedded}
+            />
+          </section>
         </TabsContent>
       </Tabs>
     </div>

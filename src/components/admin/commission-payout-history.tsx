@@ -11,22 +11,20 @@ type CommissionPayoutHistoryProps = {
   payouts: CommissionPayout[];
   /** "owner" = texto para o dono; "self" = texto para o barbeiro. */
   viewer?: "owner" | "self";
+  /** Lista flat no painel lista+detalhe (sem cards empilhados). */
+  embedded?: boolean;
 };
 
 export function CommissionPayoutHistory({
   payouts,
   viewer = "owner",
+  embedded = false,
 }: CommissionPayoutHistoryProps) {
   const isOwner = viewer === "owner";
 
   if (payouts.length === 0) {
     return (
-      <div
-        className={cn(
-          ADMIN_SURFACE.panel,
-          "flex flex-col items-center gap-2 px-4 py-10 text-center"
-        )}
-      >
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-white/10 px-4 py-10 text-center">
         <div className="flex size-10 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e]">
           <Wallet className={cn("size-4", ADMIN_SURFACE.muted)} />
         </div>
@@ -65,14 +63,12 @@ export function CommissionPayoutHistory({
         </p>
       </div>
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {payouts.map((payout) => (
-          <li key={payout.id}>
-            <div
-              className={cn(
-                ADMIN_SURFACE.panel,
-                "flex items-start justify-between gap-3 p-4"
-              )}
+      {embedded ? (
+        <ul className="divide-y divide-white/10">
+          {payouts.map((payout) => (
+            <li
+              key={payout.id}
+              className="flex items-start justify-between gap-3 py-3"
             >
               <div className="min-w-0">
                 <p className="font-medium leading-snug tracking-tight text-[#f5f5f5]">
@@ -86,10 +82,36 @@ export function CommissionPayoutHistory({
               <p className="shrink-0 text-base font-semibold tabular-nums text-[#f5f5f5]">
                 {formatPriceBRL(payout.amountCents)}
               </p>
-            </div>
-          </li>
-        ))}
-      </ul>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {payouts.map((payout) => (
+            <li key={payout.id}>
+              <div
+                className={cn(
+                  ADMIN_SURFACE.panel,
+                  "flex items-start justify-between gap-3 p-4"
+                )}
+              >
+                <div className="min-w-0">
+                  <p className="font-medium leading-snug tracking-tight text-[#f5f5f5]">
+                    {formatDateTimeBR(payout.paidAt)}
+                  </p>
+                  <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+                    Período{" "}
+                    {formatPeriodLabel(payout.periodFrom, payout.periodTo)}
+                  </p>
+                </div>
+                <p className="shrink-0 text-base font-semibold tabular-nums text-[#f5f5f5]">
+                  {formatPriceBRL(payout.amountCents)}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

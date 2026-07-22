@@ -111,8 +111,8 @@ function BarberListItem({
           {row.professionalNickname}
         </p>
         <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
-          {row.summary.serviceItemCount} atendimento
-          {row.summary.serviceItemCount === 1 ? "" : "s"}
+          {row.summary.comandaCount} atendimento
+          {row.summary.comandaCount === 1 ? "" : "s"}
           {" · "}
           {row.commissionPercent}%
         </p>
@@ -154,8 +154,10 @@ export function CommissionsView({
 
   const sortedProfessionals = useMemo(
     () =>
-      [...report.professionals].sort(
-        (a, b) => b.summary.commissionCents - a.summary.commissionCents
+      [...report.professionals].sort((a, b) =>
+        a.professionalNickname.localeCompare(b.professionalNickname, "pt-BR", {
+          sensitivity: "base",
+        })
       ),
     [report.professionals]
   );
@@ -260,7 +262,6 @@ export function CommissionsView({
                 to={to}
                 viewer="self"
                 payouts={activePayouts}
-                buildDayHref={(date) => buildQuery(date, date, selectedId)}
               />
             </div>
           )}
@@ -371,7 +372,7 @@ export function CommissionsView({
                     Atendimentos
                   </p>
                   <p className="mt-0.5 text-sm font-medium tabular-nums text-[#f5f5f5]">
-                    {report.summary.serviceItemCount}
+                    {report.summary.comandaCount}
                   </p>
                 </div>
                 <div className="bg-[#151618] px-3.5 py-3">
@@ -442,9 +443,6 @@ export function CommissionsView({
                       payouts={activePayouts}
                       hideIdentityHeader
                       embedded
-                      buildDayHref={(date) =>
-                        buildQuery(date, date, selectedId)
-                      }
                     />
                   </div>
                 </>
@@ -467,16 +465,6 @@ export function CommissionsView({
                       pagamento — os outros continuam visíveis.
                     </p>
                   </div>
-                  {sortedProfessionals[0] ? (
-                    <Button
-                      className={cn(ADMIN_SURFACE.btnPrimary, "mt-2")}
-                      onClick={() =>
-                        selectBarber(sortedProfessionals[0].professionalId)
-                      }
-                    >
-                      Abrir {sortedProfessionals[0].professionalNickname}
-                    </Button>
-                  ) : null}
                 </div>
               )}
             </section>

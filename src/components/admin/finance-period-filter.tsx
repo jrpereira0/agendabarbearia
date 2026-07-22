@@ -2,7 +2,7 @@
 
 import type { ElementType, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/admin/date-picker-field";
 import { monthStart, shiftDate } from "@/lib/date-range";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
@@ -127,15 +127,11 @@ export function FinancePeriodFilter({
             <label className="sr-only" htmlFor="finance-from">
               Data inicial
             </label>
-            <Input
+            <DatePickerField
               id="finance-from"
-              type="date"
               value={fromDate}
-              onChange={(e) => onFromChange(e.target.value)}
-              className={cn(
-                "h-10 w-full sm:h-8 sm:w-[9.75rem]",
-                dark ? ADMIN_SURFACE.input : "bg-background"
-              )}
+              onChange={onFromChange}
+              tone={dark ? "dark" : "default"}
             />
             <span
               className={cn(
@@ -148,15 +144,11 @@ export function FinancePeriodFilter({
             <label className="sr-only" htmlFor="finance-to">
               Data final
             </label>
-            <Input
+            <DatePickerField
               id="finance-to"
-              type="date"
               value={toDate}
-              onChange={(e) => onToChange(e.target.value)}
-              className={cn(
-                "h-10 w-full sm:h-8 sm:w-[9.75rem]",
-                dark ? ADMIN_SURFACE.input : "bg-background"
-              )}
+              onChange={onToChange}
+              tone={dark ? "dark" : "default"}
             />
           </div>
 

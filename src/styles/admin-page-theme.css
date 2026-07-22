@@ -135,7 +135,13 @@
 }
 
 .admin-page [data-slot="tabs-trigger"]:hover {
-  color: #f5f5f5 !important;
+  color: #c8c9cd !important;
+  background: rgb(255 255 255 / 4%) !important;
+}
+
+.admin-page [data-slot="tabs-trigger"][data-state="active"]:hover {
+  color: var(--page-accent) !important;
+  background: var(--page-input) !important;
 }
 
 .admin-page [data-slot="tabs-trigger"][data-state="active"] {
