@@ -11,6 +11,7 @@ import {
   whatsappSchema,
 } from "@/lib/whatsapp";
 import type { BookingSource } from "@/lib/booking-source";
+import { appointmentServiceRowsFromIds } from "@/lib/appointment-service-quantities";
 
 const createSchema = z
   .object({
@@ -100,10 +101,7 @@ async function insertAppointment(params: {
   }
 
   const { error: linkError } = await admin.from("appointment_services").insert(
-    params.serviceIds.map((serviceId) => ({
-      appointment_id: appointment.id,
-      service_id: serviceId,
-    }))
+    appointmentServiceRowsFromIds(appointment.id, params.serviceIds)
   );
 
   if (linkError) {

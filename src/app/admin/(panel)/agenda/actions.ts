@@ -35,6 +35,12 @@ import {
   captureAppointmentUpdateSnapshot,
   notifyAppointmentUpdated,
 } from "@/lib/notifications/appointment-updated-webhook";
+import {
+  appointmentServiceRowsFromIds,
+  expandServiceIdsFromRows,
+  sumDurationForServiceIds,
+  uniqueServiceIds,
+} from "@/lib/appointment-service-quantities";
 
 /** Revalida a agenda depois de responder ao navegador (mais rápido na Vercel). */
 function revalidateAdminAgendaSoon() {
@@ -149,7 +155,7 @@ async function assertOwnsAppointment(
       is_squeeze_in,
       date,
       start_time,
-      appointment_services ( service_id )
+      appointment_services ( service_id, quantity )
     `
     )
     .eq("id", appointmentId)
@@ -172,8 +178,8 @@ async function assertOwnsAppointment(
     isSqueezeIn: appointment.is_squeeze_in,
     date: appointment.date,
     startTime: formatTime(appointment.start_time),
-    serviceIds: (appointment.appointment_services ?? []).map(
-      (row) => row.service_id
+    serviceIds: expandServiceIdsFromRows(
+      appointment.appointment_services ?? []
     ),
   };
 }
@@ -244,10 +250,7 @@ async function insertAppointment(
   }
 
   const { error: linkError } = await admin.from("appointment_services").insert(
-    data.serviceIds.map((serviceId) => ({
-      appointment_id: appointment.id,
-      service_id: serviceId,
-    }))
+    appointmentServiceRowsFromIds(appointment.id, data.serviceIds)
   );
 
   if (linkError) {
@@ -299,6 +302,8 @@ async function validateCreateInput(
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
+  const uniqueIds = uniqueServiceIds(input.serviceIds);
+
   const [{ data: professional }, { data: foundServices }, { data: links }, { data: weekdayPrices }] =
     await Promise.all([
       admin
@@ -309,16 +314,16 @@ async function validateCreateInput(
       admin
         .from("services")
         .select("id, name, active, duration_minutes")
-        .in("id", input.serviceIds),
+        .in("id", uniqueIds),
       admin
         .from("professional_services")
         .select("service_id")
         .eq("professional_id", input.professionalId)
-        .in("service_id", input.serviceIds),
+        .in("service_id", uniqueIds),
       admin
         .from("service_weekday_prices")
         .select("service_id")
-        .in("service_id", input.serviceIds)
+        .in("service_id", uniqueIds)
         .eq("weekday", weekdayOf(input.date)),
     ]);
 
@@ -326,7 +331,7 @@ async function validateCreateInput(
     return { ok: false, error: "Profissional não encontrado." };
   }
 
-  if (!foundServices || foundServices.length !== input.serviceIds.length) {
+  if (!foundServices || foundServices.length !== uniqueIds.length) {
     return { ok: false, error: "Serviço não encontrado." };
   }
 
@@ -351,9 +356,12 @@ async function validateCreateInput(
     };
   }
 
-  const durationMinutes = foundServices.reduce(
-    (sum, s) => sum + s.duration_minutes,
-    0
+  const durationById = new Map(
+    foundServices.map((s) => [s.id, s.duration_minutes])
+  );
+  const durationMinutes = sumDurationForServiceIds(
+    input.serviceIds,
+    durationById
   );
 
   return { durationMinutes };
@@ -631,10 +639,10 @@ export async function updateAppointment(input: {
   }
 
   const { error: linkError } = await admin.from("appointment_services").insert(
-    parsed.data.serviceIds.map((serviceId) => ({
-      appointment_id: parsed.data.appointmentId,
-      service_id: serviceId,
-    }))
+    appointmentServiceRowsFromIds(
+      parsed.data.appointmentId,
+      parsed.data.serviceIds
+    )
   );
 
   if (linkError) {

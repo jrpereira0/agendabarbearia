@@ -60,7 +60,15 @@ function AppointmentTooltipContent({
   appointment: AppointmentItem;
 }) {
   const name = `${apt.customerFirstName} ${apt.customerLastName}`;
-  const services = apt.services.map((s) => s.name);
+  const services = (() => {
+    const counts = new Map<string, number>();
+    for (const s of apt.services) {
+      counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([name, qty]) =>
+      qty > 1 ? `${name} ×${qty}` : name
+    );
+  })();
   const totalMinutes = apt.services.reduce((s, svc) => s + svc.durationMinutes, 0);
   const totalPrice = apt.services.reduce((s, svc) => s + svc.priceCents, 0);
   const timeRange = `${formatTime(apt.startTime)} – ${formatTime(apt.endTime)}`;
@@ -127,12 +135,18 @@ export function AppointmentGridBlock({
   const sideBySide = columnCount > 1;
   const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
   const showService = rowSpan >= 2 && !sideBySide;
-  const serviceLabel =
-    apt.services.length === 0
-      ? null
-      : apt.services.length === 1
-        ? apt.services[0]!.name
-        : `${apt.services[0]!.name} +${apt.services.length - 1}`;
+  const serviceLabel = (() => {
+    if (apt.services.length === 0) return null;
+    const counts = new Map<string, number>();
+    for (const s of apt.services) {
+      counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+    }
+    const parts = [...counts.entries()].map(([name, qty]) =>
+      qty > 1 ? `${name} ×${qty}` : name
+    );
+    if (parts.length === 1) return parts[0]!;
+    return `${parts[0]} +${parts.length - 1}`;
+  })();
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
 
   const blockButton = (

@@ -714,7 +714,7 @@ async function seedItemsFromAppointment(
 
   const { data: links } = await admin
     .from("appointment_services")
-    .select("service_id, services ( id, name, price_cents )")
+    .select("service_id, quantity, services ( id, name, price_cents )")
     .eq("appointment_id", appointmentId);
 
   if (!links?.length || !appointment) return sortOrderStart;
@@ -747,12 +747,14 @@ async function seedItemsFromAppointment(
       },
       pricing
     );
+    const quantity = Math.max(1, link.quantity ?? 1);
     return {
       comanda_id: comandaId,
       service_id: link.service_id,
       service_name: service?.name ?? "Serviço",
       catalog_price_cents: price,
-      charged_price_cents: price,
+      charged_price_cents: price * quantity,
+      quantity,
       sort_order: sortOrderStart + index,
       appointment_id: appointmentId,
       professional_id: appointment.professional_id,

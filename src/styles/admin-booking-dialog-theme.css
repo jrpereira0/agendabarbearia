@@ -1,0 +1,235 @@
+/* Modal de agendamento (novo/encaixe) — identidade #0E0F11 + #ECF15E.
+   Escopo: .admin-booking-dialog (portal, fora de .admin-agenda). */
+
+.admin-booking-dialog {
+  --booking-bg: #0e0f11;
+  --booking-elevated: #151618;
+  --booking-input: #1a1b1e;
+  --booking-muted: #8b8d93;
+  --booking-border: rgb(255 255 255 / 10%);
+  --booking-accent: #ecf15e;
+  --booking-accent-hover: #e0e64f;
+  --booking-accent-fg: #0e0f11;
+  --booking-font-body: "Aeonik", var(--font-outfit), var(--font-sans), system-ui,
+    sans-serif;
+  --booking-font-display: "Neue Montreal", "Aeonik", var(--font-outfit),
+    var(--font-sans), system-ui, sans-serif;
+
+  font-family: var(--booking-font-body);
+  color: #f5f5f5;
+  background: var(--booking-bg) !important;
+  border: 1px solid var(--booking-border) !important;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%) !important;
+  color-scheme: dark;
+  ring-color: transparent;
+}
+
+body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.admin-booking-dialog .booking-display {
+  font-family: var(--booking-font-display);
+}
+
+.admin-booking-dialog .text-muted-foreground {
+  color: var(--booking-muted);
+}
+
+.admin-booking-dialog [data-slot="dialog-description"] {
+  color: var(--booking-muted);
+}
+
+.admin-booking-dialog [data-slot="dialog-close"] {
+  color: var(--booking-muted);
+}
+
+.admin-booking-dialog [data-slot="dialog-close"]:hover {
+  background: rgb(255 255 255 / 8%);
+  color: var(--booking-accent);
+}
+
+.admin-booking-dialog .booking-header {
+  border-color: var(--booking-border);
+  background: var(--booking-bg);
+}
+
+.admin-booking-dialog .booking-footer {
+  border-color: var(--booking-border);
+  background: rgb(21 22 24 / 92%);
+}
+
+.admin-booking-dialog .booking-progress-track {
+  background: rgb(255 255 255 / 10%);
+}
+
+.admin-booking-dialog .booking-progress-fill {
+  background: var(--booking-accent);
+}
+
+.admin-booking-dialog .booking-context {
+  border: 1px solid var(--booking-border);
+  background: var(--booking-elevated);
+}
+
+.admin-booking-dialog .booking-pick {
+  border: 1px solid transparent;
+  background: var(--booking-elevated);
+  color: #f5f5f5;
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.admin-booking-dialog .booking-pick:hover {
+  background: #1a1b1e;
+  border-color: rgb(255 255 255 / 14%);
+}
+
+.admin-booking-dialog .booking-pick-active {
+  border-color: rgb(236 241 94 / 55%);
+  background: rgb(236 241 94 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(236 241 94 / 18%);
+}
+
+.admin-booking-dialog .booking-check {
+  border-color: rgb(255 255 255 / 22%);
+  background: transparent;
+  color: transparent;
+}
+
+.admin-booking-dialog .booking-check-active {
+  border-color: var(--booking-accent);
+  background: var(--booking-accent);
+  color: var(--booking-accent-fg);
+}
+
+.admin-booking-dialog .booking-btn-ghost {
+  border-color: var(--booking-border) !important;
+  background: var(--booking-elevated) !important;
+  color: #f5f5f5 !important;
+}
+
+.admin-booking-dialog .booking-btn-ghost:hover:not(:disabled) {
+  background: #1a1b1e !important;
+  color: var(--booking-accent) !important;
+  border-color: rgb(236 241 94 / 28%) !important;
+}
+
+.admin-booking-dialog .booking-btn-primary {
+  background: var(--booking-accent) !important;
+  color: var(--booking-accent-fg) !important;
+  border-color: transparent !important;
+}
+
+.admin-booking-dialog .booking-btn-primary:hover:not(:disabled) {
+  background: var(--booking-accent-hover) !important;
+  color: var(--booking-accent-fg) !important;
+}
+
+.admin-booking-dialog .booking-btn-primary:disabled {
+  opacity: 0.55;
+}
+
+/* Tokens claros do tema global → escuros dentro do modal */
+.admin-booking-dialog .text-foreground {
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog .bg-card,
+.admin-booking-dialog .bg-background,
+.admin-booking-dialog .bg-popover {
+  background-color: var(--booking-elevated) !important;
+}
+
+.admin-booking-dialog .border,
+.admin-booking-dialog .border-b,
+.admin-booking-dialog .border-t {
+  border-color: var(--booking-border);
+}
+
+/* Inputs / busca / campos do cliente herdados */
+.admin-booking-dialog input,
+.admin-booking-dialog textarea,
+.admin-booking-dialog [data-slot="input"] {
+  border-color: var(--booking-border) !important;
+  background: var(--booking-input) !important;
+  color: #f5f5f5 !important;
+}
+
+.admin-booking-dialog input::placeholder,
+.admin-booking-dialog [data-slot="input"]::placeholder {
+  color: rgb(139 141 147 / 80%);
+}
+
+.admin-booking-dialog input:focus-visible,
+.admin-booking-dialog [data-slot="input"]:focus-visible {
+  border-color: rgb(236 241 94 / 55%) !important;
+  box-shadow: 0 0 0 3px rgb(236 241 94 / 18%) !important;
+  outline: none;
+}
+
+.admin-booking-dialog label {
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog [class*="bg-muted"] {
+  background-color: rgb(255 255 255 / 5%) !important;
+}
+
+.admin-booking-dialog [class*="hover:bg-muted"]:hover {
+  background-color: rgb(255 255 255 / 8%) !important;
+}
+
+.admin-booking-dialog .overflow-hidden.rounded-xl.border {
+  border-color: var(--booking-border) !important;
+  background: var(--booking-elevated) !important;
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog .shadow-lg {
+  box-shadow: 0 16px 40px rgb(0 0 0 / 55%) !important;
+}
+
+/* Grade de horários */
+.admin-booking-dialog .booking-slot-grid button[data-slot="button"] {
+  border-color: var(--booking-border);
+  background: var(--booking-elevated);
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog .booking-slot-grid button[data-variant="outline"] {
+  border-color: var(--booking-border);
+  background: var(--booking-elevated);
+  color: #f5f5f5;
+}
+
+.admin-booking-dialog .booking-slot-grid button[data-variant="outline"]:hover:not(:disabled) {
+  border-color: rgb(236 241 94 / 35%);
+  background: #1a1b1e;
+  color: var(--booking-accent);
+}
+
+.admin-booking-dialog .booking-slot-grid button[data-variant="default"] {
+  border-color: transparent;
+  background: var(--booking-accent);
+  color: var(--booking-accent-fg);
+}
+
+.admin-booking-dialog .booking-slot-grid button[data-variant="default"]:hover:not(:disabled) {
+  background: var(--booking-accent-hover);
+  color: var(--booking-accent-fg);
+}
+
+.admin-booking-dialog .booking-notice {
+  border: 1px dashed rgb(236 241 94 / 28%);
+  background: rgb(236 241 94 / 6%);
+  color: var(--booking-muted);
+}
+
+.admin-booking-dialog .booking-notice strong,
+.admin-booking-dialog .booking-notice .font-medium {
+  color: #f5f5f5;
+}

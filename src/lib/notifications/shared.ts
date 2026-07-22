@@ -17,7 +17,10 @@ export type RawAppointmentRow = {
     | { id: string; nickname: string; whatsapp: string }[]
     | null;
   appointment_services:
-    | { services: RawServiceRow | RawServiceRow[] | null }[]
+    | {
+        quantity?: number | null;
+        services: RawServiceRow | RawServiceRow[] | null;
+      }[]
     | null;
 };
 
@@ -57,6 +60,7 @@ export async function loadAppointmentWebhookBaseData(
       customer_whatsapp,
       professionals ( id, nickname, whatsapp ),
       appointment_services (
+        quantity,
         services ( id, name, price_cents )
       )
     `
@@ -79,9 +83,15 @@ export async function loadAppointmentWebhookBaseData(
     return null;
   }
 
-  const rawServices = (appointment.appointment_services ?? [])
-    .map((row) => firstOrSelf(row.services))
-    .filter((service): service is RawServiceRow => service !== null);
+  const rawServices: RawServiceRow[] = [];
+  for (const row of appointment.appointment_services ?? []) {
+    const service = firstOrSelf(row.services);
+    if (!service) continue;
+    const quantity = Math.max(1, row.quantity ?? 1);
+    for (let i = 0; i < quantity; i += 1) {
+      rawServices.push(service);
+    }
+  }
 
   const { data: shopSettings } = await admin
     .from("shop_settings")

@@ -71,6 +71,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       booking_source,
       professionals ( nickname ),
       appointment_services (
+        quantity,
         services ( id, name, duration_minutes, price_cents )
       )
     `
@@ -160,24 +161,30 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     isComandaExtra: a.is_comanda_extra ?? false,
     bookingSource: (a.booking_source as AppointmentItem["bookingSource"]) ?? null,
     services: (a.appointment_services ?? []).flatMap((row) => {
+      const quantity = Math.max(
+        1,
+        (row as { quantity?: number | null }).quantity ?? 1
+      );
       const raw = row.services as
         | { id: string; name: string; duration_minutes: number; price_cents: number }
         | { id: string; name: string; duration_minutes: number; price_cents: number }[]
         | null;
       const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
-      return list.map((s) => ({
-        id: s.id,
-        name: s.name,
-        durationMinutes: s.duration_minutes,
-        priceCents: resolvePriceCentsOrFallback(
-          {
-            id: s.id,
-            name: s.name,
-            price_cents: s.price_cents,
-          },
-          pricingContext
-        ),
-      }));
+      return Array.from({ length: quantity }, () =>
+        list.map((s) => ({
+          id: s.id,
+          name: s.name,
+          durationMinutes: s.duration_minutes,
+          priceCents: resolvePriceCentsOrFallback(
+            {
+              id: s.id,
+              name: s.name,
+              price_cents: s.price_cents,
+            },
+            pricingContext
+          ),
+        }))
+      ).flat();
     }),
   };
   });

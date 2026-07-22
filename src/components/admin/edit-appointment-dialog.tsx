@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Clock, Scissors, User, Check } from "lucide-react";
+import { Clock, Scissors, User, Check, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +35,7 @@ import {
   isOutsideProfessionalSchedule,
 } from "@/lib/encaixe";
 import { matchesSearch } from "@/lib/text";
+import { countServiceQuantities } from "@/lib/appointment-service-quantities";
 import { cn } from "@/lib/utils";
 import { adminWideDialogClassName } from "@/lib/admin-dialog";
 import { updateAppointment, getEditAvailabilitySlots } from "@/app/admin/(panel)/agenda/actions";
@@ -95,8 +95,15 @@ export function EditAppointmentDialog({
   }, [availableServices, serviceSearch]);
 
   const selectedServices = useMemo(
-    () => services.filter((s) => serviceIds.includes(s.id)),
+    () =>
+      serviceIds
+        .map((id) => services.find((s) => s.id === id))
+        .filter((s): s is ServiceOption => Boolean(s)),
     [services, serviceIds]
+  );
+  const serviceQuantities = useMemo(
+    () => countServiceQuantities(serviceIds),
+    [serviceIds]
   );
   const totalMinutes = useMemo(
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0),
@@ -307,10 +314,13 @@ export function EditAppointmentDialog({
     };
   }, [open, appointment, isEncaixe, ownerFreeMode, serviceIds, professionalId]);
 
-  function toggleService(id: string, checked: boolean) {
-    setServiceIds((prev) =>
-      checked ? [...prev, id] : prev.filter((v) => v !== id)
-    );
+  function setServiceQuantity(id: string, quantity: number) {
+    const nextQty = Math.max(0, Math.min(20, quantity));
+    setServiceIds((prev) => {
+      const without = prev.filter((v) => v !== id);
+      if (nextQty === 0) return without;
+      return [...without, ...Array.from({ length: nextQty }, () => id)];
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -463,32 +473,77 @@ export function EditAppointmentDialog({
               ) : (
                 <div className="flex max-h-56 flex-col gap-2 overflow-y-auto sm:max-h-64">
                   {filteredServices.map((svc) => {
-                    const checked = serviceIds.includes(svc.id);
+                    const quantity = serviceQuantities.get(svc.id) ?? 0;
+                    const selected = quantity > 0;
                     return (
-                      <label
+                      <div
                         key={svc.id}
                         className={cn(
-                          "flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50",
-                          checked && "border-primary bg-muted/50"
+                          "flex items-center gap-3 rounded-lg border p-3 transition-colors",
+                          selected
+                            ? "border-primary bg-muted/50"
+                            : "hover:bg-muted/50"
                         )}
                       >
-                        <Checkbox
-                          checked={checked}
-                          onCheckedChange={(c) =>
-                            toggleService(svc.id, c === true)
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setServiceQuantity(svc.id, selected ? 0 : 1)
                           }
-                          className="mt-0.5"
-                        />
-                        <div className="min-w-0 flex-1">
+                          className="min-w-0 flex-1 text-left"
+                        >
                           <p className="text-sm font-medium leading-snug">
                             {svc.name}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
                             {formatDuration(svc.durationMinutes)} ·{" "}
                             {formatPriceBRL(svc.priceCents)}
+                            {quantity > 1 ? " · cada" : ""}
                           </p>
-                        </div>
-                      </label>
+                        </button>
+                        {selected ? (
+                          <div className="flex shrink-0 items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Diminuir ${svc.name}`}
+                              onClick={() =>
+                                setServiceQuantity(
+                                  svc.id,
+                                  Math.max(0, quantity - 1)
+                                )
+                              }
+                            >
+                              <Minus className="size-3.5" />
+                            </Button>
+                            <span className="min-w-6 text-center text-sm font-medium tabular-nums">
+                              {quantity}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Aumentar ${svc.name}`}
+                              onClick={() =>
+                                setServiceQuantity(svc.id, quantity + 1)
+                              }
+                            >
+                              <Plus className="size-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Adicionar ${svc.name}`}
+                            onClick={() => setServiceQuantity(svc.id, 1)}
+                          >
+                            <Plus className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

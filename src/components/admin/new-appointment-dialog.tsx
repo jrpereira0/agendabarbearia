@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/encaixe";
 import { matchesSearch } from "@/lib/text";
 import { groupServicesForBooking } from "@/lib/booking-service-groups";
+import { countServiceQuantities } from "@/lib/appointment-service-quantities";
 import { cn } from "@/lib/utils";
 import {
   createNormalAppointment,
@@ -118,9 +119,7 @@ function getStepMeta(
     },
     services: {
       title: presetFromGrid ? "O que vai fazer?" : "Escolha os serviços",
-      description: presetFromGrid
-        ? "O horário já está reservado na grade."
-        : "Pode marcar mais de um serviço.",
+      description: "Pode marcar mais de um.",
     },
     time: {
       title: isEncaixe ? "Horário do encaixe" : "Qual horário?",
@@ -130,54 +129,53 @@ function getStepMeta(
     },
     client: {
       title: "Dados do cliente",
-      description: "Nome e WhatsApp para confirmar o agendamento.",
+      description: "Confira o resumo e preencha nome e WhatsApp.",
     },
   };
   return meta[step];
 }
 
-function AppointmentContextSummary({
+/** Faixa compacta no cabeçalho — preço/duração ficam só no rodapé. */
+function BookingContextBar({
   professional,
   date,
   startTime,
-  services,
-  totalMinutes,
-  totalPrice,
+  services = [],
 }: {
   professional: ProfessionalOption;
   date: string;
   startTime?: string | null;
-  services: ServiceOption[];
-  totalMinutes: number;
-  totalPrice: number;
+  services?: ServiceOption[];
 }) {
-  const hasServices = services.length > 0;
+  const whenParts = [
+    formatDateBR(date),
+    startTime ? formatTime(startTime) : null,
+  ].filter(Boolean);
+  let serviceLabel: string | null = null;
+  if (services.length === 1) {
+    serviceLabel = services[0].name;
+  } else if (services.length > 1) {
+    const uniqueNames = [...new Set(services.map((s) => s.name))];
+    serviceLabel =
+      uniqueNames.length === 1
+        ? `${uniqueNames[0]} ×${services.length}`
+        : `${services.length} serviços`;
+  }
 
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-muted/40 px-3 py-2.5">
+    <div className="booking-context flex items-center gap-2.5 rounded-xl px-2.5 py-2">
       <ProfessionalAvatar
         photoUrl={professional.photoUrl}
         photoPosition={professional.photoPosition}
         name={professional.nickname}
         size="sm"
       />
-      <div className="min-w-0 flex-1 text-xs leading-relaxed">
-        <p className="font-medium text-foreground">{professional.nickname}</p>
-        {startTime && (
-          <p className="text-muted-foreground">
-            {formatDateBR(date)} às {formatTime(startTime)}
-          </p>
-        )}
-        {hasServices && (
-          <p className="truncate text-muted-foreground">
-            {services.map((service) => service.name).join(", ")}
-          </p>
-        )}
-        {hasServices && (
-          <p className="text-muted-foreground">
-            {formatDuration(totalMinutes)} · {formatPriceBRL(totalPrice)}
-          </p>
-        )}
+      <div className="min-w-0 flex-1 leading-snug">
+        <p className="truncate text-sm font-medium">{professional.nickname}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {whenParts.join(" · ")}
+          {serviceLabel ? ` · ${serviceLabel}` : ""}
+        </p>
       </div>
     </div>
   );
@@ -185,59 +183,87 @@ function AppointmentContextSummary({
 
 function ServicePickerRow({
   service,
-  checked,
-  onToggle,
+  quantity,
+  onChangeQuantity,
 }: {
   service: ServiceOption;
-  checked: boolean;
-  onToggle: (checked: boolean) => void;
+  quantity: number;
+  onChangeQuantity: (quantity: number) => void;
 }) {
+  const selected = quantity > 0;
+
   return (
-    <button
-      type="button"
-      onClick={() => onToggle(!checked)}
+    <div
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
-        checked
-          ? "border-foreground bg-muted/40"
-          : "border-transparent bg-muted/30 hover:bg-muted/50"
+        "booking-pick flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
+        selected && "booking-pick-active"
       )}
     >
-      <ServiceThumbnail
-        photoUrl={service.photoUrl ?? null}
-        photoPosition={service.photoPosition}
-        name={service.name}
-        size="sm"
-      />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium leading-snug">{service.name}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {formatDuration(service.durationMinutes)} ·{" "}
-          {formatPriceBRL(service.priceCents)}
-        </p>
-      </div>
-      <div
-        className={cn(
-          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-          checked
-            ? "border-foreground bg-foreground text-background"
-            : "border-muted-foreground/30"
-        )}
+      <button
+        type="button"
+        onClick={() => onChangeQuantity(selected ? 0 : 1)}
+        className="flex min-w-0 flex-1 items-center gap-3 text-left"
       >
-        {checked && <Check className="size-3" />}
-      </div>
-    </button>
+        <ServiceThumbnail
+          photoUrl={service.photoUrl ?? null}
+          photoPosition={service.photoPosition}
+          name={service.name}
+          size="sm"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium leading-snug">{service.name}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {formatDuration(service.durationMinutes)} ·{" "}
+            {formatPriceBRL(service.priceCents)}
+            {quantity > 1 ? ` · cada` : ""}
+          </p>
+        </div>
+      </button>
+
+      {selected ? (
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            aria-label={`Diminuir ${service.name}`}
+            onClick={() => onChangeQuantity(Math.max(0, quantity - 1))}
+            className="booking-btn-ghost flex size-8 items-center justify-center rounded-lg border"
+          >
+            <Minus className="size-3.5" />
+          </button>
+          <span className="min-w-6 text-center text-sm font-medium tabular-nums">
+            {quantity}
+          </span>
+          <button
+            type="button"
+            aria-label={`Aumentar ${service.name}`}
+            onClick={() => onChangeQuantity(quantity + 1)}
+            className="booking-btn-ghost flex size-8 items-center justify-center rounded-lg border"
+          >
+            <Plus className="size-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Adicionar ${service.name}`}
+          onClick={() => onChangeQuantity(1)}
+          className="booking-check flex size-8 shrink-0 items-center justify-center rounded-full border"
+        >
+          <Plus className="size-3.5" />
+        </button>
+      )}
+    </div>
   );
 }
 
 function ServicePickerList({
   services,
-  serviceIds,
-  onToggle,
+  quantities,
+  onChangeQuantity,
 }: {
   services: ServiceOption[];
-  serviceIds: string[];
-  onToggle: (id: string, checked: boolean) => void;
+  quantities: Map<string, number>;
+  onChangeQuantity: (id: string, quantity: number) => void;
 }) {
   return (
     <ul className="flex flex-col gap-2">
@@ -245,8 +271,10 @@ function ServicePickerList({
         <li key={service.id}>
           <ServicePickerRow
             service={service}
-            checked={serviceIds.includes(service.id)}
-            onToggle={(checked) => onToggle(service.id, checked)}
+            quantity={quantities.get(service.id) ?? 0}
+            onChangeQuantity={(quantity) =>
+              onChangeQuantity(service.id, quantity)
+            }
           />
         </li>
       ))}
@@ -268,7 +296,7 @@ function StepProgress({
           key={i}
           className={cn(
             "h-1 flex-1 rounded-full transition-colors",
-            i < current ? "bg-foreground" : "bg-muted"
+            i < current ? "booking-progress-fill" : "booking-progress-track"
           )}
         />
       ))}
@@ -310,7 +338,7 @@ function ModalActions({
           size="lg"
           onClick={onBack}
           disabled={loading}
-          className="h-10 w-full shrink-0 sm:h-9 sm:w-auto"
+          className="booking-btn-ghost h-10 w-full shrink-0 sm:h-9 sm:w-auto"
         >
           <ArrowLeft />
           Voltar
@@ -322,7 +350,7 @@ function ModalActions({
           size="lg"
           onClick={onCancel}
           disabled={loading}
-          className="h-10 w-full shrink-0 sm:h-9 sm:w-auto"
+          className="booking-btn-ghost h-10 w-full shrink-0 sm:h-9 sm:w-auto"
         >
           Cancelar
         </Button>
@@ -333,7 +361,7 @@ function ModalActions({
         size="lg"
         onClick={onPrimary}
         disabled={primaryDisabled || loading}
-        className="h-10 w-full shrink-0 sm:h-9 sm:w-auto sm:min-w-36"
+        className="booking-btn-primary h-10 w-full shrink-0 sm:h-9 sm:w-auto sm:min-w-36"
       >
         {loading ? "Salvando..." : primaryLabel}
         {primaryType === "button" && !loading && <ArrowRight />}
@@ -401,8 +429,15 @@ export function NewAppointmentDialog({
   );
 
   const selectedServices = useMemo(
-    () => services.filter((s) => serviceIds.includes(s.id)),
+    () =>
+      serviceIds
+        .map((id) => services.find((s) => s.id === id))
+        .filter((s): s is ServiceOption => Boolean(s)),
     [services, serviceIds]
+  );
+  const serviceQuantities = useMemo(
+    () => countServiceQuantities(serviceIds),
+    [serviceIds]
   );
   const totalMinutes = useMemo(
     () => selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0),
@@ -663,10 +698,13 @@ export function NewAppointmentDialog({
     return true;
   }
 
-  function toggleService(id: string, checked: boolean) {
-    setServiceIds((prev) =>
-      checked ? [...prev, id] : prev.filter((v) => v !== id)
-    );
+  function setServiceQuantity(id: string, quantity: number) {
+    const nextQty = Math.max(0, Math.min(20, quantity));
+    setServiceIds((prev) => {
+      const without = prev.filter((v) => v !== id);
+      if (nextQty === 0) return without;
+      return [...without, ...Array.from({ length: nextQty }, () => id)];
+    });
     if (!presetFromGrid) {
       setStartTime(null);
       setPendingStartTime(null);
@@ -774,21 +812,37 @@ export function NewAppointmentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(90dvh,720px)] w-full max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
-        <DialogHeader className="shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
+      <DialogContent className="admin-booking-dialog flex max-h-[min(92dvh,760px)] w-full max-w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg">
+        <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-12 sm:px-6 sm:pt-6">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>
               Passo {currentStep} de {stepsTotal}
             </span>
-            <span>{formatDateBR(date)}</span>
+            {!(selectedProfessional && step !== "professional") && (
+              <span>{formatDateBR(date)}</span>
+            )}
           </div>
           <StepProgress current={currentStep} total={stepsTotal} />
           <div className="space-y-1">
-            <DialogTitle className="text-lg tracking-tight">
+            <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
               {isEncaixe && step !== "client" ? "Encaixe" : stepMeta.title}
             </DialogTitle>
             <DialogDescription>{stepMeta.description}</DialogDescription>
           </div>
+          {selectedProfessional && step !== "professional" && (
+            <BookingContextBar
+              professional={selectedProfessional}
+              date={date}
+              startTime={
+                step === "services"
+                  ? presetFromGrid
+                    ? startTime
+                    : null
+                  : startTime
+              }
+              services={step === "services" ? [] : selectedServices}
+            />
+          )}
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
@@ -802,10 +856,8 @@ export function NewAppointmentDialog({
                       type="button"
                       onClick={() => setProfessionalId(pro.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition-all",
-                        selected
-                          ? "border-foreground bg-muted/40"
-                          : "border-transparent bg-muted/30 hover:bg-muted/50"
+                        "booking-pick flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left",
+                        selected && "booking-pick-active"
                       )}
                     >
                       <ProfessionalAvatar
@@ -820,10 +872,8 @@ export function NewAppointmentDialog({
                       </div>
                       <div
                         className={cn(
-                          "flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-                          selected
-                            ? "border-foreground bg-foreground text-background"
-                            : "border-muted-foreground/30"
+                          "booking-check flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                          selected && "booking-check-active"
                         )}
                       >
                         {selected && <Check className="size-3" />}
@@ -837,15 +887,6 @@ export function NewAppointmentDialog({
 
           {step === "services" && selectedProfessional && (
             <div className="flex flex-col gap-4">
-              <AppointmentContextSummary
-                professional={selectedProfessional}
-                date={date}
-                startTime={presetFromGrid ? startTime : null}
-                services={selectedServices}
-                totalMinutes={totalMinutes}
-                totalPrice={totalPrice}
-              />
-
               {availableServices.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Esse profissional ainda não tem serviços vinculados.
@@ -873,8 +914,8 @@ export function NewAppointmentDialog({
                           </p>
                           <ServicePickerList
                             services={serviceGroups.popular}
-                            serviceIds={serviceIds}
-                            onToggle={toggleService}
+                            quantities={serviceQuantities}
+                            onChangeQuantity={setServiceQuantity}
                           />
                         </div>
                       )}
@@ -888,8 +929,8 @@ export function NewAppointmentDialog({
                           )}
                           <ServicePickerList
                             services={serviceGroups.others}
-                            serviceIds={serviceIds}
-                            onToggle={toggleService}
+                            quantities={serviceQuantities}
+                            onChangeQuantity={setServiceQuantity}
                           />
                         </div>
                       )}
@@ -902,14 +943,6 @@ export function NewAppointmentDialog({
 
           {step === "time" && selectedProfessional && (
             <div className="flex flex-col gap-4">
-              <AppointmentContextSummary
-                professional={selectedProfessional}
-                date={date}
-                services={selectedServices}
-                totalMinutes={totalMinutes}
-                totalPrice={totalPrice}
-              />
-
               {ownerFreeMode && (
                 <p className="text-sm text-muted-foreground">
                   Você pode agendar em qualquer horário. Horários já ocupados
@@ -920,7 +953,7 @@ export function NewAppointmentDialog({
               {!isEncaixe && !ownerFreeMode && loadingSlots ? (
                 <SlotGridSkeleton />
               ) : !isEncaixe && !ownerFreeMode && slotsError ? (
-                <p className="rounded-xl border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
+                <p className="booking-notice rounded-xl px-4 py-6 text-center text-sm">
                   {slotsError}
                 </p>
               ) : (
@@ -932,24 +965,25 @@ export function NewAppointmentDialog({
                     ownerFreeMode && blockedSlots.has(slot)
                   }
                   scrollable={false}
+                  className="booking-slot-grid"
                 />
               )}
 
               {ownerFreeMode && startTime && selectedOutsideSchedule && (
-                <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                <p className="booking-notice rounded-xl px-4 py-3 text-sm">
                   Fora do horário de funcionamento deste barbeiro.
                 </p>
               )}
 
               {isEncaixe && startTime && selectedOutsideSchedule && (
-                <p className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
+                <p className="booking-notice rounded-xl px-4 py-3 text-sm">
                   Fora do horário de funcionamento deste barbeiro.
                 </p>
               )}
 
               {isEncaixe && startTime && selectedConflicts.length > 0 && (
-                <div className="rounded-xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">
+                <div className="booking-notice rounded-xl px-4 py-3 text-sm">
+                  <p className="font-medium">
                     Vai sobrepor{" "}
                     {selectedConflicts.length === 1
                       ? "1 agendamento"
@@ -975,15 +1009,6 @@ export function NewAppointmentDialog({
               onSubmit={handleSubmit}
               className="flex flex-col gap-5"
             >
-              <AppointmentContextSummary
-                professional={selectedProfessional}
-                date={date}
-                startTime={startTime}
-                services={selectedServices}
-                totalMinutes={totalMinutes}
-                totalPrice={totalPrice}
-              />
-
               {isEncaixe &&
                 (selectedOutsideSchedule || selectedConflicts.length > 0) && (
                   <p className="text-sm text-muted-foreground">
@@ -1010,7 +1035,7 @@ export function NewAppointmentDialog({
           )}
         </div>
 
-        <div className="min-w-0 shrink-0 overflow-hidden rounded-b-xl border-t bg-muted/30 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
+        <div className="booking-footer min-w-0 shrink-0 overflow-hidden rounded-b-2xl border-t px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
           {step === "client" ? (
             <ModalActions
               showBack

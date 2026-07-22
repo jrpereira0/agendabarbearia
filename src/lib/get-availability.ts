@@ -16,6 +16,10 @@ import {
   type MinuteRange,
 } from "@/lib/availability";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
+import {
+  sumDurationForServiceIds,
+  uniqueServiceIds,
+} from "@/lib/appointment-service-quantities";
 
 export type UnavailableReason =
   | "shop_closed"
@@ -158,6 +162,7 @@ export async function getAvailability(
   }
 
   const weekday = weekdayOf(date);
+  const uniqueIds = uniqueServiceIds(serviceIds);
   const admin = createAdminClient();
   if (!admin) {
     return { ok: false, error: "Sistema indisponível no momento.", status: 503 };
@@ -183,17 +188,17 @@ export async function getAvailability(
     admin
       .from("services")
       .select("id, name, active, duration_minutes, price_cents")
-      .in("id", serviceIds),
+      .in("id", uniqueIds),
     admin
       .from("service_weekday_prices")
       .select("service_id, weekday, price_cents")
-      .in("service_id", serviceIds)
+      .in("service_id", uniqueIds)
       .eq("weekday", weekday),
     admin
       .from("professional_services")
       .select("service_id")
       .eq("professional_id", professionalId)
-      .in("service_id", serviceIds),
+      .in("service_id", uniqueIds),
     admin
       .from("business_hours")
       .select("active, open_time, close_time")
@@ -229,7 +234,7 @@ export async function getAvailability(
 
   const foundServices = services ?? [];
   if (
-    foundServices.length !== serviceIds.length ||
+    foundServices.length !== uniqueIds.length ||
     foundServices.some((s) => !s.active)
   ) {
     return { ok: false, error: "Serviço não encontrado.", status: 404 };
@@ -279,10 +284,10 @@ export async function getAvailability(
     !isShopClosed &&
     computeIsProfessionalDayOff(weeklyRanges, professionalException);
 
-  const durationMinutes = foundServices.reduce(
-    (sum, s) => sum + s.duration_minutes,
-    0
+  const durationById = new Map(
+    foundServices.map((s) => [s.id, s.duration_minutes])
   );
+  const durationMinutes = sumDurationForServiceIds(serviceIds, durationById);
 
   // Verifica disponibilidade por dia da semana ANTES de calcular preços totais,
   // pois alguns serviços podem não ter preço configurado nesse dia.
@@ -305,10 +310,11 @@ export async function getAvailability(
     }
   }
 
-  const totalPriceCents = foundServices.reduce(
-    (sum, s) => sum + (priceByServiceId.get(s.id) ?? s.price_cents),
-    0
-  );
+  const totalPriceCents = serviceIds.reduce((sum, id) => {
+    const service = foundServices.find((s) => s.id === id);
+    if (!service) return sum;
+    return sum + (priceByServiceId.get(id) ?? service.price_cents);
+  }, 0);
 
   const ranges = ownerFreeSchedule
     ? [{ start: 0, end: 24 * 60 }]
