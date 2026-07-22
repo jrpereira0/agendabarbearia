@@ -9,6 +9,7 @@ import {
   Coins,
   Loader2,
   MessageCircle,
+  Minus,
   MoreHorizontal,
   Package,
   Pencil,
@@ -70,6 +71,7 @@ import {
 } from "@/lib/comanda-types";
 import {
   formatDateBR,
+  formatDuration,
   formatPriceBRL,
   formatTime,
   formatWhatsapp,
@@ -97,6 +99,7 @@ type EditableItem = ComandaItemInput & {
 };
 
 const PRODUCT_NO_PROFESSIONAL = "__none__";
+const TIP_QUICK_CENTS = [500, 1000, 2000, 5000] as const;
 
 function mapComandaItemsToEditable(
   comandaItems: ComandaDetail["items"]
@@ -379,7 +382,6 @@ export function ComandaDialog({
   onEditSchedule,
 }: ComandaDialogProps) {
   const router = useRouter();
-  const servicePickerRef = useRef<HTMLDivElement>(null);
   const loadGenRef = useRef(0);
   const [comanda, setComanda] = useState<ComandaDetail | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
@@ -414,7 +416,6 @@ export function ComandaDialog({
   const [pendingProduct, setPendingProduct] = useState<ProductOption | null>(null);
   const [productQuantity, setProductQuantity] = useState("1");
   const [productProfessionalId, setProductProfessionalId] = useState("");
-  const productPickerRef = useRef<HTMLDivElement>(null);
   const [tipCents, setTipCents] = useState(0);
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
@@ -591,6 +592,11 @@ export function ComandaDialog({
       setPendingExtraService(null);
       setExtraProfessionalId("");
       setExtraStartTime("");
+      setPendingProduct(null);
+      setProductProfessionalId("");
+      setProductQuantity("1");
+      setProductSearch("");
+      setProductPickerOpen(false);
       setTipCents(0);
       setTipProfessionalId("");
       setCustomerCreditBalanceCents(0);
@@ -600,34 +606,6 @@ export function ComandaDialog({
       setBusy(false);
     }
   }
-
-  useEffect(() => {
-    if (!servicePickerOpen) return;
-    function handlePointerDown(event: MouseEvent) {
-      if (
-        servicePickerRef.current &&
-        !servicePickerRef.current.contains(event.target as Node)
-      ) {
-        setServicePickerOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [servicePickerOpen]);
-
-  useEffect(() => {
-    if (!productPickerOpen) return;
-    function handlePointerDown(event: MouseEvent) {
-      if (
-        productPickerRef.current &&
-        !productPickerRef.current.contains(event.target as Node)
-      ) {
-        setProductPickerOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [productPickerOpen]);
 
   const commissionByProfessional = useMemo(() => {
     const map = new Map<string, number>();
@@ -1623,7 +1601,21 @@ export function ComandaDialog({
                         <Coins className="size-4" />
                         Gorjeta
                       </Button>
-                      <div ref={servicePickerRef} className="relative">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="booking-btn-ghost h-8"
+                        disabled={busy}
+                        onClick={() => {
+                          setServicePickerOpen(true);
+                          setProductPickerOpen(false);
+                        }}
+                      >
+                        <Plus className="size-4" />
+                        Serviço
+                      </Button>
+                      {productsCatalog.length > 0 && (
                         <Button
                           type="button"
                           variant="outline"
@@ -1631,115 +1623,13 @@ export function ComandaDialog({
                           className="booking-btn-ghost h-8"
                           disabled={busy}
                           onClick={() => {
-                            setServicePickerOpen((open) => !open);
-                            setProductPickerOpen(false);
+                            setProductPickerOpen(true);
+                            setServicePickerOpen(false);
                           }}
                         >
                           <Plus className="size-4" />
-                          Serviço
+                          Produto
                         </Button>
-                        {servicePickerOpen && (
-                          <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-xl border border-[var(--booking-border)] bg-[var(--booking-elevated)] p-2 shadow-lg sm:w-80">
-                            <SearchInput
-                              value={serviceSearch}
-                              onChange={setServiceSearch}
-                              placeholder="Buscar serviço…"
-                            />
-                            <ul
-                              className="mt-2 max-h-52 overflow-y-auto"
-                              role="listbox"
-                            >
-                              {filteredServices.length === 0 ? (
-                                <li className="px-2 py-3 text-sm text-muted-foreground">
-                                  Nenhum serviço encontrado.
-                                </li>
-                              ) : (
-                                filteredServices.map((svc) => (
-                                  <li key={svc.id}>
-                                    <button
-                                      type="button"
-                                      role="option"
-                                      aria-selected={false}
-                                      className="booking-pick flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm"
-                                      onClick={() => void pickService(svc)}
-                                      disabled={busy}
-                                    >
-                                      <span className="min-w-0 truncate font-medium">
-                                        {svc.name}
-                                      </span>
-                                      <span className="shrink-0 tabular-nums text-muted-foreground">
-                                        {formatPriceBRL(svc.priceCents)}
-                                      </span>
-                                    </button>
-                                  </li>
-                                ))
-                              )}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                      {productsCatalog.length > 0 && (
-                        <div ref={productPickerRef} className="relative">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="booking-btn-ghost h-8"
-                            disabled={busy}
-                            onClick={() => {
-                              setProductPickerOpen((open) => !open);
-                              setServicePickerOpen(false);
-                            }}
-                          >
-                            <Plus className="size-4" />
-                            Produto
-                          </Button>
-                          {productPickerOpen && (
-                            <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-xl border border-[var(--booking-border)] bg-[var(--booking-elevated)] p-2 shadow-lg sm:w-80">
-                              <SearchInput
-                                value={productSearch}
-                                onChange={setProductSearch}
-                                placeholder="Buscar produto…"
-                              />
-                              <ul
-                                className="mt-2 max-h-52 overflow-y-auto"
-                                role="listbox"
-                              >
-                                {filteredProducts.length === 0 ? (
-                                  <li className="px-2 py-3 text-sm text-muted-foreground">
-                                    Nenhum produto encontrado.
-                                  </li>
-                                ) : (
-                                  filteredProducts.map((product) => (
-                                    <li key={product.id}>
-                                      <button
-                                        type="button"
-                                        role="option"
-                                        aria-selected={false}
-                                        className="booking-pick flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm"
-                                        onClick={() => pickProduct(product)}
-                                        disabled={busy}
-                                      >
-                                        <span className="min-w-0">
-                                          <span className="block truncate font-medium">
-                                            {product.name}
-                                          </span>
-                                          <span className="block text-xs text-muted-foreground">
-                                            {product.categoryName} · estoque{" "}
-                                            {product.stockQuantity}
-                                          </span>
-                                        </span>
-                                        <span className="shrink-0 tabular-nums text-muted-foreground">
-                                          {formatPriceBRL(product.priceCents)}
-                                        </span>
-                                      </button>
-                                    </li>
-                                  ))
-                                )}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
                       )}
                     </div>
                   )}
@@ -2411,52 +2301,254 @@ export function ComandaDialog({
         }
       />
 
+      <Dialog
+        open={servicePickerOpen}
+        onOpenChange={(next) => {
+          if (!busy) {
+            setServicePickerOpen(next);
+            if (!next) setServiceSearch("");
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog flex max-h-[min(92dvh,640px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => {
+              if (!busy) {
+                setServicePickerOpen(false);
+                setServiceSearch("");
+              }
+            }}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Scissors className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Adicionar serviço
+                </DialogTitle>
+                <DialogDescription>
+                  Entra na comanda e na agenda como serviço extra.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="shrink-0 px-4 pt-4 sm:px-5">
+            <SearchInput
+              value={serviceSearch}
+              onChange={setServiceSearch}
+              placeholder="Buscar serviço…"
+            />
+          </div>
+          <ul
+            className="min-h-0 max-h-[min(55dvh,28rem)] flex-1 touch-pan-y space-y-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5"
+            role="listbox"
+          >
+            {filteredServices.length === 0 ? (
+              <li className="booking-notice rounded-xl px-3 py-6 text-center text-sm">
+                Nenhum serviço encontrado.
+              </li>
+            ) : (
+              filteredServices.map((svc) => (
+                <li key={svc.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={false}
+                    className="booking-pick flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors"
+                    onClick={() => void pickService(svc)}
+                    disabled={busy}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#f5f5f5]">
+                        {svc.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {formatDuration(svc.durationMinutes)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-[#f5f5f5]">
+                      {formatPriceBRL(svc.priceCents)}
+                    </span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={productPickerOpen}
+        onOpenChange={(next) => {
+          if (!busy) {
+            setProductPickerOpen(next);
+            if (!next) setProductSearch("");
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog flex max-h-[min(92dvh,640px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => {
+              if (!busy) {
+                setProductPickerOpen(false);
+                setProductSearch("");
+              }
+            }}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Package className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Adicionar produto
+                </DialogTitle>
+                <DialogDescription>
+                  Escolha o item vendido. Depois você define quantidade e
+                  barbeiro.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="shrink-0 px-4 pt-4 sm:px-5">
+            <SearchInput
+              value={productSearch}
+              onChange={setProductSearch}
+              placeholder="Buscar produto…"
+            />
+          </div>
+          <ul
+            className="min-h-0 max-h-[min(55dvh,28rem)] flex-1 touch-pan-y space-y-1 overflow-y-auto overscroll-contain px-4 py-3 sm:px-5"
+            role="listbox"
+          >
+            {filteredProducts.length === 0 ? (
+              <li className="booking-notice rounded-xl px-3 py-6 text-center text-sm">
+                Nenhum produto encontrado.
+              </li>
+            ) : (
+              filteredProducts.map((product) => (
+                <li key={product.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={false}
+                    className="booking-pick flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors"
+                    onClick={() => pickProduct(product)}
+                    disabled={busy}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-[#f5f5f5]">
+                        {product.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {product.categoryName} · estoque{" "}
+                        {product.stockQuantity}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-sm font-medium tabular-nums text-[#f5f5f5]">
+                      {formatPriceBRL(product.priceCents)}
+                    </span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={tipDialogOpen} onOpenChange={setTipDialogOpen}>
         <DialogContent
           showCloseButton={false}
-          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-sm"
+          className="admin-booking-dialog max-h-[min(92dvh,560px)] w-[calc(100%-1.25rem)] gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
         >
           <button
             type="button"
             aria-label="Fechar"
             onClick={() => setTipDialogOpen(false)}
+            disabled={busy}
             className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
           >
             <X className="size-4" strokeWidth={2} />
           </button>
-          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-5 sm:pr-14">
-            <DialogTitle className="booking-display text-[#f5f5f5]">
-              Gorjeta
-            </DialogTitle>
-            <DialogDescription>
-              O barbeiro escolhido recebe 100% e o valor entra no total.
-            </DialogDescription>
+          <DialogHeader className="booking-header gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Coins className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Gorjeta
+                </DialogTitle>
+                <DialogDescription>
+                  O barbeiro recebe 100% do valor. Entra no total da comanda.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           <div className="space-y-4 px-4 py-4 sm:px-5">
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <Label htmlFor="tip-draft-amount">Valor</Label>
+              <div className="flex flex-wrap gap-2">
+                {TIP_QUICK_CENTS.map((cents) => {
+                  const selected = tipDraftCents === cents;
+                  return (
+                    <button
+                      key={cents}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setTipDraftCents(cents)}
+                      className={cn(
+                        "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors",
+                        selected ? "booking-pick-active" : "booking-pick",
+                        busy && "opacity-50"
+                      )}
+                    >
+                      {formatPriceBRL(cents)}
+                    </button>
+                  );
+                })}
+              </div>
               <Input
                 id="tip-draft-amount"
-                className="h-10 tabular-nums"
+                className="h-11 tabular-nums"
                 value={
                   tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
                 }
                 onChange={(e) =>
                   setTipDraftCents(parsePriceInput(e.target.value))
                 }
-                placeholder="R$ 0,00"
+                placeholder="Ou digite outro valor"
                 disabled={busy}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="tip-draft-professional">Barbeiro</Label>
+              <Label htmlFor="tip-draft-professional">Quem recebe</Label>
               <Select
                 value={tipDraftProfessionalId}
                 onValueChange={setTipDraftProfessionalId}
                 disabled={busy || tipEligibleProfessionals.length === 0}
               >
-                <SelectTrigger id="tip-draft-professional" className="h-10">
-                  <SelectValue placeholder="Quem recebe" />
+                <SelectTrigger id="tip-draft-professional" className="h-11">
+                  <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
                 <SelectContent>
                   {tipEligibleProfessionals.map((pro) => (
@@ -2467,6 +2559,19 @@ export function ComandaDialog({
                 </SelectContent>
               </Select>
             </div>
+            {tipDraftCents > 0 && tipDraftProfessionalId ? (
+              <div className="booking-context rounded-xl px-3.5 py-3 text-sm">
+                <p className="font-medium text-[#f5f5f5]">
+                  {formatPriceBRL(tipDraftCents)}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Para{" "}
+                  {tipEligibleProfessionals.find(
+                    (pro) => pro.id === tipDraftProfessionalId
+                  )?.nickname ?? "barbeiro"}
+                </p>
+              </div>
+            ) : null}
           </div>
           <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
             {tipCents > 0 ? (
@@ -2495,10 +2600,10 @@ export function ComandaDialog({
               <Button
                 type="button"
                 className="booking-btn-primary"
-                disabled={busy}
+                disabled={busy || tipDraftCents <= 0 || !tipDraftProfessionalId}
                 onClick={confirmTipDialog}
               >
-                Confirmar
+                Confirmar gorjeta
               </Button>
             </div>
           </div>
@@ -2625,7 +2730,7 @@ export function ComandaDialog({
       >
         <DialogContent
           showCloseButton={false}
-          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+          className="admin-booking-dialog flex max-h-[min(92dvh,720px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
         >
           <button
             type="button"
@@ -2641,17 +2746,36 @@ export function ComandaDialog({
           >
             <X className="size-4" strokeWidth={2} />
           </button>
-          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-6 sm:pr-14">
-            <DialogTitle className="booking-display text-[#f5f5f5]">
-              Serviço extra
-            </DialogTitle>
-            <DialogDescription>
-              {pendingExtraService?.name} · {formatDateBR(serviceDate)}. Entra
-              na agenda como serviço extra.
-            </DialogDescription>
+          <DialogHeader className="booking-header shrink-0 gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Scissors className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Serviço extra
+                </DialogTitle>
+                <DialogDescription>
+                  Define barbeiro e horário. Entra na agenda como encaixe.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 px-4 py-4 sm:px-6">
+          <div className="min-h-0 flex-1 touch-pan-y space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
+            {pendingExtraService ? (
+              <div className="booking-context rounded-xl px-3.5 py-3">
+                <p className="text-sm font-medium text-[#f5f5f5]">
+                  {pendingExtraService.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatPriceBRL(pendingExtraService.priceCents)} ·{" "}
+                  {formatDuration(pendingExtraService.durationMinutes)} ·{" "}
+                  {formatDateBR(serviceDate)}
+                </p>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <Label htmlFor="extra-professional">Barbeiro</Label>
               <Select
@@ -2659,7 +2783,7 @@ export function ComandaDialog({
                 onValueChange={setExtraProfessionalId}
                 disabled={busy}
               >
-                <SelectTrigger id="extra-professional" className="w-full">
+                <SelectTrigger id="extra-professional" className="h-11 w-full">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2698,10 +2822,10 @@ export function ComandaDialog({
               </p>
             </div>
 
-            {extraConflicts.length > 0 && extraStartTime && (
+            {extraConflicts.length > 0 && extraStartTime ? (
               <p className="booking-notice rounded-xl px-3 py-2.5 text-xs">
                 Sobrepõe:{" "}
-                <span className="font-medium">
+                <span className="font-medium text-[#f5f5f5]">
                   {extraConflicts
                     .map(
                       (apt) =>
@@ -2710,10 +2834,10 @@ export function ComandaDialog({
                     .join(" · ")}
                 </span>
               </p>
-            )}
+            ) : null}
           </div>
 
-          <div className="booking-footer flex justify-end gap-2 border-t px-4 py-3 sm:px-6">
+          <div className="booking-footer flex shrink-0 justify-end gap-2 border-t px-4 py-3 sm:px-5">
             <Button
               type="button"
               variant="outline"
@@ -2756,7 +2880,7 @@ export function ComandaDialog({
       >
         <DialogContent
           showCloseButton={false}
-          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+          className="admin-booking-dialog flex max-h-[min(92dvh,640px)] w-[calc(100%-1.25rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
         >
           <button
             type="button"
@@ -2772,17 +2896,37 @@ export function ComandaDialog({
           >
             <X className="size-4" strokeWidth={2} />
           </button>
-          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-6 sm:pr-14">
-            <DialogTitle className="booking-display text-[#f5f5f5]">
-              Adicionar produto
-            </DialogTitle>
-            <DialogDescription>
-              {pendingProduct?.name} ·{" "}
-              {formatPriceBRL(pendingProduct?.priceCents ?? 0)} cada
-            </DialogDescription>
+          <DialogHeader className="booking-header gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Package className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Confirmar produto
+                </DialogTitle>
+                <DialogDescription>
+                  Quantidade e quem vendeu. Sem barbeiro, a venda fica só da
+                  barbearia.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="space-y-4 px-4 py-4 sm:px-6">
+          <div className="space-y-4 px-4 py-4 sm:px-5">
+            {pendingProduct ? (
+              <div className="booking-context rounded-xl px-3.5 py-3">
+                <p className="text-sm font-medium text-[#f5f5f5]">
+                  {pendingProduct.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatPriceBRL(pendingProduct.priceCents)} cada ·{" "}
+                  {pendingProduct.categoryName} · estoque{" "}
+                  {pendingProduct.stockQuantity}
+                </p>
+              </div>
+            ) : null}
+
             <div className="space-y-2">
               <Label htmlFor="product-professional">Barbeiro que vendeu</Label>
               <Select
@@ -2794,7 +2938,7 @@ export function ComandaDialog({
                 }
                 disabled={busy}
               >
-                <SelectTrigger id="product-professional" className="w-full">
+                <SelectTrigger id="product-professional" className="h-11 w-full">
                   <SelectValue placeholder="Escolha o barbeiro" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2808,33 +2952,80 @@ export function ComandaDialog({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Sem profissional, a venda não gera comissão e fica só da
-                barbearia.
-              </p>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="product-quantity">Quantidade</Label>
-              <Input
-                id="product-quantity"
-                inputMode="numeric"
-                className="h-10"
-                value={productQuantity}
-                onChange={(event) =>
-                  setProductQuantity(event.target.value.replace(/\D/g, ""))
-                }
-                disabled={busy}
-              />
-              {pendingProduct && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="booking-btn-ghost size-11 shrink-0"
+                  disabled={busy || Number.parseInt(productQuantity || "1", 10) <= 1}
+                  onClick={() => {
+                    const current = Math.max(
+                      1,
+                      Number.parseInt(productQuantity || "1", 10) || 1
+                    );
+                    setProductQuantity(String(Math.max(1, current - 1)));
+                  }}
+                  aria-label="Diminuir quantidade"
+                >
+                  <Minus className="size-4" />
+                </Button>
+                <Input
+                  id="product-quantity"
+                  inputMode="numeric"
+                  className="h-11 text-center tabular-nums"
+                  value={productQuantity}
+                  onChange={(event) =>
+                    setProductQuantity(event.target.value.replace(/\D/g, ""))
+                  }
+                  disabled={busy}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="booking-btn-ghost size-11 shrink-0"
+                  disabled={
+                    busy ||
+                    (pendingProduct != null &&
+                      (Number.parseInt(productQuantity || "1", 10) || 1) >=
+                        pendingProduct.stockQuantity)
+                  }
+                  onClick={() => {
+                    const current = Math.max(
+                      1,
+                      Number.parseInt(productQuantity || "1", 10) || 1
+                    );
+                    const max = pendingProduct?.stockQuantity ?? current + 1;
+                    setProductQuantity(String(Math.min(max, current + 1)));
+                  }}
+                  aria-label="Aumentar quantidade"
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+              {pendingProduct ? (
                 <p className="text-xs text-muted-foreground">
-                  Estoque disponível: {pendingProduct.stockQuantity}
+                  Subtotal:{" "}
+                  <span className="font-medium tabular-nums text-[#f5f5f5]">
+                    {formatPriceBRL(
+                      pendingProduct.priceCents *
+                        Math.max(
+                          1,
+                          Number.parseInt(productQuantity || "1", 10) || 1
+                        )
+                    )}
+                  </span>
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
 
-          <div className="booking-footer flex justify-end gap-2 border-t px-4 py-3 sm:px-6">
+          <div className="booking-footer flex justify-end gap-2 border-t px-4 py-3 sm:px-5">
             <Button
               type="button"
               variant="outline"
