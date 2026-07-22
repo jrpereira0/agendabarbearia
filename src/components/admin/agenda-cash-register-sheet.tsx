@@ -565,6 +565,7 @@ export function AgendaCashRegisterSheet({
         responsibleOptions={responsibleOptions}
         defaultResponsibleId={defaultResponsibleId}
         defaultOpeningBalanceCents={cashSession?.openingBalanceCents ?? 0}
+        tone="dark"
         onSuccess={(openedDate) => {
           window.setTimeout(() => {
             if (!mountedRef.current) return;

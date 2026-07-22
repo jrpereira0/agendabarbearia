@@ -29,6 +29,8 @@ import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { assertPermission } from "@/lib/professional-permissions";
+import { formatTime } from "@/lib/format";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
 
 const itemSchema = z
   .object({
@@ -465,4 +467,120 @@ export async function previewComandaTotals(
     .maybeSingle();
 
   return calculateComandaTotals(items, data?.commission_percent ?? 50);
+}
+
+/** Carrega o agendamento no formato da agenda para abrir a comanda fora dela. */
+export async function loadAppointmentItemAction(
+  appointmentId: string
+): Promise<
+  | { ok: true; appointment: AppointmentItem }
+  | { ok: false; error: string }
+> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  if (!z.uuid().safeParse(appointmentId).success) {
+    return { ok: false, error: "Agendamento inválido." };
+  }
+
+  const { data, error } = await admin
+    .from("appointments")
+    .select(
+      `
+      id,
+      date,
+      professional_id,
+      customer_id,
+      customer_first_name,
+      customer_last_name,
+      customer_whatsapp,
+      start_time,
+      end_time,
+      status,
+      is_squeeze_in,
+      is_comanda_extra,
+      booking_source,
+      professionals ( nickname ),
+      appointment_services (
+        quantity,
+        services ( id, name, duration_minutes, price_cents )
+      )
+    `
+    )
+    .eq("id", appointmentId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  if (!session.isOwner) {
+    if (!session.professionalId) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
+    if (data.professional_id !== session.professionalId) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
+  }
+
+  const rawPro = data.professionals as
+    | { nickname: string }
+    | { nickname: string }[]
+    | null;
+  const professionalNickname = Array.isArray(rawPro)
+    ? (rawPro[0]?.nickname ?? "—")
+    : (rawPro?.nickname ?? "—");
+
+  const appointment: AppointmentItem = {
+    id: data.id,
+    date: data.date,
+    professionalId: data.professional_id,
+    professionalNickname,
+    customerId: data.customer_id ?? null,
+    customerFirstName: data.customer_first_name,
+    customerLastName: data.customer_last_name,
+    customerWhatsapp: data.customer_whatsapp,
+    startTime: formatTime(data.start_time),
+    endTime: formatTime(data.end_time),
+    status: data.status as AppointmentItem["status"],
+    isSqueezeIn: data.is_squeeze_in ?? false,
+    isComandaExtra: data.is_comanda_extra ?? false,
+    bookingSource:
+      (data.booking_source as AppointmentItem["bookingSource"]) ?? null,
+    services: (data.appointment_services ?? []).flatMap((row) => {
+      const quantity = Math.max(1, row.quantity ?? 1);
+      const raw = row.services as
+        | {
+            id: string;
+            name: string;
+            duration_minutes: number;
+            price_cents: number;
+          }
+        | {
+            id: string;
+            name: string;
+            duration_minutes: number;
+            price_cents: number;
+          }[]
+        | null;
+      const list = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      return Array.from({ length: quantity }, () =>
+        list.map((s) => ({
+          id: s.id,
+          name: s.name,
+          durationMinutes: s.duration_minutes,
+          priceCents: s.price_cents,
+        }))
+      ).flat();
+    }),
+  };
+
+  return { ok: true, appointment };
 }

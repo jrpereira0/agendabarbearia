@@ -365,17 +365,21 @@ function splitPaymentsForClose(
   return { comandaPayments, creditDeposits };
 }
 
+const EMPTY_APPOINTMENTS: AppointmentItem[] = [];
+const EMPTY_PRODUCTS: ProductOption[] = [];
+const EMPTY_PROFESSIONALS: ComandaProfessionalOption[] = [];
+
 export function ComandaDialog({
   appointment,
   open,
   onOpenChange,
   permissions = OWNER_PERMISSIONS,
   servicesCatalog,
-  productsCatalog = [],
-  professionals = [],
+  productsCatalog = EMPTY_PRODUCTS,
+  professionals = EMPTY_PROFESSIONALS,
   sessionProfessionalId = null,
   slotStepMinutes = 15,
-  appointments = [],
+  appointments = EMPTY_APPOINTMENTS,
   isOwnerHint = false,
   initialCashRegisterOpen = false,
   initialOpenCashRegisterDate = null,

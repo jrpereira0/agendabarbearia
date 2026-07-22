@@ -20,11 +20,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DatePickerField } from "@/components/admin/date-picker-field";
 import {
   openCashRegisterAction,
   reopenCashRegisterAction,
 } from "@/app/admin/(panel)/financeiro/actions";
 import { formatDateBR, formatPriceBRL, parsePriceBRLInput } from "@/lib/format";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type CashRegisterResponsibleOption = {
   id: string;
@@ -42,6 +45,8 @@ type OpenCashRegisterDialogProps = {
   defaultResponsibleId?: string;
   defaultOpeningBalanceCents?: number;
   onSuccess: (serviceDate: string) => void;
+  /** "dark" = identidade agenda/caixa. */
+  tone?: "default" | "dark";
 };
 
 export function OpenCashRegisterDialog({
@@ -55,8 +60,9 @@ export function OpenCashRegisterDialog({
   defaultResponsibleId,
   defaultOpeningBalanceCents = 0,
   onSuccess,
+  tone = "default",
 }: OpenCashRegisterDialogProps) {
-  // Reinicia sempre que o diálogo abre de novo — ver `key` no componente-pai.
+  const dark = tone === "dark";
   const [serviceDateInput, setServiceDateInput] = useState(
     () => serviceDate || today
   );
@@ -112,30 +118,54 @@ export function OpenCashRegisterDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent
+        className={cn(
+          "max-w-md",
+          dark && "border-white/10 bg-[#151618] text-[#f5f5f5]"
+        )}
+      >
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className={cn(dark && "text-[#f5f5f5]")}>
               {mode === "reopen" ? "Reabrir caixa" : "Abrir caixa"}
             </DialogTitle>
-            <DialogDescription>
-              O <strong>dia do caixa</strong> é a data dos atendimentos. A{" "}
-              <strong>abertura</strong> será registrada agora, com data e horário
-              atuais.
+            <DialogDescription className={cn(dark && ADMIN_SURFACE.muted)}>
+              O <strong className={cn(dark && "text-[#f5f5f5]")}>dia do caixa</strong>{" "}
+              é a data dos atendimentos. A{" "}
+              <strong className={cn(dark && "text-[#f5f5f5]")}>abertura</strong>{" "}
+              será registrada agora, com data e horário atuais.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="cash-service-date">Dia do caixa</Label>
-              <Input
-                id="cash-service-date"
-                type="date"
-                value={serviceDateInput}
-                onChange={(e) => setServiceDateInput(e.target.value)}
-                disabled={busy || dateLocked}
-              />
-              <p className="text-xs text-muted-foreground">
+              <Label
+                htmlFor="cash-service-date"
+                className={cn(dark && "text-[#f5f5f5]")}
+              >
+                Dia do caixa
+              </Label>
+              {dateLocked ? (
+                <div
+                  className={cn(
+                    "flex h-10 items-center rounded-md border px-3 text-sm",
+                    dark
+                      ? "border-white/10 bg-[#1a1b1e] text-[#f5f5f5]"
+                      : "border-input bg-muted/30"
+                  )}
+                >
+                  {formatDateBR(serviceDateInput)}
+                </div>
+              ) : (
+                <DatePickerField
+                  id="cash-service-date"
+                  value={serviceDateInput}
+                  onChange={setServiceDateInput}
+                  tone={dark ? "dark" : "default"}
+                  className="sm:w-full"
+                />
+              )}
+              <p className={cn("text-xs", dark ? ADMIN_SURFACE.muted : "text-muted-foreground")}>
                 {dateLocked
                   ? `Caixa de ${formatDateBR(serviceDateInput)}.`
                   : "Pode ser hoje ou um dia anterior que ainda não foi fechado."}
@@ -143,16 +173,24 @@ export function OpenCashRegisterDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cash-responsible">Responsável</Label>
+              <Label
+                htmlFor="cash-responsible"
+                className={cn(dark && "text-[#f5f5f5]")}
+              >
+                Responsável
+              </Label>
               <Select
                 value={responsibleId}
                 onValueChange={setResponsibleId}
                 disabled={busy || responsibleOptions.length === 0}
               >
-                <SelectTrigger id="cash-responsible" className="w-full">
+                <SelectTrigger
+                  id="cash-responsible"
+                  className={cn("w-full", dark && ADMIN_SURFACE.input)}
+                >
                   <SelectValue placeholder="Quem está no caixa?" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className={cn(dark && ADMIN_SURFACE.popover)}>
                   {responsibleOptions.map((option) => (
                     <SelectItem key={option.id} value={option.id}>
                       {option.label}
@@ -163,7 +201,12 @@ export function OpenCashRegisterDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="cash-opening-balance">Dinheiro no caixa</Label>
+              <Label
+                htmlFor="cash-opening-balance"
+                className={cn(dark && "text-[#f5f5f5]")}
+              >
+                Dinheiro no caixa
+              </Label>
               <Input
                 id="cash-opening-balance"
                 inputMode="numeric"
@@ -177,8 +220,9 @@ export function OpenCashRegisterDialog({
                   )
                 }
                 disabled={busy}
+                className={cn(dark && ADMIN_SURFACE.input)}
               />
-              <p className="text-xs text-muted-foreground">
+              <p className={cn("text-xs", dark ? ADMIN_SURFACE.muted : "text-muted-foreground")}>
                 Valor em espécie que já está na gaveta no início do dia.
               </p>
             </div>
@@ -188,12 +232,17 @@ export function OpenCashRegisterDialog({
             <Button
               type="button"
               variant="outline"
+              className={cn(dark && ADMIN_SURFACE.btnGhost)}
               onClick={() => onOpenChange(false)}
               disabled={busy}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={busy || !responsibleId}>
+            <Button
+              type="submit"
+              className={cn(dark && ADMIN_SURFACE.btnPrimary)}
+              disabled={busy || !responsibleId}
+            >
               {mode === "reopen" ? "Reabrir caixa" : "Abrir caixa"}
             </Button>
           </DialogFooter>

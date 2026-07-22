@@ -15,7 +15,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -27,11 +26,13 @@ import {
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { SearchInput } from "@/components/admin/search-input";
+import { ComandaDialog } from "@/components/admin/comanda-dialog";
 import {
   OpenCashRegisterDialog,
   type CashRegisterResponsibleOption,
 } from "@/components/admin/open-cash-register-dialog";
 import { closeCashRegisterAction } from "@/app/admin/(panel)/financeiro/actions";
+import { loadAppointmentItemAction } from "@/app/admin/(panel)/comandas/actions";
 import {
   formatPaymentMethodLabel,
   type CashRegisterSummary,
@@ -42,9 +43,22 @@ import {
   PAYMENT_METHODS,
   type PaymentMethod,
 } from "@/lib/comanda-types";
+import type { AppointmentItem } from "@/components/admin/appointment-item";
+import type { ServiceOption } from "@/components/admin/new-appointment-dialog";
+import type { ProductOption } from "@/lib/product-types";
 import { formatDateBR, formatPriceBRL, formatTime } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
+
+type ComandaProfessionalOption = {
+  id: string;
+  nickname: string;
+  photoUrl?: string | null;
+  photoPosition?: string | null;
+  serviceIds: string[];
+  commissionPercent: number;
+};
 
 type CashRegisterDetailViewProps = {
   date: string;
@@ -54,6 +68,12 @@ type CashRegisterDetailViewProps = {
   cashSession: CashRegisterSession | null;
   openCashRegister: CashRegisterSession | null;
   responsibleOptions: CashRegisterResponsibleOption[];
+  servicesCatalog: ServiceOption[];
+  productsCatalog: ProductOption[];
+  professionals: ComandaProfessionalOption[];
+  isOwner?: boolean;
+  initialCashRegisterOpen?: boolean;
+  initialOpenCashRegisterDate?: string | null;
 };
 
 const PAYMENT_ICONS: Record<PaymentMethod, LucideIcon> = {
@@ -82,6 +102,8 @@ function paymentMethodTotal(
   );
 }
 
+const EMPTY_APPOINTMENTS: AppointmentItem[] = [];
+
 export function CashRegisterDetailView({
   date,
   today,
@@ -90,6 +112,12 @@ export function CashRegisterDetailView({
   cashSession,
   openCashRegister,
   responsibleOptions,
+  servicesCatalog,
+  productsCatalog,
+  professionals,
+  isOwner = true,
+  initialCashRegisterOpen = false,
+  initialOpenCashRegisterDate = null,
 }: CashRegisterDetailViewProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -98,6 +126,15 @@ export function CashRegisterDetailView({
   const [openDialog, setOpenDialog] = useState(false);
   const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
   const [confirmClose, setConfirmClose] = useState(false);
+  const [comandaOpen, setComandaOpen] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] =
+    useState<AppointmentItem | null>(null);
+  const [openingComandaId, setOpeningComandaId] = useState<string | null>(null);
+
+  const dialogAppointments = useMemo(
+    () => (selectedAppointment ? [selectedAppointment] : EMPTY_APPOINTMENTS),
+    [selectedAppointment]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
@@ -150,6 +187,19 @@ export function CashRegisterDetailView({
     }
   }
 
+  async function openComanda(appointmentId: string, comandaId: string) {
+    setOpeningComandaId(comandaId);
+    const result = await loadAppointmentItemAction(appointmentId);
+    if (!mountedRef.current) return;
+    setOpeningComandaId(null);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setSelectedAppointment(result.appointment);
+    setComandaOpen(true);
+  }
+
   const statusLabel = !cashSession
     ? "Sem sessão"
     : isCashOpen
@@ -157,178 +207,55 @@ export function CashRegisterDetailView({
       : "Fechado";
 
   return (
-    <div className="flex flex-col gap-8">
-      <PageHeader
-        title={formatDateBR(date)}
-        description={
-          cashSession?.responsibleName
-            ? `${statusLabel} · ${cashSession.responsibleName}`
-            : statusLabel
-        }
-        backHref={backHref}
-        backLabel="Voltar aos caixas"
-        action={
-          isCashOpen ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              onClick={() => setConfirmClose(true)}
-            >
-              <Lock className="size-4" />
-              Fechar caixa
-            </Button>
-          ) : cashSession ? (
-            <Button
-              type="button"
-              size="sm"
-              disabled={pending || Boolean(otherDayOpen)}
-              onClick={() => {
-                setOpenMode("reopen");
-                setOpenDialog(true);
-              }}
-            >
-              <RotateCcw className="size-4" />
-              Reabrir
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={pending || Boolean(otherDayOpen)}
-              onClick={() => {
-                setOpenMode("open");
-                setOpenDialog(true);
-              }}
-            >
-              Abrir caixa
-            </Button>
-          )
-        }
-      />
-
-      {otherDayOpen && (
-        <div className="rounded-xl border border-dashed bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-          Já existe um caixa aberto em{" "}
-          <Link
-            href={`/admin/financeiro/caixas/${otherDayOpen.serviceDate}`}
-            className="font-medium text-foreground underline-offset-4 hover:underline"
-          >
-            {formatDateBR(otherDayOpen.serviceDate)}
-          </Link>
-          . Feche-o antes de abrir este dia.
-        </div>
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
       )}
-
-      {/* 1. Total do dia */}
-      <Card className="overflow-hidden">
-        <div className="flex flex-col gap-4 px-5 py-5 sm:flex-row sm:items-end sm:justify-between sm:px-6 sm:py-6">
-          <div>
-            <div className="flex items-center gap-2">
-              <span
-                className={cn(
-                  "size-2 rounded-full",
-                  isCashOpen ? "bg-emerald-500" : "bg-muted-foreground/40"
-                )}
-                aria-hidden
-              />
-              <p className="text-sm text-muted-foreground">Total do dia</p>
-            </div>
-            <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl">
-              {formatPriceBRL(cash.cashInflowCents)}
-            </p>
-          </div>
-          <p className="text-sm text-muted-foreground sm:text-right">
-            {cash.comandaCount} comanda
-            {cash.comandaCount === 1 ? "" : "s"}
-            {cash.creditDepositsCents > 0 && (
-              <>
-                <br className="hidden sm:block" />
-                <span className="sm:hidden"> · </span>
-                {formatPriceBRL(cash.creditDepositsCents)} em créditos
-              </>
-            )}
-          </p>
-        </div>
-      </Card>
-
-      {/* 2. Meios de pagamento */}
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between gap-2">
-          <h2 className="text-base font-medium tracking-tight">
-            Meios de pagamento
-          </h2>
-          {activePaymentMethods.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              {activePaymentMethods.length} forma
-              {activePaymentMethods.length === 1 ? "" : "s"}
-            </span>
-          )}
-        </div>
-        {activePaymentMethods.length === 0 ? (
-          <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
-            Nenhuma entrada ainda neste dia.
-          </div>
-        ) : (
-          <Card className="overflow-hidden">
-            <ul className="divide-y">
-              {activePaymentMethods.map((method) => {
-                const Icon = PAYMENT_ICONS[method];
-                return (
-                  <li
-                    key={method}
-                    className="flex items-center gap-3 px-4 py-4 sm:px-5"
-                  >
-                    <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/40">
-                      <Icon className="size-4 text-muted-foreground" />
-                    </div>
-                    <span className="min-w-0 flex-1 text-sm font-medium">
-                      {formatPaymentMethodLabel(method)}
-                    </span>
-                    <span className="text-lg font-semibold tabular-nums tracking-tight">
-                      {formatPriceBRL(paymentMethodTotal(cash, method))}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        )}
-      </section>
-
-      {/* 3. Comandas */}
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-baseline gap-2">
-            <h2 className="text-base font-medium tracking-tight">Comandas</h2>
-            {cash.comandas.length > 0 && (
-              <span className="text-xs text-muted-foreground">
-                {filteredComandas.length}
-                {search.trim() ? ` de ${cash.comandas.length}` : ""}
-              </span>
-            )}
-          </div>
-          {cash.comandas.length > 3 && (
-            <div className="w-full sm:max-w-xs">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Buscar cliente ou barbeiro…"
-              />
-            </div>
-          )}
-        </div>
-
-        {!cashSession && cash.comandas.length === 0 ? (
-          <EmptyState
-            icon={Wallet}
-            title="Sem caixa neste dia"
-            description="Abra o caixa para registrar o movimento do dia."
-            action={
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <PageHeader
+          tone="dark"
+          title={formatDateBR(date)}
+          description={
+            cashSession?.responsibleName
+              ? `${statusLabel} · ${cashSession.responsibleName}`
+              : statusLabel
+          }
+          backHref={backHref}
+          backLabel="Voltar aos caixas"
+          action={
+            isCashOpen ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={ADMIN_SURFACE.btnGhost}
+                disabled={pending}
+                onClick={() => setConfirmClose(true)}
+              >
+                <Lock className="size-4" />
+                Fechar caixa
+              </Button>
+            ) : cashSession ? (
               <Button
                 type="button"
                 size="sm"
+                className={ADMIN_SURFACE.btnPrimary}
+                disabled={pending || Boolean(otherDayOpen)}
+                onClick={() => {
+                  setOpenMode("reopen");
+                  setOpenDialog(true);
+                }}
+              >
+                <RotateCcw className="size-4" />
+                Reabrir
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                size="sm"
+                className={ADMIN_SURFACE.btnPrimary}
                 disabled={pending || Boolean(otherDayOpen)}
                 onClick={() => {
                   setOpenMode("open");
@@ -337,125 +264,316 @@ export function CashRegisterDetailView({
               >
                 Abrir caixa
               </Button>
-            }
-          />
-        ) : cash.comandas.length === 0 ? (
-          <EmptyState
-            icon={Wallet}
-            title="Nenhuma comanda ainda"
-            description="Feche comandas na agenda e elas aparecem aqui."
-            action={
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/admin?date=${date}`}>Abrir agenda</Link>
-              </Button>
-            }
-          />
-        ) : filteredComandas.length === 0 ? (
-          <div className="rounded-xl border border-dashed py-10 text-center text-sm text-muted-foreground">
-            Nenhum resultado para &ldquo;{search}&rdquo;.
+            )
+          }
+        />
+
+        {otherDayOpen ? (
+          <div
+            className={cn(
+              ADMIN_SURFACE.panel,
+              "border-dashed px-4 py-3 text-sm",
+              ADMIN_SURFACE.muted
+            )}
+          >
+            Já existe um caixa aberto em{" "}
+            <Link
+              href={`/admin/financeiro/caixas/${otherDayOpen.serviceDate}`}
+              className={cn(
+                "font-medium underline-offset-4 hover:underline",
+                ADMIN_SURFACE.accent
+              )}
+            >
+              {formatDateBR(otherDayOpen.serviceDate)}
+            </Link>
+            . Feche-o antes de abrir este dia.
           </div>
-        ) : (
-          <Card className="overflow-hidden">
-            <ul className="divide-y">
-              {filteredComandas.map((comanda) => {
-                const closedTime = formatClosedTime(comanda.closedAt);
-                return (
-                  <li key={comanda.id}>
-                    <Link
-                      href={`/admin?date=${date}`}
-                      className="flex items-center gap-3 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5"
+        ) : null}
+
+        <div className={cn(ADMIN_SURFACE.panel, "px-4 py-5 sm:px-5")}>
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "size-2 rounded-full",
+                isCashOpen ? "bg-emerald-400" : "bg-white/25"
+              )}
+              aria-hidden
+            />
+            <p className={ADMIN_SURFACE.sectionLabel}>Total do dia</p>
+          </div>
+          <p
+            className={cn(
+              "mt-2 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl",
+              ADMIN_SURFACE.accent
+            )}
+          >
+            {formatPriceBRL(cash.cashInflowCents)}
+          </p>
+          <p className={cn("mt-1.5 text-sm", ADMIN_SURFACE.muted)}>
+            {cash.comandaCount} comanda
+            {cash.comandaCount === 1 ? "" : "s"}
+            {cash.creditDepositsCents > 0
+              ? ` · ${formatPriceBRL(cash.creditDepositsCents)} em créditos`
+              : ""}
+          </p>
+        </div>
+
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className={ADMIN_SURFACE.sectionLabel}>Meios de pagamento</p>
+            {activePaymentMethods.length > 0 ? (
+              <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                {activePaymentMethods.length} forma
+                {activePaymentMethods.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
+          {activePaymentMethods.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-[#8b8d93]">
+              Nenhuma entrada ainda neste dia.
+            </div>
+          ) : (
+            <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              <ul className="divide-y divide-white/10">
+                {activePaymentMethods.map((method) => {
+                  const Icon = PAYMENT_ICONS[method];
+                  return (
+                    <li
+                      key={method}
+                      className="flex items-center gap-3 px-4 py-3.5 sm:px-5"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate font-medium leading-snug">
-                              {comanda.customerName}
-                            </p>
-                            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                              {comanda.professionalNickname}
-                              {closedTime && <> · {closedTime}</>}
-                            </p>
-                          </div>
-                          <p className="shrink-0 text-base font-semibold tabular-nums tracking-tight">
-                            {formatPriceBRL(comanda.totalCents)}
-                          </p>
-                        </div>
-                        {comanda.payments.length > 0 && (
-                          <div className="mt-2.5 flex flex-wrap gap-1.5">
-                            {comanda.payments.map((p, i) => (
-                              <span
-                                key={`${comanda.id}-${i}`}
-                                className="inline-flex items-center rounded-md border bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground"
-                              >
-                                {formatPaymentMethodLabel(p.method)}{" "}
-                                <span className="ml-1 font-medium tabular-nums text-foreground">
-                                  {formatPriceBRL(p.amountCents)}
-                                </span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-[#1a1b1e]">
+                        <Icon className={cn("size-4", ADMIN_SURFACE.muted)} />
                       </div>
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        )}
-      </section>
+                      <span className="min-w-0 flex-1 text-sm font-medium text-[#f5f5f5]">
+                        {formatPaymentMethodLabel(method)}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-base font-semibold tabular-nums",
+                          ADMIN_SURFACE.accent
+                        )}
+                      >
+                        {formatPriceBRL(paymentMethodTotal(cash, method))}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
 
-      <OpenCashRegisterDialog
-        key={`${openDialog}-${openMode}`}
-        open={openDialog}
-        onOpenChange={setOpenDialog}
-        serviceDate={date}
-        today={today}
-        mode={openMode}
-        lockServiceDate={openMode === "reopen"}
-        responsibleOptions={responsibleOptions}
-        defaultResponsibleId={defaultResponsibleId}
-        defaultOpeningBalanceCents={cashSession?.openingBalanceCents ?? 0}
-        onSuccess={(openedDate) => {
-          window.setTimeout(() => {
-            if (!mountedRef.current) return;
-            if (openedDate !== date) {
-              router.push(`/admin/financeiro/caixas/${openedDate}`);
-            } else {
-              refreshSoon();
+        <section className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-baseline gap-2">
+              <p className={ADMIN_SURFACE.sectionLabel}>Comandas</p>
+              {cash.comandas.length > 0 ? (
+                <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
+                  {filteredComandas.length}
+                  {search.trim() ? ` de ${cash.comandas.length}` : ""}
+                </span>
+              ) : null}
+            </div>
+            {cash.comandas.length > 3 ? (
+              <div className="w-full sm:max-w-xs">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Buscar cliente ou barbeiro…"
+                  inputClassName={ADMIN_SURFACE.input}
+                />
+              </div>
+            ) : null}
+          </div>
+
+          {!cashSession && cash.comandas.length === 0 ? (
+            <EmptyState
+              icon={Wallet}
+              className="border-white/10 text-[#f5f5f5]"
+              title="Sem caixa neste dia"
+              description="Abra o caixa para registrar o movimento do dia."
+              action={
+                <Button
+                  type="button"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnPrimary}
+                  disabled={pending || Boolean(otherDayOpen)}
+                  onClick={() => {
+                    setOpenMode("open");
+                    setOpenDialog(true);
+                  }}
+                >
+                  Abrir caixa
+                </Button>
+              }
+            />
+          ) : cash.comandas.length === 0 ? (
+            <EmptyState
+              icon={Wallet}
+              className="border-white/10 text-[#f5f5f5]"
+              title="Nenhuma comanda ainda"
+              description="Feche comandas na agenda e elas aparecem aqui."
+              action={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnGhost}
+                  asChild
+                >
+                  <Link href={`/admin?date=${date}`}>Abrir agenda</Link>
+                </Button>
+              }
+            />
+          ) : filteredComandas.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/10 py-10 text-center text-sm text-[#8b8d93]">
+              Nenhum resultado para &ldquo;{search}&rdquo;.
+            </div>
+          ) : (
+            <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              <ul className="divide-y divide-white/10">
+                {filteredComandas.map((comanda) => {
+                  const closedTime = formatClosedTime(comanda.closedAt);
+                  const paymentSummary =
+                    comanda.payments.length === 0
+                      ? null
+                      : comanda.payments.length === 1
+                        ? formatPaymentMethodLabel(comanda.payments[0]!.method)
+                        : comanda.payments
+                            .map(
+                              (p) =>
+                                `${formatPaymentMethodLabel(p.method)} ${formatPriceBRL(p.amountCents)}`
+                            )
+                            .join(" · ");
+
+                  const meta = [
+                    comanda.professionalNickname,
+                    closedTime || null,
+                    paymentSummary,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+
+                  return (
+                    <li key={comanda.id}>
+                      <button
+                        type="button"
+                        disabled={openingComandaId === comanda.id}
+                        onClick={() =>
+                          void openComanda(comanda.appointmentId, comanda.id)
+                        }
+                        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] disabled:opacity-60 sm:px-5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                            {comanda.customerName}
+                          </p>
+                          {meta ? (
+                            <p
+                              className={cn(
+                                "mt-0.5 truncate text-xs",
+                                ADMIN_SURFACE.muted
+                              )}
+                            >
+                              {meta}
+                            </p>
+                          ) : null}
+                        </div>
+                        <p
+                          className={cn(
+                            "shrink-0 text-sm font-semibold tabular-nums sm:text-base",
+                            ADMIN_SURFACE.accent
+                          )}
+                        >
+                          {formatPriceBRL(comanda.totalCents)}
+                        </p>
+                        <ChevronRight
+                          className={cn("size-4 shrink-0", ADMIN_SURFACE.muted)}
+                        />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </section>
+
+        <OpenCashRegisterDialog
+          key={`${openDialog}-${openMode}`}
+          open={openDialog}
+          onOpenChange={setOpenDialog}
+          serviceDate={date}
+          today={today}
+          mode={openMode}
+          lockServiceDate={openMode === "reopen"}
+          responsibleOptions={responsibleOptions}
+          defaultResponsibleId={defaultResponsibleId}
+          defaultOpeningBalanceCents={cashSession?.openingBalanceCents ?? 0}
+          tone="dark"
+          onSuccess={(openedDate) => {
+            window.setTimeout(() => {
+              if (!mountedRef.current) return;
+              if (openedDate !== date) {
+                router.push(`/admin/financeiro/caixas/${openedDate}`);
+              } else {
+                refreshSoon();
+              }
+            }, 0);
+          }}
+        />
+
+        <ComandaDialog
+          appointment={selectedAppointment}
+          open={comandaOpen}
+          onOpenChange={(open) => {
+            setComandaOpen(open);
+            if (!open) {
+              setSelectedAppointment(null);
+              window.setTimeout(() => refreshSoon(), 0);
             }
-          }, 0);
-        }}
-      />
+          }}
+          servicesCatalog={servicesCatalog}
+          productsCatalog={productsCatalog}
+          professionals={professionals}
+          appointments={dialogAppointments}
+          isOwnerHint={isOwner}
+          initialCashRegisterOpen={initialCashRegisterOpen}
+          initialOpenCashRegisterDate={initialOpenCashRegisterDate}
+        />
 
-      <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Encerrar caixa?</DialogTitle>
-            <DialogDescription>
-              Depois de encerrar, não será possível finalizar novas comandas
-              neste dia até reabrir o caixa.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setConfirmClose(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="button"
-              disabled={pending}
-              onClick={() => void handleCloseCash()}
-            >
-              Encerrar caixa
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+          <DialogContent className="max-w-sm border-white/10 bg-[#151618] text-[#f5f5f5]">
+            <DialogHeader>
+              <DialogTitle className="text-[#f5f5f5]">
+                Encerrar caixa?
+              </DialogTitle>
+              <DialogDescription className={ADMIN_SURFACE.muted}>
+                Depois de encerrar, não será possível finalizar novas comandas
+                neste dia até reabrir o caixa.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                className={ADMIN_SURFACE.btnGhost}
+                onClick={() => setConfirmClose(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className={ADMIN_SURFACE.btnPrimary}
+                disabled={pending}
+                onClick={() => void handleCloseCash()}
+              >
+                Encerrar caixa
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }
