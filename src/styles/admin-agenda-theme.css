@@ -112,13 +112,13 @@
 }
 
 .admin-agenda .agenda-grid-shell {
-  border-color: var(--agenda-border);
+  border-color: rgb(255 255 255 / 14%);
   background: var(--agenda-elevated);
   box-shadow: 0 18px 50px rgb(0 0 0 / 35%);
 }
 
 .admin-agenda .agenda-grid-header {
-  border-color: var(--agenda-border);
+  border-color: rgb(255 255 255 / 14%);
   background: #121316;
   color: #f5f5f5;
 }
@@ -128,15 +128,16 @@
 }
 
 .admin-agenda .agenda-grid-line-hour {
-  border-color: rgb(255 255 255 / 12%);
+  border-color: rgb(255 255 255 / 14%);
 }
 
 .admin-agenda .agenda-grid-line-slot {
-  border-color: rgb(255 255 255 / 6%);
+  border-color: rgb(255 255 255 / 9%);
 }
 
+/* Separadores de coluna — precisam aparecer também em células fora do expediente */
 .admin-agenda .agenda-grid-line-col {
-  border-color: rgb(255 255 255 / 8%);
+  border-color: rgb(255 255 255 / 14%);
 }
 
 .admin-agenda .agenda-closed-banner {

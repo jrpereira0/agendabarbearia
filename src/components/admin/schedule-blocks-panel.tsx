@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, Plus, Trash2 } from "lucide-react";
+import { Ban, Clock3, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -22,7 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatTime } from "@/lib/format";
+import { formatDuration, formatTime } from "@/lib/format";
+import { timeToMinutes } from "@/lib/availability";
 import { encaixeTimeSlots } from "@/lib/encaixe";
 import { cn } from "@/lib/utils";
 import {
@@ -30,6 +30,8 @@ import {
   deleteScheduleBlock,
 } from "@/app/admin/(panel)/agenda/actions";
 import type { ScheduleBlockItem } from "@/lib/get-agenda-day";
+
+const QUICK_REASONS = ["Almoço", "Folga", "Médico", "Pessoal"] as const;
 
 type ScheduleBlocksPanelProps = {
   date: string;
@@ -68,6 +70,13 @@ export function ScheduleBlocksPanel({
   const [endTime, setEndTime] = useState("13:00");
   const [note, setNote] = useState("");
 
+  const selectedProfessional = professionals.find((p) => p.id === professionalId);
+  const durationMinutes = Math.max(
+    0,
+    timeToMinutes(endTime) - timeToMinutes(startTime)
+  );
+  const rangeInvalid = startTime >= endTime;
+
   function resetForm() {
     setProfessionalId(defaultProfessionalId ?? professionals[0]?.id ?? "");
     setStartTime("12:00");
@@ -75,12 +84,26 @@ export function ScheduleBlocksPanel({
     setNote("");
   }
 
+  function handleOpenChange(next: boolean) {
+    setOpen(next);
+    if (!next) resetForm();
+  }
+
+  function handleStartChange(nextStart: string) {
+    setStartTime(nextStart);
+    if (nextStart >= endTime) {
+      const idx = timeSlots.indexOf(nextStart);
+      const fallback = timeSlots[idx + 1] ?? timeSlots[timeSlots.length - 1];
+      if (fallback && fallback > nextStart) setEndTime(fallback);
+    }
+  }
+
   async function handleCreate() {
     if (!professionalId) {
       toast.error("Escolha o profissional.");
       return;
     }
-    if (startTime >= endTime) {
+    if (rangeInvalid) {
       toast.error("O horário de fim precisa ser depois do início.");
       return;
     }
@@ -198,22 +221,48 @@ export function ScheduleBlocksPanel({
         </ul>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bloquear horário</DialogTitle>
-            <DialogDescription>
-              Clientes e agendamento normal não conseguem marcar nessa faixa.
-              Encaixe manual ainda funciona.
-            </DialogDescription>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog max-h-[min(92dvh,640px)] w-[calc(100%-1.25rem)] gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-md"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => handleOpenChange(false)}
+            disabled={busy}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+
+          <DialogHeader className="booking-header gap-3 border-b px-4 pb-4 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <div className="flex items-start gap-3">
+              <div className="booking-section-icon flex size-10 shrink-0 items-center justify-center rounded-xl border">
+                <Ban className="size-4" strokeWidth={2} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
+                  Bloquear horário
+                </DialogTitle>
+                <DialogDescription>
+                  Reserva a faixa na agenda. Clientes não marcam — encaixe
+                  manual continua liberado.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
 
-          <div className="flex flex-col gap-4">
+          <div className="space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">
             {isOwner && (
-              <div className="flex flex-col gap-2">
-                <Label>Profissional</Label>
-                <Select value={professionalId} onValueChange={setProfessionalId}>
-                  <SelectTrigger>
+              <div className="space-y-2">
+                <Label>Barbeiro</Label>
+                <Select
+                  value={professionalId}
+                  onValueChange={setProfessionalId}
+                  disabled={busy}
+                >
+                  <SelectTrigger className="h-11">
                     <SelectValue placeholder="Escolha o barbeiro" />
                   </SelectTrigger>
                   <SelectContent>
@@ -227,63 +276,138 @@ export function ScheduleBlocksPanel({
               </div>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-2">
-                <Label>De</Label>
-                <Select value={startTime} onValueChange={setStartTime}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {timeSlots.map((t) => (
-                      <SelectItem key={`start-${t}`} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="booking-context space-y-3 rounded-xl p-3.5">
+              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Clock3 className="size-3.5" />
+                Faixa bloqueada
               </div>
-              <div className="flex flex-col gap-2">
-                <Label>Até</Label>
-                <Select value={endTime} onValueChange={setEndTime}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {timeSlots.map((t) => (
-                      <SelectItem key={`end-${t}`} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Início</Label>
+                  <Select
+                    value={startTime}
+                    onValueChange={handleStartChange}
+                    disabled={busy}
+                  >
+                    <SelectTrigger className="h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {timeSlots.map((t) => (
+                        <SelectItem key={`start-${t}`} value={t}>
+                          {formatTime(t)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Fim</Label>
+                  <Select
+                    value={endTime}
+                    onValueChange={setEndTime}
+                    disabled={busy}
+                  >
+                    <SelectTrigger className="h-11">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {timeSlots.map((t) => (
+                        <SelectItem
+                          key={`end-${t}`}
+                          value={t}
+                          disabled={t <= startTime}
+                        >
+                          {formatTime(t)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-lg border px-3 py-2.5 text-sm",
+                  rangeInvalid
+                    ? "border-[rgb(248_113_113_/_35%)] bg-[rgb(248_113_113_/_8%)] text-[#fca5a5]"
+                    : "border-[var(--booking-border)] bg-[var(--booking-input)] text-[#f5f5f5]"
+                )}
+              >
+                {rangeInvalid ? (
+                  "Escolha um horário final depois do início."
+                ) : (
+                  <p className="leading-snug">
+                    <span className="font-medium">
+                      {formatTime(startTime)} – {formatTime(endTime)}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {formatDuration(durationMinutes)}
+                      {selectedProfessional
+                        ? ` · ${selectedProfessional.nickname}`
+                        : ""}
+                    </span>
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="block-note">Motivo (opcional)</Label>
+            <div className="space-y-2.5">
+              <Label htmlFor="block-note">Motivo</Label>
+              <div className="flex flex-wrap gap-2">
+                {QUICK_REASONS.map((reason) => {
+                  const selected = note === reason;
+                  return (
+                    <button
+                      key={reason}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setNote(reason)}
+                      className={cn(
+                        "h-8 rounded-lg border px-3 text-xs transition-colors sm:text-sm",
+                        selected
+                          ? "booking-pick-active"
+                          : "booking-pick",
+                        busy && "opacity-50"
+                      )}
+                    >
+                      {reason}
+                    </button>
+                  );
+                })}
+              </div>
               <Input
                 id="block-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Ex: Almoço, médico..."
+                placeholder="Ou escreva outro motivo (opcional)"
                 maxLength={200}
+                className="h-11"
+                disabled={busy}
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
             <Button
+              type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              className="booking-btn-ghost"
+              onClick={() => handleOpenChange(false)}
               disabled={busy}
             >
               Cancelar
             </Button>
-            <Button onClick={handleCreate} disabled={busy}>
-              {busy ? "Salvando..." : "Bloquear"}
+            <Button
+              type="button"
+              className="booking-btn-primary"
+              onClick={() => void handleCreate()}
+              disabled={busy || rangeInvalid || !professionalId}
+            >
+              {busy ? "Salvando..." : "Confirmar bloqueio"}
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

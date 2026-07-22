@@ -394,6 +394,7 @@ export function ComandaDialog({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [loadedItemsKey, setLoadedItemsKey] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -429,6 +430,7 @@ export function ComandaDialog({
     if (!appointment) return;
     const gen = ++loadGenRef.current;
     setLoading(true);
+    setLoadError(false);
     try {
       const result = await loadComandaForAppointment(
         appointment.id,
@@ -436,6 +438,7 @@ export function ComandaDialog({
       );
       if (gen !== loadGenRef.current) return;
       if (!result.ok) {
+        setLoadError(true);
         toast.error(result.error);
         return;
       }
@@ -548,6 +551,8 @@ export function ComandaDialog({
       );
 
       setFocusAppointmentId(appointment.id);
+      setLoading(true);
+      setLoadError(false);
       setComanda(null);
       setItems(provisional);
       setLoadedItemsKey(null);
@@ -572,6 +577,8 @@ export function ComandaDialog({
       setCustomerCreditBalanceCents(0);
     } else if (!open) {
       setComanda(null);
+      setLoadError(false);
+      setLoading(false);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);
       setConfirmCreditShortfallCents(null);
@@ -757,7 +764,11 @@ export function ComandaDialog({
     );
   }, [appointment, appointments, comanda?.linkedAppointments]);
 
-  const showSkeleton = loading && items.length === 0;
+  // Skeleton até a comanda chegar do servidor — evita crédito/gorjeta
+  // "aparecendo depois" em cima do rascunho local.
+  const showSkeleton = Boolean(
+    open && appointment && !loadError && (loading || !comanda)
+  );
 
   const extraTimeSlots = useMemo(
     () => encaixeTimeSlots(slotStepMinutes),
@@ -1482,106 +1493,121 @@ export function ComandaDialog({
           onOpenChange(next);
         }}
       >
-        <DialogContent className={adminComandaDialogClassName()}>
+        <DialogContent
+          showCloseButton={false}
+          className={adminComandaDialogClassName()}
+        >
           {closing && (
             <div
-              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-background/80"
+              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-[rgb(14_15_17_/_88%)]"
               role="status"
               aria-live="polite"
             >
-              <Loader2 className="size-8 animate-spin text-foreground" aria-hidden />
-              <p className="text-sm font-medium">Finalizando comanda…</p>
+              <Loader2
+                className="size-8 animate-spin text-[var(--booking-accent,#ecf15e)]"
+                aria-hidden
+              />
+              <p className="text-sm font-medium text-[#f5f5f5]">
+                Finalizando comanda…
+              </p>
               <p className="text-xs text-muted-foreground">Aguarde um instante</p>
             </div>
           )}
-          <DialogHeader className="sr-only">
-            <DialogTitle>Comanda — {customerName}</DialogTitle>
-            <DialogDescription>
+
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => {
+              if (!closing) onOpenChange(false);
+            }}
+            disabled={busy || closing}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+
+          <DialogHeader className="booking-header shrink-0 gap-0.5 border-b px-3 pb-2.5 pt-4 pr-14 sm:px-5 sm:pt-4 sm:pr-14 lg:px-6">
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle className="booking-display truncate text-lg tracking-tight text-[#f5f5f5] sm:text-xl">
+                {customerName}
+              </DialogTitle>
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "shrink-0 font-normal",
+                  showSkeleton
+                    ? "border border-white/10 bg-white/5 text-muted-foreground hover:bg-white/5"
+                    : isClosed
+                      ? "border border-white/15 bg-white/10 text-[#f5f5f5] hover:bg-white/10"
+                      : "border border-[rgb(236_241_94_/_35%)] bg-[rgb(236_241_94_/_12%)] text-[var(--booking-accent,#ecf15e)] hover:bg-[rgb(236_241_94_/_12%)]"
+                )}
+              >
+                {showSkeleton ? "…" : isClosed ? "Fechada" : "Aberta"}
+              </Badge>
+            </div>
+            <DialogDescription className="sr-only">
               Comanda do dia {formatDateBR(serviceDate)} —{" "}
               {linkedAppointments.length} atendimento
               {linkedAppointments.length === 1 ? "" : "s"}
             </DialogDescription>
-          </DialogHeader>
-
-          {/* Cabeçalho */}
-          <div className="shrink-0 border-b px-4 py-3.5 sm:px-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-lg font-semibold tracking-tight sm:text-xl">
-                    {customerName}
-                  </h2>
-                  <Badge
-                    variant="secondary"
-                    className={cn(
-                      "shrink-0 font-normal",
-                      isClosed
-                        ? "bg-neutral-800 text-white hover:bg-neutral-800"
-                        : "bg-muted text-foreground"
-                    )}
-                  >
-                    {isClosed ? "Fechada" : "Aberta"}
-                  </Badge>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                  <a
-                    href={whatsappLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
-                  >
-                    <MessageCircle className="size-3.5" />
-                    <span className="tabular-nums">
-                      {formatWhatsapp(customerWhatsapp)}
-                    </span>
-                  </a>
-                  {customerCreditBalanceCents > 0 && (
-                    <span className="inline-flex items-center gap-1 tabular-nums">
-                      <Wallet className="size-3.5" />
-                      {storeCreditUsedCents > 0
-                        ? `${formatPriceBRL(creditRemainingCents)} crédito restante`
-                        : `${formatPriceBRL(customerCreditBalanceCents)} em crédito`}
-                    </span>
-                  )}
-                </div>
-                {showAppointmentTimes ? (
-                  <p className="text-xs text-muted-foreground">
-                    {scheduledLinkedAppointments
-                      .map(
-                        (apt) =>
-                          `${formatTime(apt.startTime)} · ${apt.professionalNickname}`
-                      )
-                      .join(" · ")}
-                  </p>
-                ) : focusAppointment ? (
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    {formatDateBR(serviceDate)} ·{" "}
-                    {formatTime(focusAppointment.startTime)} –{" "}
-                    {formatTime(focusAppointment.endTime)}
-                    {focusAppointment.professionalNickname
-                      ? ` · ${focusAppointment.professionalNickname}`
-                      : ""}
-                  </p>
-                ) : (
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    {formatDateBR(serviceDate)}
-                  </p>
-                )}
-              </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <a
+                href={whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 transition-colors hover:text-[var(--booking-accent,#ecf15e)]"
+              >
+                <MessageCircle className="size-3.5" />
+                <span className="tabular-nums">
+                  {formatWhatsapp(customerWhatsapp)}
+                </span>
+              </a>
+              {!showSkeleton && customerCreditBalanceCents > 0 && (
+                <span className="inline-flex items-center gap-1 tabular-nums text-[var(--booking-accent,#ecf15e)]">
+                  <Wallet className="size-3.5" />
+                  {storeCreditUsedCents > 0
+                    ? `${formatPriceBRL(creditRemainingCents)} crédito restante`
+                    : `${formatPriceBRL(customerCreditBalanceCents)} em crédito`}
+                </span>
+              )}
             </div>
-          </div>
+            {showAppointmentTimes ? (
+              <p className="text-xs text-muted-foreground">
+                {scheduledLinkedAppointments
+                  .map(
+                    (apt) =>
+                      `${formatTime(apt.startTime)} · ${apt.professionalNickname}`
+                  )
+                  .join(" · ")}
+              </p>
+            ) : focusAppointment ? (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {formatDateBR(serviceDate)} ·{" "}
+                {formatTime(focusAppointment.startTime)} –{" "}
+                {formatTime(focusAppointment.endTime)}
+                {focusAppointment.professionalNickname
+                  ? ` · ${focusAppointment.professionalNickname}`
+                  : ""}
+              </p>
+            ) : (
+              <p className="text-xs tabular-nums text-muted-foreground">
+                {formatDateBR(serviceDate)}
+              </p>
+            )}
+          </DialogHeader>
 
           {showSkeleton ? (
             <ComandaDialogSkeleton />
           ) : (
-            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,22rem)] lg:gap-5 lg:overflow-hidden">
-              {/* Coluna: itens */}
-              <section className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+            <div className="grid min-h-0 flex-1 gap-3 overflow-hidden px-3 py-2.5 sm:gap-4 sm:px-5 sm:py-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,24rem)] lg:gap-5 lg:px-6">
+              <section className="flex min-h-0 flex-col gap-2.5 overflow-hidden lg:flex-1">
                 <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold">Itens da comanda</h3>
+                    <h3 className="text-sm font-semibold text-[#f5f5f5]">
+                      Itens
+                    </h3>
                     <p className="text-xs text-muted-foreground">
-                      Serviços, produtos e gorjeta deste atendimento
+                      O que o cliente fez neste dia
                     </p>
                   </div>
                   {canEdit && (
@@ -1590,6 +1616,7 @@ export function ComandaDialog({
                         type="button"
                         variant="outline"
                         size="sm"
+                        className="booking-btn-ghost h-8"
                         disabled={busy}
                         onClick={openTipDialog}
                       >
@@ -1601,6 +1628,7 @@ export function ComandaDialog({
                           type="button"
                           variant="outline"
                           size="sm"
+                          className="booking-btn-ghost h-8"
                           disabled={busy}
                           onClick={() => {
                             setServicePickerOpen((open) => !open);
@@ -1611,7 +1639,7 @@ export function ComandaDialog({
                           Serviço
                         </Button>
                         {servicePickerOpen && (
-                          <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] rounded-lg border bg-popover p-2 shadow-md sm:w-80">
+                          <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-xl border border-[var(--booking-border)] bg-[var(--booking-elevated)] p-2 shadow-lg sm:w-80">
                             <SearchInput
                               value={serviceSearch}
                               onChange={setServiceSearch}
@@ -1632,7 +1660,7 @@ export function ComandaDialog({
                                       type="button"
                                       role="option"
                                       aria-selected={false}
-                                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                      className="booking-pick flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm"
                                       onClick={() => void pickService(svc)}
                                       disabled={busy}
                                     >
@@ -1656,6 +1684,7 @@ export function ComandaDialog({
                             type="button"
                             variant="outline"
                             size="sm"
+                            className="booking-btn-ghost h-8"
                             disabled={busy}
                             onClick={() => {
                               setProductPickerOpen((open) => !open);
@@ -1666,7 +1695,7 @@ export function ComandaDialog({
                             Produto
                           </Button>
                           {productPickerOpen && (
-                            <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] rounded-lg border bg-popover p-2 shadow-md sm:w-80">
+                            <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,20rem)] overflow-hidden rounded-xl border border-[var(--booking-border)] bg-[var(--booking-elevated)] p-2 shadow-lg sm:w-80">
                               <SearchInput
                                 value={productSearch}
                                 onChange={setProductSearch}
@@ -1687,7 +1716,7 @@ export function ComandaDialog({
                                         type="button"
                                         role="option"
                                         aria-selected={false}
-                                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-muted/60"
+                                        className="booking-pick flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left text-sm"
                                         onClick={() => pickProduct(product)}
                                         disabled={busy}
                                       >
@@ -1716,23 +1745,23 @@ export function ComandaDialog({
                   )}
                 </div>
 
-                <div className="flex flex-col overflow-hidden rounded-xl border lg:min-h-0 lg:flex-1">
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
                   {items.length === 0 && tipCents <= 0 ? (
-                    <p className="flex flex-1 items-center justify-center px-4 py-10 text-center text-sm text-muted-foreground">
-                      Nenhum item nesta comanda.
+                    <p className="booking-notice m-3 flex min-h-0 flex-1 items-center justify-center rounded-xl px-4 py-6 text-center text-sm">
+                      Nenhum item ainda. Adicione um serviço ou produto.
                     </p>
                   ) : (
-                    <ul className="divide-y lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                    <ul className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
                       {items.map((item) => {
                         const product = isProductItem(item);
                         const timeLabel = getItemAppointmentTime(item);
                         return (
                           <li
                             key={item.localKey}
-                            className="flex flex-col gap-2 bg-background px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2.5"
+                            className="flex flex-col gap-1.5 bg-transparent px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2"
                           >
                             <div className="flex min-w-0 flex-1 items-start gap-3">
-                              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground sm:size-8">
+                              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] text-[var(--booking-accent,#ecf15e)] sm:size-8">
                                 {product ? (
                                   <Package className="size-4" />
                                 ) : (
@@ -1740,7 +1769,7 @@ export function ComandaDialog({
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className="font-medium leading-snug">
+                                <p className="font-medium leading-snug text-[#f5f5f5]">
                                   {item.serviceName}
                                 </p>
                                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1784,7 +1813,7 @@ export function ComandaDialog({
                                   aria-label={`Valor ${item.serviceName}`}
                                 />
                               ) : (
-                                <span className="shrink-0 font-semibold tabular-nums">
+                                <span className="shrink-0 font-semibold tabular-nums text-[#f5f5f5]">
                                   {formatPriceBRL(item.chargedPriceCents)}
                                 </span>
                               )}
@@ -1794,7 +1823,7 @@ export function ComandaDialog({
                                     type="button"
                                     variant="ghost"
                                     size="icon"
-                                    className="size-10 shrink-0 text-destructive sm:size-8"
+                                    className="size-10 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5] sm:size-8"
                                     onClick={() => handleItemTrash(item)}
                                     disabled={isItemTrashDisabled(item)}
                                     title={
@@ -1813,19 +1842,21 @@ export function ComandaDialog({
                         );
                       })}
                       {tipCents > 0 && (
-                        <li className="flex items-center gap-3 bg-background px-3 py-2.5 sm:px-4">
-                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+                        <li className="flex items-center gap-3 bg-transparent px-3 py-2.5 sm:px-4">
+                          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] text-[var(--booking-accent,#ecf15e)]">
                             <Coins className="size-4" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium leading-snug">Gorjeta</p>
+                            <p className="font-medium leading-snug text-[#f5f5f5]">
+                              Gorjeta
+                            </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {tipEligibleProfessionals.find(
                                 (pro) => pro.id === tipProfessionalId
                               )?.nickname ?? "barbeiro"}
                             </p>
                           </div>
-                          <span className="shrink-0 font-semibold tabular-nums">
+                          <span className="shrink-0 font-semibold tabular-nums text-[#f5f5f5]">
                             {formatPriceBRL(tipCents)}
                           </span>
                           {canEdit && (
@@ -1833,7 +1864,7 @@ export function ComandaDialog({
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="size-8 shrink-0 text-destructive"
+                              className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
                               onClick={removeTip}
                               disabled={busy}
                               title="Remover gorjeta"
@@ -1846,7 +1877,7 @@ export function ComandaDialog({
                     </ul>
                   )}
 
-                  <div className="shrink-0 space-y-1 border-t bg-muted/20 px-4 py-2.5 text-sm">
+                  <div className="shrink-0 space-y-1 border-t px-4 py-2.5 text-sm">
                     {servicesTotalCents > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
                         <span>Serviços</span>
@@ -1871,7 +1902,7 @@ export function ComandaDialog({
                         </span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between border-t pt-1.5 font-medium">
+                    <div className="flex items-center justify-between border-t pt-1.5 font-medium text-[#f5f5f5]">
                       <span>Subtotal</span>
                       <span className="tabular-nums">
                         {formatPriceBRL(totals.totalCents)}
@@ -1881,30 +1912,87 @@ export function ComandaDialog({
                 </div>
               </section>
 
-              {/* Coluna: pagamento */}
-              <section className="flex flex-col gap-3 lg:min-h-0 lg:overflow-hidden lg:border-l lg:pl-5">
+              <section className="flex min-h-0 flex-col gap-2.5 overflow-hidden lg:border-l lg:pl-5">
                 <div className="shrink-0">
-                  <h3 className="text-sm font-semibold">Pagamento</h3>
+                  <h3 className="text-sm font-semibold text-[#f5f5f5]">
+                    Pagamento
+                  </h3>
                   <p className="text-xs text-muted-foreground">
-                    Formas de pagamento desta comanda
+                    Quanto falta receber para finalizar
                   </p>
                 </div>
 
+                <div className="booking-pay-hero shrink-0 space-y-2 rounded-xl px-3.5 py-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Total</span>
+                    <span className="font-semibold tabular-nums text-[#f5f5f5]">
+                      {formatPriceBRL(totals.totalCents)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Já pago</span>
+                    <span
+                      className={cn(
+                        "font-semibold tabular-nums",
+                        paymentShortfall ? "booking-pay-short" : "text-[#f5f5f5]"
+                      )}
+                    >
+                      {formatPriceBRL(paymentsSum)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[var(--booking-border)] pt-2">
+                    <span className="text-sm font-medium text-[#f5f5f5]">
+                      {paymentOverpayCents > 0
+                        ? "Troco / crédito"
+                        : paymentShortfall
+                          ? "Falta"
+                          : "Em dia"}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-lg font-semibold tabular-nums",
+                        paymentOverpayCents > 0
+                          ? "booking-pay-due"
+                          : paymentShortfall
+                            ? "booking-pay-short"
+                            : "booking-pay-due"
+                      )}
+                    >
+                      {paymentOverpayCents > 0
+                        ? formatPriceBRL(paymentOverpayCents)
+                        : paymentShortfall
+                          ? formatPriceBRL(paymentShortfallCents)
+                          : formatPriceBRL(0)}
+                    </span>
+                  </div>
+                  {canEdit && paymentOverpayCents > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Pode virar crédito do cliente ao finalizar.
+                    </p>
+                  )}
+                </div>
+
                 {!isClosed && !cashRegisterOpen && isOwner && (
-                  <div className="shrink-0 rounded-xl border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                  <div className="booking-notice shrink-0 rounded-xl px-3 py-2.5 text-xs">
                     {openCashRegisterDate &&
                     openCashRegisterDate !== serviceDate ? (
                       <>
                         O caixa aberto é do dia{" "}
-                        {formatDateBR(openCashRegisterDate)}. Esta comanda é do
-                        dia {formatDateBR(serviceDate)}.
+                        <span className="font-medium">
+                          {formatDateBR(openCashRegisterDate)}
+                        </span>
+                        . Esta comanda é do dia{" "}
+                        <span className="font-medium">
+                          {formatDateBR(serviceDate)}
+                        </span>
+                        .
                       </>
                     ) : (
                       <>
                         Sem caixa aberto em {formatDateBR(serviceDate)}. Abra em{" "}
                         <Link
                           href={`/admin/financeiro?date=${serviceDate}`}
-                          className="font-medium text-foreground underline-offset-4 hover:underline"
+                          className="font-medium text-[#f5f5f5] underline-offset-4 hover:underline"
                         >
                           Financeiro
                         </Link>
@@ -1915,14 +2003,14 @@ export function ComandaDialog({
                 )}
 
                 {(canEdit || isClosed || (hasActiveLinked && items.length > 0)) && (
-                  <div className="flex flex-col gap-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+                  <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain">
                     {customerCreditBalanceCents > 0 && canEdit && (
-                      <div className="shrink-0 space-y-2 rounded-xl border bg-muted/20 p-3">
+                      <div className="booking-context shrink-0 space-y-2 rounded-xl p-3">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground">
                             Crédito do cliente
                           </p>
-                          <p className="text-sm font-semibold tabular-nums">
+                          <p className="text-sm font-semibold tabular-nums text-[var(--booking-accent,#ecf15e)]">
                             {formatPriceBRL(customerCreditBalanceCents)}{" "}
                             disponível
                           </p>
@@ -1939,6 +2027,7 @@ export function ComandaDialog({
                             type="button"
                             variant="outline"
                             size="sm"
+                            className="booking-btn-ghost h-8"
                             disabled={busy}
                             onClick={applyCustomerCredit}
                           >
@@ -1952,6 +2041,7 @@ export function ComandaDialog({
                               type="button"
                               variant="ghost"
                               size="sm"
+                              className="booking-btn-ghost h-8"
                               disabled={busy}
                               onClick={removeCustomerCreditPayment}
                             >
@@ -1965,17 +2055,20 @@ export function ComandaDialog({
                     {customerCreditBalanceCents > 0 && !canEdit && (
                       <p className="text-xs text-muted-foreground">
                         Crédito:{" "}
-                        <span className="font-medium text-foreground">
+                        <span className="font-medium text-[#f5f5f5]">
                           {formatPriceBRL(customerCreditBalanceCents)}
                         </span>
                       </p>
                     )}
 
                     <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Forma de pagamento
+                      </p>
                       {payments.map((row) => (
                         <div
                           key={row.localKey}
-                          className="flex flex-col gap-2 rounded-xl border bg-background p-2.5"
+                          className="booking-context flex flex-col gap-2 rounded-xl p-2.5"
                         >
                           <div className="flex min-w-0 gap-2">
                             <Select
@@ -2018,7 +2111,7 @@ export function ComandaDialog({
                               disabled={!canEdit || busy}
                             >
                               <SelectTrigger className="h-9 min-w-0 flex-1">
-                                <SelectValue />
+                                <SelectValue placeholder="Escolha a forma" />
                               </SelectTrigger>
                               <SelectContent>
                                 {availablePaymentMethods.map((m) => (
@@ -2033,7 +2126,7 @@ export function ComandaDialog({
                                 type="button"
                                 variant="ghost"
                                 size="icon"
-                                className="size-9 shrink-0"
+                                className="size-9 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
                                 onClick={() =>
                                   setPayments((prev) =>
                                     prev.filter(
@@ -2096,7 +2189,7 @@ export function ComandaDialog({
                           type="button"
                           variant="outline"
                           size="sm"
-                          className="w-full"
+                          className="booking-btn-ghost h-8 w-full"
                           onClick={() =>
                             setPayments((prev) => [
                               ...prev,
@@ -2117,58 +2210,38 @@ export function ComandaDialog({
                       )}
                     </div>
 
-                    <div className="mt-auto space-y-1.5 rounded-xl border bg-muted/20 px-3 py-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Valor pago</span>
-                        <span
-                          className={cn(
-                            "font-semibold tabular-nums",
-                            paymentShortfall && "text-destructive"
-                          )}
-                        >
-                          {formatPriceBRL(paymentsSum)}
-                        </span>
-                      </div>
-                      {paymentShortfall && (
-                        <p className="text-xs text-destructive">
-                          Falta {formatPriceBRL(paymentShortfallCents)}
-                        </p>
-                      )}
-                      {canEdit && paymentOverpayCents > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {formatPriceBRL(paymentOverpayCents)} a mais — pode
-                          virar crédito ao finalizar.
-                        </p>
-                      )}
-                      {(isOwner || canEdit) && (
-                        <p className="text-xs text-muted-foreground">
+                    {(isOwner || canEdit) && (
+                      <details className="mt-auto text-xs text-muted-foreground">
+                        <summary className="cursor-pointer select-none py-1 hover:text-[#f5f5f5]">
+                          Comissão e casa
+                        </summary>
+                        <p className="pt-1">
                           Comissão {formatPriceBRL(totals.commissionCents)} ·
                           Casa{" "}
                           {formatPriceBRL(
                             totals.totalCents - totals.commissionCents
                           )}
                         </p>
-                      )}
-                    </div>
+                      </details>
+                    )}
                   </div>
                 )}
               </section>
             </div>
           )}
 
-          {/* Rodapé */}
-          <div className="shrink-0 border-t bg-background px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+          <div className="booking-footer shrink-0 border-t px-3 py-2.5 pb-[max(0.65rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-3 lg:px-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
               <div className="flex items-center justify-between gap-2 sm:contents">
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    className="h-10 shrink-0 sm:h-8"
+                    className="booking-btn-ghost h-10 shrink-0 sm:h-9"
                     onClick={() => onOpenChange(false)}
                     disabled={busy}
                   >
-                    Fechar
+                    Voltar
                   </Button>
 
                   {hasSecondaryActions && (
@@ -2178,7 +2251,7 @@ export function ComandaDialog({
                           type="button"
                           variant="outline"
                           size="icon"
-                          className="size-10 shrink-0 sm:size-8"
+                          className="booking-btn-ghost size-10 shrink-0 sm:size-9"
                           disabled={busy}
                           aria-label="Mais ações"
                         >
@@ -2230,12 +2303,29 @@ export function ComandaDialog({
                   )}
                 </div>
 
-                <div className="min-w-0 text-right sm:flex-1">
+                <div className="min-w-0 text-right sm:mr-auto sm:flex-1 sm:px-3">
                   <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                    Total
+                    {paymentShortfall
+                      ? "Falta"
+                      : paymentOverpayCents > 0
+                        ? "Troco"
+                        : "Total"}
                   </p>
-                  <p className="text-lg font-semibold tabular-nums">
-                    {formatPriceBRL(totals.totalCents)}
+                  <p
+                    className={cn(
+                      "text-lg font-semibold tabular-nums",
+                      paymentShortfall
+                        ? "text-[#f87171]"
+                        : "text-[var(--booking-accent,#ecf15e)]"
+                    )}
+                  >
+                    {formatPriceBRL(
+                      paymentShortfall
+                        ? paymentShortfallCents
+                        : paymentOverpayCents > 0
+                          ? paymentOverpayCents
+                          : totals.totalCents
+                    )}
                   </p>
                 </div>
               </div>
@@ -2247,7 +2337,7 @@ export function ComandaDialog({
                   (isOwner || permissions.canCloseComanda))) && (
                 <Button
                   type="button"
-                  className="h-11 w-full shrink-0 sm:h-8 sm:w-auto"
+                  className="booking-btn-primary h-11 w-full shrink-0 sm:h-9 sm:w-auto sm:min-w-40"
                   onClick={handleClose}
                   disabled={
                     !canFinalize ||
@@ -2322,20 +2412,32 @@ export function ComandaDialog({
       />
 
       <Dialog open={tipDialogOpen} onOpenChange={setTipDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Gorjeta</DialogTitle>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-sm"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => setTipDialogOpen(false)}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-5 sm:pr-14">
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Gorjeta
+            </DialogTitle>
             <DialogDescription>
-              Opcional. O barbeiro escolhido recebe 100% do valor e entra no
-              total da comanda.
+              O barbeiro escolhido recebe 100% e o valor entra no total.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-1">
+          <div className="space-y-4 px-4 py-4 sm:px-5">
             <div className="space-y-2">
               <Label htmlFor="tip-draft-amount">Valor</Label>
               <Input
                 id="tip-draft-amount"
-                className="h-9 tabular-nums"
+                className="h-10 tabular-nums"
                 value={
                   tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
                 }
@@ -2353,7 +2455,7 @@ export function ComandaDialog({
                 onValueChange={setTipDraftProfessionalId}
                 disabled={busy || tipEligibleProfessionals.length === 0}
               >
-                <SelectTrigger id="tip-draft-professional" className="h-9">
+                <SelectTrigger id="tip-draft-professional" className="h-10">
                   <SelectValue placeholder="Quem recebe" />
                 </SelectTrigger>
                 <SelectContent>
@@ -2366,12 +2468,12 @@ export function ComandaDialog({
               </Select>
             </div>
           </div>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+          <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
             {tipCents > 0 ? (
               <Button
                 type="button"
                 variant="ghost"
-                className="text-destructive hover:text-destructive"
+                className="booking-btn-danger"
                 disabled={busy}
                 onClick={removeTip}
               >
@@ -2384,6 +2486,7 @@ export function ComandaDialog({
               <Button
                 type="button"
                 variant="outline"
+                className="booking-btn-ghost"
                 disabled={busy}
                 onClick={() => setTipDialogOpen(false)}
               >
@@ -2391,6 +2494,7 @@ export function ComandaDialog({
               </Button>
               <Button
                 type="button"
+                className="booking-btn-primary"
                 disabled={busy}
                 onClick={confirmTipDialog}
               >
@@ -2408,30 +2512,40 @@ export function ComandaDialog({
           setConfirmOverpayCredit(next);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="admin-booking-dialog rounded-2xl ring-0 sm:max-w-md">
           {closing && (
             <div
-              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-lg bg-background/80"
+              className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[rgb(14_15_17_/_88%)]"
               role="status"
               aria-live="polite"
             >
-              <Loader2 className="size-7 animate-spin text-foreground" aria-hidden />
-              <p className="text-sm font-medium">Finalizando comanda…</p>
+              <Loader2
+                className="size-7 animate-spin text-[var(--booking-accent,#ecf15e)]"
+                aria-hidden
+              />
+              <p className="text-sm font-medium text-[#f5f5f5]">
+                Finalizando comanda…
+              </p>
             </div>
           )}
           <DialogHeader>
-            <DialogTitle>Guardar o troco como crédito?</DialogTitle>
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Guardar o troco como crédito?
+            </DialogTitle>
             <DialogDescription>
               O cliente pagou{" "}
-              <strong>{formatPriceBRL(paymentOverpayCents)}</strong> a mais que o
-              total da comanda ({formatPriceBRL(totals.totalCents)}). Deseja
-              guardar esse valor como crédito para ele?
+              <strong className="text-[#f5f5f5]">
+                {formatPriceBRL(paymentOverpayCents)}
+              </strong>{" "}
+              a mais que o total ({formatPriceBRL(totals.totalCents)}). Deseja
+              guardar esse valor como crédito?
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <Button
               type="button"
               variant="outline"
+              className="booking-btn-ghost"
               disabled={busy}
               onClick={() => void finalizeComanda(false)}
             >
@@ -2439,6 +2553,7 @@ export function ComandaDialog({
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary"
               disabled={busy}
               onClick={() => void finalizeComanda(true)}
               aria-busy={closing}
@@ -2462,12 +2577,14 @@ export function ComandaDialog({
           if (!dialogOpen && !busy) setConfirmCreditShortfallCents(null);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="admin-booking-dialog rounded-2xl ring-0 sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Crédito já foi usado</DialogTitle>
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Crédito já foi usado
+            </DialogTitle>
             <DialogDescription>
               Esta comanda gerou crédito e o cliente já usou{" "}
-              <strong>
+              <strong className="text-[#f5f5f5]">
                 {formatPriceBRL(confirmCreditShortfallCents ?? 0)}
               </strong>{" "}
               em outro atendimento. Esse valor gasto não volta. Já o crédito
@@ -2478,6 +2595,7 @@ export function ComandaDialog({
             <Button
               type="button"
               variant="outline"
+              className="booking-btn-ghost"
               disabled={busy}
               onClick={() => setConfirmCreditShortfallCents(null)}
             >
@@ -2485,6 +2603,7 @@ export function ComandaDialog({
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary"
               disabled={busy}
               onClick={() => void handleReopen(true)}
             >
@@ -2504,16 +2623,35 @@ export function ComandaDialog({
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Serviço extra</DialogTitle>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => {
+              if (!busy) {
+                setPendingExtraService(null);
+                setExtraProfessionalId("");
+                setExtraStartTime("");
+              }
+            }}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-6 sm:pr-14">
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Serviço extra
+            </DialogTitle>
             <DialogDescription>
-              {pendingExtraService?.name} · {formatDateBR(serviceDate)}. Vai
-              para a agenda com a cor de serviço extra.
+              {pendingExtraService?.name} · {formatDateBR(serviceDate)}. Entra
+              na agenda como serviço extra.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-1">
+          <div className="space-y-4 px-4 py-4 sm:px-6">
             <div className="space-y-2">
               <Label htmlFor="extra-professional">Barbeiro</Label>
               <Select
@@ -2537,7 +2675,7 @@ export function ComandaDialog({
             <div className="space-y-2">
               <Label>Horário</Label>
               {!extraProfessionalId ? (
-                <p className="rounded-lg border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
+                <p className="booking-notice rounded-xl px-3 py-4 text-center text-sm">
                   Escolha o barbeiro primeiro.
                 </p>
               ) : (
@@ -2548,6 +2686,7 @@ export function ComandaDialog({
                   disabled={busy}
                   buttonSize="sm"
                   formatSlot={formatTime}
+                  className="booking-slot-grid"
                   isSlotDisabled={(slot) =>
                     extraServiceDuration > 0 &&
                     timeToMinutes(slot) + extraServiceDuration > 24 * 60
@@ -2560,22 +2699,25 @@ export function ComandaDialog({
             </div>
 
             {extraConflicts.length > 0 && extraStartTime && (
-              <p className="text-xs text-amber-800">
+              <p className="booking-notice rounded-xl px-3 py-2.5 text-xs">
                 Sobrepõe:{" "}
-                {extraConflicts
-                  .map(
-                    (apt) =>
-                      `${apt.customerFirstName} ${apt.customerLastName} (${formatTime(apt.startTime)})`
-                  )
-                  .join(" · ")}
+                <span className="font-medium">
+                  {extraConflicts
+                    .map(
+                      (apt) =>
+                        `${apt.customerFirstName} ${apt.customerLastName} (${formatTime(apt.startTime)})`
+                    )
+                    .join(" · ")}
+                </span>
               </p>
             )}
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="booking-footer flex justify-end gap-2 border-t px-4 py-3 sm:px-6">
             <Button
               type="button"
               variant="outline"
+              className="booking-btn-ghost"
               disabled={busy}
               onClick={() => {
                 setPendingExtraService(null);
@@ -2587,6 +2729,7 @@ export function ComandaDialog({
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary"
               onClick={() => void confirmExtraService()}
               disabled={
                 busy ||
@@ -2611,21 +2754,39 @@ export function ComandaDialog({
           }
         }}
       >
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Adicionar produto</DialogTitle>
+        <DialogContent
+          showCloseButton={false}
+          className="admin-booking-dialog gap-0 overflow-hidden rounded-2xl p-0 ring-0 sm:max-w-lg"
+        >
+          <button
+            type="button"
+            aria-label="Fechar"
+            onClick={() => {
+              if (!busy) {
+                setPendingProduct(null);
+                setProductProfessionalId("");
+                setProductQuantity("1");
+              }
+            }}
+            className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+          <DialogHeader className="booking-header border-b px-4 pb-3 pt-5 pr-14 sm:px-6 sm:pr-14">
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Adicionar produto
+            </DialogTitle>
             <DialogDescription>
-              {pendingProduct?.name} · {formatPriceBRL(pendingProduct?.priceCents ?? 0)} cada
+              {pendingProduct?.name} ·{" "}
+              {formatPriceBRL(pendingProduct?.priceCents ?? 0)} cada
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-1">
+          <div className="space-y-4 px-4 py-4 sm:px-6">
             <div className="space-y-2">
               <Label htmlFor="product-professional">Barbeiro que vendeu</Label>
               <Select
-                value={
-                  productProfessionalId || PRODUCT_NO_PROFESSIONAL
-                }
+                value={productProfessionalId || PRODUCT_NO_PROFESSIONAL}
                 onValueChange={(value) =>
                   setProductProfessionalId(
                     value === PRODUCT_NO_PROFESSIONAL ? "" : value
@@ -2658,6 +2819,7 @@ export function ComandaDialog({
               <Input
                 id="product-quantity"
                 inputMode="numeric"
+                className="h-10"
                 value={productQuantity}
                 onChange={(event) =>
                   setProductQuantity(event.target.value.replace(/\D/g, ""))
@@ -2672,10 +2834,11 @@ export function ComandaDialog({
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="booking-footer flex justify-end gap-2 border-t px-4 py-3 sm:px-6">
             <Button
               type="button"
               variant="outline"
+              className="booking-btn-ghost"
               disabled={busy}
               onClick={() => {
                 setPendingProduct(null);
@@ -2687,6 +2850,7 @@ export function ComandaDialog({
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary"
               onClick={() => void confirmAddProduct()}
               disabled={busy || !pendingProduct}
             >

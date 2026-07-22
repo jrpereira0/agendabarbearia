@@ -50,7 +50,7 @@ type AgendaGridProps = {
 const gridLineHour = "agenda-grid-line-hour";
 const gridLineSlot = "agenda-grid-line-slot";
 const gridLineColumn = "agenda-grid-line-col";
-const gridLineOuter = "border-white/10";
+const gridLineOuter = "border-white/15";
 
 function slotLineClass(minute: number): string {
   return minute % 60 === 0
@@ -201,6 +201,7 @@ export function AgendaGrid({
             key={pro.id}
             className={cn(
               "agenda-grid-header agenda-grid-pro-header border-b border-l",
+              i === professionals.length - 1 && "border-r",
               !compactProHeader && "sticky top-0 z-50",
               gridLineHour,
               gridLineColumn,
@@ -289,6 +290,7 @@ export function AgendaGrid({
               key={`foot-${pro.id}`}
               className={cn(
                 "agenda-grid-header flex flex-col items-center gap-1.5 border-l px-2 py-2",
+                i === professionals.length - 1 && "border-r",
                 gridLineColumn
               )}
               style={{ gridRow: footerRow, gridColumn: i + 2 }}
@@ -468,6 +470,7 @@ function TimeSlotCells({
             key={`${pro.id}-${minute}`}
             className={cn(
               `relative border-l ${gridLineColumn}`,
+              i === professionals.length - 1 && `border-r ${gridLineColumn}`,
               slotLineClass(minute),
               isLast && `border-b border-solid ${gridLineHour}`,
               agendaCellClass({ inSchedule, occupied, blocked })

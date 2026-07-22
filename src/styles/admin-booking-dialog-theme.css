@@ -22,7 +22,6 @@
   box-shadow: 0 24px 80px rgb(0 0 0 / 55%) !important;
   color-scheme: dark;
   ring-color: transparent;
-  max-height: min(92dvh, 720px);
 }
 
 body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
@@ -276,3 +275,68 @@ body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
 .admin-booking-dialog .booking-notice .font-medium {
   color: #f5f5f5;
 }
+
+/* Comanda — resumo do caixa */
+.admin-booking-dialog .booking-pay-hero {
+  border: 1px solid var(--booking-border);
+  background: var(--booking-elevated);
+}
+
+.admin-booking-dialog .booking-pay-hero .booking-pay-due {
+  color: var(--booking-accent);
+}
+
+.admin-booking-dialog .booking-pay-hero .booking-pay-short {
+  color: #f87171;
+}
+
+.admin-booking-dialog .divide-y > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--booking-border);
+}
+
+.admin-booking-dialog .text-destructive {
+  color: #f87171;
+}
+
+/* Select / menu portais enquanto a comanda (ou outro booking dialog) está aberta */
+body:has(.admin-booking-dialog) [data-slot="select-content"],
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-content"] {
+  border-color: var(--booking-border, rgb(255 255 255 / 10%)) !important;
+  background: #151618 !important;
+  color: #f5f5f5 !important;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 55%) !important;
+}
+
+body:has(.admin-booking-dialog) [data-slot="select-item"],
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-item"] {
+  color: #f5f5f5 !important;
+  border-radius: 0.5rem;
+}
+
+body:has(.admin-booking-dialog) [data-slot="select-item"]:focus,
+body:has(.admin-booking-dialog) [data-slot="select-item"][data-highlighted],
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-item"]:focus,
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-item"][data-highlighted] {
+  background: rgb(236 241 94 / 16%) !important;
+  color: #f5f5f5 !important;
+}
+
+body:has(.admin-booking-dialog) [data-slot="select-item"]:focus *,
+body:has(.admin-booking-dialog) [data-slot="select-item"][data-highlighted] *,
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-item"]:focus *,
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-item"][data-highlighted] * {
+  color: #f5f5f5 !important;
+}
+
+body:has(.admin-booking-dialog) [data-slot="select-trigger"] {
+  border-color: var(--booking-border, rgb(255 255 255 / 10%)) !important;
+  background: #1a1b1e !important;
+  color: #f5f5f5 !important;
+}
+
+body:has(.admin-booking-dialog) [data-slot="select-trigger"]:hover,
+body:has(.admin-booking-dialog) [data-slot="select-trigger"]:focus-visible {
+  border-color: rgb(236 241 94 / 40%) !important;
+  background: #1f2023 !important;
+}
+
