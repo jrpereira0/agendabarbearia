@@ -72,21 +72,11 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
   }
 
   return (
-    <section className="relative bg-foreground text-background">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        aria-hidden
-        style={{
-          backgroundImage:
-            "linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-        }}
-      />
-
-      <div className="relative mx-auto w-full max-w-lg px-5 pb-10 pt-12 sm:px-6 sm:pb-12 sm:pt-14">
+    <section className="relative z-10 text-foreground">
+      <div className="relative mx-auto w-full max-w-lg px-5 pb-6 pt-8 sm:px-6 sm:pb-12 sm:pt-14">
         <div className="flex flex-col items-center text-center">
           {shop.logoUrl ? (
-            <div className="relative size-20 overflow-hidden rounded-xl border border-background/10 bg-black shadow-lg sm:size-24">
+            <div className="relative size-16 overflow-hidden rounded-xl border border-white/10 bg-[#151618] shadow-lg sm:size-24">
               <Image
                 src={shop.logoUrl}
                 alt={shop.name}
@@ -98,25 +88,24 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
               />
             </div>
           ) : (
-            <BrandMark className="size-20 sm:size-24" />
+            <BrandMark className="size-16 sm:size-24" />
           )}
 
-          <p className="mt-5 text-[10px] font-medium uppercase tracking-[0.28em] text-background/35">
+          <p className="mt-4 text-[10px] font-medium uppercase tracking-[0.28em] text-primary sm:mt-5">
             Agendamento online
           </p>
 
-          <h1 className="mt-2 max-w-md text-[1.75rem] font-semibold leading-tight tracking-tight sm:text-4xl">
+          <h1 className="booking-display mt-1.5 max-w-md text-[1.55rem] font-medium leading-tight tracking-tight sm:mt-2 sm:text-4xl">
             {shop.name}
           </h1>
 
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-background/60 sm:text-base">
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground sm:mt-3 sm:text-base">
             {shop.bio?.trim() || "Agende seu horário com praticidade."}
           </p>
 
           <Button
             size="lg"
-            variant="secondary"
-            className="mt-8 h-12 w-full max-w-xs text-base font-semibold shadow-sm"
+            className="mt-6 h-12 w-full max-w-xs text-base font-semibold sm:mt-8"
             onClick={scrollToBooking}
           >
             Agendar agora
@@ -125,24 +114,28 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
 
           <a
             href="#meus-agendamentos"
-            className="mt-3 block text-sm text-background/50 underline-offset-2 transition-colors hover:text-background/75 hover:underline"
+            className="mt-2.5 block text-sm text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline sm:mt-3"
           >
-            Já agendou? Ver ou cancelar seu horário
+            Já agendou? Ver ou cancelar
           </a>
         </div>
 
         {hasDetails && (
-          <div className="mt-8 space-y-3 rounded-xl border border-background/10 bg-background/[0.03] px-4 py-4 text-xs leading-relaxed text-background/55">
+          <details className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] sm:mt-8">
+            <summary className="cursor-pointer list-none px-4 py-3 text-center text-xs text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden sm:hidden">
+              Horário, endereço e contato
+            </summary>
+            <div className="space-y-3 px-4 pb-4 text-xs leading-relaxed text-muted-foreground sm:block sm:py-4">
             {hoursSummary && (
               <p className="flex items-start gap-2.5">
-                <Clock className="mt-0.5 size-3.5 shrink-0 text-background/30" />
+                <Clock className="mt-0.5 size-3.5 shrink-0 opacity-70" />
                 <span>{hoursSummary}</span>
               </p>
             )}
 
             {shop.address && (
               <p className="flex items-start gap-2.5">
-                <MapPin className="mt-0.5 size-3.5 shrink-0 text-background/30" />
+                <MapPin className="mt-0.5 size-3.5 shrink-0 opacity-70" />
                 <span>
                   {shop.address}
                   {" · "}
@@ -150,7 +143,7 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
                     href={mapsHref(shop.address)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-background/75 underline-offset-2 hover:text-background hover:underline"
+                    className="text-foreground/80 underline-offset-2 hover:text-primary hover:underline"
                   >
                     Mapa
                   </Link>
@@ -159,13 +152,13 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
             )}
 
             {(shop.whatsapp || instagram) && (
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-background/10 pt-3 sm:justify-start">
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-white/10 pt-3 sm:justify-start">
                 {shop.whatsapp && (
                   <Link
                     href={whatsappHref(shop.whatsapp)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-background/75 transition-colors hover:text-background"
+                    className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
                   >
                     <MessageCircle className="size-3.5 shrink-0" />
                     {formatWhatsapp(shop.whatsapp)}
@@ -176,7 +169,7 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
                     href={instagramHref(instagram)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-background/75 transition-colors hover:text-background"
+                    className="inline-flex items-center gap-1.5 text-foreground/80 transition-colors hover:text-primary"
                   >
                     <AtSign className="size-3.5 shrink-0" />
                     {instagram.startsWith("@") ? instagram : `@${instagram}`}
@@ -184,7 +177,8 @@ export function ShopHero({ shop, businessHours }: ShopHeroProps) {
                 )}
               </div>
             )}
-          </div>
+            </div>
+          </details>
         )}
       </div>
     </section>

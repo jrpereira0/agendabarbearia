@@ -1,0 +1,153 @@
+/* Página pública de agendamento — identidade #0E0F11 + #ECF15E */
+
+.booking-theme {
+  --background: #0e0f11;
+  --foreground: #f5f5f5;
+  --card: #151618;
+  --card-foreground: #f5f5f5;
+  --popover: #151618;
+  --popover-foreground: #f5f5f5;
+  --primary: #ecf15e;
+  --primary-foreground: #0e0f11;
+  --secondary: #1a1b1e;
+  --secondary-foreground: #f5f5f5;
+  --muted: #1a1b1e;
+  --muted-foreground: #b4b6bb;
+  --accent: #1a1b1e;
+  --accent-foreground: #ecf15e;
+  --destructive: #f87171;
+  --border: rgb(255 255 255 / 10%);
+  --input: #1a1b1e;
+  --ring: #ecf15e;
+
+  /* Tailwind v4 color tokens (garantir override no escopo) */
+  --color-background: #0e0f11;
+  --color-foreground: #f5f5f5;
+  --color-card: #151618;
+  --color-card-foreground: #f5f5f5;
+  --color-popover: #151618;
+  --color-popover-foreground: #f5f5f5;
+  --color-primary: #ecf15e;
+  --color-primary-foreground: #0e0f11;
+  --color-secondary: #1a1b1e;
+  --color-secondary-foreground: #f5f5f5;
+  --color-muted: #1a1b1e;
+  --color-muted-foreground: #b4b6bb;
+  --color-accent: #1a1b1e;
+  --color-accent-foreground: #ecf15e;
+  --color-destructive: #f87171;
+  --color-border: rgb(255 255 255 / 10%);
+  --color-input: #1a1b1e;
+  --color-ring: #ecf15e;
+
+  --booking-font-body: "Aeonik", var(--font-outfit), var(--font-sans), system-ui,
+    sans-serif;
+  --booking-font-display: "Neue Montreal", "Aeonik", var(--font-outfit),
+    var(--font-sans), system-ui, sans-serif;
+
+  font-family: var(--booking-font-body);
+  color: #f5f5f5 !important;
+  background: #0e0f11 !important;
+  color-scheme: dark;
+  min-height: 100dvh;
+}
+
+.booking-theme h1,
+.booking-theme h2,
+.booking-theme .booking-display {
+  font-family: var(--booking-font-display);
+  letter-spacing: -0.02em;
+}
+
+.booking-theme .booking-glow {
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 0%,
+    rgb(236 241 94 / 18%) 0%,
+    rgb(236 241 94 / 6%) 40%,
+    transparent 70%
+  );
+}
+
+.booking-theme .booking-grid {
+  background-image: linear-gradient(
+      to right,
+      rgb(236 241 94 / 8%) 1px,
+      transparent 1px
+    ),
+    linear-gradient(to bottom, rgb(236 241 94 / 8%) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(
+    ellipse 70% 55% at 50% 0%,
+    #000 0%,
+    transparent 75%
+  );
+  -webkit-mask-image: radial-gradient(
+    ellipse 70% 55% at 50% 0%,
+    #000 0%,
+    transparent 75%
+  );
+}
+
+.booking-theme .booking-main {
+  background: var(--background);
+  border-color: var(--border);
+}
+
+.booking-theme .booking-card {
+  border-color: var(--border);
+  background: var(--card);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 35%);
+}
+
+.booking-theme [data-slot="checkbox"] {
+  border-color: rgb(255 255 255 / 20%);
+  background: #1a1b1e;
+}
+
+.booking-theme [data-slot="checkbox"][data-state="checked"] {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.booking-theme [data-slot="input"],
+.booking-theme input:not([type="checkbox"]):not([type="radio"]) {
+  border-color: var(--border);
+  background: var(--input);
+  color: var(--foreground);
+}
+
+.booking-theme [data-slot="input"]:focus-visible,
+.booking-theme input:focus-visible {
+  border-color: rgb(236 241 94 / 45%);
+  box-shadow: 0 0 0 3px rgb(236 241 94 / 16%);
+}
+
+/* Modal de cancelar (portal) */
+.booking-dialog {
+  --background: #0e0f11;
+  --foreground: #f5f5f5;
+  --card: #151618;
+  --card-foreground: #f5f5f5;
+  --muted: #1a1b1e;
+  --muted-foreground: #b4b6bb;
+  --primary: #ecf15e;
+  --primary-foreground: #0e0f11;
+  --destructive: #f87171;
+  --border: rgb(255 255 255 / 10%);
+  --input: #1a1b1e;
+  --ring: #ecf15e;
+
+  font-family: "Aeonik", var(--font-outfit), var(--font-sans), system-ui,
+    sans-serif;
+  background: #151618 !important;
+  border-color: rgb(255 255 255 / 10%) !important;
+  color: #f5f5f5 !important;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%) !important;
+  color-scheme: dark;
+}
+
+body:has(.booking-dialog) [data-slot="dialog-overlay"] {
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(6px);
+}

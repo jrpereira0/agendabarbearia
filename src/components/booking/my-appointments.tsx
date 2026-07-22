@@ -327,7 +327,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   if (step === "phone") {
     return (
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
         <div className="border-b px-5 py-4 sm:px-6">
           <h2 className="text-lg font-semibold tracking-tight">Meus horários</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -362,7 +362,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   if (step === "edit" && editing && editingProfessional) {
     return (
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
         <div className="border-b px-5 py-4 sm:px-6">
           <h2 className="text-lg font-semibold tracking-tight">Remarcar</h2>
           <p className="mt-0.5 text-sm text-muted-foreground">
@@ -399,7 +399,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                       className={cn(
                         "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
                         checked
-                          ? "border-foreground bg-muted/40"
+                          ? "border-primary bg-primary/10"
                           : "border-transparent bg-muted/30"
                       )}
                     >
@@ -489,7 +489,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="booking-card overflow-hidden rounded-2xl border bg-card">
         <div className="border-b px-5 py-4 sm:px-6">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -610,7 +610,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         open={!!cancelTarget}
         onOpenChange={(open) => !open && setCancelTarget(null)}
       >
-        <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-md">
+        <DialogContent className="booking-dialog gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogHeader className="space-y-2 border-b px-6 py-6 pr-12 text-left">
             <DialogTitle className="text-lg font-semibold">
               Cancelar agendamento?

@@ -40,14 +40,14 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
 
   return (
     <div id="meus-agendamentos" className="scroll-mt-6">
-      <div className="mb-5 grid grid-cols-2 gap-1 rounded-2xl border bg-muted/30 p-1">
+      <div className="mb-4 grid grid-cols-2 gap-1 rounded-2xl border border-white/10 bg-white/[0.04] p-1">
         <button
           type="button"
           onClick={() => selectMode("book")}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition-all",
+            "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all sm:py-3",
             mode === "book"
-              ? "bg-foreground text-background shadow-sm"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           )}
         >
@@ -58,9 +58,9 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
           type="button"
           onClick={() => selectMode("manage")}
           className={cn(
-            "flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition-all",
+            "flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all sm:py-3",
             mode === "manage"
-              ? "bg-foreground text-background shadow-sm"
+              ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
           )}
         >

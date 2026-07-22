@@ -121,8 +121,12 @@ export function BookingDatePicker({
               onClick={() => onSelectDate(iso)}
               className={cn(
                 "flex size-9 items-center justify-center rounded-full text-sm transition-colors",
-                isSelected && "bg-foreground text-background font-semibold",
-                !isSelected && isToday && selectable && "ring-1 ring-foreground",
+                isSelected &&
+                  "bg-primary font-semibold text-primary-foreground",
+                !isSelected &&
+                  isToday &&
+                  selectable &&
+                  "ring-1 ring-primary/60",
                 !isSelected && selectable && "hover:bg-muted",
                 !selectable && "cursor-not-allowed text-muted-foreground/40"
               )}
