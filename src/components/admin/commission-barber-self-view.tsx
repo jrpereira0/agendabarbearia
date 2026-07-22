@@ -15,7 +15,6 @@ import {
   HorizontalBarChart,
   VerticalBarChart,
 } from "@/components/admin/finance-charts";
-import { FinanceMetricCard } from "@/components/admin/finance-metric-card";
 import { PayCommissionButton } from "@/components/admin/pay-commission-button";
 import { CommissionPayoutHistory } from "@/components/admin/commission-payout-history";
 import {
@@ -46,6 +45,8 @@ type CommissionBarberSelfViewProps = {
   payouts?: CommissionPayout[];
   /** Quando o PageHeader já mostra nome e CTA de pagamento. */
   hideIdentityHeader?: boolean;
+  /** Dentro do painel lista+detalhe: cards mais leves, sem “caixa dentro de caixa”. */
+  embedded?: boolean;
 };
 
 function shortDate(date: string): string {
@@ -131,9 +132,11 @@ function ServiceTable({
 function AtendimentoCard({
   comanda,
   receiveLabel,
+  panelClass = ADMIN_SURFACE.panel,
 }: {
   comanda: CommissionComandaDetail;
   receiveLabel: string;
+  panelClass?: string;
 }) {
   const customerLabel =
     comanda.customerName?.trim() ||
@@ -141,10 +144,10 @@ function AtendimentoCard({
     "Cliente";
 
   return (
-    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-3 p-4")}>
+    <div className={cn(panelClass, "flex flex-col gap-3 p-4")}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="page-display truncate text-[15px] font-medium tracking-tight">
+            <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
               {customerLabel}
             </p>
             <p className="mt-0.5 text-xs text-[#8b8d93]">
@@ -332,6 +335,7 @@ export function CommissionBarberSelfView({
   viewer = "self",
   payouts = [],
   hideIdentityHeader = false,
+  embedded = false,
 }: CommissionBarberSelfViewProps) {
   const isOwnerView = viewer === "owner";
   const isSingleDay = from === to;
@@ -438,12 +442,16 @@ export function CommissionBarberSelfView({
     (summary.tipCents > 0 ? 1 : 0) +
     (bestDay && !isSingleDay ? 1 : 0);
 
+  const panelClass = embedded
+    ? "rounded-xl border border-white/10 bg-[#1a1b1e] text-[#f5f5f5]"
+    : ADMIN_SURFACE.panel;
+
   return (
     <div className="flex flex-col gap-5">
       {!hideIdentityHeader ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="page-display text-[15px] font-medium tracking-tight">
+            <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
               {professional.professionalNickname}
             </p>
             <p className="mt-0.5 text-xs text-[#8b8d93]">{heroHint}</p>
@@ -453,7 +461,7 @@ export function CommissionBarberSelfView({
               <p className="text-xs text-[#8b8d93]">
                 {isOwnerView ? "A pagar" : "Você recebe"}
               </p>
-              <p className="page-display text-2xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-3xl">
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-3xl">
                 {formatPriceBRL(summary.commissionCents)}
               </p>
             </div>
@@ -465,26 +473,29 @@ export function CommissionBarberSelfView({
                 professionalNickname={professional.professionalNickname}
                 amountCents={summary.commissionCents}
                 label="Registrar pagamento"
-                className={cn(ADMIN_SURFACE.btnPrimary, "h-10 w-full sm:h-9 sm:w-auto")}
+                className={cn(
+                  ADMIN_SURFACE.btnPrimary,
+                  "h-10 w-full sm:h-9 sm:w-auto"
+                )}
               />
             ) : null}
           </div>
         </div>
       ) : (
         <div>
-          <p className="text-xs text-[#8b8d93]">
+          <p className={ADMIN_SURFACE.sectionLabel}>
             {isOwnerView ? "A pagar no período" : "Você recebe"}
           </p>
-          <p className="page-display mt-0.5 text-3xl font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
+          <p className="mt-2 text-4xl font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
             {formatPriceBRL(summary.commissionCents)}
           </p>
-          <p className="mt-1 text-xs text-[#8b8d93]">{heroHint}</p>
+          <p className="mt-1.5 text-xs text-[#8b8d93]">{heroHint}</p>
         </div>
       )}
 
       <div
         className={cn(
-          "grid gap-3",
+          "grid gap-2",
           metricCount >= 4
             ? "sm:grid-cols-2 xl:grid-cols-4"
             : metricCount === 3
@@ -492,39 +503,55 @@ export function CommissionBarberSelfView({
               : "sm:grid-cols-2"
         )}
       >
-        <FinanceMetricCard
-          tone="dark"
-          label="Atendimentos"
-          value={String(summary.serviceItemCount)}
-          hint="Serviços com comissão no período"
-        />
-        <FinanceMetricCard
-          tone="dark"
-          label="Em serviços"
-          value={formatPriceBRL(serviceRevenueCents)}
-          hint="Base da comissão"
-        />
+        <div className={cn(panelClass, "px-3.5 py-3")}>
+          <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
+            Atendimentos
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
+            {summary.serviceItemCount}
+          </p>
+        </div>
+        <div className={cn(panelClass, "px-3.5 py-3")}>
+          <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
+            Em serviços
+          </p>
+          <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
+            {formatPriceBRL(serviceRevenueCents)}
+          </p>
+        </div>
         {summary.tipCents > 0 ? (
-          <FinanceMetricCard
-            tone="dark"
-            label="Gorjetas"
-            value={formatPriceBRL(summary.tipCents)}
-            hint={tipHint}
-          />
+          <div className={cn(panelClass, "px-3.5 py-3")}>
+            <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
+              Gorjetas
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
+              {formatPriceBRL(summary.tipCents)}
+            </p>
+          </div>
         ) : null}
         {bestDay && !isSingleDay ? (
-          <FinanceMetricCard
-            tone="dark"
-            label="Melhor dia"
-            value={formatPriceBRL(bestDay.commissionCents)}
-            hint={formatDateBR(bestDay.date)}
-          />
+          <div className={cn(panelClass, "px-3.5 py-3")}>
+            <p className={cn("text-[10px] uppercase tracking-wide", ADMIN_SURFACE.muted)}>
+              Melhor dia
+            </p>
+            <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
+              {formatPriceBRL(bestDay.commissionCents)}
+            </p>
+            <p className={cn("mt-0.5 text-xs", ADMIN_SURFACE.muted)}>
+              {formatDateBR(bestDay.date)}
+            </p>
+          </div>
         ) : null}
       </div>
 
       {isSingleDay && activeDay ? (
         <div>
-          <Button variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost} asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={ADMIN_SURFACE.btnGhost}
+            asChild
+          >
             <Link href={`/admin?date=${from}`}>
               <CalendarDays className="size-4" />
               {isOwnerView
@@ -537,22 +564,37 @@ export function CommissionBarberSelfView({
 
       <Tabs defaultValue="atendimentos" className="w-full">
         <div className="-mx-1 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <TabsList className="w-max min-w-full">
-            <TabsTrigger value="atendimentos" className="shrink-0">
+          <TabsList className="h-auto w-max min-w-full gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+            <TabsTrigger
+              value="atendimentos"
+              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
+            >
               Atendimentos
             </TabsTrigger>
-            <TabsTrigger value="servicos" className="shrink-0">
+            <TabsTrigger
+              value="servicos"
+              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
+            >
               Por serviço
             </TabsTrigger>
             {!isSingleDay ? (
-              <TabsTrigger value="dias" className="shrink-0">
+              <TabsTrigger
+                value="dias"
+                className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
+              >
                 Por dia
               </TabsTrigger>
             ) : null}
-            <TabsTrigger value="repasses" className="shrink-0">
+            <TabsTrigger
+              value="repasses"
+              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
+            >
               Repasses
             </TabsTrigger>
-            <TabsTrigger value="resumo" className="shrink-0">
+            <TabsTrigger
+              value="resumo"
+              className="shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] data-[state=active]:bg-[#1a1b1e] data-[state=active]:text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm"
+            >
               Resumo
             </TabsTrigger>
           </TabsList>
@@ -560,24 +602,28 @@ export function CommissionBarberSelfView({
 
         <TabsContent value="atendimentos" className="mt-4">
           {comandas.length === 0 ? (
-            <div className={cn(ADMIN_SURFACE.panel, "flex flex-col items-center gap-2 px-4 py-10 text-center")}>
-                <ClipboardList className={cn("size-5", ADMIN_SURFACE.muted)} />
-                <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
-                  Nenhum atendimento neste período.
-                </p>
-              </div>
+            <div
+              className={cn(
+                panelClass,
+                "flex flex-col items-center gap-2 px-4 py-10 text-center"
+              )}
+            >
+              <ClipboardList className={cn("size-5", ADMIN_SURFACE.muted)} />
+              <p className={cn("text-sm", ADMIN_SURFACE.muted)}>
+                Nenhum atendimento neste período.
+              </p>
+            </div>
           ) : (
             <div className="flex flex-col gap-3">
               {isSingleDay ? (
-                <p className="text-xs text-[#8b8d93]">
-                  {formatDateBR(from)}
-                </p>
+                <p className="text-xs text-[#8b8d93]">{formatDateBR(from)}</p>
               ) : null}
               {comandas.map((comanda) => (
                 <AtendimentoCard
                   key={comanda.comandaId}
                   comanda={comanda}
                   receiveLabel={receiveLabel}
+                  panelClass={panelClass}
                 />
               ))}
             </div>
@@ -585,9 +631,9 @@ export function CommissionBarberSelfView({
         </TabsContent>
 
         <TabsContent value="servicos" className="mt-4">
-          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-              <ServiceTable rows={serviceRows} earnLabel={earnLabel} />
-            </div>
+          <div className={cn(panelClass, "overflow-hidden")}>
+            <ServiceTable rows={serviceRows} earnLabel={earnLabel} />
+          </div>
         </TabsContent>
 
         {!isSingleDay ? (
@@ -597,14 +643,14 @@ export function CommissionBarberSelfView({
                 Nenhum dia com atendimento no período.
               </p>
             ) : (
-              <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
-                  <DayTable
-                    rows={dayRows}
-                    maxDayCommission={maxDayCommission}
-                    buildDayHref={buildDayHref}
-                    earnLabel={earnLabel}
-                  />
-                </div>
+              <div className={cn(panelClass, "overflow-hidden")}>
+                <DayTable
+                  rows={dayRows}
+                  maxDayCommission={maxDayCommission}
+                  buildDayHref={buildDayHref}
+                  earnLabel={earnLabel}
+                />
+              </div>
             )}
           </TabsContent>
         ) : null}
@@ -626,7 +672,7 @@ export function CommissionBarberSelfView({
                 </h2>
                 <p className="text-xs text-[#8b8d93]">{dayChartHint}</p>
               </div>
-              <div className={cn(ADMIN_SURFACE.panel, "px-4 pt-5 pb-4")}>
+              <div className={cn(panelClass, "px-4 pt-5 pb-4")}>
                   <VerticalBarChart items={chartDays} height={160} />
                 </div>
             </section>
@@ -641,7 +687,7 @@ export function CommissionBarberSelfView({
                 </h2>
                 <p className="text-xs text-[#8b8d93]">{topServicesHint}</p>
               </div>
-              <div className={cn(ADMIN_SURFACE.panel, "px-4 pt-5 pb-4")}>
+              <div className={cn(panelClass, "px-4 pt-5 pb-4")}>
                   <HorizontalBarChart items={topServices} />
                 </div>
             </section>
@@ -656,7 +702,7 @@ export function CommissionBarberSelfView({
                 </h2>
                 <p className="text-xs text-[#8b8d93]">{paymentsHint}</p>
               </div>
-              <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-3 px-4 pt-5 pb-4")}>
+              <div className={cn(panelClass, "flex flex-col gap-3 px-4 pt-5 pb-4")}>
                   {activePaymentMethods.map((method) => {
                     const amount = paymentRows[method];
                     const pct =

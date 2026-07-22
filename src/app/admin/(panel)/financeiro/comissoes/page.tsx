@@ -6,7 +6,10 @@ import { isActionResult } from "@/lib/is-action-result";
 import { LOGIN_PATH } from "@/lib/login-path";
 import { todayInTimezone } from "@/lib/availability";
 import { getCommissionReport } from "@/lib/finance-reports";
-import { listProfessionalCommissionPayouts } from "@/lib/commission-payout-service";
+import {
+  listProfessionalCommissionPayouts,
+  type CommissionPayout,
+} from "@/lib/commission-payout-service";
 import { shiftDate } from "@/lib/date-range";
 import { CommissionsView } from "@/components/admin/commissions-view";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -72,32 +75,44 @@ export default async function ComissoesPage({ searchParams }: PageProps) {
     commissionPercent: row.commission_percent ?? 50,
   }));
 
-  const scopedProfessionalId = session.isOwner
+  // Dono sempre carrega o relatório completo — a seleção do barbeiro é só no cliente.
+  const reportScopeId = session.isOwner
+    ? undefined
+    : (session.professionalId ?? undefined);
+
+  const report = await getCommissionReport(admin, from, to, reportScopeId);
+
+  const initialProfessionalId = session.isOwner
     ? professionalId && professionals.some((p) => p.id === professionalId)
       ? professionalId
-      : undefined
-    : session.professionalId ?? undefined;
+      : null
+    : (session.professionalId ?? null);
 
-  const report = await getCommissionReport(
-    admin,
-    from,
-    to,
-    scopedProfessionalId
+  const payoutTargets = session.isOwner
+    ? professionals.map((p) => p.id)
+    : session.professionalId
+      ? [session.professionalId]
+      : [];
+
+  const payoutEntries = await Promise.all(
+    payoutTargets.map(async (id) => {
+      const rows = await listProfessionalCommissionPayouts(admin, id);
+      return [id, rows] as const;
+    })
   );
 
-  const payouts = scopedProfessionalId
-    ? await listProfessionalCommissionPayouts(admin, scopedProfessionalId)
-    : [];
+  const payoutsByProfessionalId: Record<string, CommissionPayout[]> =
+    Object.fromEntries(payoutEntries);
 
   return (
     <CommissionsView
       from={from}
       to={to}
       today={today}
-      professionalId={scopedProfessionalId ?? null}
+      professionalId={initialProfessionalId}
       report={report}
       professionals={professionals}
-      payouts={payouts}
+      payoutsByProfessionalId={payoutsByProfessionalId}
       isOwner={session.isOwner}
     />
   );
