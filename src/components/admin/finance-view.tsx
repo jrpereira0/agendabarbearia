@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, Percent, Wallet } from "lucide-react";
+import { BarChart3, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,20 +18,20 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { FinancePeriodFilter } from "@/components/admin/finance-period-filter";
 import { FinanceMetricCard } from "@/components/admin/finance-metric-card";
 import { FinanceMetricDetail } from "@/components/admin/finance-metric-detail";
-import {
-  DonutChart,
-  SparklineBars,
-  VerticalBarChart,
-} from "@/components/admin/finance-charts";
-import type { FinanceMetricsReport } from "@/lib/finance-reports";
+import { VerticalBarChart } from "@/components/admin/finance-charts";
+import type {
+  FinanceDayMetric,
+  FinanceMetricsReport,
+} from "@/lib/finance-reports";
 import {
   buildFinanceQuery,
   FINANCE_METRIC_OPTIONS,
-  formatSignedPercent,
   type FinanceMetricId,
 } from "@/lib/finance-metrics";
-import { formatPeriodLabel } from "@/lib/date-range";
-import { formatPriceBRL } from "@/lib/format";
+import { formatPeriodLabel, shiftDate } from "@/lib/date-range";
+import { formatPriceBRL, WEEKDAYS } from "@/lib/format";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type FinanceViewProps = {
   from: string;
@@ -39,7 +39,19 @@ type FinanceViewProps = {
   today: string;
   metric: FinanceMetricId;
   report: FinanceMetricsReport;
+  /** Dias do gráfico “últimos 7 dias” (hoje e 6 anteriores). */
+  last7Days: FinanceDayMetric[];
 };
+
+function weekdayShort(isoDate: string): string {
+  const weekday = new Date(`${isoDate}T00:00:00`).getDay();
+  return WEEKDAYS[weekday].slice(0, 3);
+}
+
+function dayMonth(isoDate: string): string {
+  const [, month, day] = isoDate.split("-");
+  return `${day}/${month}`;
+}
 
 export function FinanceView({
   from,
@@ -47,6 +59,7 @@ export function FinanceView({
   today,
   metric,
   report,
+  last7Days,
 }: FinanceViewProps) {
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
@@ -62,33 +75,30 @@ export function FinanceView({
     setSelectedMetric(metric);
   }
 
-  const hasData = report.totals.serviceItemCount > 0;
+  const hasData =
+    report.totals.comandaCount > 0 || report.totals.serviceItemCount > 0;
   const isDetail = metric !== "geral";
 
-  const dailySparkline = useMemo(
-    () => report.byDay.map((day) => day.cashInflowCents),
-    [report.byDay]
-  );
+  const attendanceCount = report.totals.comandaCount;
+  const ticketAverageCents =
+    attendanceCount > 0
+      ? Math.round(report.totals.servicesGrossCents / attendanceCount)
+      : 0;
 
-  const weekdayGross = useMemo(
+  const last7Chart = useMemo(
     () =>
-      report.weekdayBreakdown.map((row) => ({
-        label: row.label.slice(0, 3),
-        value: row.grossCents,
+      last7Days.map((day) => ({
+        label: weekdayShort(day.date),
+        value: day.totalCents,
+        sublabel: dayMonth(day.date),
       })),
-    [report.weekdayBreakdown]
+    [last7Days]
   );
 
-  const comparisonLine = useMemo(() => {
-    const comparison = report.comparison;
-    if (!comparison) return null;
-    const parts = [
-      `caixa ${formatSignedPercent(comparison.cashInflowChangePercent)}`,
-      `faturamento ${formatSignedPercent(comparison.totalChangePercent)}`,
-      `serviços ${formatSignedPercent(comparison.serviceChangePercent)}`,
-    ];
-    return `vs período anterior: ${parts.join(" · ")}`;
-  }, [report.comparison]);
+  const last7TotalCents = useMemo(
+    () => last7Days.reduce((sum, day) => sum + day.totalCents, 0),
+    [last7Days]
+  );
 
   function navigate(nextFrom: string, nextTo: string, nextMetric = metric) {
     router.push(
@@ -114,212 +124,159 @@ export function FinanceView({
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <PageHeader
-        title="Financeiro"
-        description={formatPeriodLabel(from, to)}
-      />
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+        <PageHeader
+          tone="dark"
+          title="Financeiro"
+          description={formatPeriodLabel(from, to)}
+        />
 
-      <FinancePeriodFilter
-        today={today}
-        fromDate={fromDate}
-        toDate={toDate}
-        onFromChange={setFromDate}
-        onToChange={setToDate}
-        onSubmit={applyFilter}
-        onPreset={applyPreset}
-        extraFields={
-          <Select value={selectedMetric} onValueChange={onMetricChange}>
-            <SelectTrigger
-              aria-label="Analisar métrica"
-              className="h-8 w-full bg-background sm:w-[13.5rem]"
-            >
-              <SelectValue placeholder="Visão geral" />
-            </SelectTrigger>
-            <SelectContent>
-              {FINANCE_METRIC_OPTIONS.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
-      />
-
-      {!hasData && !isDetail ? (
-        <EmptyState
-          icon={BarChart3}
-          title="Nada neste período"
-          description="Não há serviços finalizados neste intervalo. Ajuste as datas ou feche comandas na agenda."
-          action={
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/admin?date=${to}`}>Abrir agenda</Link>
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/admin/financeiro/caixas?from=${from}&to=${to}`}>
-                  <Wallet className="size-4" />
-                  Caixas
-                </Link>
-              </Button>
-            </div>
+        <FinancePeriodFilter
+          today={today}
+          fromDate={fromDate}
+          toDate={toDate}
+          onFromChange={setFromDate}
+          onToChange={setToDate}
+          onSubmit={applyFilter}
+          onPreset={applyPreset}
+          tone="dark"
+          extraFields={
+            <Select value={selectedMetric} onValueChange={onMetricChange}>
+              <SelectTrigger
+                aria-label="Analisar métrica"
+                className={cn(
+                  "h-8 w-full sm:w-[13.5rem]",
+                  ADMIN_SURFACE.selectTrigger
+                )}
+              >
+                <SelectValue placeholder="Visão geral" />
+              </SelectTrigger>
+              <SelectContent className={ADMIN_SURFACE.popover}>
+                {FINANCE_METRIC_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           }
         />
-      ) : isDetail ? (
-        hasData ? (
-          <FinanceMetricDetail
-            metric={metric}
-            report={report}
-            from={from}
-            to={to}
-          />
-        ) : (
+
+        {!hasData && !isDetail ? (
           <EmptyState
             icon={BarChart3}
-            title="Sem dados para esta métrica"
-            description="Não há atendimento finalizado neste período. Tente outra faixa de datas."
+            className="border-white/10 text-[#f5f5f5]"
+            title="Nada neste período"
+            description="Não há atendimentos finalizados neste intervalo. Ajuste as datas ou feche comandas na agenda."
+            action={
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnGhost}
+                  asChild
+                >
+                  <Link href={`/admin?date=${to}`}>Abrir agenda</Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnGhost}
+                  asChild
+                >
+                  <Link href={`/admin/financeiro/caixas?from=${from}&to=${to}`}>
+                    <Wallet className="size-4" />
+                    Caixas
+                  </Link>
+                </Button>
+              </div>
+            }
           />
-        )
-      ) : (
-        <div className="flex flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-sm font-medium">Números principais</h2>
-              <p className="text-xs text-muted-foreground">
-                Resumo do período selecionado
-              </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        ) : isDetail ? (
+          hasData ? (
+            <FinanceMetricDetail
+              metric={metric}
+              report={report}
+              from={from}
+              to={to}
+            />
+          ) : (
+            <EmptyState
+              icon={BarChart3}
+              className="border-white/10 text-[#f5f5f5]"
+              title="Sem dados para esta métrica"
+              description="Não há atendimento finalizado neste período. Tente outra faixa de datas."
+            />
+          )
+        ) : (
+          <div className="flex flex-col gap-6">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <FinanceMetricCard
-                label="Entradas no caixa"
-                value={formatPriceBRL(report.totals.cashInflowCents)}
-                hint={
-                  report.totals.creditDepositsCents > 0
-                    ? `Inclui ${formatPriceBRL(report.totals.creditDepositsCents)} em créditos`
-                    : "Pagamentos + créditos"
-                }
-                tooltip="Soma o dinheiro que realmente entrou no período: pix, dinheiro, débito, crédito e depósitos que viraram crédito do cliente. Pagamento com crédito antigo do cliente não entra aqui."
-              />
-              <FinanceMetricCard
-                label="Faturamento"
+                tone="dark"
+                label="Faturamento total"
                 value={formatPriceBRL(report.totals.servicesGrossCents)}
-                hint="Serviços no período"
-                tooltip="É o valor dos serviços realizados no período. Pode ser maior que o caixa quando o cliente usa crédito antigo, e pode ser menor quando entra depósito de crédito a mais."
+                hint="Serviços do período"
+                tooltip="Soma do valor dos serviços realizados no período selecionado."
               />
               <FinanceMetricCard
-                label="Comissões"
+                tone="dark"
+                label="Atendimentos"
+                value={String(attendanceCount)}
+                hint={
+                  attendanceCount === 1
+                    ? "1 comanda finalizada"
+                    : `${attendanceCount} comandas finalizadas`
+                }
+                tooltip="Quantidade de comandas finalizadas no período."
+              />
+              <FinanceMetricCard
+                tone="dark"
+                label="Ticket médio"
+                value={formatPriceBRL(ticketAverageCents)}
+                hint="Por atendimento"
+                tooltip="Faturamento dividido pelo número de atendimentos (comandas)."
+              />
+              <FinanceMetricCard
+                tone="dark"
+                label="Comissão dos barbeiros"
                 value={formatPriceBRL(report.totals.commissionCents)}
                 hint={`${report.commissionRatePercent}% do faturamento`}
-                tooltip="Quanto desse faturamento vai para os barbeiros em comissão."
+                tooltip="Quanto do faturamento vai para os barbeiros em comissão."
               />
-              <FinanceMetricCard
-                label="Barbearia"
-                value={formatPriceBRL(report.totals.shopCents)}
-                hint={`${report.shopRatePercent}% fica com a casa`}
-                tooltip="Parte do faturamento que fica com a barbearia depois das comissões."
-              />
-              <FinanceMetricCard
-                label="Serviços"
-                value={String(report.totals.serviceItemCount)}
-                hint={`${report.activeDays} dia${report.activeDays === 1 ? "" : "s"} ativos`}
-                tooltip="Quantidade de serviços finalizados no período."
-              />
-              <FinanceMetricCard
-                label="Ticket médio"
-                value={formatPriceBRL(report.averageServiceCents)}
-                hint="Por serviço realizado"
-                tooltip="Média por serviço realizado, não por comanda."
-              />
-            </div>
-            {comparisonLine && (
-              <p className="text-xs text-muted-foreground">{comparisonLine}</p>
-            )}
-          </section>
+            </section>
 
-          <section className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardContent className="flex flex-col gap-3 pt-5">
-                <div className="flex flex-wrap items-end justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">Entradas no caixa</p>
-                    <p className="text-xs text-muted-foreground">
-                      Evolução dia a dia
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold tabular-nums">
-                    {formatPriceBRL(report.totals.cashInflowCents)}
+            <section className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className={cn(ADMIN_SURFACE.sectionLabel)}>
+                    Últimos 7 dias
+                  </p>
+                  <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+                    Faturamento por dia · {formatPeriodLabel(
+                      shiftDate(today, -6),
+                      today
+                    )}
                   </p>
                 </div>
-                <SparklineBars values={dailySparkline} height={64} />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-5">
-                <div className="mb-4">
-                  <p className="text-sm font-medium">
-                    Comissões × barbearia
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Como o faturamento se divide
-                  </p>
-                </div>
-                <DonutChart
-                  slices={[
-                    {
-                      label: "Comissões",
-                      value: report.totals.commissionCents,
-                      className: "text-foreground",
-                    },
-                    {
-                      label: "Barbearia",
-                      value: report.totals.shopCents,
-                      className: "text-foreground/40",
-                    },
-                  ]}
-                  centerLabel="Total"
-                  centerValue={formatPriceBRL(report.totals.totalCents)}
-                />
-              </CardContent>
-            </Card>
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <div>
-              <h2 className="text-sm font-medium">Movimento na semana</h2>
-              <p className="text-xs text-muted-foreground">
-                Faturamento por dia da semana no período
-              </p>
-            </div>
-            <Card>
-              <CardContent className="pt-5">
-                <VerticalBarChart items={weekdayGross} height={160} />
-              </CardContent>
-            </Card>
-          </section>
-
-          <p className="text-xs text-muted-foreground">
-            Para analisar uma métrica com mais detalhes, use o menu ao lado
-            do filtro de período.
-          </p>
-
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin/financeiro/caixas?from=${from}&to=${to}`}>
-                <Wallet className="size-4" />
-                Caixas
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/admin/financeiro/comissoes?from=${from}&to=${to}`}>
-                <Percent className="size-4" />
-                Comissões
-              </Link>
-            </Button>
+                <p className="text-sm font-semibold tabular-nums text-[#f5f5f5]">
+                  {formatPriceBRL(last7TotalCents)}
+                </p>
+              </div>
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="pt-5">
+                  <VerticalBarChart items={last7Chart} height={180} />
+                </CardContent>
+              </Card>
+            </section>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

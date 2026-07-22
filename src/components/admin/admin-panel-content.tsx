@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 function isAdminDarkSurface(pathname: string): boolean {
   return (
     pathname === "/admin" ||
+    pathname === "/admin/financeiro" ||
     pathname === "/admin/financeiro/comissoes" ||
     pathname.startsWith("/admin/financeiro/comissoes/") ||
     pathname === "/admin/financeiro/caixas" ||

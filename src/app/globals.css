@@ -4,7 +4,7 @@
 @import "../styles/brand-fonts.css";
 @import "../styles/admin-sidebar-theme.css";
 @import "../styles/admin-agenda-theme.css";
-@import "../styles/admin-page-theme.css";
+@import "../styles/admin-page-theme.css"; /* painel escuro: financeiro, comissões, caixas */
 @import "../styles/admin-booking-dialog-theme.css";
 
 @custom-variant dark (&:is(.dark *));

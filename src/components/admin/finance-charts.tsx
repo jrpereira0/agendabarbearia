@@ -32,7 +32,7 @@ export function HorizontalBarChart({
               <div className="min-w-0">
                 <span className="font-medium">{item.label}</span>
                 {item.sublabel && (
-                  <span className="ml-1.5 text-xs text-muted-foreground">
+                  <span className="ml-1.5 text-xs text-[#b4b6bb]">
                     {item.sublabel}
                   </span>
                 )}
@@ -41,9 +41,9 @@ export function HorizontalBarChart({
                 {formatValue(item.value)}
               </span>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div className="h-2 overflow-hidden rounded-full bg-white/10">
               <div
-                className="h-full rounded-full bg-foreground/75 transition-all"
+                className="h-full rounded-full bg-[#ecf15e] transition-all"
                 style={{ width: `${pct}%` }}
               />
             </div>
@@ -83,22 +83,27 @@ export function VerticalBarChart({
               key={item.label}
               className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
             >
-              <span className="text-[10px] font-medium tabular-nums text-muted-foreground sm:text-xs">
+              <span className="text-[10px] font-medium tabular-nums text-[#b4b6bb] sm:text-xs">
                 {item.value > 0 ? formatValue(item.value) : "—"}
               </span>
               <div
                 className="flex w-full max-w-10 items-end justify-center sm:max-w-12"
-                style={{ height: height - 36 }}
+                style={{ height: height - (item.sublabel ? 48 : 36) }}
               >
                 <div
-                  className="w-full max-w-8 rounded-t-sm bg-foreground/80 transition-all"
+                  className="w-full max-w-8 rounded-t-sm bg-[#ecf15e] transition-all"
                   style={{ height: `${barHeight}%` }}
                   title={`${item.label}: ${formatValue(item.value)}`}
                 />
               </div>
-              <span className="w-full truncate text-center text-[10px] text-muted-foreground sm:text-xs">
+              <span className="w-full truncate text-center text-[10px] text-[#b4b6bb] sm:text-xs">
                 {item.label}
               </span>
+              {item.sublabel ? (
+                <span className="w-full truncate text-center text-[10px] text-[#8b8d93]">
+                  {item.sublabel}
+                </span>
+              ) : null}
             </div>
           );
         })}
@@ -180,7 +185,7 @@ export function DonutChart({
               </span>
             )}
             {centerLabel && (
-              <span className="text-[10px] text-muted-foreground sm:text-xs">
+              <span className="text-[10px] text-[#b4b6bb] sm:text-xs">
                 {centerLabel}
               </span>
             )}
@@ -200,13 +205,13 @@ export function DonutChart({
               <div className="flex min-w-0 items-center gap-2">
                 <span
                   className={cn(
-                    "size-2.5 shrink-0 rounded-full bg-foreground",
+                    "size-2.5 shrink-0 rounded-full bg-white/40",
                     slice.className
                   )}
                 />
-                <span className="truncate">{slice.label}</span>
+                <span className="truncate text-[#f5f5f5]">{slice.label}</span>
               </div>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
+              <span className="shrink-0 tabular-nums text-[#b4b6bb]">
                 {formatPriceBRL(slice.value)} · {pct}%
               </span>
             </div>
@@ -238,7 +243,7 @@ export function SparklineBars({
         return (
           <div
             key={index}
-            className="min-w-[3px] flex-1 rounded-sm bg-foreground/70"
+            className="min-w-[3px] flex-1 rounded-sm bg-[#ecf15e]"
             style={{ height: `${pct}%` }}
           />
         );

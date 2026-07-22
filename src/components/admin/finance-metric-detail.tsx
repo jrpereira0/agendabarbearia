@@ -22,6 +22,8 @@ import {
 } from "@/lib/finance-metrics";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL } from "@/lib/format";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type DetailMetric = Exclude<FinanceMetricId, "geral">;
 
@@ -44,9 +46,11 @@ function Section({
   return (
     <section className="flex flex-col gap-3">
       <div>
-        <h2 className="text-sm font-medium">{title}</h2>
+        <p className={cn(ADMIN_SURFACE.sectionLabel)}>{title}</p>
         {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted)}>
+            {description}
+          </p>
         ) : null}
       </div>
       {children}
@@ -213,14 +217,14 @@ export function FinanceMetricDetail({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-sm text-muted-foreground">
+        <p className={cn(ADMIN_SURFACE.sectionLabel)}>
           {financeMetricLabel(metric)}
         </p>
-        <p className="mt-1 text-3xl font-semibold tabular-nums tracking-tight sm:text-4xl">
+        <p className="page-display mt-1 text-3xl font-semibold tabular-nums tracking-tight text-[#f5f5f5] sm:text-4xl">
           {hero}
         </p>
         {heroHint ? (
-          <p className="mt-1 text-sm text-muted-foreground">{heroHint}</p>
+          <p className={cn("mt-1 text-sm", ADMIN_SURFACE.muted)}>{heroHint}</p>
         ) : null}
       </div>
 
@@ -228,7 +232,7 @@ export function FinanceMetricDetail({
         <>
           <Section title="Evolução no período" description="Faturamento por dia">
             {dayEvolutionGross.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <VerticalBarChart items={dayEvolutionGross} height={180} />
                 </CardContent>
@@ -239,7 +243,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Por dia da semana">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart items={weekdayGross} height={160} />
               </CardContent>
@@ -248,7 +252,7 @@ export function FinanceMetricDetail({
 
           {topServices.length > 0 && (
             <Section title="Top serviços" description="Maior faturamento">
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart items={topServices} />
                 </CardContent>
@@ -258,7 +262,7 @@ export function FinanceMetricDetail({
 
           {report.professionals.length > 0 && (
             <Section title="Por barbeiro">
-              <Card className="overflow-hidden">
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                 <ProfessionalMoneyTable
                   rows={report.professionals.map((pro) => ({
                     id: pro.professionalId,
@@ -282,7 +286,7 @@ export function FinanceMetricDetail({
             description="Quanto entrou por cada meio"
           >
             {paymentItems.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart items={paymentItems} />
                 </CardContent>
@@ -294,7 +298,7 @@ export function FinanceMetricDetail({
 
           <Section title="Entradas por dia">
             {dayEvolutionCash.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <VerticalBarChart items={dayEvolutionCash} height={180} />
                 </CardContent>
@@ -305,7 +309,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Dia a dia">
-            <Card className="overflow-hidden">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-sm">
                   <thead>
@@ -364,7 +368,7 @@ export function FinanceMetricDetail({
             description="Valor médio por serviço em cada dia"
           >
             {dayEvolutionTicket.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <VerticalBarChart items={dayEvolutionTicket} height={180} />
                 </CardContent>
@@ -375,7 +379,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Ticket por dia da semana">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart items={weekdayTicket} height={160} />
               </CardContent>
@@ -383,7 +387,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Ticket por dia">
-            <Card className="overflow-hidden">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[420px] text-sm">
                   <thead>
@@ -424,7 +428,7 @@ export function FinanceMetricDetail({
 
           {report.professionals.length > 0 && (
             <Section title="Ticket médio por barbeiro">
-              <Card className="overflow-hidden">
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                 <ProfessionalMoneyTable
                   rows={[...report.professionals]
                     .map((pro) => ({
@@ -450,7 +454,7 @@ export function FinanceMetricDetail({
         <>
           <Section title="Serviços por dia">
             {dayEvolutionServices.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <VerticalBarChart
                     items={dayEvolutionServices}
@@ -465,7 +469,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Por dia da semana">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart
                   items={weekdayServices}
@@ -478,7 +482,7 @@ export function FinanceMetricDetail({
 
           {topServicesByQty.length > 0 && (
             <Section title="Serviços mais feitos">
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart
                     items={topServicesByQty}
@@ -491,7 +495,7 @@ export function FinanceMetricDetail({
 
           {report.professionals.length > 0 && (
             <Section title="Por barbeiro">
-              <Card className="overflow-hidden">
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[360px] text-sm">
                     <thead>
@@ -548,19 +552,19 @@ export function FinanceMetricDetail({
       {metric === "comissoes" && (
         <>
           <Section title="Divisão do faturamento">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <DonutChart
                   slices={[
                     {
                       label: "Comissões",
                       value: report.totals.commissionCents,
-                      className: "text-foreground",
+                      className: "text-[#ecf15e] bg-[#ecf15e]",
                     },
                     {
                       label: "Barbearia",
                       value: report.totals.shopCents,
-                      className: "text-foreground/40",
+                      className: "text-white/35 bg-white/35",
                     },
                   ]}
                   centerLabel="Comissão"
@@ -572,7 +576,7 @@ export function FinanceMetricDetail({
 
           <Section title="Comissão por dia">
             {dayEvolutionCommission.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <VerticalBarChart
                     items={dayEvolutionCommission}
@@ -587,7 +591,7 @@ export function FinanceMetricDetail({
 
           {report.professionals.length > 0 && (
             <Section title="Por barbeiro">
-              <Card className="overflow-hidden">
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                 <ProfessionalMoneyTable
                   rows={[...report.professionals]
                     .map((pro) => ({
@@ -604,7 +608,12 @@ export function FinanceMetricDetail({
             </Section>
           )}
 
-          <Button variant="outline" size="sm" className="w-fit" asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("w-fit", ADMIN_SURFACE.btnGhost)}
+            asChild
+          >
             <Link href={`/admin/financeiro/comissoes?from=${from}&to=${to}`}>
               <Percent className="size-4" />
               Abrir página de comissões
@@ -621,7 +630,7 @@ export function FinanceMetricDetail({
             description="Quanto entrou por cada forma"
           >
             {paymentItems.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart items={paymentItems} />
                 </CardContent>
@@ -632,7 +641,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Tabela">
-            <Card className="overflow-hidden">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[360px] text-sm">
                   <thead>
@@ -694,7 +703,7 @@ export function FinanceMetricDetail({
             description="Valor dos serviços de cada um"
           >
             {report.professionals.length > 0 ? (
-              <Card className="overflow-hidden">
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
                 <ProfessionalMoneyTable
                   rows={[...report.professionals]
                     .map((pro) => ({
@@ -715,7 +724,7 @@ export function FinanceMetricDetail({
 
           <Section title="Comissão gerada">
             {report.professionals.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart
                     items={[...report.professionals]
@@ -741,7 +750,7 @@ export function FinanceMetricDetail({
             title="Faturamento por dia da semana"
             description="Qual dia da semana rende mais"
           >
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart items={weekdayGross} height={180} />
               </CardContent>
@@ -749,7 +758,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Serviços por dia da semana">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart
                   items={weekdayServices}
@@ -761,7 +770,7 @@ export function FinanceMetricDetail({
           </Section>
 
           <Section title="Entradas no caixa">
-            <Card>
+            <Card className={ADMIN_SURFACE.panel}>
               <CardContent className="pt-5">
                 <VerticalBarChart
                   items={report.weekdayBreakdown.map((row) => ({
@@ -783,7 +792,7 @@ export function FinanceMetricDetail({
             description="Serviços que mais geraram valor"
           >
             {topServices.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart items={topServices} />
                 </CardContent>
@@ -798,7 +807,7 @@ export function FinanceMetricDetail({
             description="Serviços mais feitos"
           >
             {topServicesByQty.length > 0 ? (
-              <Card>
+              <Card className={ADMIN_SURFACE.panel}>
                 <CardContent className="pt-5">
                   <HorizontalBarChart
                     items={topServicesByQty}

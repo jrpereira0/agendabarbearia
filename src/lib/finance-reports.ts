@@ -447,6 +447,8 @@ export type FinanceMetricsReport = {
     commissionCents: number;
     shopCents: number;
     serviceItemCount: number;
+    /** Comandas finalizadas no período (atendimentos). */
+    comandaCount: number;
     servicesGrossCents: number;
   };
   averageServiceCents: number;
@@ -748,6 +750,7 @@ export async function getFinanceMetricsReport(
       commissionCents: summary.commissionCents,
       shopCents: summary.shopCents,
       serviceItemCount,
+      comandaCount: summary.comandaCount,
       servicesGrossCents,
     },
     averageServiceCents,

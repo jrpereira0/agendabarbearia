@@ -57,7 +57,7 @@ export function FinanceMetricCard({
                 className={cn(
                   "inline-flex size-4 items-center justify-center transition",
                   dark
-                    ? "text-[#8b8d93] hover:text-[#f5f5f5]"
+                    ? "text-[#b4b6bb] hover:text-[#f5f5f5]"
                     : "text-muted-foreground/70 hover:text-foreground"
                 )}
                 aria-label={`Explicar ${label.toLowerCase()}`}

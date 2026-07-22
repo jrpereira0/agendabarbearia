@@ -30,7 +30,7 @@ function normalizeRange(
   legacyDate: string | undefined,
   today: string
 ): { from: string; to: string } {
-  const defaultFrom = shiftDate(today, -10);
+  const defaultFrom = shiftDate(today, -6);
   let from = isIsoDate(fromParam)
     ? fromParam
     : isIsoDate(legacyDate)
@@ -58,19 +58,35 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
   const today = todayInTimezone();
   const { from, to } = normalizeRange(fromParam, toParam, legacyDate, today);
   const metric = parseFinanceMetric(metricParam);
+  const last7From = shiftDate(today, -6);
+  const coversLast7 = from <= last7From && to >= today;
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return (
-      <EmptyState
-        icon={Wallet}
-        title="Sistema indisponível"
-        description="Não foi possível carregar o financeiro. Tente de novo em instantes."
-      />
+      <div className="admin-page -m-4 flex min-h-full flex-col bg-[#0e0f11] p-4 text-[#f5f5f5] md:-m-8 md:p-8">
+        <EmptyState
+          icon={Wallet}
+          className="border-white/10 text-[#f5f5f5]"
+          title="Sistema indisponível"
+          description="Não foi possível carregar o financeiro. Tente de novo em instantes."
+        />
+      </div>
     );
   }
 
-  const report = await getFinanceMetricsReport(admin, from, to);
+  const [report, last7Report] = await Promise.all([
+    getFinanceMetricsReport(admin, from, to),
+    coversLast7
+      ? Promise.resolve(null)
+      : getFinanceMetricsReport(admin, last7From, today),
+  ]);
+
+  const last7Days = coversLast7
+    ? report.byDay.filter(
+        (day) => day.date >= last7From && day.date <= today
+      )
+    : (last7Report?.byDay ?? []);
 
   return (
     <FinanceView
@@ -79,6 +95,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       today={today}
       metric={metric}
       report={report}
+      last7Days={last7Days}
     />
   );
 }

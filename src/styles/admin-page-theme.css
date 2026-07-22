@@ -5,7 +5,7 @@
   --page-bg: #0e0f11;
   --page-elevated: #151618;
   --page-input: #1a1b1e;
-  --page-muted: #8b8d93;
+  --page-muted: #b4b6bb;
   --page-border: rgb(255 255 255 / 10%);
   --page-accent: #ecf15e;
   --page-accent-fg: #0e0f11;
@@ -42,8 +42,15 @@
 .admin-page .bg-card {
   border-color: var(--page-border) !important;
   background: var(--page-elevated) !important;
+  background-color: var(--page-elevated) !important;
   color: #f5f5f5 !important;
   box-shadow: none !important;
+  --tw-ring-color: rgb(255 255 255 / 10%) !important;
+}
+
+.admin-page [data-slot="card"] {
+  --card: #151618;
+  --card-foreground: #f5f5f5;
 }
 
 .admin-page .page-metric [data-slot="finance-metric-value"] {
@@ -97,7 +104,7 @@
   box-shadow: none !important;
 }
 
-.admin-page .page-filter .bg-muted\/40 {
+.admin-page .page-filter [class*="bg-muted"] {
   background: rgb(255 255 255 / 4%) !important;
   border-color: var(--page-border) !important;
 }
@@ -107,7 +114,7 @@
   background: transparent !important;
 }
 
-.admin-page .page-empty .bg-muted\/50 {
+.admin-page .page-empty [class*="bg-muted"] {
   background: var(--page-elevated) !important;
   border-color: var(--page-border) !important;
 }
@@ -162,23 +169,15 @@
   border-color: var(--page-border) !important;
 }
 
-.admin-page .bg-foreground\/75,
-.admin-page .bg-foreground\/80,
-.admin-page .bg-foreground\/70 {
+/* Barras de gráfico: destaque amarelo no tema escuro */
+.admin-page [class*="bg-foreground"] {
   background: var(--page-accent) !important;
 }
 
 .admin-page .bg-muted,
-.admin-page .bg-muted\/30,
-.admin-page .bg-muted\/40,
+.admin-page [class*="bg-muted"],
 .admin-page .bg-background {
   background: rgb(255 255 255 / 6%) !important;
-}
-
-.admin-page .hover\:bg-muted:hover,
-.admin-page .hover\:bg-muted\/40:hover,
-.admin-page .active\:bg-muted\/40:active {
-  background: rgb(255 255 255 / 8%) !important;
 }
 
 .admin-page table thead tr {
@@ -199,3 +198,73 @@
 .admin-page a.text-muted-foreground {
   color: var(--page-muted) !important;
 }
+
+.admin-page .text-card-foreground {
+  color: #f5f5f5 !important;
+}
+
+/* Dropdown/select escuro (portal) — mesmo hover do menu lateral */
+.admin-popover {
+  border: 1px solid rgb(255 255 255 / 10%) !important;
+  background: #151618 !important;
+  color: #f5f5f5 !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 55%) !important;
+  padding: 0.3rem !important;
+  overflow: hidden;
+}
+
+.admin-popover [data-slot="select-item"],
+.admin-popover [data-slot="dropdown-menu-item"] {
+  cursor: pointer;
+  border-radius: 0.5rem !important;
+  margin: 0.05rem 0;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  padding-left: 0.7rem !important;
+  color: rgb(245 245 245 / 86%) !important;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.admin-popover [data-slot="select-item"][data-highlighted],
+.admin-popover [data-slot="select-item"]:focus,
+.admin-popover [data-slot="select-item"]:hover,
+.admin-popover [data-slot="dropdown-menu-item"][data-highlighted],
+.admin-popover [data-slot="dropdown-menu-item"]:focus,
+.admin-popover [data-slot="dropdown-menu-item"]:hover {
+  background: rgb(255 255 255 / 6%) !important;
+  color: #f5f5f5 !important;
+}
+
+.admin-popover [data-slot="select-item"][data-highlighted] *,
+.admin-popover [data-slot="select-item"]:focus *,
+.admin-popover [data-slot="dropdown-menu-item"][data-highlighted] *,
+.admin-popover [data-slot="dropdown-menu-item"]:focus * {
+  color: inherit !important;
+}
+
+.admin-popover [data-slot="select-item"][data-state="checked"] {
+  background: rgb(236 241 94 / 12%) !important;
+  color: #ecf15e !important;
+  font-weight: 500;
+}
+
+.admin-popover [data-slot="select-item"][data-state="checked"][data-highlighted],
+.admin-popover [data-slot="select-item"][data-state="checked"]:focus,
+.admin-popover [data-slot="select-item"][data-state="checked"]:hover {
+  background: rgb(236 241 94 / 18%) !important;
+  color: #ecf15e !important;
+}
+
+.admin-popover [data-slot="select-item"] svg {
+  color: #ecf15e !important;
+}
+
+.admin-popover [data-slot="select-scroll-up-button"],
+.admin-popover [data-slot="select-scroll-down-button"] {
+  background: #151618 !important;
+  color: #b4b6bb !important;
+}
+
