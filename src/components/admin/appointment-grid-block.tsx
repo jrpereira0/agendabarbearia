@@ -35,6 +35,11 @@ type AppointmentGridBlockProps = {
   gridRow: string;
   columnIndex?: number;
   columnCount?: number;
+  /** Quando o agendamento vira vários cards, o nome deste serviço. */
+  focusedServiceName?: string | null;
+  showBookingSource?: boolean;
+  segmentStartTime?: string;
+  segmentEndTime?: string;
   /** Informa o horário sob o mouse enquanto passa pelo bloco. */
   onHoverTime?: (clientY: number, top: number, height: number) => void;
 };
@@ -121,6 +126,10 @@ export function AppointmentGridBlock({
   gridRow,
   columnIndex = 0,
   columnCount = 1,
+  focusedServiceName = null,
+  showBookingSource = true,
+  segmentStartTime,
+  segmentEndTime,
   onHoverTime,
 }: AppointmentGridBlockProps) {
   const isMobile = useIsMobile();
@@ -130,23 +139,25 @@ export function AppointmentGridBlock({
   } | null>(null);
 
   const name = `${apt.customerFirstName} ${apt.customerLastName}`;
-  const startTime = formatTime(apt.startTime);
-  const endTime = formatTime(apt.endTime);
+  const startTime = formatTime(segmentStartTime ?? apt.startTime);
+  const endTime = formatTime(segmentEndTime ?? apt.endTime);
   const sideBySide = columnCount > 1;
   const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
   const showService = rowSpan >= 2 && !sideBySide;
-  const serviceLabel = (() => {
-    if (apt.services.length === 0) return null;
-    const counts = new Map<string, number>();
-    for (const s of apt.services) {
-      counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
-    }
-    const parts = [...counts.entries()].map(([name, qty]) =>
-      qty > 1 ? `${name} ×${qty}` : name
-    );
-    if (parts.length === 1) return parts[0]!;
-    return `${parts[0]} +${parts.length - 1}`;
-  })();
+  const serviceLabel =
+    focusedServiceName ??
+    (() => {
+      if (apt.services.length === 0) return null;
+      const counts = new Map<string, number>();
+      for (const s of apt.services) {
+        counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+      }
+      const parts = [...counts.entries()].map(([svcName, qty]) =>
+        qty > 1 ? `${svcName} ×${qty}` : svcName
+      );
+      if (parts.length === 1) return parts[0]!;
+      return `${parts[0]} +${parts.length - 1}`;
+    })();
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
 
   const blockButton = (
@@ -185,14 +196,14 @@ export function AppointmentGridBlock({
         setStatusMenu({ x: event.clientX, y: event.clientY });
       }}
     >
-      {apt.bookingSource ? (
+      {showBookingSource && apt.bookingSource ? (
         <BookingSourceBadge source={apt.bookingSource} />
       ) : null}
       <div className="relative z-[2] flex min-h-0 w-full flex-col justify-center gap-px">
         <p
           className={cn(
             "truncate font-medium leading-none",
-            apt.bookingSource && "pr-3.5",
+            showBookingSource && apt.bookingSource && "pr-3.5",
             tight ? "text-[10px]" : "text-[11px] sm:text-xs"
           )}
         >

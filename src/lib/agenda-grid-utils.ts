@@ -105,6 +105,77 @@ export type OverlapLayout = {
   columnCount: number;
 };
 
+/** Um card visual por serviço (mesmo agendamento pode virar vários cards). */
+export type AgendaAppointmentCard = {
+  id: string;
+  appointment: AppointmentItemLike;
+  startTime: string;
+  endTime: string;
+  serviceIndex: number;
+  serviceName: string | null;
+  serviceCount: number;
+};
+
+type AppointmentItemLike = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  services: {
+    id: string;
+    name: string;
+    durationMinutes: number;
+    priceCents: number;
+  }[];
+};
+
+export function expandAppointmentsToServiceCards<T extends AppointmentItemLike>(
+  appointments: T[]
+): (AgendaAppointmentCard & { appointment: T })[] {
+  const cards: (AgendaAppointmentCard & { appointment: T })[] = [];
+
+  for (const apt of appointments) {
+    const services = apt.services;
+    if (services.length <= 1) {
+      cards.push({
+        id: apt.id,
+        appointment: apt,
+        startTime: apt.startTime,
+        endTime: apt.endTime,
+        serviceIndex: 0,
+        serviceName: services[0]?.name ?? null,
+        serviceCount: Math.max(1, services.length),
+      });
+      continue;
+    }
+
+    let cursor = timeToMinutes(apt.startTime);
+    const aptEnd = timeToMinutes(apt.endTime);
+
+    services.forEach((service, index) => {
+      const start = cursor;
+      const isLast = index === services.length - 1;
+      const proposedEnd = start + Math.max(1, service.durationMinutes);
+      const end = isLast
+        ? Math.max(proposedEnd, aptEnd)
+        : Math.min(proposedEnd, aptEnd);
+      const safeEnd = Math.max(start + 1, Math.min(end, aptEnd));
+
+      cards.push({
+        id: `${apt.id}#${index}`,
+        appointment: apt,
+        startTime: minutesToTime(start),
+        endTime: minutesToTime(safeEnd),
+        serviceIndex: index,
+        serviceName: service.name,
+        serviceCount: services.length,
+      });
+      cursor = start + Math.max(1, service.durationMinutes);
+    });
+  }
+
+  return cards;
+}
+
 /** Divide a coluna quando vários agendamentos se sobrepõem no tempo. */
 export function computeOverlapLayouts<T extends { id: string; startTime: string; endTime: string }>(
   appointments: T[]

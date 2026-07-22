@@ -479,13 +479,15 @@ async function syncManualEncaixeItemsToComanda(
     .select("squeeze_appointment_id, appointment_id, service_id")
     .eq("comanda_id", comandaId);
 
-  const coveredKeys = new Set<string>();
+  const coveredCounts = new Map<string, number>();
   for (const item of existingItems ?? []) {
     if (item.squeeze_appointment_id && item.service_id) {
-      coveredKeys.add(`${item.squeeze_appointment_id}:${item.service_id}`);
+      const key = `${item.squeeze_appointment_id}:${item.service_id}`;
+      coveredCounts.set(key, (coveredCounts.get(key) ?? 0) + 1);
     }
     if (item.appointment_id && item.service_id) {
-      coveredKeys.add(`apt:${item.appointment_id}:${item.service_id}`);
+      const key = `apt:${item.appointment_id}:${item.service_id}`;
+      coveredCounts.set(key, (coveredCounts.get(key) ?? 0) + 1);
     }
   }
 
@@ -505,14 +507,10 @@ async function syncManualEncaixeItemsToComanda(
   for (const apt of squeezeApts) {
     const { data: services } = await admin
       .from("appointment_services")
-      .select("service_id, services ( id, name, price_cents )")
+      .select("service_id, quantity, services ( id, name, price_cents )")
       .eq("appointment_id", apt.id);
 
     for (const link of services ?? []) {
-      const squeezeKey = `${apt.id}:${link.service_id}`;
-      const aptKey = `apt:${apt.id}:${link.service_id}`;
-      if (coveredKeys.has(squeezeKey) || coveredKeys.has(aptKey)) continue;
-
       const service = Array.isArray(link.services)
         ? link.services[0]
         : link.services;
@@ -524,20 +522,30 @@ async function syncManualEncaixeItemsToComanda(
         },
         pricing
       );
+      const quantity = Math.max(1, link.quantity ?? 1);
+      const squeezeKey = `${apt.id}:${link.service_id}`;
+      const aptKey = `apt:${apt.id}:${link.service_id}`;
+      const already = Math.max(
+        coveredCounts.get(squeezeKey) ?? 0,
+        coveredCounts.get(aptKey) ?? 0
+      );
 
-      await admin.from("comanda_items").insert({
-        comanda_id: comandaId,
-        service_id: link.service_id,
-        service_name: service?.name ?? "Serviço",
-        catalog_price_cents: price,
-        charged_price_cents: price,
-        sort_order: sortOrder,
-        squeeze_appointment_id: apt.id,
-        appointment_id: null,
-        professional_id: apt.professional_id,
-      });
-      coveredKeys.add(squeezeKey);
-      sortOrder += 1;
+      for (let unit = already; unit < quantity; unit += 1) {
+        await admin.from("comanda_items").insert({
+          comanda_id: comandaId,
+          service_id: link.service_id,
+          service_name: service?.name ?? "Serviço",
+          catalog_price_cents: price,
+          charged_price_cents: price,
+          quantity: 1,
+          sort_order: sortOrder,
+          squeeze_appointment_id: apt.id,
+          appointment_id: null,
+          professional_id: apt.professional_id,
+        });
+        coveredCounts.set(squeezeKey, (coveredCounts.get(squeezeKey) ?? 0) + 1);
+        sortOrder += 1;
+      }
     }
   }
 }
@@ -735,7 +743,7 @@ async function seedItemsFromAppointment(
     serviceRows.map((service) => service.id)
   );
 
-  const rows = links.map((link, index) => {
+  const rows = links.flatMap((link) => {
     const service = Array.isArray(link.services)
       ? link.services[0]
       : link.services;
@@ -748,18 +756,20 @@ async function seedItemsFromAppointment(
       pricing
     );
     const quantity = Math.max(1, link.quantity ?? 1);
-    return {
+    return Array.from({ length: quantity }, () => ({
       comanda_id: comandaId,
       service_id: link.service_id,
       service_name: service?.name ?? "Serviço",
       catalog_price_cents: price,
-      charged_price_cents: price * quantity,
-      quantity,
-      sort_order: sortOrderStart + index,
+      charged_price_cents: price,
+      quantity: 1,
       appointment_id: appointmentId,
       professional_id: appointment.professional_id,
-    };
-  });
+    }));
+  }).map((row, index) => ({
+    ...row,
+    sort_order: sortOrderStart + index,
+  }));
 
   await admin.from("comanda_items").insert(rows);
   return sortOrderStart + rows.length;
@@ -1176,7 +1186,7 @@ async function syncItemsFromLinkedAppointments(
       admin
         .from("comanda_items")
         .select(
-          "id, appointment_id, service_id, product_id, is_tip, squeeze_appointment_id"
+          "id, appointment_id, service_id, product_id, is_tip, squeeze_appointment_id, quantity, catalog_price_cents, charged_price_cents, service_name, professional_id, sort_order"
         )
         .eq("comanda_id", comandaId),
       admin
@@ -1185,23 +1195,70 @@ async function syncItemsFromLinkedAppointments(
         .in("id", appointmentIds),
       admin
         .from("appointment_services")
-        .select("appointment_id, service_id, services ( id, name, price_cents )")
+        .select(
+          "appointment_id, service_id, quantity, services ( id, name, price_cents )"
+        )
         .in("appointment_id", appointmentIds),
     ]);
+
+  // Itens antigos com quantity > 1 viram N linhas (1 serviço realizado cada).
+  for (const item of existingItems ?? []) {
+    const quantity = Math.max(1, item.quantity ?? 1);
+    if (quantity <= 1) continue;
+    if (item.is_tip || item.product_id || item.squeeze_appointment_id) continue;
+    if (!item.appointment_id || !item.service_id) continue;
+
+    const unitPrice =
+      item.catalog_price_cents > 0
+        ? item.catalog_price_cents
+        : Math.round(item.charged_price_cents / quantity);
+
+    await admin
+      .from("comanda_items")
+      .update({
+        quantity: 1,
+        catalog_price_cents: unitPrice,
+        charged_price_cents: unitPrice,
+      })
+      .eq("id", item.id);
+
+    const extraRows = Array.from({ length: quantity - 1 }, (_, index) => ({
+      comanda_id: comandaId,
+      service_id: item.service_id,
+      service_name: item.service_name ?? "Serviço",
+      catalog_price_cents: unitPrice,
+      charged_price_cents: unitPrice,
+      quantity: 1,
+      sort_order: (item.sort_order ?? 0) + index + 1,
+      appointment_id: item.appointment_id,
+      professional_id: item.professional_id,
+    }));
+    if (extraRows.length > 0) {
+      await admin.from("comanda_items").insert(extraRows);
+    }
+  }
+
+  const { data: refreshedItems } = await admin
+    .from("comanda_items")
+    .select(
+      "id, appointment_id, service_id, product_id, is_tip, squeeze_appointment_id"
+    )
+    .eq("comanda_id", comandaId);
 
   const appointmentById = new Map(
     (appointments ?? []).map((apt) => [apt.id, apt])
   );
 
-  const desiredKeys = new Set<string>();
-  const desiredRows: Array<{
-    key: string;
+  type DesiredService = {
     appointmentId: string;
     serviceId: string;
     serviceName: string;
     priceCents: number;
     professionalId: string;
-  }> = [];
+  };
+
+  const desiredCounts = new Map<string, number>();
+  const desiredMeta = new Map<string, DesiredService>();
 
   for (const link of serviceLinks ?? []) {
     const apt = appointmentById.get(link.appointment_id);
@@ -1219,9 +1276,9 @@ async function syncItemsFromLinkedAppointments(
       pricing
     );
     const key = `${link.appointment_id}:${link.service_id}`;
-    desiredKeys.add(key);
-    desiredRows.push({
-      key,
+    const quantity = Math.max(1, link.quantity ?? 1);
+    desiredCounts.set(key, (desiredCounts.get(key) ?? 0) + quantity);
+    desiredMeta.set(key, {
       appointmentId: link.appointment_id,
       serviceId: link.service_id,
       serviceName: service?.name ?? "Serviço",
@@ -1230,14 +1287,18 @@ async function syncItemsFromLinkedAppointments(
     });
   }
 
+  const linkedServiceItems = (refreshedItems ?? []).filter((item) => {
+    if (item.is_tip || item.product_id) return false;
+    if (!item.appointment_id || item.squeeze_appointment_id) return false;
+    if (!appointmentIds.includes(item.appointment_id)) return false;
+    return Boolean(item.service_id);
+  });
+
   // Remove serviços que saíram do agendamento (mantém tip/produto/encaixe).
-  const staleItemIds = (existingItems ?? [])
+  const staleItemIds = linkedServiceItems
     .filter((item) => {
-      if (item.is_tip || item.product_id) return false;
-      if (!item.appointment_id || item.squeeze_appointment_id) return false;
-      if (!appointmentIds.includes(item.appointment_id)) return false;
       const key = `${item.appointment_id}:${item.service_id ?? ""}`;
-      return !desiredKeys.has(key);
+      return !desiredCounts.has(key);
     })
     .map((item) => item.id);
 
@@ -1245,11 +1306,17 @@ async function syncItemsFromLinkedAppointments(
     await deleteComandaItemsSafely(admin, staleItemIds);
   }
 
-  const existingKeys = new Set(
-    (existingItems ?? [])
-      .filter((item) => !staleItemIds.includes(item.id))
-      .map((item) => `${item.appointment_id ?? ""}:${item.service_id ?? ""}`)
+  const remainingItems = linkedServiceItems.filter(
+    (item) => !staleItemIds.includes(item.id)
   );
+
+  const existingByKey = new Map<string, string[]>();
+  for (const item of remainingItems) {
+    const key = `${item.appointment_id}:${item.service_id ?? ""}`;
+    const list = existingByKey.get(key) ?? [];
+    list.push(item.id);
+    existingByKey.set(key, list);
+  }
 
   // Atualiza barbeiro nos itens que continuam vinculados.
   for (const apt of appointments ?? []) {
@@ -1263,6 +1330,28 @@ async function syncItemsFromLinkedAppointments(
       .eq("is_tip", false);
   }
 
+  const excessItemIds: string[] = [];
+  const missingRows: DesiredService[] = [];
+
+  for (const [key, desiredCount] of desiredCounts) {
+    const existingIds = existingByKey.get(key) ?? [];
+    const meta = desiredMeta.get(key);
+    if (!meta) continue;
+
+    if (existingIds.length > desiredCount) {
+      excessItemIds.push(...existingIds.slice(desiredCount));
+    } else if (existingIds.length < desiredCount) {
+      const missing = desiredCount - existingIds.length;
+      for (let i = 0; i < missing; i += 1) {
+        missingRows.push(meta);
+      }
+    }
+  }
+
+  if (excessItemIds.length > 0) {
+    await deleteComandaItemsSafely(admin, excessItemIds);
+  }
+
   const { data: sortRows } = await admin
     .from("comanda_items")
     .select("sort_order")
@@ -1273,18 +1362,17 @@ async function syncItemsFromLinkedAppointments(
       -1
     ) + 1;
 
-  const insertRows = desiredRows
-    .filter((row) => !existingKeys.has(row.key))
-    .map((row, index) => ({
-      comanda_id: comandaId,
-      service_id: row.serviceId,
-      service_name: row.serviceName,
-      catalog_price_cents: row.priceCents,
-      charged_price_cents: row.priceCents,
-      sort_order: sortOrder + index,
-      appointment_id: row.appointmentId,
-      professional_id: row.professionalId,
-    }));
+  const insertRows = missingRows.map((row, index) => ({
+    comanda_id: comandaId,
+    service_id: row.serviceId,
+    service_name: row.serviceName,
+    catalog_price_cents: row.priceCents,
+    charged_price_cents: row.priceCents,
+    quantity: 1,
+    sort_order: sortOrder + index,
+    appointment_id: row.appointmentId,
+    professional_id: row.professionalId,
+  }));
 
   if (insertRows.length > 0) {
     await admin.from("comanda_items").insert(insertRows);
@@ -1429,9 +1517,15 @@ async function isOpenComandaReadyToShow(
       dayIds.length > 0
         ? admin
             .from("appointment_services")
-            .select("appointment_id, service_id")
+            .select("appointment_id, service_id, quantity")
             .in("appointment_id", dayIds)
-        : Promise.resolve({ data: [] as { appointment_id: string; service_id: string }[] }),
+        : Promise.resolve({
+            data: [] as {
+              appointment_id: string;
+              service_id: string;
+              quantity?: number | null;
+            }[],
+          }),
     ]);
 
   const linkedIds = new Set((links ?? []).map((row) => row.appointment_id));
@@ -1444,27 +1538,34 @@ async function isOpenComandaReadyToShow(
     if (!daySet.has(id)) return false;
   }
 
-  const desiredServiceKeys = new Set(
-    (aptServices ?? []).map(
-      (row) => `${row.appointment_id}:${row.service_id}`
-    )
-  );
-  const actualServiceKeys = new Set(
-    (items ?? [])
-      .filter(
-        (item) =>
-          item.appointment_id &&
-          !item.product_id &&
-          !item.is_tip &&
-          !item.squeeze_appointment_id &&
-          daySet.has(item.appointment_id)
-      )
-      .map((item) => `${item.appointment_id}:${item.service_id ?? ""}`)
-  );
+  const desiredServiceCounts = new Map<string, number>();
+  for (const row of aptServices ?? []) {
+    const key = `${row.appointment_id}:${row.service_id}`;
+    const quantity = Math.max(1, row.quantity ?? 1);
+    desiredServiceCounts.set(
+      key,
+      (desiredServiceCounts.get(key) ?? 0) + quantity
+    );
+  }
 
-  if (desiredServiceKeys.size !== actualServiceKeys.size) return false;
-  for (const key of desiredServiceKeys) {
-    if (!actualServiceKeys.has(key)) return false;
+  const actualServiceCounts = new Map<string, number>();
+  for (const item of items ?? []) {
+    if (
+      !item.appointment_id ||
+      item.product_id ||
+      item.is_tip ||
+      item.squeeze_appointment_id ||
+      !daySet.has(item.appointment_id)
+    ) {
+      continue;
+    }
+    const key = `${item.appointment_id}:${item.service_id ?? ""}`;
+    actualServiceCounts.set(key, (actualServiceCounts.get(key) ?? 0) + 1);
+  }
+
+  if (desiredServiceCounts.size !== actualServiceCounts.size) return false;
+  for (const [key, count] of desiredServiceCounts) {
+    if ((actualServiceCounts.get(key) ?? 0) !== count) return false;
   }
 
   if (

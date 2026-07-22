@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   buildTimeSlots,
   computeOverlapLayouts,
+  expandAppointmentsToServiceCards,
   appointmentGridRows,
   isSlotStartAvailable,
   rowHeightForStep,
@@ -127,14 +128,21 @@ export function AgendaGrid({
   const overlapLayoutsByPro = useMemo(() => {
     const map = new Map<string, ReturnType<typeof computeOverlapLayouts>>();
     for (const pro of professionals) {
-      const apts = appointments.filter(
-        (apt) =>
-          apt.professionalId === pro.id && sharesAgendaColumnLayout(apt)
+      const cards = expandAppointmentsToServiceCards(
+        appointments.filter(
+          (apt) =>
+            apt.professionalId === pro.id && sharesAgendaColumnLayout(apt)
+        )
       );
-      map.set(pro.id, computeOverlapLayouts(apts));
+      map.set(pro.id, computeOverlapLayouts(cards));
     }
     return map;
   }, [appointments, professionals]);
+
+  const serviceCards = useMemo(
+    () => expandAppointmentsToServiceCards(appointments),
+    [appointments]
+  );
 
   const proColumnIndex = useMemo(() => {
     const map = new Map<string, number>();
@@ -165,8 +173,6 @@ export function AgendaGrid({
       : `3.25rem repeat(${professionals.length}, ${colMin})`,
     gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
-
-  const visibleAppointments = appointments;
 
   return (
     <div
@@ -305,13 +311,14 @@ export function AgendaGrid({
           />
         ) : null}
 
-        {visibleAppointments.map((apt) => {
+        {serviceCards.map((card) => {
+          const apt = card.appointment;
           const col = proColumnIndex.get(apt.professionalId);
           if (!col) return null;
 
           const rows = appointmentGridRows(
-            apt.startTime,
-            apt.endTime,
+            card.startTime,
+            card.endTime,
             gridStart,
             gridEnd,
             slotStepMinutes
@@ -319,25 +326,29 @@ export function AgendaGrid({
           if (!rows) return null;
 
           const layout = overlapLayoutsByPro.get(apt.professionalId)?.get(
-            apt.id
+            card.id
           );
-          const aptStart = timeToMinutes(apt.startTime);
-          const aptEnd = timeToMinutes(apt.endTime);
+          const cardStart = timeToMinutes(card.startTime);
+          const cardEnd = timeToMinutes(card.endTime);
 
           return (
             <AppointmentGridBlock
-              key={apt.id}
+              key={card.id}
               appointment={apt}
               rowSpan={rows.rowSpan}
               gridColumn={col}
               gridRow={`${rows.rowStart} / ${rows.rowEnd}`}
               columnIndex={layout?.columnIndex}
               columnCount={layout?.columnCount}
+              focusedServiceName={card.serviceName}
+              showBookingSource={card.serviceIndex === 0}
+              segmentStartTime={card.startTime}
+              segmentEndTime={card.endTime}
               onClick={() => onAppointmentClick(apt)}
               onHoverTime={(clientY, top, height) => {
                 if (height <= 0) {
                   setHoverMinute(
-                    Math.floor(aptStart / slotStepMinutes) * slotStepMinutes
+                    Math.floor(cardStart / slotStepMinutes) * slotStepMinutes
                   );
                   return;
                 }
@@ -345,7 +356,7 @@ export function AgendaGrid({
                   1,
                   Math.max(0, (clientY - top) / height)
                 );
-                const raw = aptStart + ratio * (aptEnd - aptStart);
+                const raw = cardStart + ratio * (cardEnd - cardStart);
                 const snapped =
                   Math.floor(raw / slotStepMinutes) * slotStepMinutes;
                 const clamped = Math.min(
