@@ -157,6 +157,7 @@
   box-shadow: none !important;
 }
 
+.admin-page .divide-y > :not(:last-child),
 .admin-page .divide-y > :not([hidden]) ~ :not([hidden]),
 .admin-page .divide-y {
   border-color: var(--page-border) !important;

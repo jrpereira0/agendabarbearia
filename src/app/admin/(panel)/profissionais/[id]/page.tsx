@@ -13,6 +13,8 @@ import { todayInTimezone } from "@/lib/availability";
 import { shiftDate } from "@/lib/date-range";
 import { getCommissionReport } from "@/lib/finance-reports";
 import { listProfessionalCommissionPayouts } from "@/lib/commission-payout-service";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 import { updateProfessional } from "../actions";
 
 export const metadata = { title: "Editar profissional" };
@@ -95,50 +97,58 @@ export default async function EditProfessionalPage({
   }
 
   return (
-    <AdminFormPage>
-      <PageHeader
-        title="Editar profissional"
-        description={`${professional.nickname} — ${professional.first_name} ${professional.last_name}`}
-        backHref="/admin/profissionais"
-        backLabel="Profissionais"
-      />
+    <div
+      className={cn(
+        "admin-page -m-4 flex min-h-full flex-col p-4 md:-m-8 md:p-8",
+        ADMIN_SURFACE.page
+      )}
+    >
+      <AdminFormPage tone="dark">
+        <PageHeader
+          tone="dark"
+          title="Editar profissional"
+          description={`${professional.nickname} — ${professional.first_name} ${professional.last_name}`}
+          backHref="/admin/profissionais"
+          backLabel="Profissionais"
+        />
 
-      <ProfessionalForm
-        services={services ?? []}
-        businessDays={(businessHours ?? []).map((b) => ({
-          weekday: b.weekday,
-          active: b.active,
-          openTime: formatTime(b.open_time),
-          closeTime: formatTime(b.close_time),
-        }))}
-        initialValues={{
-          firstName: professional.first_name,
-          lastName: professional.last_name,
-          nickname: professional.nickname,
-          whatsapp: professional.whatsapp,
-          email: professional.email,
-          instagram: professional.instagram ?? "",
-          photoUrl: professional.photo_url,
-          photoPosition: professional.photo_position,
-          commissionPercent: professional.commission_percent ?? 50,
-          serviceIds: (professional.professional_services ?? []).map(
-            (ps) => ps.service_id
-          ),
-          schedule,
-          permissions: mapProfessionalPermissionsRow(professional),
-        }}
-        onSubmit={updateWithId}
-        submitLabel="Salvar alterações"
-        isEdit
-        commissions={{
-          professionalId: professional.id,
-          today,
-          from,
-          to,
-          openCommissionCents,
-          payouts,
-        }}
-      />
-    </AdminFormPage>
+        <ProfessionalForm
+          services={services ?? []}
+          businessDays={(businessHours ?? []).map((b) => ({
+            weekday: b.weekday,
+            active: b.active,
+            openTime: formatTime(b.open_time),
+            closeTime: formatTime(b.close_time),
+          }))}
+          initialValues={{
+            firstName: professional.first_name,
+            lastName: professional.last_name,
+            nickname: professional.nickname,
+            whatsapp: professional.whatsapp,
+            email: professional.email,
+            instagram: professional.instagram ?? "",
+            photoUrl: professional.photo_url,
+            photoPosition: professional.photo_position,
+            commissionPercent: professional.commission_percent ?? 50,
+            serviceIds: (professional.professional_services ?? []).map(
+              (ps) => ps.service_id
+            ),
+            schedule,
+            permissions: mapProfessionalPermissionsRow(professional),
+          }}
+          onSubmit={updateWithId}
+          submitLabel="Salvar alterações"
+          isEdit
+          commissions={{
+            professionalId: professional.id,
+            today,
+            from,
+            to,
+            openCommissionCents,
+            payouts,
+          }}
+        />
+      </AdminFormPage>
+    </div>
   );
 }

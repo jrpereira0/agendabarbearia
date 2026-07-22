@@ -11,7 +11,9 @@ function isAdminDarkSurface(pathname: string): boolean {
     pathname === "/admin/financeiro/comissoes" ||
     pathname.startsWith("/admin/financeiro/comissoes/") ||
     pathname === "/admin/financeiro/caixas" ||
-    pathname.startsWith("/admin/financeiro/caixas/")
+    pathname.startsWith("/admin/financeiro/caixas/") ||
+    pathname === "/admin/profissionais" ||
+    pathname.startsWith("/admin/profissionais/")
   );
 }
 

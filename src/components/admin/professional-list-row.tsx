@@ -36,6 +36,7 @@ import {
   deleteProfessional,
   setProfessionalActive,
 } from "@/app/admin/(panel)/profissionais/actions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 export type ProfessionalListItem = {
@@ -51,9 +52,24 @@ export type ProfessionalListItem = {
   serviceNames: string[];
 };
 
-function ProfessionalThumb({ professional }: { professional: ProfessionalListItem }) {
+type Tone = "default" | "dark";
+
+function ProfessionalThumb({
+  professional,
+  tone = "default",
+}: {
+  professional: ProfessionalListItem;
+  tone?: Tone;
+}) {
+  const dark = tone === "dark";
+
   return (
-    <div className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border bg-muted">
+    <div
+      className={cn(
+        "relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border",
+        dark ? "border-white/10 bg-[#1a1b1e]" : "bg-muted"
+      )}
+    >
       {professional.photoUrl ? (
         <Image
           src={professional.photoUrl}
@@ -66,7 +82,12 @@ function ProfessionalThumb({ professional }: { professional: ProfessionalListIte
           unoptimized
         />
       ) : (
-        <User className="size-4 text-muted-foreground" />
+        <User
+          className={cn(
+            "size-4",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        />
       )}
     </div>
   );
@@ -75,19 +96,27 @@ function ProfessionalThumb({ professional }: { professional: ProfessionalListIte
 function ProfessionalActionsMenu({
   professional,
   onDelete,
+  tone = "default",
 }: {
   professional: ProfessionalListItem;
   onDelete: () => void;
+  tone?: Tone;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const dark = tone === "dark";
 
   async function handleToggleActive() {
     setBusy(true);
-    const result = await setProfessionalActive(professional.id, !professional.active);
+    const result = await setProfessionalActive(
+      professional.id,
+      !professional.active
+    );
     if (result.ok) {
       toast.success(
-        professional.active ? "Profissional desativado." : "Profissional ativado."
+        professional.active
+          ? "Profissional desativado."
+          : "Profissional ativado."
       );
       router.refresh();
     } else {
@@ -99,13 +128,27 @@ function ProfessionalActionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="Ações" disabled={busy}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Ações"
+          disabled={busy}
+          className={cn(
+            dark &&
+              "text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+          )}
+        >
           <MoreVertical />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent
+        align="end"
+        className={cn(dark && ADMIN_SURFACE.popover)}
+      >
         <DropdownMenuItem
-          onSelect={() => router.push(`/admin/profissionais/${professional.id}`)}
+          onSelect={() =>
+            router.push(`/admin/profissionais/${professional.id}`)
+          }
         >
           <Pencil />
           Editar
@@ -114,7 +157,9 @@ function ProfessionalActionsMenu({
           {professional.active ? <CircleOff /> : <CircleCheck />}
           {professional.active ? "Desativar" : "Ativar"}
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
+        <DropdownMenuSeparator
+          className={cn(dark && "bg-white/10")}
+        />
         <DropdownMenuItem variant="destructive" onSelect={onDelete}>
           <Trash2 />
           Excluir
@@ -124,14 +169,72 @@ function ProfessionalActionsMenu({
   );
 }
 
+function DeleteProfessionalDialog({
+  open,
+  onOpenChange,
+  professional,
+  busy,
+  onConfirm,
+  tone = "default",
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  professional: ProfessionalListItem;
+  busy: boolean;
+  onConfirm: () => void;
+  tone?: Tone;
+}) {
+  const dark = tone === "dark";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className={cn(
+          dark &&
+            "border-white/10 bg-[#151618] text-[#f5f5f5] ring-white/10"
+        )}
+      >
+        <DialogHeader>
+          <DialogTitle className={cn(dark && "text-[#f5f5f5]")}>
+            Excluir {professional.nickname}?
+          </DialogTitle>
+          <DialogDescription className={cn(dark && ADMIN_SURFACE.muted)}>
+            Isso apaga o cadastro e o acesso ao sistema. Prefira desativar.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+            className={cn(dark && ADMIN_SURFACE.btnGhost)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            disabled={busy}
+          >
+            {busy ? "Excluindo..." : "Excluir"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ProfessionalListRow({
   professional,
+  tone = "default",
 }: {
   professional: ProfessionalListItem;
+  tone?: Tone;
 }) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const dark = tone === "dark";
 
   const services =
     professional.serviceNames.length > 0
@@ -155,29 +258,52 @@ export function ProfessionalListRow({
     <>
       <tr
         className={cn(
-          "cursor-pointer transition-colors hover:bg-muted/40",
+          "cursor-pointer transition-colors",
+          dark ? "hover:bg-white/[0.04]" : "hover:bg-muted/40",
           !professional.active && "opacity-60"
         )}
         onClick={() => router.push(`/admin/profissionais/${professional.id}`)}
       >
         <td className="px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <ProfessionalThumb professional={professional} />
+            <ProfessionalThumb professional={professional} tone={tone} />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <CatalogStatusDot active={professional.active} />
-                <span className="truncate font-medium">{professional.nickname}</span>
+                <span
+                  className={cn(
+                    "truncate font-medium",
+                    dark && "text-[#f5f5f5]"
+                  )}
+                >
+                  {professional.nickname}
+                </span>
               </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              <p
+                className={cn(
+                  "mt-0.5 truncate text-xs",
+                  dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                )}
+              >
                 {professional.firstName} {professional.lastName}
               </p>
             </div>
           </div>
         </td>
-        <td className="hidden px-4 py-3 tabular-nums text-muted-foreground md:table-cell">
+        <td
+          className={cn(
+            "hidden px-4 py-3 tabular-nums md:table-cell",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        >
           {formatWhatsapp(professional.whatsapp)}
         </td>
-        <td className="hidden px-4 py-3 text-muted-foreground lg:table-cell">
+        <td
+          className={cn(
+            "hidden px-4 py-3 lg:table-cell",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        >
           {services}
         </td>
         <td
@@ -187,40 +313,34 @@ export function ProfessionalListRow({
           <ProfessionalActionsMenu
             professional={professional}
             onDelete={() => setConfirmDelete(true)}
+            tone={tone}
           />
         </td>
       </tr>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir {professional.nickname}?</DialogTitle>
-            <DialogDescription>
-              Isso apaga o cadastro e o acesso ao sistema. Prefira desativar.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={busy}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={busy}>
-              {busy ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteProfessionalDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        professional={professional}
+        busy={busy}
+        onConfirm={handleDelete}
+        tone={tone}
+      />
     </>
   );
 }
 
 export function ProfessionalMobileCard({
   professional,
+  tone = "default",
 }: {
   professional: ProfessionalListItem;
+  tone?: Tone;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const dark = tone === "dark";
 
   async function handleDelete() {
     setBusy(true);
@@ -239,7 +359,10 @@ export function ProfessionalMobileCard({
     <>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg border bg-card p-4 shadow-sm",
+          "flex items-center gap-3 rounded-lg border p-4",
+          dark
+            ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
+            : "bg-card shadow-sm",
           !professional.active && "opacity-60"
         )}
       >
@@ -247,44 +370,52 @@ export function ProfessionalMobileCard({
           href={`/admin/profissionais/${professional.id}`}
           className="flex min-w-0 flex-1 items-center gap-3"
         >
-          <ProfessionalThumb professional={professional} />
+          <ProfessionalThumb professional={professional} tone={tone} />
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <CatalogStatusDot active={professional.active} />
-              <p className="truncate font-medium">{professional.nickname}</p>
+              <p
+                className={cn(
+                  "truncate font-medium",
+                  dark && "text-[#f5f5f5]"
+                )}
+              >
+                {professional.nickname}
+              </p>
             </div>
-            <p className="mt-1 truncate text-sm tabular-nums text-muted-foreground">
+            <p
+              className={cn(
+                "mt-1 truncate text-sm tabular-nums",
+                dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+              )}
+            >
               {formatWhatsapp(professional.whatsapp)}
             </p>
           </div>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          <ChevronRight
+            className={cn(
+              "size-4 shrink-0",
+              dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+            )}
+          />
         </Link>
         <div onClick={(event) => event.stopPropagation()}>
           <ProfessionalActionsMenu
             professional={professional}
             onDelete={() => setConfirmDelete(true)}
+            tone={tone}
           />
         </div>
       </div>
 
-      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir {professional.nickname}?</DialogTitle>
-            <DialogDescription>
-              Isso apaga o cadastro e o acesso ao sistema. Prefira desativar.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={busy}>
-              Cancelar
-            </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={busy}>
-              {busy ? "Excluindo..." : "Excluir"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <DeleteProfessionalDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        professional={professional}
+        busy={busy}
+        onConfirm={handleDelete}
+        tone={tone}
+      />
     </>
   );
 }

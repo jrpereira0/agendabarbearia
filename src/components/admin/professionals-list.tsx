@@ -22,6 +22,7 @@ import {
   ProfessionalMobileCard,
 } from "@/components/admin/professional-list-row";
 import { matchesSearch } from "@/lib/text";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 
 type Professional = {
   id: string;
@@ -69,18 +70,25 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
   return (
     <CatalogListShell>
       <CatalogListToolbar
+        tone="dark"
         search={
           <SearchInput
             value={query}
             onChange={setQuery}
             placeholder="Buscar profissional..."
+            inputClassName={ADMIN_SURFACE.input}
           />
         }
         filters={
-          <CatalogFilterSegment value={filter} onChange={setFilter} counts={counts} />
+          <CatalogFilterSegment
+            tone="dark"
+            value={filter}
+            onChange={setFilter}
+            counts={counts}
+          />
         }
         actions={
-          <Button asChild>
+          <Button asChild className={ADMIN_SURFACE.btnPrimary}>
             <Link href="/admin/profissionais/novo">
               <Plus />
               Novo profissional
@@ -91,13 +99,14 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
 
       {filtered.length === 0 ? (
         <CatalogListEmpty
+          tone="dark"
           title="Nenhum profissional encontrado"
           description="Ajuste a busca ou o filtro, ou cadastre um novo profissional."
         />
       ) : (
         <>
-          <CatalogTable>
-            <CatalogTableHead>
+          <CatalogTable tone="dark">
+            <CatalogTableHead tone="dark">
               <CatalogTableHeadCell>Profissional</CatalogTableHeadCell>
               <CatalogTableHeadCell className="hidden md:table-cell">
                 WhatsApp
@@ -107,16 +116,24 @@ export function ProfessionalsList({ items }: { items: Professional[] }) {
               </CatalogTableHeadCell>
               <CatalogTableHeadCell className="w-12" />
             </CatalogTableHead>
-            <CatalogTableBody>
+            <CatalogTableBody tone="dark">
               {filtered.map((professional) => (
-                <ProfessionalListRow key={professional.id} professional={professional} />
+                <ProfessionalListRow
+                  key={professional.id}
+                  professional={professional}
+                  tone="dark"
+                />
               ))}
             </CatalogTableBody>
           </CatalogTable>
 
           <CatalogMobileList>
             {filtered.map((professional) => (
-              <ProfessionalMobileCard key={professional.id} professional={professional} />
+              <ProfessionalMobileCard
+                key={professional.id}
+                professional={professional}
+                tone="dark"
+              />
             ))}
           </CatalogMobileList>
         </>

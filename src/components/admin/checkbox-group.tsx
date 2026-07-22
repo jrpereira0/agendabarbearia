@@ -1,6 +1,7 @@
 "use client";
 
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 export type CheckboxOption = { id: string; label: string };
 
@@ -9,6 +10,7 @@ type CheckboxGroupProps = {
   options: CheckboxOption[];
   value: string[];
   onChange: (value: string[]) => void;
+  tone?: "default" | "dark";
 };
 
 // Grupo de checkboxes padrão dos formulários, com "Selecionar todos".
@@ -18,7 +20,9 @@ export function CheckboxGroup({
   options,
   value,
   onChange,
+  tone = "default",
 }: CheckboxGroupProps) {
+  const dark = tone === "dark";
   const allSelected = options.length > 0 && value.length === options.length;
   const someSelected = value.length > 0 && !allSelected;
 
@@ -28,7 +32,12 @@ export function CheckboxGroup({
 
   return (
     <div className="flex flex-col gap-3">
-      <label className="flex w-fit cursor-pointer items-center gap-3 text-sm font-medium">
+      <label
+        className={cn(
+          "flex w-fit cursor-pointer items-center gap-3 text-sm font-medium",
+          dark && "text-[#f5f5f5]"
+        )}
+      >
         <Checkbox
           checked={allSelected ? true : someSelected ? "indeterminate" : false}
           onCheckedChange={(checked) =>
@@ -44,9 +53,16 @@ export function CheckboxGroup({
           return (
             <label
               key={option.id}
-              className={`flex cursor-pointer items-center gap-3 rounded-md border p-3 text-sm transition-colors hover:bg-muted/50 ${
-                checked ? "border-primary bg-muted/50" : ""
-              }`}
+              className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm transition-colors",
+                dark
+                  ? checked
+                    ? "border-[rgb(236_241_94_/_35%)] bg-[rgb(236_241_94_/_10%)] text-[#f5f5f5]"
+                    : "border-white/10 text-[#f5f5f5] hover:bg-white/[0.04]"
+                  : checked
+                    ? "border-primary bg-muted/50"
+                    : "hover:bg-muted/50"
+              )}
             >
               <Checkbox
                 name={name}

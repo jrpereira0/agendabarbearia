@@ -12,6 +12,7 @@ import {
   formatPhotoPosition,
   parsePhotoPosition,
 } from "@/lib/photo-position";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 type PhotoFieldProps = {
@@ -23,6 +24,7 @@ type PhotoFieldProps = {
   name?: string;
   positionName?: string;
   hint?: string;
+  tone?: "default" | "dark";
 };
 
 /**
@@ -38,7 +40,9 @@ export function PhotoField({
   name = "photo",
   positionName = "photoPosition",
   hint = "JPG ou PNG. Você recorta e depois pode arrastar para posicionar.",
+  tone = "default",
 }: PhotoFieldProps) {
+  const dark = tone === "dark";
   const pickerRef = useRef<HTMLInputElement>(null);
   const payloadRef = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -121,10 +125,13 @@ export function PhotoField({
       <div className="flex flex-col items-start gap-2">
         <div
           className={cn(
-            "relative shrink-0 select-none overflow-hidden border-2 border-dashed bg-muted/20",
+            "relative shrink-0 select-none overflow-hidden border-2 border-dashed",
+            dark ? "border-white/15 bg-[#1a1b1e]" : "bg-muted/20",
             shape === "circle" ? "size-28 rounded-full" : "size-28 rounded-lg",
             preview &&
-              "cursor-grab border-solid border-border active:cursor-grabbing",
+              (dark
+                ? "cursor-grab border-solid border-white/20 active:cursor-grabbing"
+                : "cursor-grab border-solid border-border active:cursor-grabbing"),
             dragging && "cursor-grabbing"
           )}
           onPointerDown={(e) => {
@@ -155,7 +162,12 @@ export function PhotoField({
             <button
               type="button"
               onClick={openPicker}
-              className="flex size-full flex-col items-center justify-center gap-1 text-muted-foreground transition-colors hover:bg-muted/40"
+              className={cn(
+                "flex size-full flex-col items-center justify-center gap-1 transition-colors",
+                dark
+                  ? cn(ADMIN_SURFACE.muted, "hover:bg-white/[0.04] hover:text-[#f5f5f5]")
+                  : "text-muted-foreground hover:bg-muted/40"
+              )}
               aria-label="Escolher foto"
             >
               <Camera className="size-5" />
@@ -164,7 +176,12 @@ export function PhotoField({
           )}
         </div>
         {preview ? (
-          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <p
+            className={cn(
+              "flex items-center gap-1 text-[11px]",
+              dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+            )}
+          >
             <Move className="size-3" />
             Arraste para posicionar
           </p>
@@ -173,7 +190,13 @@ export function PhotoField({
 
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={openPicker}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openPicker}
+            className={cn(dark && ADMIN_SURFACE.btnGhost)}
+          >
             {preview ? "Trocar foto" : "Enviar foto"}
           </Button>
           {preview && position !== DEFAULT_PHOTO_POSITION ? (
@@ -182,12 +205,22 @@ export function PhotoField({
               variant="ghost"
               size="sm"
               onClick={() => onPositionChange(DEFAULT_PHOTO_POSITION)}
+              className={cn(
+                dark && "text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+              )}
             >
               Centralizar
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">{hint}</p>
+        <p
+          className={cn(
+            "text-xs",
+            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+          )}
+        >
+          {hint}
+        </p>
       </div>
 
       <input

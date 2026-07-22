@@ -2,10 +2,28 @@
 
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
-export function AdminFormPage({ children }: { children: ReactNode }) {
-  return <div className="flex w-full flex-col gap-6 pb-28">{children}</div>;
+export type AdminFormTone = "default" | "dark";
+
+export function AdminFormPage({
+  children,
+  tone = "default",
+}: {
+  children: ReactNode;
+  tone?: AdminFormTone;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex w-full flex-col gap-5 pb-28",
+        tone === "dark" && "text-[#f5f5f5]"
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 type AdminFormSectionCardProps = {
@@ -13,6 +31,7 @@ type AdminFormSectionCardProps = {
   description?: string;
   children: ReactNode;
   className?: string;
+  tone?: AdminFormTone;
 };
 
 export function AdminFormSectionCard({
@@ -20,18 +39,43 @@ export function AdminFormSectionCard({
   description,
   children,
   className,
+  tone = "default",
 }: AdminFormSectionCardProps) {
+  const dark = tone === "dark";
+
   return (
     <section
       className={cn(
-        "overflow-hidden rounded-lg border bg-card shadow-sm",
+        "overflow-hidden rounded-lg border",
+        dark
+          ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
+          : "bg-card shadow-sm",
         className
       )}
     >
-      <div className="border-b bg-muted/20 px-5 py-4">
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+      <div
+        className={cn(
+          "border-b px-5 py-4",
+          dark ? "border-white/10 bg-white/[0.03]" : "bg-muted/20"
+        )}
+      >
+        <h2
+          className={cn(
+            "text-sm font-semibold",
+            dark ? "text-[#f5f5f5]" : "text-foreground"
+          )}
+        >
+          {title}
+        </h2>
         {description ? (
-          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+          <p
+            className={cn(
+              "mt-1 text-sm",
+              dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+            )}
+          >
+            {description}
+          </p>
         ) : null}
       </div>
       <div className="p-5">{children}</div>
@@ -67,6 +111,7 @@ type AdminFormActionsProps = {
   submitLabel: string;
   saving?: boolean;
   disabled?: boolean;
+  tone?: AdminFormTone;
 };
 
 export function AdminFormActions({
@@ -74,23 +119,37 @@ export function AdminFormActions({
   submitLabel,
   saving = false,
   disabled = false,
+  tone = "default",
 }: AdminFormActionsProps) {
+  const dark = tone === "dark";
+
   return (
-    <div className="sticky bottom-0 z-10 mt-8 -mx-4 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-8 md:px-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div
+      className={cn(
+        "sticky bottom-0 z-10 mt-8 -mx-4 border-t px-4 py-3 backdrop-blur md:-mx-8 md:px-8 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+        dark ? "border-white/10 bg-[#0e0f11]/95" : "bg-background/95"
+      )}
+    >
       <div className="flex w-full items-center justify-end gap-3">
         <Button
           type="button"
           variant="outline"
           onClick={onCancel}
           disabled={saving}
-          className="h-10 min-w-24 sm:h-8"
+          className={cn(
+            "h-10 min-w-24 sm:h-8",
+            dark && ADMIN_SURFACE.btnGhost
+          )}
         >
           Cancelar
         </Button>
         <Button
           type="submit"
           disabled={saving || disabled}
-          className="h-10 min-w-40 sm:h-8"
+          className={cn(
+            "h-10 min-w-40 sm:h-8",
+            dark && ADMIN_SURFACE.btnPrimary
+          )}
         >
           {saving ? "Salvando..." : submitLabel}
         </Button>

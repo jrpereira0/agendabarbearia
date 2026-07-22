@@ -3,16 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { AtSign, Copy, Eye, EyeOff } from "lucide-react";
+import {
+  AtSign,
+  CalendarClock,
+  Copy,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Percent,
+  Scissors,
+  Shield,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 import { CheckboxGroup } from "@/components/admin/checkbox-group";
 import {
   AdminFormActions,
   AdminFormFields,
-  AdminFormSectionCard,
 } from "@/components/admin/admin-form-layout";
+import { FormSectionTitle } from "@/components/admin/form-section";
 import { PhotoField } from "@/components/admin/photo-field";
 import {
   appendPermissionsToFormData,
@@ -37,6 +49,8 @@ import {
   DEFAULT_BARBER_PERMISSIONS,
   type ProfessionalPermissions,
 } from "@/lib/professional-permissions";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 export type ServiceOption = { id: string; name: string };
 
@@ -72,6 +86,32 @@ type ProfessionalFormProps = {
     payouts: CommissionPayout[];
   };
 };
+
+function FieldHint({ children }: { children: React.ReactNode }) {
+  return <p className={cn("text-xs", ADMIN_SURFACE.muted)}>{children}</p>;
+}
+
+function FormPanel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className={cn(ADMIN_SURFACE.panel, "flex flex-col gap-6 p-5 sm:p-6")}>
+      {children}
+    </div>
+  );
+}
+
+function DarkLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label htmlFor={htmlFor} className="text-[#f5f5f5]">
+      {children}
+    </Label>
+  );
+}
 
 export function ProfessionalForm({
   services,
@@ -189,152 +229,199 @@ export function ProfessionalForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+    <form
+      onSubmit={handleSubmit}
+      className="flex w-full flex-col gap-5"
+      autoComplete="off"
+    >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList>
-          <TabsTrigger value="dados">Dados</TabsTrigger>
-          <TabsTrigger value="acesso">Acesso</TabsTrigger>
-          <TabsTrigger value="servicos">Serviços</TabsTrigger>
-          <TabsTrigger value="horario">Horário</TabsTrigger>
-          {isEdit && commissions && (
-            <TabsTrigger value="comissoes">Comissões</TabsTrigger>
-          )}
+        <TabsList className="h-auto w-full flex-wrap justify-start gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          <TabsTrigger value="dados" className="flex-none px-3">
+            Dados
+          </TabsTrigger>
+          <TabsTrigger value="acesso" className="flex-none px-3">
+            Acesso
+          </TabsTrigger>
+          <TabsTrigger value="servicos" className="flex-none px-3">
+            Serviços
+          </TabsTrigger>
+          <TabsTrigger value="horario" className="flex-none px-3">
+            Horário
+          </TabsTrigger>
+          {isEdit && commissions ? (
+            <TabsTrigger value="comissoes" className="flex-none px-3">
+              Comissões
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent
           value="dados"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <div className="flex flex-col gap-6">
-            <AdminFormSectionCard
+          <FormPanel>
+            <FormSectionTitle
+              tone="dark"
+              icon={UserRound}
               title="Perfil"
-              description="Apelido e foto são o que o cliente vê ao agendar."
-            >
-              <div className="flex flex-col gap-6">
-                <PhotoField
-                  preview={preview}
-                  position={photoPosition}
-                  onPreviewChange={setPreview}
-                  onPositionChange={setPhotoPosition}
-                  shape="circle"
+              description="Foto e apelido são o que o cliente vê ao agendar."
+            />
+
+            <PhotoField
+              preview={preview}
+              position={photoPosition}
+              onPreviewChange={setPreview}
+              onPositionChange={setPhotoPosition}
+              shape="circle"
+              tone="dark"
+            />
+
+            <AdminFormFields columns={2}>
+              <div className="space-y-2">
+                <DarkLabel htmlFor="firstName">Nome</DarkLabel>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  placeholder="Ex: Carlos"
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
                 />
-
-                <AdminFormFields columns={2}>
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">Nome</Label>
-                    <Input
-                      id="firstName"
-                      name="firstName"
-                      placeholder="Ex: Carlos"
-                      value={firstName}
-                      onChange={(event) => setFirstName(event.target.value)}
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Sobrenome</Label>
-                    <Input
-                      id="lastName"
-                      name="lastName"
-                      placeholder="Ex: Silva"
-                      value={lastName}
-                      onChange={(event) => setLastName(event.target.value)}
-                      disabled={saving}
-                    />
-                  </div>
-
-                  <div className="space-y-2 sm:col-span-2">
-                    <Label htmlFor="nickname">Apelido</Label>
-                    <Input
-                      id="nickname"
-                      name="nickname"
-                      placeholder="Ex: Carlão"
-                      value={nickname}
-                      onChange={(event) => setNickname(event.target.value)}
-                      disabled={saving}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      É assim que o cliente vê esse profissional na agenda.
-                    </p>
-                  </div>
-                </AdminFormFields>
               </div>
-            </AdminFormSectionCard>
 
-            <AdminFormSectionCard
+              <div className="space-y-2">
+                <DarkLabel htmlFor="lastName">Sobrenome</DarkLabel>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  placeholder="Ex: Silva"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <DarkLabel htmlFor="nickname">Apelido</DarkLabel>
+                <Input
+                  id="nickname"
+                  name="nickname"
+                  placeholder="Ex: Carlão"
+                  value={nickname}
+                  onChange={(event) => setNickname(event.target.value)}
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
+                />
+                <FieldHint>
+                  É assim que o cliente vê esse profissional na agenda.
+                </FieldHint>
+              </div>
+            </AdminFormFields>
+
+            <Separator className="bg-white/10" />
+
+            <FormSectionTitle
+              tone="dark"
+              icon={Percent}
               title="Comissão e contato"
-              description="Percentual sobre serviços na comanda e formas de contato."
-            >
-              <AdminFormFields columns={2}>
-                <div className="space-y-2">
-                  <Label htmlFor="commissionPercent">Comissão (%)</Label>
+              description="Percentual na comanda e formas de falar com o barbeiro."
+            />
+
+            <AdminFormFields columns={2}>
+              <div className="space-y-2">
+                <DarkLabel htmlFor="commissionPercent">Comissão (%)</DarkLabel>
+                <Input
+                  id="commissionPercent"
+                  name="commissionPercent"
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={1}
+                  inputMode="numeric"
+                  value={commissionPercent}
+                  onChange={(event) =>
+                    setCommissionPercent(event.target.value)
+                  }
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <DarkLabel htmlFor="whatsapp">WhatsApp</DarkLabel>
+                <Input
+                  id="whatsapp"
+                  name="whatsapp"
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="(11) 99999-8888"
+                  value={whatsapp}
+                  onChange={(event) =>
+                    setWhatsapp(formatWhatsapp(event.target.value))
+                  }
+                  disabled={saving}
+                  className={ADMIN_SURFACE.input}
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
+                <DarkLabel htmlFor="instagram">Instagram (opcional)</DarkLabel>
+                <div className="relative">
+                  <AtSign
+                    className={cn(
+                      "absolute left-3 top-1/2 size-4 -translate-y-1/2",
+                      ADMIN_SURFACE.muted
+                    )}
+                  />
                   <Input
-                    id="commissionPercent"
-                    name="commissionPercent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    inputMode="numeric"
-                    value={commissionPercent}
-                    onChange={(event) =>
-                      setCommissionPercent(event.target.value)
-                    }
+                    id="instagram"
+                    name="professional_instagram"
+                    type="text"
+                    inputMode="text"
+                    placeholder="nome.do.perfil"
+                    value={instagram}
+                    onChange={(event) => setInstagram(event.target.value)}
+                    className={cn("pl-9", ADMIN_SURFACE.input)}
                     disabled={saving}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-form-type="other"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="whatsapp">WhatsApp</Label>
-                  <Input
-                    id="whatsapp"
-                    name="whatsapp"
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder="(11) 99999-8888"
-                    value={whatsapp}
-                    onChange={(event) =>
-                      setWhatsapp(formatWhatsapp(event.target.value))
-                    }
-                    disabled={saving}
-                  />
-                </div>
-
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="instagram">Instagram (opcional)</Label>
-                  <div className="relative">
-                    <AtSign className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      id="instagram"
-                      name="instagram"
-                      placeholder="usuario"
-                      value={instagram}
-                      onChange={(event) => setInstagram(event.target.value)}
-                      className="pl-9"
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-              </AdminFormFields>
-            </AdminFormSectionCard>
-          </div>
+              </div>
+            </AdminFormFields>
+          </FormPanel>
         </TabsContent>
 
         <TabsContent
           value="acesso"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <div className="flex flex-col gap-6">
-            <AdminFormSectionCard
-              title="Acesso ao sistema"
-              description="E-mail e senha para o barbeiro entrar no painel."
-            >
+          <div className="flex flex-col gap-4">
+            <FormPanel>
+              <FormSectionTitle
+                tone="dark"
+                icon={KeyRound}
+                title="Login no painel"
+                description="E-mail e senha para o barbeiro entrar no sistema."
+              />
+
               <AdminFormFields columns={2}>
                 <div className="space-y-2">
-                  <Label htmlFor="email">E-mail</Label>
+                  <DarkLabel htmlFor="email">E-mail</DarkLabel>
                   <Input
                     id="email"
                     name="email"
@@ -343,13 +430,17 @@ export function ProfessionalForm({
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     disabled={saving}
+                    className={ADMIN_SURFACE.input}
+                    autoComplete="off"
+                    data-1p-ignore
+                    data-lpignore="true"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">
+                  <DarkLabel htmlFor="password">
                     {isEdit ? "Nova senha" : "Senha"}
-                  </Label>
+                  </DarkLabel>
                   <div className="relative">
                     <Input
                       id="password"
@@ -363,13 +454,20 @@ export function ProfessionalForm({
                       }
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
-                      className="pr-10"
+                      className={cn("pr-10", ADMIN_SURFACE.input)}
                       disabled={saving}
+                      autoComplete="new-password"
+                      data-1p-ignore
+                      data-lpignore="true"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((value) => !value)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+                      className={cn(
+                        "absolute right-3 top-1/2 -translate-y-1/2 transition-colors",
+                        ADMIN_SURFACE.muted,
+                        "hover:text-[#f5f5f5]"
+                      )}
                       aria-label={
                         showPassword ? "Esconder senha" : "Mostrar senha"
                       }
@@ -383,35 +481,50 @@ export function ProfessionalForm({
                   </div>
                 </div>
               </AdminFormFields>
-            </AdminFormSectionCard>
+            </FormPanel>
 
-            <AdminFormSectionCard
-              title="Permissões no painel"
-              description="O que esse profissional pode fazer na agenda e nas comandas."
-            >
+            <FormPanel>
+              <FormSectionTitle
+                tone="dark"
+                icon={Shield}
+                title="Permissões"
+                description="O que esse profissional pode fazer na agenda e nas comandas."
+              />
               <ProfessionalPermissionsFields
+                tone="dark"
                 value={permissions}
                 onChange={setPermissions}
               />
-            </AdminFormSectionCard>
+            </FormPanel>
           </div>
         </TabsContent>
 
         <TabsContent
           value="servicos"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <AdminFormSectionCard
-            title="Serviços"
-            description="O cliente só agenda com ele os serviços marcados."
-          >
+          <FormPanel>
+            <FormSectionTitle
+              tone="dark"
+              icon={Scissors}
+              title="Serviços"
+              description="O cliente só agenda com ele os serviços marcados."
+            />
+
             {services.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              <div
+                className={cn(
+                  "rounded-xl border border-dashed px-4 py-8 text-center text-sm",
+                  "border-white/10",
+                  ADMIN_SURFACE.muted
+                )}
+              >
                 Nenhum serviço cadastrado ainda.
               </div>
             ) : (
               <CheckboxGroup
+                tone="dark"
                 name="serviceIds"
                 options={services.map((service) => ({
                   id: service.id,
@@ -421,37 +534,46 @@ export function ProfessionalForm({
                 onChange={setServiceIds}
               />
             )}
-          </AdminFormSectionCard>
+          </FormPanel>
         </TabsContent>
 
         <TabsContent
           value="horario"
           forceMount
-          className="data-[state=inactive]:hidden"
+          className="mt-4 data-[state=inactive]:hidden"
         >
-          <AdminFormSectionCard
-            title="Horário de atendimento"
-            description="Dia desligado é folga. Dá para ter pausa no meio do dia."
-          >
-            <div className="mb-4 flex justify-end">
+          <FormPanel>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <FormSectionTitle
+                tone="dark"
+                icon={CalendarClock}
+                title="Horário de atendimento"
+                description="Dia desligado é folga. Dá para ter pausa no meio do dia."
+              />
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={saving}
+                className={ADMIN_SURFACE.btnGhost}
                 onClick={() =>
                   setSchedule(
                     businessDays.map((day) => ({
                       weekday: day.weekday,
                       ranges: day.active
-                        ? [{ startTime: day.openTime, endTime: day.closeTime }]
+                        ? [
+                            {
+                              startTime: day.openTime,
+                              endTime: day.closeTime,
+                            },
+                          ]
                         : [],
                     }))
                   )
                 }
               >
                 <Copy />
-                Copiar horário da barbearia
+                Copiar da barbearia
               </Button>
             </div>
 
@@ -460,12 +582,13 @@ export function ProfessionalForm({
               businessDays={businessDays}
               onChange={setSchedule}
             />
-          </AdminFormSectionCard>
+          </FormPanel>
         </TabsContent>
 
-        {isEdit && commissions && (
-          <TabsContent value="comissoes">
+        {isEdit && commissions ? (
+          <TabsContent value="comissoes" className="mt-4">
             <ProfessionalCommissionsPanel
+              tone="dark"
               professionalId={commissions.professionalId}
               professionalNickname={nickname || "Barbeiro"}
               today={commissions.today}
@@ -475,14 +598,17 @@ export function ProfessionalForm({
               payouts={commissions.payouts}
             />
           </TabsContent>
-        )}
+        ) : null}
       </Tabs>
 
-      <AdminFormActions
-        onCancel={() => router.push("/admin/profissionais")}
-        submitLabel={submitLabel}
-        saving={saving}
-      />
+      {activeTab !== "comissoes" ? (
+        <AdminFormActions
+          tone="dark"
+          onCancel={() => router.push("/admin/profissionais")}
+          submitLabel={submitLabel}
+          saving={saving}
+        />
+      ) : null}
     </form>
   );
 }

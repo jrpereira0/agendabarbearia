@@ -3,15 +3,17 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, History, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { AdminFormSectionCard } from "@/components/admin/admin-form-layout";
+import { FormSectionTitle } from "@/components/admin/form-section";
 import { CommissionPayoutHistory } from "@/components/admin/commission-payout-history";
 import { FinancePeriodFilter } from "@/components/admin/finance-period-filter";
 import { PayCommissionButton } from "@/components/admin/pay-commission-button";
 import type { CommissionPayout } from "@/lib/commission-payout-service";
 import { formatPeriodLabel } from "@/lib/date-range";
 import { formatPriceBRL } from "@/lib/format";
+import { ADMIN_SURFACE } from "@/lib/admin-surface";
+import { cn } from "@/lib/utils";
 
 type ProfessionalCommissionsPanelProps = {
   professionalId: string;
@@ -21,6 +23,7 @@ type ProfessionalCommissionsPanelProps = {
   to: string;
   openCommissionCents: number;
   payouts: CommissionPayout[];
+  tone?: "default" | "dark";
 };
 
 export function ProfessionalCommissionsPanel({
@@ -31,10 +34,12 @@ export function ProfessionalCommissionsPanel({
   to,
   openCommissionCents,
   payouts,
+  tone = "default",
 }: ProfessionalCommissionsPanelProps) {
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
   const [toDate, setToDate] = useState(to);
+  const dark = tone === "dark";
 
   function buildHref(nextFrom: string, nextTo: string) {
     const params = new URLSearchParams({ from: nextFrom, to: nextTo });
@@ -53,12 +58,27 @@ export function ProfessionalCommissionsPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <AdminFormSectionCard
-        title="A pagar no período"
-        description={`Comissão em aberto de ${formatPeriodLabel(from, to)}.`}
-      >
-        <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
+      <div className={cn(dark ? ADMIN_SURFACE.panel : "rounded-lg border bg-card shadow-sm", dark && "p-5 sm:p-6", !dark && "overflow-hidden")}>
+        {!dark ? null : (
+          <div className="mb-5">
+            <FormSectionTitle
+              tone="dark"
+              icon={Wallet}
+              title="A pagar no período"
+              description={`Comissão em aberto de ${formatPeriodLabel(from, to)}.`}
+            />
+          </div>
+        )}
+        {!dark ? (
+          <div className="border-b bg-muted/20 px-5 py-4">
+            <h2 className="text-sm font-semibold">A pagar no período</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Comissão em aberto de {formatPeriodLabel(from, to)}.
+            </p>
+          </div>
+        ) : null}
+        <div className={cn("flex flex-col gap-4", !dark && "p-5")}>
           <FinancePeriodFilter
             today={today}
             fromDate={fromDate}
@@ -68,12 +88,25 @@ export function ProfessionalCommissionsPanel({
             onSubmit={applyFilter}
             onPreset={applyPreset}
             embedded
+            tone={dark ? "dark" : "default"}
           />
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-xs text-muted-foreground">Total a pagar</p>
-              <p className="text-2xl font-semibold tabular-nums tracking-tight">
+              <p
+                className={cn(
+                  "text-xs",
+                  dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+                )}
+              >
+                Total a pagar
+              </p>
+              <p
+                className={cn(
+                  "text-2xl font-semibold tabular-nums tracking-tight",
+                  dark && "text-[#f5f5f5]"
+                )}
+              >
                 {formatPriceBRL(openCommissionCents)}
               </p>
             </div>
@@ -85,11 +118,17 @@ export function ProfessionalCommissionsPanel({
                 professionalNickname={professionalNickname}
                 amountCents={openCommissionCents}
                 label="Registrar pagamento"
-                className="h-10 w-full sm:h-8 sm:w-auto"
+                className={cn(
+                  "h-10 w-full sm:h-8 sm:w-auto",
+                  dark && ADMIN_SURFACE.btnPrimary
+                )}
               />
               <Button
                 variant="outline"
-                className="h-10 w-full sm:h-8 sm:w-auto"
+                className={cn(
+                  "h-10 w-full sm:h-8 sm:w-auto",
+                  dark && ADMIN_SURFACE.btnGhost
+                )}
                 asChild
               >
                 <Link
@@ -102,14 +141,36 @@ export function ProfessionalCommissionsPanel({
             </div>
           </div>
         </div>
-      </AdminFormSectionCard>
+      </div>
 
-      <AdminFormSectionCard
-        title="Histórico de pagamentos"
-        description="Repasses já registrados para este barbeiro."
+      <div
+        className={cn(
+          dark
+            ? cn(ADMIN_SURFACE.panel, "p-5 sm:p-6")
+            : "overflow-hidden rounded-lg border bg-card shadow-sm"
+        )}
       >
-        <CommissionPayoutHistory payouts={payouts} viewer="owner" />
-      </AdminFormSectionCard>
+        {dark ? (
+          <div className="mb-5">
+            <FormSectionTitle
+              tone="dark"
+              icon={History}
+              title="Histórico de pagamentos"
+              description="Repasses já registrados para este barbeiro."
+            />
+          </div>
+        ) : (
+          <div className="border-b bg-muted/20 px-5 py-4">
+            <h2 className="text-sm font-semibold">Histórico de pagamentos</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Repasses já registrados para este barbeiro.
+            </p>
+          </div>
+        )}
+        <div className={cn(!dark && "p-5")}>
+          <CommissionPayoutHistory payouts={payouts} viewer="owner" />
+        </div>
+      </div>
     </div>
   );
 }
