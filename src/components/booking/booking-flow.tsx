@@ -842,12 +842,12 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         )}
       >
         {step === "professional" && (
-          <div className="grid grid-cols-2 content-start gap-2">
+          <div className="grid auto-rows-fr grid-cols-2 content-start gap-2">
             <button
               type="button"
               onClick={() => selectProfessional(NO_PREFERENCE_ID)}
               className={cn(
-                "flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
+                "flex h-full min-h-[8.25rem] flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
                 anyPreference
                   ? "bg-primary/10 ring-primary/50"
                   : "bg-[#151618] ring-white/8"
@@ -863,7 +863,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               >
                 <Users className="size-6" strokeWidth={1.5} />
               </div>
-              <span className="text-[0.9375rem] font-semibold leading-tight">
+              <span className="line-clamp-1 max-w-full px-0.5 text-[0.9375rem] font-semibold leading-tight">
                 Qualquer
               </span>
               <span className="px-0.5 text-[10px] leading-tight text-muted-foreground">
@@ -879,7 +879,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   type="button"
                   onClick={() => selectProfessional(pro.id)}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
+                    "flex h-full min-h-[8.25rem] flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-2.5 text-center transition-colors ring-1",
                     selected
                       ? "bg-primary/10 ring-primary/50"
                       : "bg-[#151618] ring-white/8"
@@ -901,6 +901,12 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                   </div>
                   <span className="line-clamp-1 max-w-full px-0.5 text-[0.9375rem] font-semibold leading-tight">
                     {pro.nickname}
+                  </span>
+                  <span
+                    className="px-0.5 text-[10px] leading-tight text-transparent"
+                    aria-hidden
+                  >
+                    Melhor horário
                   </span>
                 </button>
               );
