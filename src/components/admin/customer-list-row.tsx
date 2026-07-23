@@ -38,6 +38,8 @@ export type CustomerListItem = {
   lastName: string;
   whatsapp: string;
   appointmentCount: number;
+  /** Sem visita concluída nem horário ativo (agendado/confirmado). */
+  canDelete: boolean;
   lastVisitDate: string | null;
   memberSince: string;
 };
@@ -171,7 +173,6 @@ function CustomerActionsMenu({
   tone?: Tone;
 }) {
   const router = useRouter();
-  const hasVisits = customer.appointmentCount > 0;
   const dark = tone === "dark";
 
   return (
@@ -198,7 +199,7 @@ function CustomerActionsMenu({
           <Pencil />
           Ver e editar
         </DropdownMenuItem>
-        {!hasVisits ? (
+        {customer.canDelete ? (
           <>
             <DropdownMenuSeparator className={cn(dark && "bg-white/10")} />
             <DropdownMenuItem variant="destructive" onSelect={onDelete}>
@@ -242,7 +243,8 @@ function DeleteCustomerDialog({
             Excluir {fullName}?
           </DialogTitle>
           <DialogDescription className={cn(dark && ADMIN_SURFACE.muted)}>
-            Só é possível excluir clientes sem agendamentos no histórico.
+            Só é possível excluir clientes sem visitas concluídas nem horários
+            marcados. Cancelados não impedem.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

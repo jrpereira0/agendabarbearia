@@ -33,6 +33,12 @@ function mapCustomer(c: {
 
   const doneAppts = appts.filter((a) => a.status === "done");
   const appointmentCount = doneAppts.length;
+  const canDelete = !appts.some(
+    (a) =>
+      a.status === "done" ||
+      a.status === "scheduled" ||
+      a.status === "confirmed"
+  );
 
   const lastVisitDate =
     [...doneAppts].sort((a, b) => b.date.localeCompare(a.date))[0]?.date ??
@@ -44,6 +50,7 @@ function mapCustomer(c: {
     lastName: capitalizePersonName(c.last_name),
     whatsapp: c.whatsapp,
     appointmentCount,
+    canDelete,
     lastVisitDate,
     memberSince: c.created_at.slice(0, 10),
   };

@@ -150,22 +150,48 @@ export async function deleteCustomer(customerId: string): Promise<ActionResult> 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
 
-  const { count } = await admin
+  // Só bloqueia visitas concluídas ou horários ainda ativos.
+  // Cancelados não impedem (o vínculo some com ON DELETE SET NULL).
+  const { count: doneCount, error: doneError } = await admin
     .from("appointments")
     .select("id", { count: "exact", head: true })
-    .eq("customer_id", customerId);
+    .eq("customer_id", customerId)
+    .eq("status", "done");
 
-  if (count && count > 0) {
+  if (doneError) {
+    return { ok: false, error: "Não foi possível verificar o histórico do cliente." };
+  }
+
+  if (doneCount && doneCount > 0) {
     return {
       ok: false,
       error:
-        "Esse cliente tem agendamentos no histórico. Não dá pra excluir — edite os dados se precisar.",
+        "Esse cliente tem visitas no histórico. Não dá pra excluir — edite os dados se precisar.",
+    };
+  }
+
+  const { count: activeCount, error: activeError } = await admin
+    .from("appointments")
+    .select("id", { count: "exact", head: true })
+    .eq("customer_id", customerId)
+    .in("status", ["scheduled", "confirmed"]);
+
+  if (activeError) {
+    return { ok: false, error: "Não foi possível verificar os horários do cliente." };
+  }
+
+  if (activeCount && activeCount > 0) {
+    return {
+      ok: false,
+      error:
+        "Esse cliente ainda tem horário marcado. Cancele ou conclua antes de excluir.",
     };
   }
 
   const { error } = await admin.from("customers").delete().eq("id", customerId);
 
   if (error) {
+    console.error("deleteCustomer", error);
     return { ok: false, error: "Não foi possível excluir o cliente." };
   }
 

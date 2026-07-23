@@ -243,7 +243,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 - Somente o **dono** vê **Clientes** (`/admin/clientes`): busca, cadastro manual em **Novo cliente**, ficha com histórico
 - Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
-- Exclusão só é permitida se o cliente não tiver agendamentos no histórico
+- Exclusão só é permitida se o cliente não tiver visitas concluídas (`done`) nem horários ativos (`scheduled`/`confirmed`); agendamentos cancelados não impedem
 - **App / site (cliente logado por OTP):** `GET` e `PATCH /api/v1/customers/me` — ver e editar **nome/sobrenome** do próprio cadastro; WhatsApp não muda. A resposta inclui `creditBalanceCents` (crédito na loja). Detalhes: [api/app-mobile.md](./api/app-mobile.md)
 
 ## Fotos (profissionais, serviços e produtos)
