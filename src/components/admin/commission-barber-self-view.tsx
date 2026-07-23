@@ -46,15 +46,13 @@ type CommissionBarberSelfViewProps = {
 const tabTriggerClass =
   "shrink-0 rounded-lg px-3 py-2 text-xs text-[#8b8d93] hover:!bg-white/[0.04] hover:!text-[#c8c9cd] data-[state=active]:!bg-[#1a1b1e] data-[state=active]:!text-[#ecf15e] data-[state=active]:shadow-none sm:text-sm";
 
-function MetricCell({
-  label,
-  value,
-  hint,
-}: {
+type MetricItem = {
   label: string;
   value: string;
   hint?: string;
-}) {
+};
+
+function MetricCell({ label, value, hint }: MetricItem) {
   return (
     <div className="bg-[#151618] px-4 py-3.5">
       <p
@@ -68,9 +66,77 @@ function MetricCell({
       <p className="mt-1 text-lg font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
         {value}
       </p>
-      <p className={cn("mt-0.5 text-[11px]", ADMIN_SURFACE.muted)}>
-        {hint ?? "\u00a0"}
+      {hint ? (
+        <p className={cn("mt-0.5 text-[11px] leading-snug", ADMIN_SURFACE.muted)}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** No celular: valor à direita, sem grade com buraco. */
+function MetricRow({ label, value, hint }: MetricItem) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+      <div className="min-w-0">
+        <p
+          className={cn(
+            "text-[10px] font-medium uppercase tracking-[0.12em]",
+            ADMIN_SURFACE.muted
+          )}
+        >
+          {label}
+        </p>
+        {hint ? (
+          <p className={cn("mt-1 text-[11px] leading-snug", ADMIN_SURFACE.muted)}>
+            {hint}
+          </p>
+        ) : null}
+      </div>
+      <p className="shrink-0 text-[1.05rem] font-semibold tabular-nums tracking-tight text-[#f5f5f5]">
+        {value}
       </p>
+    </div>
+  );
+}
+
+function MetricsBlock({
+  items,
+  className,
+}: {
+  items: MetricItem[];
+  className?: string;
+}) {
+  if (items.length === 0) return null;
+
+  const desktopCols =
+    items.length >= 4
+      ? "sm:grid-cols-4"
+      : items.length === 3
+        ? "sm:grid-cols-3"
+        : "sm:grid-cols-2";
+
+  return (
+    <div className={className}>
+      <div className="overflow-hidden rounded-xl border border-white/10 sm:hidden">
+        <div className="divide-y divide-white/10 bg-[#151618]">
+          {items.map((item) => (
+            <MetricRow key={item.label} {...item} />
+          ))}
+        </div>
+      </div>
+
+      <div
+        className={cn(
+          "hidden gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 sm:grid",
+          desktopCols
+        )}
+      >
+        {items.map((item) => (
+          <MetricCell key={item.label} {...item} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -665,52 +731,47 @@ export function CommissionBarberSelfView({
         </div>
       )}
 
-      <div
-        className={cn(
-          "grid gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10",
-          mobileSimple && "hidden lg:grid",
-          summary.tipCents > 0 && bestDay && !isSingleDay
-            ? "grid-cols-2 sm:grid-cols-4"
-            : summary.tipCents > 0 || (bestDay && !isSingleDay)
-              ? "grid-cols-2 sm:grid-cols-3"
-              : "grid-cols-2"
-        )}
-      >
-        <MetricCell
-          label="Atendimentos"
-          value={String(summary.comandaCount)}
-          hint={
-            !isSingleDay && dayRows.length > 0
-              ? `em ${dayRows.length} dia${dayRows.length === 1 ? "" : "s"}`
-              : undefined
-          }
-        />
-        <MetricCell
-          label="Em serviços"
-          value={formatPriceBRL(serviceRevenueCents)}
-          hint={
-            summary.comandaCount > 0
-              ? `méd. ${formatPriceBRL(
-                  Math.round(serviceRevenueCents / summary.comandaCount)
-                )} por atendimento`
-              : undefined
-          }
-        />
-        {summary.tipCents > 0 ? (
-          <MetricCell
-            label="Gorjetas"
-            value={formatPriceBRL(summary.tipCents)}
-            hint={isOwnerView ? "100% do barbeiro" : "100% suas"}
-          />
-        ) : null}
-        {bestDay && !isSingleDay ? (
-          <MetricCell
-            label="Melhor dia"
-            value={formatPriceBRL(bestDay.commissionCents)}
-            hint={formatDateBR(bestDay.date)}
-          />
-        ) : null}
-      </div>
+      <MetricsBlock
+        className={cn(mobileSimple && "hidden lg:block")}
+        items={[
+          {
+            label: "Atendimentos",
+            value: String(summary.comandaCount),
+            hint:
+              !isSingleDay && dayRows.length > 0
+                ? `em ${dayRows.length} dia${dayRows.length === 1 ? "" : "s"}`
+                : undefined,
+          },
+          {
+            label: "Em serviços",
+            value: formatPriceBRL(serviceRevenueCents),
+            hint:
+              summary.comandaCount > 0
+                ? `média ${formatPriceBRL(
+                    Math.round(serviceRevenueCents / summary.comandaCount)
+                  )}`
+                : undefined,
+          },
+          ...(summary.tipCents > 0
+            ? [
+                {
+                  label: "Gorjetas",
+                  value: formatPriceBRL(summary.tipCents),
+                  hint: isOwnerView ? "100% do barbeiro" : "100% suas",
+                },
+              ]
+            : []),
+          ...(bestDay && !isSingleDay
+            ? [
+                {
+                  label: "Melhor dia",
+                  value: formatPriceBRL(bestDay.commissionCents),
+                  hint: formatDateBR(bestDay.date),
+                },
+              ]
+            : []),
+        ]}
+      />
 
       {isSingleDay && activeDay ? (
         <div className={cn(mobileSimple && "hidden lg:block")}>
