@@ -25,7 +25,11 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/app/admin/(panel)/produtos` | Cadastro de produtos, estoque, comissão por item e categorias |
 | `src/app/admin/(panel)/configuracoes` | Perfil público da barbearia, horários, chaves de API (Integrações) |
 | `src/app/admin/(panel)/minha-conta` | Tela do barbeiro para ver a própria grade e trocar a senha |
-| `src/app/api/agenda/session` | Emite o cookie de sessão do cliente (aba "Meus horários") |
+| `src/app/api/agenda/otp/send` | Gera e dispara o código OTP (webhook n8n → WhatsApp) |
+| `src/app/api/agenda/otp/verify` | Valida o código e emite o cookie de sessão do cliente |
+| `src/app/api/agenda/session` | `GET` sessão atual / `DELETE` sair |
+| `src/lib/client-whatsapp-otp.ts` | Gera, grava (hash) e valida códigos OTP |
+| `src/lib/notifications/client-otp-webhook.ts` | Envia `client.otp` ao n8n |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
 | `src/components/admin` | Componentes do painel (sidebar, formulários, cards) |
 | `src/components/booking` | Página pública de agendamento do cliente |
@@ -163,15 +167,16 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - Layout estilo app: tela cheia, conteúdo limpo (sem barra de marca no topo) e menu inferior **Agendar · Horários · Local**
 - Aba **Local**: perfil da loja, funcionamento, endereço, contatos e botão **Como chegar**
 - A **prévia do link no WhatsApp** (Open Graph) usa nome, bio curta e logo de `shop_settings`, com imagem gerada em `/agenda/opengraph-image` (1200×630). Se a prévia ficar desatualizada após um deploy, force a atualização no [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/)
-- Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → WhatsApp (busca automática; se não existir, pede nome/sobrenome pra criar o cadastro) → confirmação
+- Passos: barbeiro (**ou sem preferência**) → serviços → data/horário → **WhatsApp + código** (fica logado ~14 dias) → se for novo, nome/sobrenome → confirmação
 - **Sem preferência:** o site mostra a união dos horários livres de quem faz os serviços; na hora de confirmar, o servidor escolhe o barbeiro **com menos agendamentos ativos naquele dia** (empate: ordem do apelido)
 - **Preços na escolha de serviços:** como o dia ainda não foi escolhido, cada serviço mostra a **faixa de preço** (ex.: `Seg–Qua R$ 60,00 · Qui–Sáb R$ 70,00` ou `R$ 60,00 – R$ 70,00`). O total aparece como **“a partir de …”** quando há variação por dia
 - **Serviços mais agendados:** no topo da lista aparece a seção **“Mais agendados”** (até 5 serviços com histórico de marcações); o restante fica em **“Outros serviços”**, ordenado pela mesma contagem
 - **Preços após escolher a data:** na etapa de data/horário e na confirmação, o total passa a usar o **valor exato** do dia selecionado (mesma regra da API ao gravar)
-- Aba **Horários** (Meus horários): cliente digita WhatsApp, vê agendamentos futuros (total já pelo preço do dia do horário), pode **remarcar** (data, horário, serviços) ou **cancelar**
+- Aba **Horários** (Meus horários): mesmo login por código; vê agendamentos futuros, pode **remarcar**, **cancelar** ou **Sair**
 - Se o número já existir e não for a pessoa, o cliente troca o WhatsApp (não edita o nome de outro cadastro)
 - Usa a mesma regra de horários livres da API (`GET /api/v1/appointments/availability`)
-- Confirmação via `POST /api/v1/appointments` (servidor valida de novo antes de gravar)
+- Confirmação via `POST /api/v1/appointments` com cookie de sessão (ou chave de API no bot)
+- Login OTP: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md)
 - O dono edita o perfil público em **Configurações** (`/admin/configuracoes`)
 - Campos do perfil em `shop_settings`: `shop_name`, `bio`, `cep`, `street`, `address_number`, `address_complement`, `neighborhood`, `city`, `state`, `address` (texto montado automaticamente), `whatsapp`, `instagram`, `logo_url`
 - Endereço: digite o CEP e o sistema preenche rua, bairro e cidade (ViaCEP); você informa número e complemento
@@ -194,7 +199,7 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 | GET | `/api/v1/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos (`mode=upcoming` padrão, `history` ou `all`) |
 | GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
-| POST | `/api/v1/appointments` | Pública | Criar agendamento online |
+| POST | `/api/v1/appointments` | **Privada*** | Criar agendamento online (*site: cookie OTP; n8n: chave de API*) |
 | PUT | `/api/v1/appointments/:id/status` | **Privada** | Atualizar status (`scheduled` / `confirmed` / `cancelled` / `done`) |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
@@ -205,7 +210,7 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
-**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin ou cookie de cliente (`POST /api/agenda/session` no site). Rotas **públicas** funcionam sem header; se enviar `Bearer`, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API.
+**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin ou cookie de cliente após OTP (`POST /api/agenda/otp/verify`). Rotas **públicas** (catálogo, disponibilidade, busca de cliente) funcionam sem header; se enviar `Bearer`, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API. Detalhes do OTP: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md).
 
 Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [api/guia-n8n.md](./api/guia-n8n.md).
 
@@ -248,7 +253,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 Identificados em auditoria (jul/2026); decisão consciente de não corrigir agora — revisar quando fizer sentido:
 
 - **`GET /api/v1/customers` permite enumerar WhatsApp cadastrados**: é pública (usada no site para autocompletar nome ao agendar) e devolve se um número é cliente. Só tem rate limit de 10 tentativas/15 min por IP. Mitigar exigiria sessão prévia ou CAPTCHA, o que mudaria a experiência de quem chega direto no site.
-- **Sessão "Meus horários" não confirma posse do WhatsApp**: `POST /api/agenda/session` emite cookie de acesso aos agendamentos só de informar o número, sem checar se quem está pedindo é o dono dele. Corrigir direito exige enviar um código de verificação por WhatsApp (integração nova, ex. via n8n) — planejar quando essa integração existir.
+- Login do cliente no site: código no WhatsApp (OTP) via n8n — ver [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md)
 
 ## Como atualizar o banco
 

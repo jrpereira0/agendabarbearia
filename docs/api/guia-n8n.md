@@ -103,7 +103,7 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 ### Site público vs integração
 
 - O site `/agenda` **não usa** chave de API no navegador
-- **Meus horários:** após digitar o WhatsApp, o site chama `POST /api/agenda/session` (cookie httpOnly assinado) e depois as rotas protegidas com `credentials: include`
+- **Meus horários / Agendar:** o site pede um **código no WhatsApp** (`POST /api/agenda/otp/send` + `verify`); depois usa cookie `agenda_client_session` nas rotas protegidas. Guia: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md)
 - **Novo agendamento:** continua em `POST /api/v1/appointments` sem chave (rate limit por IP/WhatsApp)
 - **Serviços, profissionais, disponibilidade e cliente:** continuam públicos (`GET /services`, `GET /professionals`, `GET /appointments/availability`, `GET /customers`)
 - **Rotas sensíveis** exigem API Key, sessão admin ou cookie de cliente — sem fallback público:

@@ -59,6 +59,12 @@ export const PUBLIC_API_RATE_LIMITS = {
   catalog: { limit: 60, windowMs: 15 * 60 * 1000 },
   availability: { limit: 60, windowMs: 15 * 60 * 1000 },
   whatsappSensitive: { limit: 10, windowMs: 15 * 60 * 1000 },
+  /** Pedidos de código OTP por IP. */
+  clientOtpSendIp: { limit: 10, windowMs: 15 * 60 * 1000 },
+  /** Pedidos de código OTP por WhatsApp. */
+  clientOtpSendWhatsapp: { limit: 3, windowMs: 15 * 60 * 1000 },
+  /** Tentativas de validar OTP por IP. */
+  clientOtpVerifyIp: { limit: 20, windowMs: 15 * 60 * 1000 },
   appointmentCreateIp: { limit: 5, windowMs: 60 * 60 * 1000 },
   appointmentCreateWhatsapp: { limit: 3, windowMs: 60 * 60 * 1000 },
   appointmentMutate: { limit: 10, windowMs: 15 * 60 * 1000 },

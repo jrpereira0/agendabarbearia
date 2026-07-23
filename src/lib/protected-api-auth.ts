@@ -29,6 +29,7 @@ export type ProtectedApiAuthContext =
 
 const CLIENT_SESSION_SCOPES: ApiScope[] = [
   "appointments:read",
+  "appointments:create",
   "appointments:update",
   "appointments:cancel",
 ];
@@ -106,31 +107,48 @@ export async function resolveProtectedApiAuth(
     return { ok: true, auth: apiKey.auth };
   }
 
+  const clientSession = readClientSessionFromRequest(request);
+  const clientAuth =
+    clientSession && clientHasScope(requiredScope)
+      ? (() => {
+          if (options.whatsapp) {
+            const requested = normalizeWhatsapp(options.whatsapp);
+            if (!requested || requested !== clientSession.whatsapp) {
+              return null;
+            }
+          }
+          return {
+            type: "client" as const,
+            whatsapp: clientSession.whatsapp,
+          };
+        })()
+      : null;
+
+  // Preferir sessão OTP do cliente quando o WhatsApp da requisição bate com ela.
+  // Assim Agendar/Horários funcionam mesmo com o painel aberto no mesmo navegador.
+  if (clientAuth && options.whatsapp) {
+    return { ok: true, auth: clientAuth };
+  }
+
   const admin = await getAdminApiSession();
-  if (admin) {
-    if (!adminHasScope(admin.role, requiredScope)) {
-      return { ok: false, response: apiForbiddenResponse() };
-    }
+  if (admin && adminHasScope(admin.role, requiredScope)) {
     return { ok: true, auth: admin };
   }
 
-  const clientSession = readClientSessionFromRequest(request);
-  if (clientSession) {
-    if (!clientHasScope(requiredScope)) {
-      return { ok: false, response: apiForbiddenResponse() };
-    }
+  if (clientAuth) {
+    return { ok: true, auth: clientAuth };
+  }
 
-    if (options.whatsapp) {
-      const requested = normalizeWhatsapp(options.whatsapp);
-      if (!requested || requested !== clientSession.whatsapp) {
-        return { ok: false, response: apiForbiddenResponse() };
-      }
-    }
+  if (admin) {
+    return { ok: false, response: apiForbiddenResponse() };
+  }
 
-    return {
-      ok: true,
-      auth: { type: "client", whatsapp: clientSession.whatsapp },
-    };
+  if (clientSession && !clientHasScope(requiredScope)) {
+    return { ok: false, response: apiForbiddenResponse() };
+  }
+
+  if (clientSession && options.whatsapp) {
+    return { ok: false, response: apiForbiddenResponse() };
   }
 
   return { ok: false, response: apiUnauthorizedResponse() };

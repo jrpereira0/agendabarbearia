@@ -1,14 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Check, CheckCircle2, User, Users } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
 import { BookingDatePicker } from "@/components/booking/booking-date-picker";
+import {
+  ClientWhatsappAuth,
+  logoutClientSession,
+  type ClientWhatsappAuthStickyAction,
+} from "@/components/booking/client-whatsapp-auth";
 import { ServiceThumbnail } from "@/components/booking/service-thumbnail";
 import {
   formatDateBR,
@@ -49,7 +54,7 @@ const stepMeta: Record<Step, { title: string; hint: string }> = {
   },
   confirm: {
     title: "Seus dados",
-    hint: "Informe o WhatsApp pra te reconhecer.",
+    hint: "Confirme o WhatsApp com o código e finalize.",
   },
 };
 
@@ -238,6 +243,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappVerified, setWhatsappVerified] = useState(false);
+  const [otpStickyPrimary, setOtpStickyPrimary] =
+    useState<ClientWhatsappAuthStickyAction | null>(null);
   const [customerFound, setCustomerFound] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupDone, setLookupDone] = useState(false);
@@ -279,7 +287,29 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     ? null
     : (professionals.find((p) => p.id === professionalId) ?? null);
   const currentStep = stepOrder.indexOf(step) + 1;
-  const meta = stepMeta[step];
+  const meta = useMemo(() => {
+    if (step !== "confirm") return stepMeta[step];
+    if (!whatsappVerified) return stepMeta.confirm;
+    if (lookupLoading) {
+      return {
+        title: "Seus dados",
+        hint: "Buscando seu cadastro...",
+      };
+    }
+    if (customerFound) {
+      return {
+        title: "Quase lá",
+        hint: "Confira se está tudo certo e confirme o horário.",
+      };
+    }
+    if (lookupDone) {
+      return {
+        title: "Seus dados",
+        hint: "Complete seu nome pra finalizar o agendamento.",
+      };
+    }
+    return stepMeta.confirm;
+  }, [step, whatsappVerified, lookupLoading, customerFound, lookupDone]);
 
   const availableServices = useMemo(() => {
     if (!professionalId) return [];
@@ -381,15 +411,17 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   }, [step, professionalId, anyPreference, serviceIds, date]);
 
   useEffect(() => {
-    if (step !== "confirm") return;
+    if (step !== "confirm" || !whatsappVerified) return;
 
     const delay = whatsappLookupDelayMs(whatsapp);
     if (delay === null) {
       lastLookupDigitsRef.current = "";
-      setLookupLoading(false);
-      setLookupDone(false);
-      setCustomerFound(false);
-      return;
+      const resetTimer = setTimeout(() => {
+        setLookupLoading(false);
+        setLookupDone(false);
+        setCustomerFound(false);
+      }, 0);
+      return () => clearTimeout(resetTimer);
     }
 
     let cancelled = false;
@@ -440,7 +472,12 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [whatsapp, step]);
+  }, [whatsapp, step, whatsappVerified]);
+
+  const handleWhatsappAuthenticated = useCallback((canonical: string) => {
+    setWhatsapp(formatWhatsapp(canonical));
+    setWhatsappVerified(true);
+  }, []);
 
   function selectProfessional(id: string) {
     setProfessionalId(id);
@@ -462,12 +499,15 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setFirstName("");
     setLastName("");
     setWhatsapp("");
+    setWhatsappVerified(false);
     lastLookupDigitsRef.current = "";
   }
 
-  function handleNotMe() {
+  async function handleNotMe() {
+    await logoutClientSession();
     lastLookupDigitsRef.current = "";
     setWhatsapp("");
+    setWhatsappVerified(false);
     setFirstName("");
     setLastName("");
     setCustomerFound(false);
@@ -538,6 +578,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       const res = await fetch("/api/v1/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           ...(anyPreference ? { anyProfessional: true } : { professionalId }),
           date,
@@ -601,6 +642,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     (step === "datetime" && !startTime) ||
     (step === "confirm" &&
       (saving ||
+        !whatsappVerified ||
         lookupLoading ||
         !lookupDone ||
         !normalizeWhatsapp(whatsapp) ||
@@ -716,7 +758,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       <div
         className={cn(
           "relative z-10 shrink-0 bg-[#0e0f11] px-5",
-          step === "professional" ? "pb-2 pt-3" : "pb-2 pt-5"
+          step === "professional"
+            ? "pb-2 pt-3"
+            : step === "confirm" && !whatsappVerified
+              ? "pb-2 pt-4"
+              : "pb-2 pt-5"
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -730,7 +776,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             "booking-display font-medium leading-tight tracking-tight",
             step === "professional"
               ? "mt-2.5 text-[1.45rem]"
-              : "mt-4 text-[1.75rem]"
+              : step === "confirm" && !whatsappVerified
+                ? "mt-3 text-[1.5rem]"
+                : "mt-4 text-[1.75rem]"
           )}
         >
           {meta.title}
@@ -738,7 +786,11 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         <p
           className={cn(
             "text-muted-foreground",
-            step === "professional" ? "mt-1 text-[13px]" : "mt-1.5 text-sm"
+            step === "professional"
+              ? "mt-1 text-[13px]"
+              : step === "confirm" && !whatsappVerified
+                ? "mt-1 text-[13px]"
+                : "mt-1.5 text-sm"
           )}
         >
           {meta.hint}
@@ -746,7 +798,12 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
         {(step === "services" || step === "datetime" || step === "confirm") &&
           (anyPreference || selectedProfessional) && (
-            <div className="mt-4 flex items-center gap-2.5 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8">
+            <div
+              className={cn(
+                "flex items-center gap-2.5 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8",
+                step === "confirm" && !whatsappVerified ? "mt-3" : "mt-4"
+              )}
+            >
               {anyPreference ? (
                 <div className="flex size-8 items-center justify-center rounded-full bg-white/10">
                   <Users className="size-3.5 text-muted-foreground" />
@@ -788,7 +845,10 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
           "min-h-0 flex-1 px-5",
           step === "professional"
             ? "overflow-hidden pt-2 pb-2"
-            : "overflow-y-auto overscroll-y-contain pb-8 [-webkit-overflow-scrolling:touch]"
+            : cn(
+                "overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]",
+                step === "confirm" && !whatsappVerified ? "pb-4 pt-1" : "pb-8"
+              )
         )}
       >
         {step === "professional" && (
@@ -965,94 +1025,107 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
         {step === "confirm" && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="bookingWhatsapp" className="text-xs">
-                WhatsApp
-              </Label>
-              <Input
-                id="bookingWhatsapp"
-                inputMode="numeric"
-                placeholder="(11) 99999-9999"
-                value={whatsapp}
-                onChange={(e) => {
-                  setWhatsapp(formatWhatsapp(e.target.value));
-                  setCustomerFound(false);
-                  setLookupDone(false);
-                }}
-                autoComplete="tel"
-                className="h-12 rounded-xl"
+            {!whatsappVerified ? (
+              <ClientWhatsappAuth
+                onAuthenticated={handleWhatsappAuthenticated}
+                onStickyPrimaryChange={setOtpStickyPrimary}
+                hint="Enviamos um código no WhatsApp. Com ele você confirma o horário e fica logado neste aparelho."
               />
-              <p className="text-xs text-muted-foreground">
-                {lookupLoading
-                  ? "Buscando seu cadastro..."
-                  : customerFound
-                    ? "Encontramos você."
-                    : lookupDone
-                      ? "Não achamos esse número ainda."
-                      : "Usamos pra te reconhecer e avisar."}
-              </p>
-            </div>
-
-            {customerFound ? (
-              <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-full border border-primary/30 bg-[#151618]">
-                    <User className="size-4 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold">
-                      {firstName} {lastName}
+            ) : (
+              <>
+                {lookupLoading ? (
+                  <div className="rounded-2xl bg-[#151618] px-4 py-4 ring-1 ring-white/8">
+                    <p className="text-sm text-muted-foreground">
+                      Buscando seu cadastro...
                     </p>
-                    <button
-                      type="button"
-                      onClick={handleNotMe}
-                      className="mt-0.5 text-xs font-medium text-primary"
-                    >
-                      Não sou eu
-                    </button>
                   </div>
-                </div>
-              </div>
-            ) : null}
+                ) : null}
 
-            {lookupDone && !customerFound ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-2xl bg-[#151618] px-4 py-3.5 ring-1 ring-white/8">
-                  <p className="text-sm font-medium">Primeiro agendamento?</p>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Não encontramos cadastro com esse WhatsApp. Preencha nome e
-                    sobrenome pra criar o seu e confirmar o horário.
-                  </p>
-                </div>
+                {customerFound ? (
+                  <div className="rounded-2xl bg-[#151618] px-4 py-3.5 ring-1 ring-white/8">
+                    <div className="flex items-start gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/15">
+                        <CheckCircle2
+                          className="size-5 text-primary"
+                          strokeWidth={1.75}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.95rem] font-semibold">
+                          {firstName} {lastName}
+                        </p>
+                        <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
+                          {formatWhatsapp(whatsapp)}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleNotMe()}
+                          className="mt-2 text-xs font-medium text-primary"
+                        >
+                          Não sou eu
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="bookingFirstName" className="text-xs">
-                      Nome
-                    </Label>
-                    <Input
-                      id="bookingFirstName"
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      autoComplete="given-name"
-                      className="h-12 rounded-xl"
-                    />
+                {lookupDone && !customerFound ? (
+                  <div className="rounded-2xl bg-[#151618] px-4 py-4 ring-1 ring-white/8">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                          WhatsApp
+                        </p>
+                        <p className="mt-1 text-[0.95rem] font-semibold tabular-nums">
+                          {formatWhatsapp(whatsapp)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleNotMe()}
+                        className="shrink-0 pt-0.5 text-xs font-medium text-primary"
+                      >
+                        Trocar
+                      </button>
+                    </div>
+
+                    <div className="my-4 h-px bg-white/8" />
+
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Não encontramos cadastro com esse número. Informe nome e
+                      sobrenome pra criar o seu.
+                    </p>
+
+                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="bookingFirstName" className="text-xs">
+                          Nome
+                        </Label>
+                        <Input
+                          id="bookingFirstName"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          autoComplete="given-name"
+                          className="h-12 rounded-xl border-white/10 bg-[#0e0f11]"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="bookingLastName" className="text-xs">
+                          Sobrenome
+                        </Label>
+                        <Input
+                          id="bookingLastName"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          autoComplete="family-name"
+                          className="h-12 rounded-xl border-white/10 bg-[#0e0f11]"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="bookingLastName" className="text-xs">
-                      Sobrenome
-                    </Label>
-                    <Input
-                      id="bookingLastName"
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      autoComplete="family-name"
-                      className="h-12 rounded-xl"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : null}
+                ) : null}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -1075,18 +1148,32 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               Voltar
             </Button>
           ) : null}
-          <Button
-            type="button"
-            size="lg"
-            disabled={primaryDisabled}
-            onClick={() => {
-              if (step === "confirm") void handleConfirm();
-              else goNext();
-            }}
-            className="h-12 min-w-0 flex-1 rounded-2xl text-[0.95rem] font-semibold shadow-none"
-          >
-            {primaryLabel}
-          </Button>
+          {step === "confirm" && !whatsappVerified ? (
+            otpStickyPrimary ? (
+              <Button
+                type="button"
+                size="lg"
+                disabled={otpStickyPrimary.disabled}
+                onClick={otpStickyPrimary.onClick}
+                className="h-12 min-w-0 flex-1 rounded-2xl text-[0.95rem] font-semibold shadow-none"
+              >
+                {otpStickyPrimary.label}
+              </Button>
+            ) : null
+          ) : (
+            <Button
+              type="button"
+              size="lg"
+              disabled={primaryDisabled}
+              onClick={() => {
+                if (step === "confirm") void handleConfirm();
+                else goNext();
+              }}
+              className="h-12 min-w-0 flex-1 rounded-2xl text-[0.95rem] font-semibold shadow-none"
+            >
+              {primaryLabel}
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -11,9 +11,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ClientWhatsappAuth,
+  logoutClientSession,
+} from "@/components/booking/client-whatsapp-auth";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { BookingDatePicker } from "@/components/booking/booking-date-picker";
 import { AppointmentCardsSkeleton } from "@/components/skeletons/appointment-cards-skeleton";
@@ -37,7 +38,6 @@ import {
   formatPublicServicesTotalLabel,
 } from "@/lib/public-service-prices";
 import { sortServicesByPopularity } from "@/lib/booking-service-groups";
-import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
 import type { PublicAppointmentItem } from "@/lib/manage-public-appointment";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
 import { cn } from "@/lib/utils";
@@ -61,11 +61,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
 
   const [step, setStep] = useState<Step>("phone");
-  const [whatsapp, setWhatsapp] = useState("");
   const [whatsappDigits, setWhatsappDigits] = useState("");
-  const [lookupLoading, setLookupLoading] = useState(false);
-  const lastLookupDigitsRef = useRef("");
-
   const [appointments, setAppointments] = useState<PublicAppointmentItem[]>([]);
   const [loadingList, setLoadingList] = useState(false);
 
@@ -113,21 +109,6 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const fetchAppointments = useCallback(async (canonical: string) => {
     setLoadingList(true);
     try {
-      const sessionRes = await fetch("/api/agenda/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ whatsapp: canonical }),
-      });
-
-      if (!sessionRes.ok) {
-        const sessionBody = await sessionRes.json().catch(() => ({}));
-        toast.error(
-          sessionBody.error ?? "Não foi possível verificar seu WhatsApp."
-        );
-        return false;
-      }
-
       const res = await fetch(
         `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}`,
         { credentials: "include" }
@@ -149,41 +130,17 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     }
   }, []);
 
-  useEffect(() => {
-    if (step !== "phone") return;
-
-    const delay = whatsappLookupDelayMs(whatsapp);
-    if (delay === null) {
-      lastLookupDigitsRef.current = "";
-      return;
-    }
-
-    let cancelled = false;
-
-    const timer = setTimeout(() => {
-      const current = normalizeWhatsapp(whatsapp);
-      if (cancelled || !current) return;
-      if (current === lastLookupDigitsRef.current) return;
-
-      lastLookupDigitsRef.current = current;
-      setLookupLoading(true);
-      fetchAppointments(current).finally(() => {
-        if (!cancelled) setLookupLoading(false);
-      });
-    }, delay);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [whatsapp, step, fetchAppointments]);
+  const handleAuthenticated = useCallback(
+    (canonical: string) => {
+      void fetchAppointments(canonical);
+    },
+    [fetchAppointments]
+  );
 
   useEffect(() => {
     if (step !== "edit" || !editing || editServiceIds.length === 0) return;
 
     let cancelled = false;
-    // Defer pro próximo tick: evita "setState direto no efeito" e permite
-    // cancelar (abaixo) antes de sequer começar a buscar.
     const timer = setTimeout(() => {
       if (cancelled) return;
       setLoadingSlots(true);
@@ -312,6 +269,14 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     setSaving(false);
   }
 
+  async function handleLogout() {
+    await logoutClientSession();
+    setWhatsappDigits("");
+    setAppointments([]);
+    setEditing(null);
+    setStep("phone");
+  }
+
   function goBack() {
     if (step === "edit") {
       setEditing(null);
@@ -319,9 +284,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
       return;
     }
     if (step === "list") {
-      lastLookupDigitsRef.current = whatsappDigits;
-      setStep("phone");
-      setAppointments([]);
+      void handleLogout();
     }
   }
 
@@ -332,32 +295,19 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           Meus horários
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Informe o WhatsApp pra consultar, remarcar ou cancelar.
+          Confirme o WhatsApp com o código pra consultar, remarcar ou cancelar.
         </p>
 
-        <div className="mt-8 rounded-2xl bg-[#151618] p-4 ring-1 ring-white/8">
-          <Label
-            htmlFor="myAppointmentsWhatsapp"
-            className="text-[11px] font-medium text-muted-foreground"
-          >
-            WhatsApp
-          </Label>
-          <Input
-            id="myAppointmentsWhatsapp"
-            inputMode="numeric"
-            placeholder="(11) 99999-9999"
-            value={whatsapp}
-            onChange={(e) => setWhatsapp(formatWhatsapp(e.target.value))}
-            autoComplete="tel"
-            className="mt-2 h-12 rounded-xl border-white/10 bg-[#0e0f11] text-base"
+        <div className="mt-8">
+          <ClientWhatsappAuth
+            onAuthenticated={handleAuthenticated}
+            hint="Enviamos um código no WhatsApp. Depois disso você fica logado neste aparelho."
           />
-          <div className="mt-2.5 text-xs text-muted-foreground" aria-live="polite">
-            {lookupLoading || loadingList ? (
-              <Skeleton className="inline-block h-3 w-48" aria-hidden />
-            ) : (
-              "Buscamos assim que o número estiver completo."
-            )}
-          </div>
+          {loadingList ? (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Carregando seus horários...
+            </p>
+          ) : null}
         </div>
       </div>
     );
@@ -478,7 +428,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         <div className="relative shrink-0 px-5 pb-3 pt-2">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-8 h-8 bg-gradient-to-t from-[#0e0f11] to-transparent"
+            className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[#0e0f11] to-transparent"
           />
           <div className="flex items-center gap-2">
             <Button
@@ -486,7 +436,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               variant="ghost"
               size="lg"
               onClick={goBack}
-              className="h-12 shrink-0 rounded-2xl px-3 text-muted-foreground hover:text-foreground"
+              className="h-12 shrink-0 rounded-2xl px-3 text-muted-foreground"
             >
               <ArrowLeft className="size-4" />
               Voltar
@@ -494,9 +444,14 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             <Button
               type="button"
               size="lg"
+              disabled={
+                saving ||
+                !editStartTime ||
+                editServiceIds.length === 0 ||
+                loadingSlots
+              }
+              onClick={() => void handleSaveEdit()}
               className="h-12 min-w-0 flex-1 rounded-2xl font-semibold"
-              disabled={saving || !editStartTime || editServiceIds.length === 0}
-              onClick={handleSaveEdit}
             >
               {saving ? "Salvando..." : "Salvar alterações"}
             </Button>
@@ -521,10 +476,10 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           </div>
           <button
             type="button"
-            onClick={goBack}
+            onClick={() => void handleLogout()}
             className="mt-1 shrink-0 rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-white/10"
           >
-            Trocar
+            Sair
           </button>
         </div>
 
@@ -681,7 +636,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             <Button
               variant="destructive"
               className="w-full sm:w-auto"
-              onClick={handleCancelConfirm}
+              onClick={() => void handleCancelConfirm()}
               disabled={cancelBusy}
             >
               {cancelBusy ? "Cancelando..." : "Sim, cancelar"}

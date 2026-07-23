@@ -3,14 +3,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
 import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
-import { resolveApiAuth } from "@/lib/api-key-auth";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import {
   LIST_APPOINTMENTS_MODES,
   listPublicAppointmentsByWhatsapp,
   type ListAppointmentsMode,
 } from "@/lib/manage-public-appointment";
-import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -101,29 +99,9 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST /api/v1/appointments — agendamento online pelo cliente (público com rate limit)
+// POST /api/v1/appointments — site exige sessão OTP; n8n usa chave de API
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
-    const authResult = await resolveApiAuth(request, "appointments:create");
-    if (!authResult.ok) {
-      return authResult.response;
-    }
-
-    if (authResult.auth.type === "api_key") {
-      const limited = enforcePublicApiRateLimit(
-        request,
-        "apiKey",
-        authResult.auth.keyUuid
-      );
-      if (limited) return limited;
-    } else {
-      const limitedIp = enforcePublicApiRateLimit(
-        request,
-        "appointmentCreateIp"
-      );
-      if (limitedIp) return limitedIp;
-    }
-
     let json: unknown;
     try {
       json = await request.json();
@@ -153,15 +131,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (authResult.auth.type === "public") {
-      const limitedWhatsapp = enforcePublicApiRateLimit(
-        request,
-        "appointmentCreateWhatsapp",
-        whatsapp
-      );
-      if (limitedWhatsapp) return limitedWhatsapp;
-    }
-
     const parsed = bodySchema.safeParse({ ...raw, whatsapp });
     if (!parsed.success) {
       return NextResponse.json(
@@ -170,24 +139,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await createPublicAppointment(parsed.data, {
-      bookingSource: authResult.auth.type === "api_key" ? "ai" : "site",
-    });
+    return withProtectedApiRouteGuard(
+      request,
+      {
+        scope: "appointments:create",
+        rateLimit: "appointmentCreateIp",
+        whatsapp: parsed.data.whatsapp,
+      },
+      async ({ auth }) => {
+        const result = await createPublicAppointment(parsed.data, {
+          bookingSource: auth.type === "api_key" ? "ai" : "site",
+        });
 
-    if (!result.ok) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: result.status }
-      );
-    }
+        if (!result.ok) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: result.status }
+          );
+        }
 
-    revalidatePath("/admin");
-    revalidatePath("/agenda");
-    return NextResponse.json({
-      ok: true,
-      appointmentId: result.appointmentId,
-      professionalId: result.professionalId,
-      professionalNickname: result.professionalNickname,
-    });
+        revalidatePath("/admin");
+        revalidatePath("/agenda");
+        return NextResponse.json({
+          ok: true,
+          appointmentId: result.appointmentId,
+          professionalId: result.professionalId,
+          professionalNickname: result.professionalNickname,
+        });
+      }
+    );
   });
 }
