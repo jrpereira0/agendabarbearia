@@ -953,24 +953,54 @@ export function ComandaDialog({
     setTipDialogOpen(true);
   }
 
-  function confirmTipDialog() {
+  async function confirmTipDialog() {
+    if (!canEdit || busy) return;
     if (tipDraftCents > 0 && !tipDraftProfessionalId) {
       toast.error("Escolha o barbeiro da gorjeta.");
       return;
     }
-    setTipCents(tipDraftCents);
-    setTipProfessionalId(tipDraftProfessionalId);
-    syncSinglePaymentToTotal(itemsSubtotalCents + tipDraftCents);
+
+    const previousTipCents = tipCents;
+    const previousTipProfessionalId = tipProfessionalId;
+    const nextTipCents = tipDraftCents;
+    const nextTipProfessionalId = tipDraftProfessionalId;
+
+    setTipCents(nextTipCents);
+    setTipProfessionalId(nextTipProfessionalId);
+    syncSinglePaymentToTotal(itemsSubtotalCents + nextTipCents);
     setTipDialogOpen(false);
+
+    const ok = await persistItems(items, nextTipCents, nextTipProfessionalId);
+    if (!ok) {
+      setTipCents(previousTipCents);
+      setTipProfessionalId(previousTipProfessionalId);
+      syncSinglePaymentToTotal(itemsSubtotalCents + previousTipCents);
+      return;
+    }
+    toast.success("Gorjeta salva.");
   }
 
-  function removeTip() {
+  async function removeTip() {
+    if (!canEdit || busy) return;
+
+    const previousTipCents = tipCents;
+    const previousTipProfessionalId = tipProfessionalId;
+
     setTipCents(0);
     setTipProfessionalId("");
     setTipDraftCents(0);
     setTipDraftProfessionalId("");
     syncSinglePaymentToTotal(itemsSubtotalCents);
     setTipDialogOpen(false);
+
+    const ok = await persistItems(items, 0, "");
+    if (!ok) {
+      setTipCents(previousTipCents);
+      setTipProfessionalId(previousTipProfessionalId);
+      syncSinglePaymentToTotal(itemsSubtotalCents + previousTipCents);
+      return;
+    }
+    toast.success("Gorjeta removida.");
   }
 
   const persistItems = async (
