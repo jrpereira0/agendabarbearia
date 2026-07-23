@@ -176,6 +176,145 @@ export function expandAppointmentsToServiceCards<T extends AppointmentItemLike>(
   return cards;
 }
 
+/**
+ * Reparte linhas da grade entre serviços do mesmo agendamento, sem sobrepor
+ * cards (serviços curtos caíam na mesma linha e pareciam um bloco só).
+ */
+export function distributePositiveIntegers(
+  weights: number[],
+  total: number
+): number[] {
+  const n = weights.length;
+  if (n === 0) return [];
+  const safeTotal = Math.max(total, n);
+  const sum = weights.reduce((acc, w) => acc + Math.max(1, w), 0);
+  const exact = weights.map((w) => (Math.max(1, w) / sum) * safeTotal);
+  const shares = exact.map((value) => Math.floor(value));
+
+  for (let i = 0; i < n; i++) {
+    if (shares[i]! < 1) shares[i] = 1;
+  }
+
+  let allocated = shares.reduce((acc, value) => acc + value, 0);
+  while (allocated > safeTotal) {
+    let maxIdx = 0;
+    for (let i = 1; i < n; i++) {
+      if (shares[i]! > shares[maxIdx]!) maxIdx = i;
+    }
+    if (shares[maxIdx]! <= 1) break;
+    shares[maxIdx]!--;
+    allocated--;
+  }
+
+  const remainder = safeTotal - allocated;
+  const byFraction = exact
+    .map((value, index) => ({
+      index,
+      fraction: value - Math.floor(value),
+    }))
+    .sort((a, b) => b.fraction - a.fraction);
+
+  for (let i = 0; i < remainder; i++) {
+    const target = byFraction[i % n];
+    if (!target) break;
+    shares[target.index]!++;
+  }
+
+  return shares;
+}
+
+export function packServiceCardsToGridRows<
+  T extends {
+    id: string;
+    startTime: string;
+    endTime: string;
+    serviceIndex: number;
+    appointment: { id: string; startTime: string; endTime: string };
+  },
+>(
+  cards: T[],
+  gridStart: number,
+  gridEnd: number,
+  stepMinutes: number
+): Map<string, { rowStart: number; rowEnd: number; rowSpan: number }> {
+  const result = new Map<
+    string,
+    { rowStart: number; rowEnd: number; rowSpan: number }
+  >();
+  const byAppointment = new Map<string, T[]>();
+
+  for (const card of cards) {
+    const list = byAppointment.get(card.appointment.id) ?? [];
+    list.push(card);
+    byAppointment.set(card.appointment.id, list);
+  }
+
+  for (const aptCards of byAppointment.values()) {
+    aptCards.sort((a, b) => a.serviceIndex - b.serviceIndex);
+
+    if (aptCards.length === 1) {
+      const only = aptCards[0]!;
+      const rows = appointmentGridRows(
+        only.startTime,
+        only.endTime,
+        gridStart,
+        gridEnd,
+        stepMinutes
+      );
+      if (rows) result.set(only.id, rows);
+      continue;
+    }
+
+    const appointment = aptCards[0]!.appointment;
+    const full = appointmentGridRows(
+      appointment.startTime,
+      appointment.endTime,
+      gridStart,
+      gridEnd,
+      stepMinutes
+    );
+    if (!full) continue;
+
+    const weights = aptCards.map((card) =>
+      Math.max(
+        1,
+        timeToMinutes(card.endTime) - timeToMinutes(card.startTime)
+      )
+    );
+    // Se der, cada card fica com pelo menos 2 linhas pra caber nome + serviço.
+    const minShare = full.rowSpan >= aptCards.length * 2 ? 2 : 1;
+    const targetRows = Math.max(full.rowSpan, aptCards.length * minShare);
+    const shares = distributePositiveIntegers(weights, targetRows).map(
+      (share) => Math.max(minShare, share)
+    );
+
+    // Ajuste fino se o mínimo 2 estourou o total.
+    let allocated = shares.reduce((acc, value) => acc + value, 0);
+    while (allocated > targetRows) {
+      let maxIdx = 0;
+      for (let i = 1; i < shares.length; i++) {
+        if (shares[i]! > shares[maxIdx]!) maxIdx = i;
+      }
+      if (shares[maxIdx]! <= minShare) break;
+      shares[maxIdx]!--;
+      allocated--;
+    }
+
+    let cursor = full.rowStart;
+    aptCards.forEach((card, index) => {
+      const rowSpan = Math.max(minShare, shares[index] ?? minShare);
+      result.set(card.id, {
+        rowStart: cursor,
+        rowEnd: cursor + rowSpan,
+        rowSpan,
+      });
+      cursor += rowSpan;
+    });
+  }
+
+  return result;
+}
+
 /** Divide a coluna quando vários agendamentos se sobrepõem no tempo. */
 export function computeOverlapLayouts<T extends { id: string; startTime: string; endTime: string }>(
   appointments: T[]

@@ -7,6 +7,7 @@ import {
   computeOverlapLayouts,
   expandAppointmentsToServiceCards,
   appointmentGridRows,
+  packServiceCardsToGridRows,
   isSlotStartAvailable,
   rowHeightForStep,
   shouldShowTimeLabel,
@@ -141,6 +142,17 @@ export function AgendaGrid({
   const serviceCards = useMemo(
     () => expandAppointmentsToServiceCards(appointments),
     [appointments]
+  );
+
+  const serviceCardRows = useMemo(
+    () =>
+      packServiceCardsToGridRows(
+        serviceCards,
+        gridStart,
+        gridEnd,
+        slotStepMinutes
+      ),
+    [serviceCards, gridStart, gridEnd, slotStepMinutes]
   );
 
   const proColumnIndex = useMemo(() => {
@@ -317,13 +329,15 @@ export function AgendaGrid({
           const col = proColumnIndex.get(apt.professionalId);
           if (!col) return null;
 
-          const rows = appointmentGridRows(
-            card.startTime,
-            card.endTime,
-            gridStart,
-            gridEnd,
-            slotStepMinutes
-          );
+          const rows =
+            serviceCardRows.get(card.id) ??
+            appointmentGridRows(
+              card.startTime,
+              card.endTime,
+              gridStart,
+              gridEnd,
+              slotStepMinutes
+            );
           if (!rows) return null;
 
           const layout = overlapLayoutsByPro.get(apt.professionalId)?.get(
@@ -342,12 +356,12 @@ export function AgendaGrid({
               columnIndex={layout?.columnIndex}
               columnCount={layout?.columnCount}
               focusedServiceName={card.serviceName}
-              showBookingSource={card.serviceIndex === 0}
+              showBookingSource
               segmentStartTime={card.startTime}
               segmentEndTime={card.endTime}
               serviceIndex={card.serviceIndex}
               serviceCount={card.serviceCount}
-              onClick={() => onAppointmentClick(apt, card.serviceIndex)}
+              onClick={() => onAppointmentClick(apt)}
               onHoverTime={(clientY, top, height) => {
                 if (height <= 0) {
                   setHoverMinute(

@@ -145,9 +145,8 @@ export function AppointmentGridBlock({
   const name = `${apt.customerFirstName} ${apt.customerLastName}`;
   const startTime = formatTime(segmentStartTime ?? apt.startTime);
   const endTime = formatTime(segmentEndTime ?? apt.endTime);
+  const timeRange = `${startTime} – ${endTime}`;
   const sideBySide = columnCount > 1;
-  const tight = rowSpan <= 1 || (sideBySide && rowSpan <= 2);
-  const showService = rowSpan >= 2 && !sideBySide;
   const serviceLabel =
     focusedServiceName ??
     (() => {
@@ -163,6 +162,15 @@ export function AppointmentGridBlock({
       return `${parts[0]} +${parts.length - 1}`;
     })();
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
+  const showSourceIcon = Boolean(showBookingSource && apt.bookingSource);
+
+  // Prioridade: nome completo, horário e ícone da origem. Serviço só se couber.
+  const density: "single" | "double" | "full" =
+    rowSpan <= 1 || (sideBySide && rowSpan <= 1)
+      ? "single"
+      : rowSpan === 2 || (sideBySide && rowSpan <= 2)
+        ? "double"
+        : "full";
 
   const blockButton = (
     <button
@@ -170,13 +178,13 @@ export function AppointmentGridBlock({
       className={cn(
         "agenda-apt-card relative z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left",
         sideBySide ? "mx-0.5" : "mx-1",
-        tight ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
+        density === "single" ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
         agendaAppointmentClass(apt)
       )}
       style={{
         gridColumn,
         gridRow,
-        zIndex: 20 + columnIndex,
+        zIndex: 20 + columnIndex + serviceIndex,
         ["--apt-bar" as string]: barColor,
         ...(sideBySide
           ? {
@@ -200,37 +208,61 @@ export function AppointmentGridBlock({
         setStatusMenu({ x: event.clientX, y: event.clientY });
       }}
     >
-      {showBookingSource && apt.bookingSource ? (
+      {showSourceIcon && apt.bookingSource ? (
         <BookingSourceBadge source={apt.bookingSource} />
       ) : null}
-      <div className="relative z-[2] flex min-h-0 w-full flex-col justify-center gap-px">
-        <p
-          className={cn(
-            "truncate font-medium leading-none",
-            showBookingSource && apt.bookingSource && "pr-3.5",
-            tight ? "text-[10px]" : "text-[11px] sm:text-xs"
-          )}
-        >
-          {name}
-        </p>
-        {showService && serviceLabel ? (
+      <div className="relative z-[2] flex min-h-0 w-full flex-col justify-center gap-0.5 overflow-hidden">
+        {density === "single" ? (
           <p
             className={cn(
-              "truncate leading-none opacity-75",
-              tight ? "text-[9px]" : "text-[10px]"
+              "truncate text-[10px] font-medium leading-tight",
+              showSourceIcon && "pr-3.5"
             )}
           >
-            {serviceLabel}
+            {name}
+            <span className="font-normal tabular-nums opacity-85">
+              {" "}
+              · {startTime}
+            </span>
           </p>
         ) : null}
-        <p
-          className={cn(
-            "truncate leading-none tabular-nums opacity-85",
-            tight ? "text-[9px]" : "text-[10px]"
-          )}
-        >
-          {startTime} – {endTime}
-        </p>
+
+        {density === "double" ? (
+          <>
+            <p
+              className={cn(
+                "truncate text-[10px] font-medium leading-tight",
+                showSourceIcon && "pr-3.5"
+              )}
+            >
+              {name}
+            </p>
+            <p className="truncate text-[9px] leading-tight tabular-nums opacity-85">
+              {timeRange}
+            </p>
+          </>
+        ) : null}
+
+        {density === "full" ? (
+          <>
+            <p
+              className={cn(
+                "truncate text-[11px] font-medium leading-tight sm:text-xs",
+                showSourceIcon && "pr-3.5"
+              )}
+            >
+              {name}
+            </p>
+            <p className="truncate text-[10px] leading-tight tabular-nums opacity-85">
+              {timeRange}
+            </p>
+            {serviceLabel ? (
+              <p className="truncate text-[10px] leading-tight opacity-70">
+                {serviceLabel}
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </button>
   );
