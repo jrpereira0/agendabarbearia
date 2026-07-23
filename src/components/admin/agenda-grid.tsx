@@ -172,37 +172,28 @@ export function AgendaGrid({
   const footerRow = timeSlots.length + 2;
   const compactProHeader = mobileLayout && professionals.length === 1;
 
-  const colMin = mobileLayout
-    ? professionals.length === 1
-      ? "minmax(0, 1fr)"
-      : "minmax(10rem, 1fr)"
-    : "minmax(7.5rem, 1fr)";
-
+  // Colunas encolhem pra caber na largura — sem scroll horizontal.
   const gridStyle = {
     gridTemplateColumns: compactProHeader
       ? `3rem minmax(0, 1fr)`
-      : `3.25rem repeat(${professionals.length}, ${colMin})`,
+      : `3rem repeat(${professionals.length}, minmax(0, 1fr))`,
     gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 
   return (
     <div
       className={cn(
-        "agenda-grid-shell rounded-2xl border",
-        compactProHeader ? "overflow-visible" : "overflow-x-auto",
+        "agenda-grid-shell min-w-0 overflow-hidden rounded-2xl border",
         gridLineOuter,
         className
       )}
       onMouseLeave={() => setHoverMinute(null)}
     >
-      <div
-        className={cn("relative grid", compactProHeader ? "w-full" : "min-w-max")}
-        style={gridStyle}
-      >
+      <div className="relative grid w-full min-w-0" style={gridStyle}>
         <div
           className={cn(
-            "agenda-grid-header agenda-grid-pro-header border-b",
-            !compactProHeader && "sticky top-0 left-0 z-50",
+            "agenda-grid-header border-b",
+            !compactProHeader && "sticky top-0 z-30",
             gridLineHour
           )}
           style={{ gridRow: 1, gridColumn: 1 }}
@@ -211,14 +202,13 @@ export function AgendaGrid({
           <div
             key={pro.id}
             className={cn(
-              "agenda-grid-header agenda-grid-pro-header border-b border-l",
-              i === professionals.length - 1 && "border-r",
-              !compactProHeader && "sticky top-0 z-50",
+              "agenda-grid-header agenda-grid-pro-header min-w-0 border-b border-l",
+              !compactProHeader && "sticky top-0 z-30",
               gridLineHour,
               gridLineColumn,
               compactProHeader
                 ? "flex flex-row items-center gap-2.5 px-3 py-2"
-                : "flex flex-col items-center gap-2 px-2 py-2.5"
+                : "flex flex-col items-center gap-1.5 px-1 py-2 sm:gap-2 sm:px-2 sm:py-2.5"
             )}
             style={{ gridRow: 1, gridColumn: i + 2 }}
           >
@@ -226,14 +216,20 @@ export function AgendaGrid({
               photoUrl={pro.photoUrl}
               photoPosition={pro.photoPosition}
               name={pro.nickname}
-              size={compactProHeader ? "sm" : "md"}
+              size={
+                compactProHeader
+                  ? "sm"
+                  : professionals.length >= 5
+                    ? "sm"
+                    : "md"
+              }
             />
             <span
               className={cn(
-                "font-medium",
+                "min-w-0 font-medium",
                 compactProHeader
                   ? "truncate text-sm"
-                  : "line-clamp-2 text-center text-sm"
+                  : "line-clamp-2 w-full text-center text-xs sm:text-sm"
               )}
             >
               {pro.nickname}
@@ -252,7 +248,7 @@ export function AgendaGrid({
               row={row}
               isLast={isLast}
               isHovered={hoverMinute === minute}
-              stickyTimeColumn={!compactProHeader}
+              stickyTimeColumn={false}
               slotStepMinutes={slotStepMinutes}
               professionals={professionals}
               appointmentsByPro={appointmentsByPro}
@@ -276,7 +272,7 @@ export function AgendaGrid({
             aria-hidden
           >
             <div className="relative flex items-center">
-              <span className="absolute -left-0.5 z-10 -translate-y-1/2 rounded-full bg-[var(--agenda-accent,#ecf15e)] px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--agenda-accent-fg,#0e0f11)] shadow-sm">
+              <span className="absolute left-0 z-10 -translate-y-1/2 rounded-full bg-[var(--agenda-accent,#ecf15e)] px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-[var(--agenda-accent-fg,#0e0f11)] shadow-sm">
                 {nowLine.label}
               </span>
               <div className="ml-10 h-px w-full bg-[var(--agenda-accent,#ecf15e)] shadow-[0_0_8px_rgb(236_241_94_/_45%)]" />
@@ -285,10 +281,7 @@ export function AgendaGrid({
         ) : null}
 
         <div
-          className={cn(
-            "agenda-grid-header relative",
-            !compactProHeader && "sticky left-0 z-30"
-          )}
+          className="agenda-grid-header relative"
           style={{ gridRow: footerRow, gridColumn: 1 }}
         >
           <span className="absolute top-1.5 right-1.5 text-[10px] leading-none tabular-nums text-[var(--agenda-muted,#8b8d93)] sm:right-2 sm:text-[11px]">
@@ -300,8 +293,7 @@ export function AgendaGrid({
             <div
               key={`foot-${pro.id}`}
               className={cn(
-                "agenda-grid-header flex flex-col items-center gap-1.5 border-l px-2 py-2",
-                i === professionals.length - 1 && "border-r",
+                "agenda-grid-header flex min-w-0 flex-col items-center gap-1.5 border-l px-1 py-2 sm:px-2",
                 gridLineColumn
               )}
               style={{ gridRow: footerRow, gridColumn: i + 2 }}
@@ -312,7 +304,7 @@ export function AgendaGrid({
                 name={pro.nickname}
                 size="sm"
               />
-              <span className="line-clamp-1 text-center text-xs text-[var(--agenda-muted,#8b8d93)]">
+              <span className="line-clamp-1 w-full min-w-0 text-center text-xs text-[var(--agenda-muted,#8b8d93)]">
                 {pro.nickname}
               </span>
             </div>
@@ -482,8 +474,7 @@ function TimeSlotCells({
           <div
             key={`${pro.id}-${minute}`}
             className={cn(
-              `relative border-l ${gridLineColumn}`,
-              i === professionals.length - 1 && `border-r ${gridLineColumn}`,
+              `relative min-w-0 border-l ${gridLineColumn}`,
               slotLineClass(minute),
               isLast && `border-b border-solid ${gridLineHour}`,
               agendaCellClass({ inSchedule, occupied, blocked })

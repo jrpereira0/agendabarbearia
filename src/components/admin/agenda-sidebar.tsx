@@ -495,7 +495,7 @@ export function AgendaSidebar({
   }
 
   return (
-    <aside className="flex w-full flex-col gap-3 lg:w-72 lg:shrink-0">
+    <aside className="flex w-full flex-col gap-3 lg:w-full lg:shrink-0">
       <div className="agenda-panel rounded-2xl border p-4">
         <p className="agenda-display mb-3 text-[11px] font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase">
           Calendário

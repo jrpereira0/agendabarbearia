@@ -176,7 +176,7 @@ export function AppointmentGridBlock({
     <button
       type="button"
       className={cn(
-        "agenda-apt-card relative z-20 my-0.5 flex min-h-0 self-stretch overflow-hidden rounded-sm text-left",
+        "agenda-apt-card relative z-20 my-0.5 flex min-h-0 min-w-0 self-stretch overflow-hidden rounded-sm text-left",
         sideBySide ? "mx-0.5" : "mx-1",
         density === "single" ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
         agendaAppointmentClass(apt)

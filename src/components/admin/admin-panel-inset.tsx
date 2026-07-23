@@ -32,7 +32,7 @@ export function AdminPanelInset({ children }: { children: React.ReactNode }) {
   return (
     <SidebarInset
       className={cn(
-        "flex min-h-svh flex-col",
+        "flex min-h-svh min-w-0 flex-col overflow-x-hidden",
         darkSurface && "!bg-[#0e0f11] text-[#f5f5f5]"
       )}
     >
