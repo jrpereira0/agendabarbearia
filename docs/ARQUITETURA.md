@@ -26,7 +26,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/app/admin/(panel)/configuracoes` | Perfil público da barbearia, horários, chaves de API (Integrações) |
 | `src/app/admin/(panel)/minha-conta` | Tela do barbeiro para ver a própria grade e trocar a senha |
 | `src/app/api/agenda/otp/send` | Gera e dispara o código OTP (webhook n8n → WhatsApp) |
-| `src/app/api/agenda/otp/verify` | Valida o código e emite o cookie de sessão do cliente |
+| `src/app/api/agenda/otp/verify` | Valida o código e emite cookie + `accessToken` (app) |
 | `src/app/api/agenda/session` | `GET` sessão atual / `DELETE` sair |
 | `src/lib/client-whatsapp-otp.ts` | Gera, grava (hash) e valida códigos OTP |
 | `src/lib/notifications/client-otp-webhook.ts` | Envia `client.otp` ao n8n |
@@ -193,13 +193,14 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
+| GET | `/api/v1/shop` | Pública | Dados da loja (nome, contato, logo, fuso, slots, horários) |
 | GET | `/api/v1/services` | Pública | Lista **serviços** (preços agrupados + quem realiza); opcional `?professionalId=` e `?date=` |
 | GET | `/api/v1/professionals` | Pública | Lista **profissionais** ativos (dados do barbeiro + `serviceIds`); opcional `?serviceId=` |
 | GET | `/api/v1/appointments/availability` | Pública | Horários livres (`professionalId` ou `anyProfessional=1`) |
 | GET | `/api/v1/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos (`mode=upcoming` padrão, `history` ou `all`) |
 | GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
-| POST | `/api/v1/appointments` | **Privada*** | Criar agendamento online (*site: cookie OTP; n8n: chave de API*) |
+| POST | `/api/v1/appointments` | **Privada*** | Criar agendamento online (*site: cookie OTP; app: Bearer `accessToken`; n8n: chave de API*) |
 | PUT | `/api/v1/appointments/:id/status` | **Privada** | Atualizar status (`scheduled` / `confirmed` / `cancelled` / `done`) |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
@@ -210,7 +211,7 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
-**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin ou cookie de cliente após OTP (`POST /api/agenda/otp/verify`). Rotas **públicas** (catálogo, disponibilidade, busca de cliente) funcionam sem header; se enviar `Bearer`, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API. Detalhes do OTP: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md).
+**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin, cookie de cliente após OTP **ou** Bearer com `accessToken` do OTP (`POST /api/agenda/otp/verify`). Rotas **públicas** (loja, catálogo, disponibilidade, busca de cliente) funcionam sem header; se enviar `Bearer` de chave de API, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API. Detalhes: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md), [api/app-mobile.md](./api/app-mobile.md).
 
 Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [api/guia-n8n.md](./api/guia-n8n.md).
 
@@ -218,7 +219,7 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 | Rotas | Limite |
 | --- | --- |
-| `services` / `professionals` / `availability` | 60 a cada 15 min |
+| `shop` / `services` / `professionals` / `availability` | 60 a cada 15 min |
 | `customers` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |

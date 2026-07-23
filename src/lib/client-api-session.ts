@@ -3,7 +3,7 @@ import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export const CLIENT_SESSION_COOKIE = "agenda_client_session";
 /** Sessão após OTP: cliente fica logado ~14 dias no mesmo aparelho. */
-const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+export const CLIENT_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 
 export type ClientSessionPayload = {
   whatsapp: string;
@@ -30,7 +30,7 @@ export function createClientSessionToken(whatsapp: string): string | null {
 
   const payload: ClientSessionPayload = {
     whatsapp: normalized,
-    exp: Date.now() + SESSION_TTL_MS,
+    exp: Date.now() + CLIENT_SESSION_TTL_MS,
   };
 
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -91,13 +91,31 @@ export function getClientSessionCookieOptions() {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    maxAge: SESSION_TTL_MS / 1000,
+    maxAge: CLIENT_SESSION_TTL_MS / 1000,
   };
 }
 
+/** Extrai o token Bearer cru (sem validar). */
+export function extractBearerToken(request: Request): string | null {
+  const authorization = request.headers.get("authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const token = authorization.slice("Bearer ".length).trim();
+  return token || null;
+}
+
+/**
+ * Lê sessão do cliente: cookie (site) ou Bearer com token de sessão (app).
+ * Não confunde com chave de API (`dbc_live_...`).
+ */
 export function readClientSessionFromRequest(
   request: Request
 ): ClientSessionPayload | null {
+  const bearer = extractBearerToken(request);
+  if (bearer && !bearer.startsWith("dbc_live_")) {
+    const fromBearer = verifyClientSessionToken(bearer);
+    if (fromBearer) return fromBearer;
+  }
+
   const cookieHeader = request.headers.get("cookie");
   if (!cookieHeader) return null;
 

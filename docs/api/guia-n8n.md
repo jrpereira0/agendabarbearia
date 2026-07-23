@@ -11,7 +11,10 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
 - **Painel admin:** `https://agendabarbearia-seven.vercel.app/login-admin` (login do dono/barbeiro).
 - **API base (produção):** `https://agendabarbearia-seven.vercel.app/api/v1`
 - **Fuso horário:** `America/Sao_Paulo`
-- **Autenticação:** rotas públicas continuam acessíveis pelo site sem chave. Para integrações (n8n), use **chave de API** gerada no painel (`Configurações > Integrações > Chaves de API`). Header: `Authorization: Bearer dbc_live_<keyId>_<secret>`.
+- **Autenticação:**
+  - **Públicas** (`/shop`, catálogo, disponibilidade, lookup de cliente): sem chave OK
+  - **Privadas** (criar/listar/remarcar/cancelar, lembretes): chave de API no n8n, **ou** sessão OTP do cliente (cookie / `accessToken`)
+  - Header da chave: `Authorization: Bearer dbc_live_<keyId>_<secret>` (Configurações > Integrações > Chaves de API)
 - **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` (ou `{ "ok": false, "error": "..." }` em `/customers`).
 
 O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e profissionais, horários livres, buscar cliente, criar/cancelar/remarcar agendamentos — as mesmas regras do site `/agenda`.
@@ -22,13 +25,14 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e 
 
 | # | Método | Rota | Auth | Função |
 | --- | --- | --- | --- | --- |
+| 0 | `GET` | `/shop` | Pública | Dados da loja (nome, contato, horários, slots) |
 | 1 | `GET` | `/services` | Pública | Listar serviços ativos (opcional `?professionalId=` / `?date=`) |
 | 1b | `GET` | `/professionals` | Pública | Listar profissionais ativos (opcional `?serviceId=`) |
 | 2 | `GET` | `/appointments/availability` | Pública | Horários livres |
 | 3 | `GET` | `/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
 | 5 | `GET` | `/appointments?whatsapp=` | **Privada** | Listar / histórico (`mode=upcoming` \| `history` \| `all`) |
 | 5b | `GET` | `/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
-| 6 | `POST` | `/appointments` | Pública | Criar agendamento (site e bot sem chave) |
+| 6 | `POST` | `/appointments` | **Privada** | Criar agendamento (n8n: chave; site/app: OTP) |
 | 6b | `PUT` | `/appointments/:id/status` | **Privada** | Atualizar status (`scheduled` / `confirmed` / `cancelled` / `done`) |
 | 7 | `PATCH` | `/appointments/:id` | **Privada** | Remarcar agendamento |
 | 8 | `DELETE` | `/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
@@ -37,11 +41,13 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e 
 | 8d | `GET` | `/appointment-reminders/pending-response?whatsapp=` | **Privada** | Buscar lembrete enviado aguardando confirmação do cliente |
 | 8e | `POST` | `/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
 
-**Resumo:** 5 rotas públicas (1, 1b, 2, 3, 6) e privadas de agenda (5, 5b, 6b, 7, 8) + **4 rotas de lembretes** (8b–8e). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel; status de agendamento via `PUT /appointments/:id/status`.
+**Resumo:** públicas (0–3) + privadas de agenda (5–8) + **4 rotas de lembretes** (8b–8e). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel.
+
+**App do cliente:** [app-mobile.md](./app-mobile.md) · OTP: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md)
 
 **Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — tela dedicada em `/docs/api` (**Configurações → Integrações → Documentação da API**).
 
-**Regra do header `Authorization`:** em rotas **públicas**, se você **não** enviar o header, a requisição passa. Se **enviar** `Bearer ...`, a chave será validada — chave inválida retorna **401** (não ignora o header).
+**Regra do header `Authorization`:** em rotas **públicas**, se você **não** enviar o header, a requisição passa. Se **enviar** `Bearer ...` de chave de API, a chave será validada — chave inválida retorna **401**.
 
 ---
 
@@ -68,7 +74,7 @@ dbc_live_<keyId>_<secret>
 | Nome do header | `Authorization` |
 | Valor | `Bearer dbc_live_SEU_KEYID_SEU_SECRET` |
 
-Use a **mesma credencial** em todos os nós **HTTP Request** e **HTTP Request Tool** — inclusive nos nós de rotas públicas (`/services`, `/professionals`, `/appointments/availability`, `POST /appointments`), para não misturar requisições com e sem header.
+Use a **mesma credencial** em todos os nós **HTTP Request** e **HTTP Request Tool** — inclusive nos nós de rotas públicas (`/shop`, `/services`, `/professionals`, `/appointments/availability`), para não misturar requisições com e sem header. `POST /appointments` é **privado** (precisa da chave).
 
 ### Exemplo (substitua pela chave copiada no painel — nunca commite a chave real)
 
@@ -103,10 +109,10 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 ### Site público vs integração
 
 - O site `/agenda` **não usa** chave de API no navegador
-- **Meus horários / Agendar:** o site pede um **código no WhatsApp** (`POST /api/agenda/otp/send` + `verify`); depois usa cookie `agenda_client_session` nas rotas protegidas. Guia: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md)
-- **Novo agendamento:** continua em `POST /api/v1/appointments` sem chave (rate limit por IP/WhatsApp)
-- **Serviços, profissionais, disponibilidade e cliente:** continuam públicos (`GET /services`, `GET /professionals`, `GET /appointments/availability`, `GET /customers`)
-- **Rotas sensíveis** exigem API Key, sessão admin ou cookie de cliente — sem fallback público:
+- **Meus horários / Agendar:** o site pede um **código no WhatsApp** (`POST /api/agenda/otp/send` + `verify`); depois usa cookie `agenda_client_session` (app: Bearer com `accessToken`). Guia: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md) · [app-mobile.md](./app-mobile.md)
+- **Novo agendamento:** `POST /api/v1/appointments` é **privado** (cookie OTP, Bearer do cliente ou chave de API)
+- **Serviços, profissionais, disponibilidade, loja e cliente:** públicos (`GET /shop`, `GET /services`, `GET /professionals`, `GET /appointments/availability`, `GET /customers`)
+- **Rotas sensíveis** exigem API Key, sessão admin, cookie de cliente ou Bearer do OTP — sem fallback público:
 
 | Rota | Auth obrigatória |
 | --- | --- |
@@ -521,7 +527,7 @@ curl -s "https://agendabarbearia-seven.vercel.app/api/v1/customers?whatsapp=1398
 | --- | --- |
 | **Método** | `GET` |
 | **Rota** | `/appointments` |
-| **Auth** | **Obrigatória** — chave de API (`appointments:read`), sessão admin ou cookie de cliente |
+| **Auth** | **Obrigatória** — chave de API (`appointments:read`), sessão admin, cookie OTP ou Bearer `accessToken` |
 | **Rate limit** | 10 / 15 min por IP (ou por chave / WhatsApp da sessão) |
 
 **Quem autentica como:**
@@ -529,7 +535,8 @@ curl -s "https://agendabarbearia-seven.vercel.app/api/v1/customers?whatsapp=1398
 | Origem | Como |
 | --- | --- |
 | **n8n** | `Authorization: Bearer dbc_live_...` |
-| **Site — Meus horários** | `POST /api/agenda/session` com WhatsApp → cookie `agenda_client_session` → `GET /appointments` com `credentials: include` |
+| **Site — Meus horários** | OTP (`/api/agenda/otp/verify`) → cookie → `GET /appointments` com `credentials: include` |
+| **App** | OTP → guardar `accessToken` → `Authorization: Bearer <accessToken>` |
 | **Painel admin** | Sessão Supabase (login do dono/barbeiro) |
 
 **Query params:**
@@ -642,7 +649,7 @@ Retorna o agendamento mais recente com status **`done`** (atendido), ordenado po
 | --- | --- |
 | **Método** | `POST` |
 | **Rota** | `/appointments` |
-| **Auth** | Pública — site e bot **não precisam** de chave. Opcional no n8n: chave com `appointments:create` |
+| **Auth** | **Obrigatória** — chave com `appointments:create` (n8n), cookie OTP (site) ou Bearer `accessToken` (app) |
 | **Rate limit** | 5 / hora por IP e 3 / hora por WhatsApp |
 | **Headers** | `Content-Type: application/json` |
 
@@ -690,6 +697,7 @@ Com `anyProfessional: true`, o `professionalId` / `professionalNickname` são os
 
 | HTTP | Mensagem típica |
 | --- | --- |
+| 401 | Sem auth (chave / cookie OTP / Bearer) |
 | 409 | `Esse horário não está mais disponível. Escolha outro.` |
 | 409 | `Esse horário acabou de ser ocupado. Escolha outro.` |
 | 400 | Validação (nome vazio, WhatsApp inválido, UUID inválido…) |
@@ -708,7 +716,7 @@ Depois que um agendamento é criado com sucesso, o sistema pode disparar um **we
 
 | Origem | `source` | Onde acontece |
 | --- | --- | --- |
-| Site público `/agenda` e bot via n8n | `public_api` | `POST /appointments` |
+| Site `/agenda` ou app (OTP) e bot via n8n | `public_api` | `POST /appointments` |
 | Painel admin — botão **+ Agendar** | `admin_agenda` | Server action `createNormalAppointment` |
 | Painel admin — botão **+ Encaixe** | `admin_squeeze_in` | Server action `createSqueezeInAppointment` |
 | Painel admin — serviço extra novo na comanda | `comanda_extra` | `updateComandaItems` (modal da comanda) |
@@ -772,7 +780,7 @@ x-appointment-webhook-secret: {{N8N_APPOINTMENT_WEBHOOK_SECRET}}
 
 `source` pode ser `"public_api"`, `"admin_agenda"`, `"admin_squeeze_in"` ou `"comanda_extra"` (ver tabela acima) — útil para o workflow tratar diferente cada origem, por exemplo pulando o aviso pro encaixe se preferir.
 
-**Origem gravada no agendamento (`booking_source`):** além do `source` do webhook, cada agendamento grava internamente `admin`, `site` ou `ai` em `appointments.booking_source` — usado pelo ícone na agenda do painel para indicar se foi marcado pelo painel, pelo site do cliente ou pela IA/WhatsApp. Em `POST /appointments`, o sistema grava `ai` quando a chamada usa **chave de API** (n8n/IA) e `site` quando é o site público sem chave.
+**Origem gravada no agendamento (`booking_source`):** além do `source` do webhook, cada agendamento grava internamente `admin`, `site` ou `ai` em `appointments.booking_source` — usado pelo ícone na agenda do painel. Em `POST /appointments`, o sistema grava `ai` quando a chamada usa **chave de API** (n8n/IA) e `site` quando é o site/app com sessão OTP do cliente.
 
 `professional.whatsapp` e `customer.whatsapp` já vêm normalizados (DDI + DDD + número, sem máscara) — prontos para usar em nós de envio de WhatsApp (Evolution API, Z-API, etc.). `totalPriceCents` já soma o preço de todos os serviços **no dia do agendamento** (considerando preço por dia da semana).
 
@@ -1135,7 +1143,7 @@ Valores: `scheduled`, `confirmed`, `cancelled`, `done`.
 | --- | --- |
 | **Método** | `PATCH` |
 | **Rota** | `/appointments/:id` |
-| **Auth** | **Obrigatória** — chave (`appointments:update`), sessão admin ou cookie de cliente (WhatsApp no body deve ser o mesmo da sessão) |
+| **Auth** | **Obrigatória** — chave (`appointments:update`), sessão admin, cookie OTP ou Bearer `accessToken` (WhatsApp do body = sessão) |
 | **Rate limit** | 10 / 15 min por IP (ou por chave) |
 | **Headers** | `Content-Type: application/json`, `Authorization: Bearer ...` (n8n) |
 
@@ -1186,7 +1194,7 @@ Só funciona para agendamentos **futuros**, status ativo, **sem encaixe**. O `wh
 | --- | --- |
 | **Método** | `DELETE` |
 | **Rota** | `/appointments/:id` |
-| **Auth** | **Obrigatória** — chave (`appointments:cancel`), sessão admin ou cookie de cliente |
+| **Auth** | **Obrigatória** — chave (`appointments:cancel`), sessão admin, cookie OTP ou Bearer `accessToken` |
 | **Rate limit** | 10 / 15 min por IP (ou por chave) |
 
 **Path:** `id` = UUID do agendamento.
@@ -1283,8 +1291,9 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Horários livres | GET | `{{baseUrl}}/appointments/availability?professionalId=...&date=...&serviceIds=...` | Pública |
 | Horários livres (remarcar) | GET | `{{baseUrl}}/appointments/availability?...&excludeAppointmentId=...` | Pública |
 | Lookup cliente | GET | `{{baseUrl}}/customers?whatsapp=...` | Pública |
+| Loja | GET | `{{baseUrl}}/shop` | Pública |
 | Listar agendamentos | GET | `{{baseUrl}}/appointments?whatsapp=...` | **Privada** |
-| Criar | POST | `{{baseUrl}}/appointments` + JSON body | Pública (chave opcional) |
+| Criar | POST | `{{baseUrl}}/appointments` + JSON body | **Privada** (chave ou OTP) |
 | Remarcar | PATCH | `{{baseUrl}}/appointments/{{id}}` + JSON body | **Privada** |
 | Cancelar | DELETE | `{{baseUrl}}/appointments/{{id}}?whatsapp=...` | **Privada** |
 | Lembretes vencidos | GET | `{{baseUrl}}/appointment-reminders/due` | **Privada** |
@@ -1294,7 +1303,7 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 
 `baseUrl` = `https://agendabarbearia-seven.vercel.app/api/v1`
 
-**Rota auxiliar (só site, não n8n):** `POST /api/agenda/session` com body `{ "whatsapp": "..." }` — emite cookie para **Meus horários** no navegador.
+**Login do cliente (site/app, não n8n):** `POST /api/agenda/otp/send` + `POST /api/agenda/otp/verify` — ver [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md) e [app-mobile.md](./app-mobile.md).
 
 ---
 
@@ -1311,11 +1320,13 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 ## Checklist Vercel (API no ar)
 
 - [ ] Variáveis no painel Vercel: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para **Meus horários** no site (`POST /api/agenda/session`)
+- [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para login OTP do cliente (site e app)
+- [ ] **`N8N_CLIENT_OTP_WEBHOOK_URL`** / **`N8N_CLIENT_OTP_WEBHOOK_SECRET`** — envio do código no WhatsApp
 - [ ] **`N8N_APPOINTMENT_WEBHOOK_URL`** e **`N8N_APPOINTMENT_WEBHOOK_SECRET`** — opcionais, só para o aviso automático ao barbeiro (ver [seção 6b](#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated))
-- [ ] Rodar as migrations `0037`–`0039` (`npm run db:migrate`) — `0037`/`0038` para webhooks de barbeiro, `0039` para lembretes de cliente
+- [ ] Rodar as migrations (`npm run db:migrate`) — incluir `0053` (OTP do cliente)
 - [ ] Rodar também `0047` (status do atendimento por IA) e `0048` (`booking_source` — ícone de origem na agenda)
 - [ ] Redeploy após salvar variáveis
+- [ ] `GET /shop` retorna JSON da loja
 - [ ] `GET /professionals` retorna JSON com barbeiros e `serviceIds`
 - [ ] `GET /services` retorna JSON com serviços e `prices`
 - [ ] Profissionais e serviços cadastrados e **ativos** no painel
@@ -1339,15 +1350,17 @@ npm run test:api:protected
 
 | Teste | Como | Esperado |
 | --- | --- | --- |
+| Loja pública | Abrir `/api/v1/shop` no navegador | **200** |
 | Serviços públicos | Abrir `/api/v1/services` no navegador | **200** |
 | Profissionais públicos | Abrir `/api/v1/professionals` no navegador | **200** |
 | Lookup cliente | `GET /customers?whatsapp=...` sem header | **200** |
+| Criar sem auth | `POST /appointments` sem header | **401** |
 | Privada bloqueada | `GET /appointments?whatsapp=...` sem header | **401** |
 | Chave errada | Qualquer rota privada com Bearer inválido | **401** |
-| Meus horários | `/agenda` → aba Meus horários → F12 → Rede | `session` **200**, `appointments` **200** |
-| Cookie de outro número | `GET /appointments` com cookie de sessão e outro `whatsapp` | **403** |
+| Meus horários | `/agenda` → OTP → Horários → F12 → Rede | `otp/verify` **200**, `appointments` **200** |
+| Cookie de outro número | `GET /appointments` com sessão e outro `whatsapp` | **403** |
 
-**Última verificação automática (jun/2026):** todas as rotas privadas retornaram **401** sem auth; públicas **200**; sessão por cookie funcionando em produção.
+**Última atualização (jul/2026):** `/shop` público; `POST /appointments` privado; OTP devolve `accessToken` para o app.
 
 ---
 

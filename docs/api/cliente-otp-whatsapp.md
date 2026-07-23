@@ -1,24 +1,45 @@
 # Login do cliente por código WhatsApp (OTP)
 
-O site `/agenda` exige que o cliente **prove que o número é dele** antes de:
+O site `/agenda` e o **app mobile** exigem que o cliente **prove que o número é dele** antes de:
 
 - confirmar um agendamento
 - ver / remarcar / cancelar em **Meus horários**
 
-O código chega no WhatsApp via **n8n**. Depois de acertar uma vez, o cliente fica **logado ~14 dias** no mesmo aparelho (cookie `agenda_client_session`).
+O código chega no WhatsApp via **n8n**. Depois de acertar uma vez, o cliente fica **logado ~14 dias**.
+
+| Canal | Como a sessão é usada |
+| --- | --- |
+| **Site** | Cookie httpOnly `agenda_client_session` |
+| **App** | `accessToken` no body do verify → `Authorization: Bearer <accessToken>` |
+
+Guia do app: [app-mobile.md](./app-mobile.md).
 
 ---
 
-## O que o site já faz
+## O que o sistema já faz
 
 | Etapa | Rota |
 | --- | --- |
 | Pedir código | `POST /api/agenda/otp/send` body `{ "whatsapp": "11999999999" }` |
 | Validar código + login | `POST /api/agenda/otp/verify` body `{ "whatsapp": "...", "code": "123456" }` |
-| Ver se já está logado | `GET /api/agenda/session` |
-| Sair | `DELETE /api/agenda/session` |
+| Ver se já está logado | `GET /api/agenda/session` (cookie ou Bearer) |
+| Sair (site) | `DELETE /api/agenda/session` |
 
-Após o login, `POST /api/v1/appointments` (criar) e as rotas de listar/remarcar/cancelar exigem o cookie (ou chave de API no n8n/bot).
+Resposta do **verify** (site + app):
+
+```json
+{
+  "ok": true,
+  "whatsapp": "5511999999999",
+  "accessToken": "<token>",
+  "tokenType": "Bearer",
+  "expiresAt": 1720000000000
+}
+```
+
+O site ignora o token e usa o cookie. O app **guarda** o `accessToken` e envia nas rotas privadas de `/api/v1`.
+
+Após o login, `POST /api/v1/appointments` (criar) e as rotas de listar/remarcar/cancelar exigem cookie, Bearer do cliente **ou** chave de API (n8n/bot).
 
 ### Variáveis de ambiente
 
@@ -125,3 +146,4 @@ Quero que você me ajude a montar um workflow no n8n que recebe um webhook do me
 5. [ ] Redeploy na Vercel com as novas envs
 6. [ ] Testar em `/agenda`: Agendar → dados → receber código → confirmar
 7. [ ] Testar aba Horários: código → lista → Sair
+8. [ ] (App) Guardar `accessToken` do verify e chamar `GET /api/v1/appointments` com Bearer

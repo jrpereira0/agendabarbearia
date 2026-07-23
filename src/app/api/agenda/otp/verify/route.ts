@@ -4,6 +4,7 @@ import {
   CLIENT_SESSION_COOKIE,
   createClientSessionToken,
   getClientSessionCookieOptions,
+  verifyClientSessionToken,
 } from "@/lib/client-api-session";
 import { verifyClientWhatsappOtp } from "@/lib/client-whatsapp-otp";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
@@ -12,7 +13,7 @@ import {
   WHATSAPP_INVALID_MESSAGE,
 } from "@/lib/whatsapp";
 
-// POST /api/agenda/otp/verify — valida código e emite cookie de sessão
+// POST /api/agenda/otp/verify — valida código, cookie (site) + accessToken (app)
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
     const limitedIp = enforcePublicApiRateLimit(request, "clientOtpVerifyIp");
@@ -62,9 +63,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const session = verifyClientSessionToken(token);
     const response = NextResponse.json({
       ok: true,
       whatsapp: result.whatsapp,
+      /** Token pra app mobile: `Authorization: Bearer <accessToken>`. */
+      accessToken: token,
+      tokenType: "Bearer",
+      expiresAt: session?.exp ?? null,
     });
     response.cookies.set(
       CLIENT_SESSION_COOKIE,

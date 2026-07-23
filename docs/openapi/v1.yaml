@@ -1,13 +1,14 @@
 openapi: 3.1.0
 info:
   title: Agenda Barbearia API
-  version: 1.0.0
-  summary: Integrações de agenda (n8n, WhatsApp e apps)
+  version: 1.1.0
+  summary: Integrações de agenda (n8n, WhatsApp e app do cliente)
   description: |
-    API REST para **conectar o WhatsApp, o n8n ou outro sistema** à agenda da
+    API REST para **conectar o WhatsApp, o n8n ou o app do cliente** à agenda da
     barbearia — as mesmas regras do site `/agenda`.
 
     **O que dá para fazer**
+    - Ver dados da **loja** (`/shop`)
     - Ver **serviços** e **profissionais**
     - Consultar **horários livres**, **criar**, **listar**, **remarcar** e **cancelar**
     - Buscar **cliente** pelo WhatsApp
@@ -17,16 +18,28 @@ info:
 
     ## Autenticação
 
-    Gere a chave em **Configurações → Integrações → Chaves de API**:
+    ### Chave de API (n8n / integrações)
+
+    Gere em **Configurações → Integrações → Chaves de API**:
 
     ```
     Authorization: Bearer dbc_live_<keyId>_<secret>
     ```
 
+    ### Sessão do cliente (site e app)
+
+    1. `POST /api/agenda/otp/send` → código no WhatsApp
+    2. `POST /api/agenda/otp/verify` → `{ accessToken, expiresAt }` + cookie httpOnly
+    3. Rotas privadas:
+       - **Site:** cookie `agenda_client_session`
+       - **App:** `Authorization: Bearer <accessToken>`
+
     | Tipo | Rotas | Regra |
     | --- | --- | --- |
-    | **Públicas** | `/services`, `/professionals`, `/appointments/availability`, `/customers`, `POST /appointments` | Funcionam sem header. Se enviar `Bearer`, a chave precisa ser válida e ter o scope. |
-    | **Privadas** | listar/remarcar/cancelar, status, lembretes | Exigem chave de API, sessão do painel ou cookie de cliente (Meus horários). |
+    | **Públicas** | `/shop`, `/services`, `/professionals`, `/appointments/availability`, `/customers` | Sem header OK. Se enviar Bearer de **chave de API**, a chave precisa ser válida. |
+    | **Privadas** | `POST/GET/PATCH/DELETE /appointments…`, status, lembretes | Chave de API **ou** sessão do cliente (cookie / `accessToken`). |
+
+    Guias: `docs/api/app-mobile.md`, `docs/api/cliente-otp-whatsapp.md`, `docs/api/guia-n8n.md`.
 
     ## Formatos
 
@@ -43,7 +56,7 @@ info:
 
     | Rotas | Limite |
     | --- | --- |
-    | services, professionals, availability | 60 / 15 min |
+    | shop, services, professionals, availability | 60 / 15 min |
     | customers, GET appointments | 10 / 15 min |
     | POST appointments | 5/h por IP e 3/h por WhatsApp |
     | PATCH / DELETE appointments | 10 / 15 min |
@@ -51,8 +64,6 @@ info:
     ## Erros
 
     JSON: `{ "error": "mensagem" }` ou `{ "ok": false, "error": "..." }`.
-
-    Guia passo a passo (fluxo n8n / WhatsApp): `docs/api/guia-n8n.md` no repositório.
   contact:
     name: Agenda Barbearia
 servers:
@@ -61,6 +72,8 @@ servers:
   - url: https://agendabarbearia-seven.vercel.app/api/v1
     description: Produção
 tags:
+  - name: Loja
+    description: Dados públicos da barbearia (bootstrap do app)
   - name: Serviços
     description: Lista e preços dos serviços ativos
   - name: Profissionais
@@ -74,6 +87,82 @@ tags:
 security:
   - BearerAuth: []
 paths:
+  /shop:
+    get:
+      tags: [Loja]
+      operationId: getShop
+      summary: Dados públicos da loja
+      description: |
+        Nome, contato, logo, fuso, intervalo de slots, janela de agendamento
+        e horários de funcionamento. Ideal na abertura do app.
+
+        **Acesso:** público. Scope opcional `catalog:read`.
+      security: []
+      responses:
+        "200":
+          description: Dados da loja
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shop, businessHours]
+                properties:
+                  shop:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      bio:
+                        type: string
+                        nullable: true
+                      address:
+                        type: string
+                        nullable: true
+                      whatsapp:
+                        type: string
+                        nullable: true
+                      instagram:
+                        type: string
+                        nullable: true
+                      logoUrl:
+                        type: string
+                        nullable: true
+                      timezone:
+                        type: string
+                        example: America/Sao_Paulo
+                      slotStepMinutes:
+                        type: integer
+                        example: 30
+                      booking:
+                        type: object
+                        properties:
+                          maxDaysAhead:
+                            type: integer
+                            example: 60
+                  businessHours:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        weekday:
+                          type: integer
+                          minimum: 0
+                          maximum: 6
+                        label:
+                          type: string
+                        active:
+                          type: boolean
+                        openTime:
+                          type: string
+                          example: "09:00"
+                        closeTime:
+                          type: string
+                          example: "19:00"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   /services:
     get:
       tags: [Serviços]
@@ -393,8 +482,10 @@ paths:
         Informe o barbeiro (`professionalId`) **ou** `anyProfessional: true`
         para o sistema escolher alguém disponível.
 
-        **Acesso:** pública (site). Com chave de API, scope `appointments:create`.
-      security: []
+        **Acesso:** privada. Scope `appointments:create`
+        (chave de API, cookie OTP ou `Bearer` com `accessToken` do OTP).
+      security:
+        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -446,7 +537,8 @@ paths:
         - `mode=history`: passados, cancelados e concluídos
         - `mode=all`: todos os status (até 50)
 
-        **Acesso:** privada. Scope `appointments:read` (chave, dono ou cookie do cliente).
+        **Acesso:** privada. Scope `appointments:read`
+        (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
       security:
         - BearerAuth: []
       parameters:
@@ -508,7 +600,8 @@ paths:
         Devolve o último horário já atendido (`done`) daquele WhatsApp.
         Útil no bot para lembrar serviço/barbeiro preferido e sugerir remarcar.
 
-        **Acesso:** privada. Scope `appointments:read`.
+        **Acesso:** privada. Scope `appointments:read`
+        (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
       security:
         - BearerAuth: []
       parameters:
@@ -602,7 +695,9 @@ paths:
         Troca data, horário, barbeiro e/ou serviços de um agendamento já existente.
         O WhatsApp do body precisa ser o do dono do horário.
 
-        **Acesso:** privada. Scope `appointments:update`.
+        **Acesso:** privada. Scope `appointments:update`
+        (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
+        WhatsApp do body deve ser o da sessão do cliente.
       security:
         - BearerAuth: []
       requestBody:
@@ -661,7 +756,9 @@ paths:
         Cancela o horário do cliente. O registro continua no sistema com status
         `cancelled` (não apaga o histórico).
 
-        **Acesso:** privada. Scope `appointments:cancel`.
+        **Acesso:** privada. Scope `appointments:cancel`
+        (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
+        WhatsApp da query deve ser o da sessão do cliente.
       security:
         - BearerAuth: []
       parameters:
@@ -857,10 +954,13 @@ components:
     BearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: dbc_live_<keyId>_<secret>
+      bearerFormat: dbc_live_… ou accessToken do OTP
       description: |
-        Chave gerada em Configurações → Integrações → Chaves de API.
-        Exemplo: `Authorization: Bearer dbc_live_abc_xyz`
+        Dois tipos de Bearer:
+        1. **Chave de API** (`dbc_live_<keyId>_<secret>`) — n8n / integrações
+        2. **Sessão do cliente** (`accessToken` de `POST /api/agenda/otp/verify`) — app mobile
+
+        Exemplo: `Authorization: Bearer <token>`
 
   parameters:
     whatsappQuery:
@@ -1146,3 +1246,11 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.
+    ServiceUnavailable:
+      description: Sistema indisponível
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Sistema indisponível no momento.

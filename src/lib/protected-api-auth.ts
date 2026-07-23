@@ -8,7 +8,12 @@ import {
   validateApiKeyFromRequest,
   type ApiKeyAuthContext,
 } from "@/lib/api-key-auth";
-import { readClientSessionFromRequest } from "@/lib/client-api-session";
+import { parseBearerApiKey } from "@/lib/api-key-crypto";
+import {
+  extractBearerToken,
+  readClientSessionFromRequest,
+  verifyClientSessionToken,
+} from "@/lib/client-api-session";
 import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export type AdminApiAuthContext = {
@@ -50,6 +55,21 @@ function adminHasScope(role: "owner" | "barber", scope: ApiScope): boolean {
 
 function clientHasScope(scope: ApiScope): boolean {
   return CLIENT_SESSION_SCOPES.includes(scope);
+}
+
+function buildClientAuth(
+  whatsapp: string,
+  requiredScope: ApiScope,
+  requestedWhatsapp?: string | null
+): ClientApiAuthContext | null {
+  if (!clientHasScope(requiredScope)) return null;
+
+  if (requestedWhatsapp) {
+    const requested = normalizeWhatsapp(requestedWhatsapp);
+    if (!requested || requested !== whatsapp) return null;
+  }
+
+  return { type: "client", whatsapp };
 }
 
 export async function getAdminApiSession(): Promise<AdminApiAuthContext | null> {
@@ -99,30 +119,41 @@ export async function resolveProtectedApiAuth(
       return { ok: false, response: apiUnauthorizedResponse() };
     }
 
-    const apiKey = await validateApiKeyFromRequest(request, requiredScope);
-    if (!apiKey.ok) {
-      return apiKey;
+    // Chave de API (n8n / integrações)
+    if (parseBearerApiKey(authorization)) {
+      const apiKey = await validateApiKeyFromRequest(request, requiredScope);
+      if (!apiKey.ok) {
+        return apiKey;
+      }
+      return { ok: true, auth: apiKey.auth };
     }
 
-    return { ok: true, auth: apiKey.auth };
+    // Token de sessão do cliente (app mobile)
+    const bearer = extractBearerToken(request);
+    const bearerSession = verifyClientSessionToken(bearer);
+    if (bearerSession) {
+      const clientAuth = buildClientAuth(
+        bearerSession.whatsapp,
+        requiredScope,
+        options.whatsapp
+      );
+      if (clientAuth) {
+        return { ok: true, auth: clientAuth };
+      }
+      return { ok: false, response: apiForbiddenResponse() };
+    }
+
+    return { ok: false, response: apiUnauthorizedResponse() };
   }
 
   const clientSession = readClientSessionFromRequest(request);
-  const clientAuth =
-    clientSession && clientHasScope(requiredScope)
-      ? (() => {
-          if (options.whatsapp) {
-            const requested = normalizeWhatsapp(options.whatsapp);
-            if (!requested || requested !== clientSession.whatsapp) {
-              return null;
-            }
-          }
-          return {
-            type: "client" as const,
-            whatsapp: clientSession.whatsapp,
-          };
-        })()
-      : null;
+  const clientAuth = clientSession
+    ? buildClientAuth(
+        clientSession.whatsapp,
+        requiredScope,
+        options.whatsapp
+      )
+    : null;
 
   // Preferir sessão OTP do cliente quando o WhatsApp da requisição bate com ela.
   // Assim Agendar/Horários funcionam mesmo com o painel aberto no mesmo navegador.

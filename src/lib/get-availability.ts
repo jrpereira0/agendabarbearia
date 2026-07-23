@@ -56,7 +56,7 @@ export type AvailabilityError = { ok: false; error: string; status: number };
 
 export type AvailabilityResult = AvailabilityOk | AvailabilityError;
 
-const MAX_DAYS_AHEAD = 60;
+export const MAX_DAYS_AHEAD = 60;
 
 export type GetAvailabilityOptions = {
   /** Edição no painel: ignora antecedência mínima e limite de data passada. */

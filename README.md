@@ -44,7 +44,7 @@ No painel da Vercel, abra **Settings → Environment Variables** e cadastre as c
 | `SUPABASE_SERVICE_ROLE_KEY` | API e ações do painel |
 | `NEXT_PUBLIC_SUPABASE_URL` | Login no navegador (mesmo valor de `SUPABASE_URL`) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Login no navegador (mesmo valor de `SUPABASE_ANON_KEY`) |
-| `CLIENT_SESSION_SECRET` | **Obrigatória** — assina o cookie de sessão do cliente no site após o código WhatsApp (gere uma string aleatória de 32+ caracteres) |
+| `CLIENT_SESSION_SECRET` | **Obrigatória** — assina a sessão do cliente (cookie no site + `accessToken` no app) após o código WhatsApp (gere uma string aleatória de 32+ caracteres) |
 
 Opcionais (só quem usa a funcionalidade correspondente):
 
@@ -88,6 +88,7 @@ npm run test          # roda os testes automatizados (vitest)
 
 - [docs/ARQUITETURA.md](docs/ARQUITETURA.md) — como o sistema é organizado, tabelas do banco e permissões
 - [docs/api/README.md](docs/api/README.md) — índice da documentação da API
+- [docs/api/app-mobile.md](docs/api/app-mobile.md) — contrato pra app do cliente
 - [docs/openapi/v1.yaml](docs/openapi/v1.yaml) — especificação OpenAPI (também no painel: Integrações → Documentação da API)
 - [docs/api/guia-n8n.md](docs/api/guia-n8n.md) — guia para automação no WhatsApp (n8n)
 - [docs/api/financeiro.md](docs/api/financeiro.md) — regras de comandas, caixa e comissões (painel)
