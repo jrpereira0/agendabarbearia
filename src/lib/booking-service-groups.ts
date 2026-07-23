@@ -6,6 +6,12 @@ export type ServiceWithPopularity = {
   bookingCount?: number;
 };
 
+function sortServicesAlphabetically<T extends ServiceWithPopularity>(
+  services: T[]
+): T[] {
+  return [...services].sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+}
+
 export function sortServicesByPopularity<T extends ServiceWithPopularity>(
   services: T[]
 ): T[] {
@@ -20,17 +26,18 @@ export function groupServicesForBooking<T extends ServiceWithPopularity>(
   services: T[],
   options: { searching?: boolean } = {}
 ): { popular: T[]; others: T[] } {
-  const sorted = sortServicesByPopularity(services);
-
   if (options.searching) {
-    return { popular: [], others: sorted };
+    return { popular: [], others: sortServicesAlphabetically(services) };
   }
 
-  const popular = sorted
+  const byPopularity = sortServicesByPopularity(services);
+  const popular = byPopularity
     .filter((service) => (service.bookingCount ?? 0) > 0)
     .slice(0, POPULAR_SERVICES_LIMIT);
   const popularIds = new Set(popular.map((service) => service.id));
-  const others = sorted.filter((service) => !popularIds.has(service.id));
+  const others = sortServicesAlphabetically(
+    services.filter((service) => !popularIds.has(service.id))
+  );
 
   return { popular, others };
 }

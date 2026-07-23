@@ -45,23 +45,26 @@ describe("booking-service-groups", () => {
       makeService("b", "Corte", 20),
       makeService("c", "Sobrancelha", 15),
       makeService("d", "Combo", 0),
+      makeService("e", "Aparar", 0),
     ];
 
     const { popular, others } = groupServicesForBooking(services);
     expect(popular.map((s) => s.id)).toEqual(["b", "c", "a"]);
-    expect(others.map((s) => s.id)).toEqual(["d"]);
+    // Lista completa em ordem alfabética
+    expect(others.map((s) => s.name)).toEqual(["Aparar", "Combo"]);
   });
 
-  it("na busca mostra lista única ordenada", () => {
+  it("na busca mostra lista única em ordem alfabética", () => {
     const services = [
       makeService("a", "Barba", 1),
       makeService("b", "Corte", 20),
+      makeService("c", "Aparar", 0),
     ];
 
     const { popular, others } = groupServicesForBooking(services, {
       searching: true,
     });
     expect(popular).toHaveLength(0);
-    expect(others.map((s) => s.id)).toEqual(["b", "a"]);
+    expect(others.map((s) => s.name)).toEqual(["Aparar", "Barba", "Corte"]);
   });
 });
