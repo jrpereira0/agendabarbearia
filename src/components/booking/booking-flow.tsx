@@ -176,52 +176,6 @@ const SLOT_PERIODS = [
   { label: "Noite", from: 18, to: 24 },
 ] as const;
 
-function QuickDateChips({
-  today,
-  maxDate,
-  selectedDate,
-  onSelectDate,
-}: {
-  today: string;
-  maxDate: string;
-  selectedDate: string;
-  onSelectDate: (date: string) => void;
-}) {
-  const chips = [
-    { label: "Hoje", date: today },
-    { label: "Amanhã", date: addDays(today, 1) },
-    {
-      label: new Date(`${addDays(today, 2)}T12:00:00`)
-        .toLocaleDateString("pt-BR", { weekday: "short" })
-        .replace(".", ""),
-      date: addDays(today, 2),
-    },
-  ].filter((chip) => chip.date <= maxDate);
-
-  return (
-    <div className="flex gap-2">
-      {chips.map((chip) => {
-        const active = chip.date === selectedDate;
-        return (
-          <button
-            key={chip.date}
-            type="button"
-            onClick={() => onSelectDate(chip.date)}
-            className={cn(
-              "h-12 flex-1 rounded-2xl border text-sm font-semibold capitalize transition-colors",
-              active
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-white/10 bg-white/[0.03]"
-            )}
-          >
-            {chip.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function SlotGroups({
   slots,
   selected,
@@ -983,33 +937,15 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
         {step === "datetime" && (
           <div className="flex flex-col gap-4">
-            <QuickDateChips
+            <BookingDatePicker
+              selectedDate={date}
               today={today}
               maxDate={maxDate}
-              selectedDate={date}
               onSelectDate={(next) => {
                 setDate(next);
                 setStartTime(null);
               }}
             />
-
-            <details className="group rounded-2xl border border-white/10">
-              <summary className="cursor-pointer list-none px-3.5 py-3 text-sm text-muted-foreground marker:content-none [&::-webkit-details-marker]:hidden">
-                <span className="group-open:hidden">Outra data no calendário</span>
-                <span className="hidden group-open:inline">Fechar calendário</span>
-              </summary>
-              <div className="border-t border-white/10 px-3 pb-3 pt-2">
-                <BookingDatePicker
-                  selectedDate={date}
-                  today={today}
-                  maxDate={maxDate}
-                  onSelectDate={(next) => {
-                    setDate(next);
-                    setStartTime(null);
-                  }}
-                />
-              </div>
-            </details>
 
             {loadingSlots ? (
               <SlotGridSkeleton />

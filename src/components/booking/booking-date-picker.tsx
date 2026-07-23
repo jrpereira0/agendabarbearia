@@ -1,10 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
-
-const WEEKDAY_LABELS = ["D", "S", "T", "Q", "Q", "S", "S"];
 
 type BookingDatePickerProps = {
   selectedDate: string;
@@ -13,30 +10,47 @@ type BookingDatePickerProps = {
   onSelectDate: (date: string) => void;
 };
 
-function parseIso(iso: string) {
-  const [y, m, d] = iso.split("-").map(Number);
-  return { year: y, month: m - 1, day: d };
+function addDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-function toIso(year: number, month: number, day: number): string {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+const WEEKDAY_SHORT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"] as const;
+const MONTH_SHORT = [
+  "Jan",
+  "Fev",
+  "Mar",
+  "Abr",
+  "Mai",
+  "Jun",
+  "Jul",
+  "Ago",
+  "Set",
+  "Out",
+  "Nov",
+  "Dez",
+] as const;
+
+const DRAG_THRESHOLD_PX = 6;
+
+function dateParts(iso: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const d = new Date(year, month - 1, day);
+  return {
+    weekday: WEEKDAY_SHORT[d.getDay()],
+    day,
+    month: MONTH_SHORT[month - 1],
+  };
 }
 
-function daysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate();
-}
-
-function monthLabel(year: number, month: number): string {
-  const label = new Date(year, month, 1).toLocaleDateString("pt-BR", {
-    month: "long",
-    year: "numeric",
-  });
-  return label.charAt(0).toUpperCase() + label.slice(1);
-}
-
-function isSelectable(iso: string, today: string, maxDate: string): boolean {
-  return iso >= today && iso <= maxDate;
-}
+type DragState = {
+  tracking: boolean;
+  dragging: boolean;
+  startX: number;
+  startScroll: number;
+  pointerId: number;
+};
 
 export function BookingDatePicker({
   selectedDate,
@@ -44,94 +58,155 @@ export function BookingDatePicker({
   maxDate,
   onSelectDate,
 }: BookingDatePickerProps) {
-  const { year, month } = parseIso(selectedDate);
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const totalDays = daysInMonth(year, month);
-  const cells: (number | null)[] = [
-    ...Array.from({ length: firstWeekday }, () => null),
-    ...Array.from({ length: totalDays }, (_, i) => i + 1),
-  ];
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const suppressClickRef = useRef(false);
+  const dragRef = useRef<DragState>({
+    tracking: false,
+    dragging: false,
+    startX: 0,
+    startScroll: 0,
+    pointerId: -1,
+  });
 
-  function shiftMonth(delta: number) {
-    const d = new Date(year, month + delta, 1);
-    const day = Math.min(parseIso(selectedDate).day, daysInMonth(d.getFullYear(), d.getMonth()));
-    let next = toIso(d.getFullYear(), d.getMonth(), day);
-    if (next < today) next = today;
-    if (next > maxDate) {
-      next = maxDate;
+  const dates = useMemo(() => {
+    const list: string[] = [];
+    let cursor = today;
+    while (cursor <= maxDate) {
+      list.push(cursor);
+      cursor = addDays(cursor, 1);
     }
-    onSelectDate(next);
+    return list;
+  }, [today, maxDate]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const active = root.querySelector<HTMLElement>("[data-selected='true']");
+    if (!active) return;
+    const rootRect = root.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const nextLeft =
+      root.scrollLeft +
+      (activeRect.left - rootRect.left) -
+      rootRect.width / 2 +
+      activeRect.width / 2;
+    root.scrollTo({ left: nextLeft, behavior: "smooth" });
+  }, [selectedDate, dates]);
+
+  function endDrag(pointerId: number) {
+    const drag = dragRef.current;
+    if (!drag.tracking || drag.pointerId !== pointerId) return;
+    if (drag.dragging) suppressClickRef.current = true;
+    drag.tracking = false;
+    drag.dragging = false;
+    const root = scrollRef.current;
+    if (root?.hasPointerCapture(pointerId)) {
+      root.releasePointerCapture(pointerId);
+    }
+    root?.classList.remove("cursor-grabbing");
   }
 
-  const canGoPrev =
-    toIso(year, month, 1) > toIso(parseIso(today).year, parseIso(today).month, 1);
-  const canGoNext =
-    toIso(year, month, totalDays) < maxDate;
-
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => shiftMonth(-1)}
-          disabled={!canGoPrev}
-          aria-label="Mês anterior"
-        >
-          <ChevronLeft className="size-4" />
-        </Button>
-        <p className="text-sm font-medium">{monthLabel(year, month)}</p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="size-8"
-          onClick={() => shiftMonth(1)}
-          disabled={!canGoNext}
-          aria-label="Próximo mês"
-        >
-          <ChevronRight className="size-4" />
-        </Button>
-      </div>
+    <div className="relative">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-8 bg-gradient-to-r from-[#0e0f11] to-transparent"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-8 bg-gradient-to-l from-[#0e0f11] to-transparent"
+      />
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-        {WEEKDAY_LABELS.map((label, i) => (
-          <span key={`${label}-${i}`} className="py-1 font-medium">
-            {label}
-          </span>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((day, index) => {
-          if (!day) return <span key={`empty-${index}`} />;
-
-          const iso = toIso(year, month, day);
-          const selectable = isSelectable(iso, today, maxDate);
-          const isSelected = iso === selectedDate;
+      <div
+        ref={scrollRef}
+        role="listbox"
+        aria-label="Escolher data"
+        aria-orientation="horizontal"
+        onPointerDown={(event) => {
+          // No mouse: arrastar pra rolar. No touch: scroll nativo.
+          if (event.pointerType !== "mouse" || event.button !== 0) return;
+          const root = scrollRef.current;
+          if (!root) return;
+          // Só começa a capturar depois de mover — senão o clique no dia some.
+          dragRef.current = {
+            tracking: true,
+            dragging: false,
+            startX: event.clientX,
+            startScroll: root.scrollLeft,
+            pointerId: event.pointerId,
+          };
+        }}
+        onPointerMove={(event) => {
+          const drag = dragRef.current;
+          const root = scrollRef.current;
+          if (!drag.tracking || !root || drag.pointerId !== event.pointerId) {
+            return;
+          }
+          const delta = event.clientX - drag.startX;
+          if (!drag.dragging) {
+            if (Math.abs(delta) < DRAG_THRESHOLD_PX) return;
+            drag.dragging = true;
+            root.setPointerCapture(event.pointerId);
+            root.classList.add("cursor-grabbing");
+          }
+          root.scrollLeft = drag.startScroll - delta;
+        }}
+        onPointerUp={(event) => endDrag(event.pointerId)}
+        onPointerCancel={(event) => endDrag(event.pointerId)}
+        className={cn(
+          "flex gap-2.5 overflow-x-auto overscroll-x-contain px-3 py-1",
+          "snap-x snap-mandatory touch-pan-x",
+          "cursor-grab select-none",
+          "[-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        )}
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
+        {dates.map((iso) => {
+          const { weekday, day, month } = dateParts(iso);
+          const selected = iso === selectedDate;
           const isToday = iso === today;
 
           return (
             <button
               key={iso}
               type="button"
-              disabled={!selectable}
-              onClick={() => onSelectDate(iso)}
+              role="option"
+              aria-selected={selected}
+              data-selected={selected ? "true" : undefined}
+              onClick={() => {
+                if (suppressClickRef.current) {
+                  suppressClickRef.current = false;
+                  return;
+                }
+                onSelectDate(iso);
+              }}
               className={cn(
-                "flex size-9 items-center justify-center rounded-full text-sm transition-colors",
-                isSelected &&
-                  "bg-primary font-semibold text-primary-foreground",
-                !isSelected &&
-                  isToday &&
-                  selectable &&
-                  "ring-1 ring-primary/60",
-                !isSelected && selectable && "hover:bg-muted",
-                !selectable && "cursor-not-allowed text-muted-foreground/40"
+                "flex w-[4.25rem] shrink-0 snap-center flex-col items-center justify-center gap-1 rounded-[1.15rem] px-2 py-3 transition-[background-color,border-color,transform,box-shadow] duration-200",
+                selected
+                  ? "scale-[1.02] border border-primary bg-primary text-primary-foreground shadow-[0_8px_24px_rgb(236_241_94_/_22%)]"
+                  : "border border-white/10 bg-[#151618] text-[#f5f5f5] active:scale-[0.98]",
+                !selected && isToday && "border-primary/45 bg-primary/10"
               )}
             >
-              {day}
+              <span
+                className={cn(
+                  "text-[0.7rem] font-medium leading-none tracking-wide",
+                  selected ? "text-primary-foreground/75" : "text-muted-foreground"
+                )}
+              >
+                {weekday}
+              </span>
+              <span className="text-[1.35rem] font-semibold tabular-nums leading-none tracking-tight">
+                {day}
+              </span>
+              <span
+                className={cn(
+                  "text-[0.7rem] font-medium leading-none tracking-wide",
+                  selected ? "text-primary-foreground/75" : "text-muted-foreground"
+                )}
+              >
+                {month}
+              </span>
             </button>
           );
         })}
