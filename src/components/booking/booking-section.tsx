@@ -1,14 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, CalendarPlus, MapPinned } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarPlus,
+  MapPinned,
+  UserRound,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BookingFlow } from "@/components/booking/booking-flow";
 import { MyAppointments } from "@/components/booking/my-appointments";
+import { MyAccount } from "@/components/booking/my-account";
 import { ShopInfoPanel } from "@/components/booking/shop-info-panel";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
 
-type Mode = "book" | "manage" | "info";
+type Mode = "book" | "manage" | "info" | "account";
 
 type BookingSectionProps = {
   catalog: ShopCatalog;
@@ -29,11 +35,13 @@ const tabs: {
     hash: "#meus-agendamentos",
   },
   { id: "info", label: "Local", icon: MapPinned, hash: "#local" },
+  { id: "account", label: "Conta", icon: UserRound, hash: "#conta" },
 ];
 
 function modeFromHash(hash: string): Mode {
   if (hash === "#meus-agendamentos") return "manage";
   if (hash === "#local") return "info";
+  if (hash === "#conta") return "account";
   return "book";
 }
 
@@ -100,6 +108,17 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
               businessHours={catalog.businessHours}
             />
           </div>
+          <div
+            id="conta"
+            className={cn(
+              "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+              mode === "account" ? "flex" : "hidden"
+            )}
+            aria-hidden={mode !== "account"}
+            inert={mode !== "account" ? true : undefined}
+          >
+            <MyAccount />
+          </div>
         </div>
       </main>
 
@@ -108,7 +127,7 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
         className="relative z-20 shrink-0 bg-[#0e0f11]"
       >
         <div className="mx-auto h-px max-w-lg bg-white/10" />
-        <div className="mx-auto grid max-w-lg grid-cols-3 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5">
+        <div className="mx-auto grid max-w-lg grid-cols-4 px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-2">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = mode === tab.id;
@@ -118,7 +137,7 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
                 type="button"
                 onClick={() => selectMode(tab.id)}
                 className={cn(
-                  "flex min-h-[3.35rem] flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[10px] font-medium tracking-wide transition-colors",
+                  "flex min-h-[3.35rem] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-medium tracking-wide transition-colors sm:px-2",
                   active
                     ? "text-primary"
                     : "text-muted-foreground active:text-foreground"

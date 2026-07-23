@@ -33,6 +33,8 @@ export type ProtectedApiAuthContext =
   | ClientApiAuthContext;
 
 const CLIENT_SESSION_SCOPES: ApiScope[] = [
+  "customers:read",
+  "customers:update",
   "appointments:read",
   "appointments:create",
   "appointments:update",

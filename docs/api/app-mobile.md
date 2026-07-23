@@ -1,6 +1,6 @@
 # App mobile do cliente — contrato da API
 
-Guia curto para montar o **aplicativo do cliente** (agendar e gerenciar horários).
+Guia curto para montar o **aplicativo do cliente** (agendar, gerenciar horários e **Minha conta**).
 Comandas, caixa e painel do barbeiro **não** entram aqui.
 
 Base URL: `https://seu-dominio/api/v1`  
@@ -18,9 +18,11 @@ Auth do cliente (fora do `/v1`): `/api/agenda/...`
 5. POST /api/agenda/otp/send     { whatsapp }
 6. POST /api/agenda/otp/verify  { whatsapp, code }
       → guardar accessToken no aparelho (~14 dias)
-7. POST /api/v1/appointments    (Bearer accessToken)
-8. GET  /api/v1/appointments?whatsapp=…&mode=upcoming
-9. PATCH / DELETE quando precisar remarcar / cancelar
+7. GET  /api/v1/customers/me     (Bearer — preenche nome se já for cliente)
+8. POST /api/v1/appointments    (Bearer accessToken)
+9. GET  /api/v1/appointments?whatsapp=…&mode=upcoming
+10. PATCH / DELETE quando precisar remarcar / cancelar
+11. PATCH /api/v1/customers/me  (Minha conta — editar nome/sobrenome)
 ```
 
 ---
@@ -53,9 +55,87 @@ Authorization: Bearer <accessToken>
 ```
 
 O **site** continua usando cookie httpOnly; o **app** usa só o Bearer.
-O WhatsApp do body/query precisa ser o **mesmo** da sessão.
+O WhatsApp do body/query (nas rotas de agenda) precisa ser o **mesmo** da sessão.
 
 Detalhes do n8n (envio do código): [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md).
+
+---
+
+## Minha conta (perfil do cliente)
+
+Só com sessão OTP do **próprio** cliente (Bearer `accessToken`).  
+**Não** use chave de API nestas rotas.
+
+| Método | Rota | Scope da sessão | Função |
+| --- | --- | --- | --- |
+| GET | `/customers/me` | `customers:read` | Ler cadastro (`id`, `firstName`, `lastName`, `whatsapp`) |
+| PATCH | `/customers/me` | `customers:update` | Atualizar **nome** e **sobrenome** |
+
+### GET — exemplo
+
+```http
+GET /api/v1/customers/me
+Authorization: Bearer <accessToken>
+```
+
+**Já cadastrado:**
+
+```json
+{
+  "ok": true,
+  "found": true,
+  "customer": {
+    "id": "22222222-2222-2222-2222-222222222222",
+    "firstName": "João",
+    "lastName": "Silva",
+    "whatsapp": "5511999999999"
+  }
+}
+```
+
+**Ainda sem cadastro** (nunca agendou / nunca salvou perfil):
+
+```json
+{
+  "ok": true,
+  "found": false,
+  "customer": null
+}
+```
+
+### PATCH — exemplo
+
+```http
+PATCH /api/v1/customers/me
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{
+  "firstName": "João",
+  "lastName": "Silva"
+}
+```
+
+```json
+{
+  "ok": true,
+  "customer": {
+    "id": "22222222-2222-2222-2222-222222222222",
+    "firstName": "João",
+    "lastName": "Silva",
+    "whatsapp": "5511999999999"
+  }
+}
+```
+
+**Regras**
+
+- WhatsApp **não** muda por aqui (é o da sessão).
+- Se ainda não existir cliente, o PATCH **cria** o cadastro com esse WhatsApp.
+- Nome/sobrenome são normalizados (primeira letra maiúscula).
+- Erros comuns: **401** (sem token / expirado), **403** (não é sessão de cliente), **400** (nome/sobrenome vazios).
+
+Para o n8n buscar **outro** número, continue com `GET /customers?whatsapp=` + chave de API (`customers:read`).
 
 ---
 

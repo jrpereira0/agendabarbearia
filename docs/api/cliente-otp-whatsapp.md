@@ -39,7 +39,12 @@ Resposta do **verify** (site + app):
 
 O site ignora o token e usa o cookie. O app **guarda** o `accessToken` e envia nas rotas privadas de `/api/v1`.
 
-Após o login, `POST /api/v1/appointments` (criar) e as rotas de listar/remarcar/cancelar exigem cookie, Bearer do cliente **ou** chave de API (n8n/bot).
+Após o login, estas rotas exigem cookie, Bearer do cliente **ou** chave de API (n8n/bot), conforme o caso:
+
+- `POST /api/v1/appointments` (criar) e listar/remarcar/cancelar
+- **App — Minha conta:** `GET` / `PATCH /api/v1/customers/me` (**só** Bearer OTP do cliente; não use chave de API)
+
+Contrato do perfil: [app-mobile.md](./app-mobile.md#minha-conta-perfil-do-cliente).
 
 ### Variáveis de ambiente
 
@@ -147,3 +152,4 @@ Quero que você me ajude a montar um workflow no n8n que recebe um webhook do me
 6. [ ] Testar em `/agenda`: Agendar → dados → receber código → confirmar
 7. [ ] Testar aba Horários: código → lista → Sair
 8. [ ] (App) Guardar `accessToken` do verify e chamar `GET /api/v1/appointments` com Bearer
+9. [ ] (App) Minha conta: `GET /api/v1/customers/me` e `PATCH` com nome/sobrenome

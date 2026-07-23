@@ -83,3 +83,109 @@ export async function lookupCustomerByWhatsapp(
     lastName: result.customer.lastName,
   };
 }
+
+export type UpdateCustomerProfileResult =
+  | { ok: true; customer: CustomerPublic }
+  | { ok: false; error: string; httpStatus: number };
+
+/**
+ * Atualiza nome/sobrenome do cliente autenticado (WhatsApp imutável).
+ * Se ainda não existir cadastro, cria.
+ */
+export async function updateCustomerProfileByWhatsapp(input: {
+  whatsapp: string;
+  firstName: string;
+  lastName: string;
+}): Promise<UpdateCustomerProfileResult> {
+  const whatsapp = normalizeWhatsapp(input.whatsapp);
+  if (!whatsapp) {
+    return { ok: false, error: "WhatsApp inválido.", httpStatus: 400 };
+  }
+
+  const firstName = capitalizePersonName(input.firstName);
+  const lastName = capitalizePersonName(input.lastName);
+  if (!firstName) {
+    return { ok: false, error: "Informe o nome.", httpStatus: 400 };
+  }
+  if (!lastName) {
+    return { ok: false, error: "Informe o sobrenome.", httpStatus: 400 };
+  }
+
+  const admin = createAdminClient();
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Sistema indisponível no momento.",
+      httpStatus: 503,
+    };
+  }
+
+  const { data: existing, error: lookupError } = await admin
+    .from("customers")
+    .select("id")
+    .in("whatsapp", whatsappLookupKeys(whatsapp))
+    .limit(1)
+    .maybeSingle();
+
+  if (lookupError) {
+    return {
+      ok: false,
+      error: "Não foi possível salvar os dados.",
+      httpStatus: 500,
+    };
+  }
+
+  if (existing) {
+    const { error } = await admin
+      .from("customers")
+      .update({
+        first_name: firstName,
+        last_name: lastName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id);
+
+    if (error) {
+      return {
+        ok: false,
+        error: "Não foi possível atualizar o cadastro.",
+        httpStatus: 500,
+      };
+    }
+
+    return {
+      ok: true,
+      customer: { id: existing.id, firstName, lastName, whatsapp },
+    };
+  }
+
+  const { data: created, error } = await admin
+    .from("customers")
+    .insert({
+      first_name: firstName,
+      last_name: lastName,
+      whatsapp,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    if (error?.code === "23505") {
+      return {
+        ok: false,
+        error: "Esse WhatsApp já está cadastrado. Tente de novo.",
+        httpStatus: 409,
+      };
+    }
+    return {
+      ok: false,
+      error: "Não foi possível criar o cadastro.",
+      httpStatus: 500,
+    };
+  }
+
+  return {
+    ok: true,
+    customer: { id: created.id, firstName, lastName, whatsapp },
+  };
+}

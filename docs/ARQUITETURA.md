@@ -28,6 +28,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/app/api/agenda/otp/send` | Gera e dispara o código OTP (webhook n8n → WhatsApp) |
 | `src/app/api/agenda/otp/verify` | Valida o código e emite cookie + `accessToken` (app) |
 | `src/app/api/agenda/session` | `GET` sessão atual / `DELETE` sair |
+| `src/app/api/v1/customers/me` | Perfil do cliente autenticado (`GET` / `PATCH` — Minha conta no app) |
 | `src/lib/client-whatsapp-otp.ts` | Gera, grava (hash) e valida códigos OTP |
 | `src/lib/notifications/client-otp-webhook.ts` | Envia `client.otp` ao n8n |
 | `src/components/ui` | Componentes visuais (shadcn/ui) |
@@ -197,7 +198,9 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 | GET | `/api/v1/services` | Pública | Lista **serviços** (preços agrupados + quem realiza); opcional `?professionalId=` e `?date=` |
 | GET | `/api/v1/professionals` | Pública | Lista **profissionais** ativos (dados do barbeiro + `serviceIds`); opcional `?serviceId=` |
 | GET | `/api/v1/appointments/availability` | Pública | Horários livres (`professionalId` ou `anyProfessional=1`) |
-| GET | `/api/v1/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
+| GET | `/api/v1/customers?whatsapp=` | **Privada** | Buscar cliente (`id`, nome, sobrenome, WhatsApp) — chave ou OTP do mesmo número |
+| GET | `/api/v1/customers/me` | **Privada** | Perfil do cliente autenticado (OTP / app) |
+| PATCH | `/api/v1/customers/me` | **Privada** | Editar nome/sobrenome do próprio cadastro (OTP / app; WhatsApp imutável) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos (`mode=upcoming` padrão, `history` ou `all`) |
 | GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | POST | `/api/v1/appointments` | **Privada*** | Criar agendamento online (*site: cookie OTP; app: Bearer `accessToken`; n8n: chave de API*) |
@@ -211,7 +214,7 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
-**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin, cookie de cliente após OTP **ou** Bearer com `accessToken` do OTP (`POST /api/agenda/otp/verify`). Rotas **públicas** (loja, catálogo, disponibilidade, busca de cliente) funcionam sem header; se enviar `Bearer` de chave de API, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API. Detalhes: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md), [api/app-mobile.md](./api/app-mobile.md).
+**Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin, cookie de cliente após OTP **ou** Bearer com `accessToken` do OTP (`POST /api/agenda/otp/verify`). Rotas **públicas** (loja, catálogo, disponibilidade) funcionam sem header; se enviar `Bearer` de chave de API, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API. Detalhes: [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md), [api/app-mobile.md](./api/app-mobile.md).
 
 Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [api/guia-n8n.md](./api/guia-n8n.md).
 
@@ -220,7 +223,7 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 | Rotas | Limite |
 | --- | --- |
 | `shop` / `services` / `professionals` / `availability` | 60 a cada 15 min |
-| `customers` e `appointments?whatsapp=` | 10 a cada 15 min |
+| `customers` / `customers/me` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
 
@@ -241,6 +244,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 - Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
 - Exclusão só é permitida se o cliente não tiver agendamentos no histórico
+- **App / site (cliente logado por OTP):** `GET` e `PATCH /api/v1/customers/me` — ver e editar **nome/sobrenome** do próprio cadastro; WhatsApp não muda. Detalhes: [api/app-mobile.md](./api/app-mobile.md)
 
 ## Fotos (profissionais, serviços e produtos)
 
@@ -253,7 +257,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 
 Identificados em auditoria (jul/2026); decisão consciente de não corrigir agora — revisar quando fizer sentido:
 
-- **`GET /api/v1/customers` permite enumerar WhatsApp cadastrados**: é pública (usada no site para autocompletar nome ao agendar) e devolve se um número é cliente. Só tem rate limit de 10 tentativas/15 min por IP. Mitigar exigiria sessão prévia ou CAPTCHA, o que mudaria a experiência de quem chega direto no site.
+- **`GET /api/v1/customers`**: privada (chave de API, dono ou OTP do mesmo WhatsApp). Site/app usam `GET` / `PATCH /customers/me` após o login.
 - Login do cliente no site: código no WhatsApp (OTP) via n8n — ver [api/cliente-otp-whatsapp.md](./api/cliente-otp-whatsapp.md)
 
 ## Como atualizar o banco

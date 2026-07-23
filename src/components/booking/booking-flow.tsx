@@ -432,7 +432,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       setLookupDone(false);
       setCustomerFound(false);
 
-      fetch(`/api/v1/customers?whatsapp=${encodeURIComponent(current)}`)
+      fetch("/api/v1/customers/me", { credentials: "include" })
         .then(async (res) => {
           const body = await res.json();
           if (cancelled) return;

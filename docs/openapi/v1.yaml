@@ -12,6 +12,7 @@ info:
     - Ver **serviços** e **profissionais**
     - Consultar **horários livres**, **criar**, **listar**, **remarcar** e **cancelar**
     - Buscar **cliente** pelo WhatsApp
+    - No **app**: ver e **editar o próprio cadastro** (`GET` / `PATCH /customers/me`)
     - Disparar e confirmar **lembretes** (~1h antes)
 
     Comandas, caixa e comissões ficam **só no painel** — não entram nesta API.
@@ -36,8 +37,8 @@ info:
 
     | Tipo | Rotas | Regra |
     | --- | --- | --- |
-    | **Públicas** | `/shop`, `/services`, `/professionals`, `/appointments/availability`, `/customers` | Sem header OK. Se enviar Bearer de **chave de API**, a chave precisa ser válida. |
-    | **Privadas** | `POST/GET/PATCH/DELETE /appointments…`, status, lembretes | Chave de API **ou** sessão do cliente (cookie / `accessToken`). |
+    | **Públicas** | `/shop`, `/services`, `/professionals`, `/appointments/availability` | Sem header OK. Se enviar Bearer de **chave de API**, a chave precisa ser válida. |
+    | **Privadas** | `GET /customers`, `GET|PATCH /customers/me`, criar/listar/remarcar/cancelar, status, lembretes | Chave de API **ou** sessão do cliente (cookie / `accessToken`). `/customers/me` é só sessão OTP do app/site. |
 
     Guias: `docs/api/app-mobile.md`, `docs/api/cliente-otp-whatsapp.md`, `docs/api/guia-n8n.md`.
 
@@ -57,7 +58,7 @@ info:
     | Rotas | Limite |
     | --- | --- |
     | shop, services, professionals, availability | 60 / 15 min |
-    | customers, GET appointments | 10 / 15 min |
+    | customers, customers/me, GET appointments | 10 / 15 min |
     | POST appointments | 5/h por IP e 3/h por WhatsApp |
     | PATCH / DELETE appointments | 10 / 15 min |
 
@@ -81,7 +82,9 @@ tags:
   - name: Agendamentos
     description: Horários livres → criar → listar → status → remarcar → cancelar
   - name: Clientes
-    description: Buscar cliente pelo WhatsApp (id, nome, sobrenome e WhatsApp)
+    description: |
+      Buscar cliente pelo WhatsApp e, no app, ver/editar o próprio cadastro
+      (`/customers/me` — nome e sobrenome; WhatsApp imutável).
   - name: Lembretes
     description: Lembretes automáticos ~1h antes do horário (disparo e confirmação no WhatsApp)
 security:
@@ -308,6 +311,86 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /customers/me:
+    get:
+      tags: [Clientes]
+      operationId: getMyCustomerProfile
+      summary: Meu cadastro (app)
+      description: |
+        Devolve o cadastro do cliente autenticado pela sessão OTP
+        (`Authorization: Bearer <accessToken>`).
+
+        Se ainda não houver cadastro, `found` vem `false` e `customer` é `null`.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Cadastro encontrado ou não
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  found:
+                    type: boolean
+                  customer:
+                    oneOf:
+                      - $ref: "#/components/schemas/Customer"
+                      - type: "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      tags: [Clientes]
+      operationId: updateMyCustomerProfile
+      summary: Atualizar meu cadastro (app)
+      description: |
+        Atualiza nome e sobrenome do cliente autenticado.
+        O WhatsApp não muda (é o da sessão).
+        Scope da sessão: `customers:update`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName]
+              properties:
+                firstName:
+                  type: string
+                lastName:
+                  type: string
+            example:
+              firstName: João
+              lastName: Silva
+      responses:
+        "200":
+          description: Cadastro atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  customer:
+                    $ref: "#/components/schemas/Customer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /customers:
     get:
       tags: [Clientes]
@@ -320,8 +403,13 @@ paths:
         Se não achar, `found` vem `false` e `customer` é `null`
         (aí o fluxo pede nome e sobrenome).
 
-        **Acesso:** pública (site `/agenda`). Com chave, scope `customers:read`.
-      security: []
+        **Acesso:** privada. Scope `customers:read`.
+        - Chave de API (n8n) ou dono do painel: qualquer WhatsApp
+        - Sessão OTP do cliente: só o **próprio** WhatsApp
+
+        No app, preferir `GET /customers/me` (não precisa passar WhatsApp na URL).
+      security:
+        - BearerAuth: []
       parameters:
         - $ref: "#/components/parameters/whatsappQuery"
       responses:
@@ -357,6 +445,10 @@ paths:
                     customer: null
         "400":
           $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
@@ -961,6 +1053,8 @@ components:
         2. **Sessão do cliente** (`accessToken` de `POST /api/agenda/otp/verify`) — app mobile
 
         Exemplo: `Authorization: Bearer <token>`
+
+        `/customers/me` aceita **somente** o token de sessão do cliente (não chave de API).
 
   parameters:
     whatsappQuery:

@@ -12,8 +12,8 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
 - **API base (produção):** `https://agendabarbearia-seven.vercel.app/api/v1`
 - **Fuso horário:** `America/Sao_Paulo`
 - **Autenticação:**
-  - **Públicas** (`/shop`, catálogo, disponibilidade, lookup de cliente): sem chave OK
-  - **Privadas** (criar/listar/remarcar/cancelar, lembretes): chave de API no n8n, **ou** sessão OTP do cliente (cookie / `accessToken`)
+  - **Públicas** (`/shop`, catálogo, disponibilidade): sem chave OK
+  - **Privadas** (lookup de cliente, criar/listar/remarcar/cancelar, lembretes): chave de API no n8n, **ou** sessão OTP do cliente (cookie / `accessToken`)
   - Header da chave: `Authorization: Bearer dbc_live_<keyId>_<secret>` (Configurações > Integrações > Chaves de API)
 - **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` (ou `{ "ok": false, "error": "..." }` em `/customers`).
 
@@ -29,7 +29,9 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e 
 | 1 | `GET` | `/services` | Pública | Listar serviços ativos (opcional `?professionalId=` / `?date=`) |
 | 1b | `GET` | `/professionals` | Pública | Listar profissionais ativos (opcional `?serviceId=`) |
 | 2 | `GET` | `/appointments/availability` | Pública | Horários livres |
-| 3 | `GET` | `/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
+| 3 | `GET` | `/customers?whatsapp=` | **Privada** | Buscar cliente (chave ou OTP do mesmo número) |
+| 3b | `GET` | `/customers/me` | **Privada** | Perfil do cliente logado (só OTP / app) |
+| 3c | `PATCH` | `/customers/me` | **Privada** | Editar nome/sobrenome do próprio cadastro (só OTP / app) |
 | 5 | `GET` | `/appointments?whatsapp=` | **Privada** | Listar / histórico (`mode=upcoming` \| `history` \| `all`) |
 | 5b | `GET` | `/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | 6 | `POST` | `/appointments` | **Privada** | Criar agendamento (n8n: chave; site/app: OTP) |
@@ -41,7 +43,7 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e 
 | 8d | `GET` | `/appointment-reminders/pending-response?whatsapp=` | **Privada** | Buscar lembrete enviado aguardando confirmação do cliente |
 | 8e | `POST` | `/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
 
-**Resumo:** públicas (0–3) + privadas de agenda (5–8) + **4 rotas de lembretes** (8b–8e). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel.
+**Resumo:** públicas (0–2: loja, serviços, profissionais, disponibilidade) + privadas (3–3c, 5–8: cliente e agenda) + **4 rotas de lembretes** (8b–8e). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel.
 
 **App do cliente:** [app-mobile.md](./app-mobile.md) · OTP: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md)
 
@@ -89,7 +91,8 @@ Authorization: Bearer <sua-chave-do-painel>
 | --- | --- |
 | `catalog:read` | `GET /services`, `GET /professionals` |
 | `availability:read` | `GET /appointments/availability` |
-| `customers:read` | `GET /customers` |
+| `customers:read` | `GET /customers`, `GET /customers/me` (me = só sessão OTP) |
+| `customers:update` | `PATCH /customers/me` (só sessão OTP do app/site) |
 | `appointments:read` | `GET /appointments`, `GET /appointments/last-completed` |
 | `appointments:create` | `POST /appointments` |
 | `appointments:update` | `PATCH /appointments/:id`, `PUT /appointments/:id/status` |
@@ -111,7 +114,9 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 - O site `/agenda` **não usa** chave de API no navegador
 - **Meus horários / Agendar:** o site pede um **código no WhatsApp** (`POST /api/agenda/otp/send` + `verify`); depois usa cookie `agenda_client_session` (app: Bearer com `accessToken`). Guia: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md) · [app-mobile.md](./app-mobile.md)
 - **Novo agendamento:** `POST /api/v1/appointments` é **privado** (cookie OTP, Bearer do cliente ou chave de API)
-- **Serviços, profissionais, disponibilidade, loja e cliente:** públicos (`GET /shop`, `GET /services`, `GET /professionals`, `GET /appointments/availability`, `GET /customers`)
+- **Serviços, profissionais, disponibilidade e loja:** públicos (`GET /shop`, `GET /services`, `GET /professionals`, `GET /appointments/availability`)
+- **Lookup de cliente** (`GET /customers`): **privado** — chave ou OTP do mesmo WhatsApp (app: preferir `GET /customers/me`)
+- **Minha conta (app):** `GET` / `PATCH /customers/me` — só sessão OTP; edita nome/sobrenome (WhatsApp imutável). Guia: [app-mobile.md](./app-mobile.md)
 - **Rotas sensíveis** exigem API Key, sessão admin, cookie de cliente ou Bearer do OTP — sem fallback público:
 
 | Rota | Auth obrigatória |
@@ -171,7 +176,7 @@ Se exceder, a API responde **429** com:
 | Rotas | Limite |
 | --- | --- |
 | `GET /services`, `GET /professionals`, `GET /appointments/availability` | 60 requisições / 15 min por IP (ou por chave de API) |
-| `GET /customers`, `GET /appointments?whatsapp=` | 10 / 15 min por IP (ou por chave) |
+| `GET /customers`, `GET|PATCH /customers/me`, `GET /appointments?whatsapp=` | 10 / 15 min por IP (ou por chave) |
 | `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp (chave: 120/15min por keyId) |
 | `PUT /appointments/:id/status`, `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP (ou por chave) |
 | Qualquer rota com chave de API | 120 / 15 min por `keyId` |
@@ -459,10 +464,12 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/appointments/availability?pr
 | --- | --- |
 | **Método** | `GET` |
 | **Rota** | `/customers` |
-| **Auth** | Pública (sem header). Opcional: chave com `customers:read` |
+| **Auth** | **Obrigatória** — chave (`customers:read`), dono, ou OTP do **mesmo** WhatsApp |
 | **Rate limit** | 10 / 15 min por IP (ou por chave) |
 
 Busca o cliente pelo WhatsApp e devolve só o essencial: `id`, `firstName`, `lastName` e `whatsapp`.
+
+No **app**, use `GET /customers/me` com o Bearer (sem passar WhatsApp na URL).
 
 **Query params:**
 
@@ -470,11 +477,11 @@ Busca o cliente pelo WhatsApp e devolve só o essencial: `id`, `firstName`, `las
 | --- | --- | --- |
 | `whatsapp` | Sim | Número do cliente (aceita máscara, `+55`, com ou sem `55`) |
 
-**Exemplos:**
+**Exemplos (n8n — com chave):**
 
 ```
 GET {{baseUrl}}/customers?whatsapp=11981008852
-GET {{baseUrl}}/customers?whatsapp=5511981008852
+Authorization: Bearer dbc_live_...
 ```
 
 **Cliente encontrado (200):**
@@ -516,8 +523,55 @@ GET {{baseUrl}}/customers?whatsapp=5511981008852
 **Teste (terminal):**
 
 ```bash
-curl -s "https://agendabarbearia-seven.vercel.app/api/v1/customers?whatsapp=13981008852"
+curl -s "https://agendabarbearia-seven.vercel.app/api/v1/customers?whatsapp=13981008852" \
+  -H "Authorization: Bearer dbc_live_SUA_CHAVE"
 ```
+
+---
+
+### 3b. Minha conta (app — perfil do cliente)
+
+| | |
+| --- | --- |
+| **Métodos** | `GET` e `PATCH` |
+| **Rota** | `/customers/me` |
+| **Auth** | **Só sessão OTP** (`Authorization: Bearer <accessToken>` do verify). Chave de API → **403**. |
+| **Scopes** | `customers:read` (GET), `customers:update` (PATCH) |
+
+Usado pela aba **Minha conta** do app. O WhatsApp vem da sessão — **não** vai na URL nem no body do PATCH.
+
+**GET** — ler cadastro:
+
+```http
+GET {{baseUrl}}/customers/me
+Authorization: Bearer <accessToken>
+```
+
+**PATCH** — editar nome/sobrenome (cria o cadastro se ainda não existir):
+
+```http
+PATCH {{baseUrl}}/customers/me
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{ "firstName": "João", "lastName": "Silva" }
+```
+
+Resposta de sucesso do PATCH:
+
+```json
+{
+  "ok": true,
+  "customer": {
+    "id": "uuid-do-cliente",
+    "firstName": "João",
+    "lastName": "Silva",
+    "whatsapp": "5511981008852"
+  }
+}
+```
+
+Contrato completo: [app-mobile.md](./app-mobile.md#minha-conta-perfil-do-cliente).
 
 ---
 
@@ -1290,7 +1344,8 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Profissionais | GET | `{{baseUrl}}/professionals` (opcional `?serviceId=`) | Pública |
 | Horários livres | GET | `{{baseUrl}}/appointments/availability?professionalId=...&date=...&serviceIds=...` | Pública |
 | Horários livres (remarcar) | GET | `{{baseUrl}}/appointments/availability?...&excludeAppointmentId=...` | Pública |
-| Lookup cliente | GET | `{{baseUrl}}/customers?whatsapp=...` | Pública |
+| Lookup cliente | GET | `{{baseUrl}}/customers?whatsapp=...` | **Privada** |
+| Minha conta (app) | GET / PATCH | `{{baseUrl}}/customers/me` | **Privada** (só OTP) |
 | Loja | GET | `{{baseUrl}}/shop` | Pública |
 | Listar agendamentos | GET | `{{baseUrl}}/appointments?whatsapp=...` | **Privada** |
 | Criar | POST | `{{baseUrl}}/appointments` + JSON body | **Privada** (chave ou OTP) |
@@ -1353,14 +1408,17 @@ npm run test:api:protected
 | Loja pública | Abrir `/api/v1/shop` no navegador | **200** |
 | Serviços públicos | Abrir `/api/v1/services` no navegador | **200** |
 | Profissionais públicos | Abrir `/api/v1/professionals` no navegador | **200** |
-| Lookup cliente | `GET /customers?whatsapp=...` sem header | **200** |
+| Lookup cliente | `GET /customers?whatsapp=...` sem header | **401** |
+| Lookup com chave | `GET /customers?whatsapp=...` + Bearer válido | **200** |
+| Minha conta sem token | `GET /customers/me` sem header | **401** |
+| Minha conta com OTP | `GET` / `PATCH /customers/me` + Bearer `accessToken` | **200** |
 | Criar sem auth | `POST /appointments` sem header | **401** |
 | Privada bloqueada | `GET /appointments?whatsapp=...` sem header | **401** |
 | Chave errada | Qualquer rota privada com Bearer inválido | **401** |
 | Meus horários | `/agenda` → OTP → Horários → F12 → Rede | `otp/verify` **200**, `appointments` **200** |
 | Cookie de outro número | `GET /appointments` com sessão e outro `whatsapp` | **403** |
 
-**Última atualização (jul/2026):** `/shop` público; `POST /appointments` privado; OTP devolve `accessToken` para o app.
+**Última atualização (jul/2026):** `/shop` público; `POST /appointments` privado; OTP devolve `accessToken`; app com `GET`/`PATCH /customers/me` (Minha conta).
 
 ---
 

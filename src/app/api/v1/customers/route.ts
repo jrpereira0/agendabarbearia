@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { safeApiRoute } from "@/lib/api/safe-route";
-import { withPublicApiRouteGuard } from "@/lib/api/with-api-guard";
-import { getAdminApiSession } from "@/lib/protected-api-auth";
+import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
 import { getCustomerByWhatsapp } from "@/lib/lookup-customer";
 import {
   normalizeWhatsapp,
@@ -11,7 +10,10 @@ import {
 /**
  * GET /api/v1/customers?whatsapp=...
  * Busca cliente pelo WhatsApp. Resposta: id, firstName, lastName, whatsapp.
- * Público (site). Scope opcional: customers:read.
+ *
+ * Privada: chave de API (`customers:read`), dono do painel, ou sessão OTP
+ * do **mesmo** WhatsApp (cookie / Bearer accessToken).
+ * App do cliente preferir `GET /customers/me` (sem passar whatsapp na URL).
  */
 export async function GET(request: NextRequest) {
   return safeApiRoute(async () => {
@@ -24,31 +26,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const respond = async () => {
-      const result = await getCustomerByWhatsapp(whatsapp);
-      if (!result.ok) {
-        return NextResponse.json(
-          { ok: false, error: result.error },
-          { status: result.httpStatus }
-        );
-      }
-      return NextResponse.json({
-        ok: true,
-        found: result.found,
-        customer: result.customer,
-      });
-    };
-
-    // Painel logado: sem o limite curto da API pública.
-    const adminSession = await getAdminApiSession();
-    if (adminSession) {
-      return respond();
-    }
-
-    return withPublicApiRouteGuard(
+    return withProtectedApiRouteGuard(
       request,
-      { scope: "customers:read", rateLimit: "whatsappSensitive" },
-      async () => respond()
+      {
+        scope: "customers:read",
+        rateLimit: "whatsappSensitive",
+        whatsapp,
+      },
+      async () => {
+        const result = await getCustomerByWhatsapp(whatsapp);
+        if (!result.ok) {
+          return NextResponse.json(
+            { ok: false, error: result.error },
+            { status: result.httpStatus }
+          );
+        }
+        return NextResponse.json({
+          ok: true,
+          found: result.found,
+          customer: result.customer,
+        });
+      }
     );
   });
 }
