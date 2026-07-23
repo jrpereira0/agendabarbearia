@@ -37,13 +37,9 @@ const CLIENT_SESSION_SCOPES: ApiScope[] = [
 // Não inclui "customers:read" nem "appointments:read": essas rotas devolvem
 // dados de QUALQUER WhatsApp informado, sem restringir ao próprio barbeiro,
 // então um barbeiro logado poderia ler clientes/agendamentos de terceiros.
-// "comandas:read" e "finance:read" já são filtrados por rota
-// (barberCanAccessComanda / financeForbiddenForBarberWrite).
 const BARBER_SESSION_SCOPES: ApiScope[] = [
   "catalog:read",
   "availability:read",
-  "comandas:read",
-  "finance:read",
 ];
 
 function adminHasScope(role: "owner" | "barber", scope: ApiScope): boolean {

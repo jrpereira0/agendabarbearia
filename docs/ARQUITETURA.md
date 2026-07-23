@@ -36,7 +36,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/lib/login-path.ts` | Caminho do login (`/login-admin`) e URLs de erro |
 | `supabase/migrations` | Histórico de mudanças do banco (SQL) |
 | `scripts` | Ferramentas: `db:migrate`, `db:migrate-weekday-prices`, `db:reset-shop` e `create-admin` |
-| `src/lib/catalog-booking.ts` | Catálogo enxuto `mode=booking` (preços agrupados por dia para n8n/IA) |
+| `src/lib/catalog-booking.ts` | Labels de dias e helper legado de faixa de preço por nome |
 | `src/lib/public-service-prices.ts` | Exibição de preços no site do cliente (faixa antes da data, valor exato depois) |
 | `src/lib/service-booking-stats.ts` | Contagem de agendamentos por serviço (catálogo público) |
 | `src/lib/booking-service-groups.ts` | Ordenação e seções “Mais agendados” no site |
@@ -178,22 +178,20 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## API REST (`/api/v1`)
 
-Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6 operações).
+Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no painel** (sem `/api/v1`).
 
 **Documentação:**
 - Referência OpenAPI (tela dedicada `/docs/api`): [openapi/v1.yaml](./openapi/v1.yaml) — **Configurações → Integrações → Documentação da API**
 - Guia n8n / WhatsApp: [api/guia-n8n.md](./api/guia-n8n.md)
-- Financeiro detalhado: [api/financeiro.md](./api/financeiro.md)
+- Regras de comandas/caixa/comissões: [api/financeiro.md](./api/financeiro.md)
 - Índice: [api/README.md](./api/README.md)
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
-| GET | `/api/v1/catalog` | Pública | Catálogo completo (`weekdayPrices` em cada serviço) ou `?mode=booking` enxuto para n8n/IA (`dayLabels` + `prices` agrupados) |
 | GET | `/api/v1/services` | Pública | Lista **serviços** (preços agrupados + quem realiza); opcional `?professionalId=` e `?date=` |
 | GET | `/api/v1/professionals` | Pública | Lista **profissionais** ativos (dados do barbeiro + `serviceIds`); opcional `?serviceId=` |
 | GET | `/api/v1/appointments/availability` | Pública | Horários livres (`professionalId` ou `anyProfessional=1`) |
-| GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
-| GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
+| GET | `/api/v1/customers?whatsapp=` | Pública | Buscar cliente (`id`, nome, sobrenome, WhatsApp) |
 | GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos (`mode=upcoming` padrão, `history` ou `all`) |
 | GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | POST | `/api/v1/appointments` | Pública | Criar agendamento online |
@@ -204,12 +202,6 @@ Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6
 | GET | `/api/v1/appointment-reminders/pending-response` | **Privada** | Listar lembretes enviados sem confirmação do cliente |
 | POST | `/api/v1/appointment-reminders/:id/mark-sent` | **Privada** | Marcar lembrete como enviado |
 | POST | `/api/v1/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
-| GET | `/api/v1/comandas` | **Privada** | Listar comandas ou abrir por agendamento |
-| GET/PATCH | `/api/v1/comandas/:id` | **Privada** | Ver ou editar itens da comanda |
-| POST | `/api/v1/comandas/:id/close` | **Privada** | Fechar comanda |
-| POST | `/api/v1/comandas/:id/reopen` | **Privada** | Reabrir comanda |
-| GET | `/api/v1/finance/cash-register` | **Privada** | Caixa do dia |
-| GET | `/api/v1/finance/commissions` | **Privada** | Comissões no período |
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
@@ -221,8 +213,8 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 | Rotas | Limite |
 | --- | --- |
-| `catalog` / `services` / `professionals` / `availability` | 60 a cada 15 min |
-| `customers/by-whatsapp`, `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
+| `services` / `professionals` / `availability` | 60 a cada 15 min |
+| `customers` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
 
@@ -255,7 +247,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 
 Identificados em auditoria (jul/2026); decisão consciente de não corrigir agora — revisar quando fizer sentido:
 
-- **`GET /api/v1/customers/lookup` permite enumerar WhatsApp cadastrados**: é pública (usada no site para autocompletar nome ao agendar) e devolve se um número é cliente. Só tem rate limit de 10 tentativas/15 min por IP. Mitigar exigiria sessão prévia ou CAPTCHA, o que mudaria a experiência de quem chega direto no site.
+- **`GET /api/v1/customers` permite enumerar WhatsApp cadastrados**: é pública (usada no site para autocompletar nome ao agendar) e devolve se um número é cliente. Só tem rate limit de 10 tentativas/15 min por IP. Mitigar exigiria sessão prévia ou CAPTCHA, o que mudaria a experiência de quem chega direto no site.
 - **Sessão "Meus horários" não confirma posse do WhatsApp**: `POST /api/agenda/session` emite cookie de acesso aos agendamentos só de informar o número, sem checar se quem está pedindo é o dono dele. Corrigir direito exige enviar um código de verificação por WhatsApp (integração nova, ex. via n8n) — planejar quando essa integração existir.
 
 ## Como atualizar o banco

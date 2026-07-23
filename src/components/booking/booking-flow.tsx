@@ -62,7 +62,6 @@ type Confirmation = {
   professionalId: string;
   professionalName: string;
   professionalPhotoUrl: string | null;
-  professionalPhotoPosition: string;
   date: string;
   startTime: string;
   serviceNames: string[];
@@ -450,7 +449,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       setLookupDone(false);
       setCustomerFound(false);
 
-      fetch(`/api/v1/customers/lookup?whatsapp=${encodeURIComponent(current)}`)
+      fetch(`/api/v1/customers?whatsapp=${encodeURIComponent(current)}`)
         .then(async (res) => {
           const body = await res.json();
           if (cancelled) return;
@@ -460,9 +459,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             toast.error(body.error ?? "Não foi possível buscar seus dados.");
             return;
           }
-          if (body.found) {
-            setFirstName(body.firstName);
-            setLastName(body.lastName);
+          if (body.found && body.customer) {
+            setFirstName(body.customer.firstName);
+            setLastName(body.customer.lastName);
             setCustomerFound(true);
           } else {
             setFirstName("");
@@ -617,7 +616,6 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         professionalId: assignedId,
         professionalName: assignedName,
         professionalPhotoUrl: assignedPro?.photoUrl ?? null,
-        professionalPhotoPosition: assignedPro?.photoPosition ?? "50% 50%",
         date,
         startTime,
         serviceNames: selectedServices.map((s) => s.name),
@@ -663,9 +661,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
       confirmedProfessional?.photoUrl?.trim() ||
       confirmation.professionalPhotoUrl?.trim() ||
       null;
-    const professionalPhotoPosition =
-      confirmedProfessional?.photoPosition ||
-      confirmation.professionalPhotoPosition;
+    const professionalPhotoPosition = confirmedProfessional?.photoPosition;
 
     return (
       <div

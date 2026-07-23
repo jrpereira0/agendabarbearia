@@ -47,7 +47,7 @@ beforeEach(() => {
 
 describe("api-key-auth", () => {
   it("retorna 401 quando Bearer está ausente em validação obrigatória", async () => {
-    const request = new Request("https://example.com/api/v1/catalog");
+    const request = new Request("https://example.com/api/v1/services");
     const result = await validateApiKeyFromRequest(request, "catalog:read");
     expect(result.ok).toBe(false);
     if (!result.ok) {

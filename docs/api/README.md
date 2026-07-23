@@ -12,7 +12,7 @@ Referência e guias da API REST em `/api/v1`.
 | --- | --- |
 | [../openapi/v1.yaml](../openapi/v1.yaml) | Especificação OpenAPI 3.1 (fonte da referência) |
 | [guia-n8n.md](./guia-n8n.md) | Guia para n8n / WhatsApp: auth, exemplos, webhooks, fluxo de conversa |
-| [financeiro.md](./financeiro.md) | Comandas, caixa, comissões e regras de negócio |
+| [financeiro.md](./financeiro.md) | Regras de comandas, caixa e comissões (painel; sem rotas REST) |
 
 ## Visão geral
 

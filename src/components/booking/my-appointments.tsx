@@ -557,7 +557,10 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                     </div>
                     <ProfessionalAvatar
                       photoUrl={a.professionalPhotoUrl}
-                      photoPosition={a.professionalPhotoPosition}
+                      photoPosition={
+                        catalog.professionals.find((p) => p.id === a.professionalId)
+                          ?.photoPosition
+                      }
                       name={a.professionalName}
                       size="md"
                     />
@@ -644,7 +647,11 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                 <div className="flex items-center gap-3.5">
                   <ProfessionalAvatar
                     photoUrl={cancelTarget.professionalPhotoUrl}
-                    photoPosition={cancelTarget.professionalPhotoPosition}
+                    photoPosition={
+                      catalog.professionals.find(
+                        (p) => p.id === cancelTarget.professionalId
+                      )?.photoPosition
+                    }
                     name={cancelTarget.professionalName}
                     size="md"
                   />

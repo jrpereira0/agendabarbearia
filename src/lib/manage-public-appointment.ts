@@ -7,7 +7,6 @@ import {
   todayInTimezone,
 } from "@/lib/availability";
 import { formatTime } from "@/lib/format";
-import { normalizePhotoPosition } from "@/lib/photo-position";
 import { getAvailability } from "@/lib/get-availability";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
 import {
@@ -40,7 +39,6 @@ export type PublicAppointmentItem = {
   professionalId: string;
   professionalName: string;
   professionalPhotoUrl: string | null;
-  professionalPhotoPosition: string;
   date: string;
   startTime: string;
   status: string;
@@ -212,7 +210,7 @@ export async function listPublicAppointmentsByWhatsapp(
       start_time,
       status,
       is_squeeze_in,
-      professionals (nickname, photo_url, photo_position),
+      professionals (nickname, photo_url),
       appointment_services (
         service_id,
         services (name, duration_minutes, price_cents)
@@ -291,12 +289,10 @@ export async function listPublicAppointmentsByWhatsapp(
         | {
             nickname: string;
             photo_url: string | null;
-            photo_position: string | null;
           }
         | {
             nickname: string;
             photo_url: string | null;
-            photo_position: string | null;
           }[]
         | null;
       const professional = Array.isArray(pro) ? pro[0] : pro;
@@ -312,9 +308,6 @@ export async function listPublicAppointmentsByWhatsapp(
         professionalId: row.professional_id,
         professionalName: professional?.nickname ?? "Barbeiro",
         professionalPhotoUrl: professional?.photo_url ?? null,
-        professionalPhotoPosition: normalizePhotoPosition(
-          professional?.photo_position
-        ),
         date: row.date,
         startTime,
         status: row.status,

@@ -27,7 +27,7 @@ export default async function StandaloneApiDocsPage() {
               Documentação da API
             </p>
             <p className="hidden truncate text-xs text-white/45 sm:block">
-              Referência /api/v1 — n8n, bots e integrações
+              Conecte n8n e WhatsApp à agenda — /api/v1
             </p>
           </div>
         </div>

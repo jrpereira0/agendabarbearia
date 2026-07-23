@@ -2024,39 +2024,6 @@ export async function getComandaById(
   return { ok: true, comanda };
 }
 
-export async function listComandasByDate(
-  admin: SupabaseClient,
-  date: string,
-  options: { professionalId?: string; status?: "open" | "closed" } = {}
-): Promise<ComandaDetail[]> {
-  const { data: appointmentIds } = await admin
-    .from("appointments")
-    .select("id")
-    .eq("date", date);
-
-  const ids = (appointmentIds ?? []).map((a) => a.id);
-  if (ids.length === 0) return [];
-
-  let query = admin
-    .from("comandas")
-    .select(COMANDA_SELECT)
-    .in("appointment_id", ids);
-
-  if (options.professionalId) {
-    query = query.eq("professional_id", options.professionalId);
-  }
-  if (options.status) {
-    query = query.eq("status", options.status);
-  }
-
-  const { data } = await query.order("closed_at", { ascending: false });
-  const comandas: ComandaDetail[] = [];
-  for (const row of data ?? []) {
-    comandas.push(await resolveComandaDetail(admin, row as DbComandaRow));
-  }
-  return comandas;
-}
-
 /** Serviços além dos do agendamento principal viram encaixe na agenda. */
 export function flagComandaItemsNeedingSqueeze(
   items: Pick<ComandaItemInput, "serviceId">[],

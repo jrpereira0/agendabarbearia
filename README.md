@@ -88,4 +88,4 @@ npm run test          # roda os testes automatizados (vitest)
 - [docs/api/README.md](docs/api/README.md) — índice da documentação da API
 - [docs/openapi/v1.yaml](docs/openapi/v1.yaml) — especificação OpenAPI (também no painel: Integrações → Documentação da API)
 - [docs/api/guia-n8n.md](docs/api/guia-n8n.md) — guia para automação no WhatsApp (n8n)
-- [docs/api/financeiro.md](docs/api/financeiro.md) — comandas, caixa do dia, comissões e rotas financeiras
+- [docs/api/financeiro.md](docs/api/financeiro.md) — regras de comandas, caixa e comissões (painel)
