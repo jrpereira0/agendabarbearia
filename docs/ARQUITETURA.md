@@ -178,7 +178,13 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 
 ## API REST (`/api/v1`)
 
-Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6 operações). Detalhes das comandas: [API-FINANCE.md](./API-FINANCE.md).
+Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6 operações).
+
+**Documentação:**
+- Referência OpenAPI (interativa no painel): [openapi/v1.yaml](./openapi/v1.yaml) — **Configurações → Integrações → Documentação da API**
+- Guia n8n / WhatsApp: [api/guia-n8n.md](./api/guia-n8n.md)
+- Financeiro detalhado: [api/financeiro.md](./api/financeiro.md)
+- Índice: [api/README.md](./api/README.md)
 
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
@@ -206,7 +212,7 @@ WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 díg
 
 **Autenticação:** rotas **privadas** exigem chave de API (`Authorization: Bearer dbc_live_...`), sessão admin ou cookie de cliente (`POST /api/agenda/session` no site). Rotas **públicas** funcionam sem header; se enviar `Bearer`, a chave deve ser válida. Chaves geradas em Configurações > Integrações > Chaves de API.
 
-Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [API-N8N.md](./API-N8N.md).
+Guia completo para montar bot no n8n (exemplos, IDs, fluxo de conversa): [api/guia-n8n.md](./api/guia-n8n.md).
 
 Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limit.ts`):
 
@@ -221,7 +227,7 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarcado** — pelo site `/agenda`, pela IA (n8n) ou pelo painel admin — o sistema dispara um webhook para um workflow do n8n avisar o(s) barbeiro(s) no WhatsApp. Não dispara em exclusão definitiva (só o dono, via `deleteAppointment`) nem em reatribuição interna de serviço já existente na comanda.
 
-- Configuração e comportamento completo: criação em [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated), cancelamento em [seção 6c](./API-N8N.md#6c-webhook-aviso-automático-ao-barbeiro-appointmentcancelled), alteração em [seção 6d](./API-N8N.md#6d-webhook-aviso-automático-ao-barbeiro-appointmentupdated)
+- Configuração e comportamento completo: criação em [api/guia-n8n.md, seção 6b](./api/guia-n8n.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated), cancelamento em [seção 6c](./api/guia-n8n.md#6c-webhook-aviso-automático-ao-barbeiro-appointmentcancelled), alteração em [seção 6d](./api/guia-n8n.md#6d-webhook-aviso-automático-ao-barbeiro-appointmentupdated)
 - Funções centrais: `notifyAppointmentCreated`, `notifyAppointmentCancelled` e `notifyAppointmentUpdated` em `src/lib/notifications/`
 - Nunca bloqueia nem desfaz a operação principal se falhar (logs com prefixo `[appointment-webhook]`, `[appointment-cancelled-webhook]` e `[appointment-updated-webhook]`)
 - `appointment.created` e `appointment.cancelled` são protegidos contra duplicidade pela tabela `appointment_notifications`; `appointment.updated` **não** bloqueia edições futuras (cada alteração relevante gera um novo aviso)

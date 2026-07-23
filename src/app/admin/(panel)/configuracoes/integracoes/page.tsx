@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { KeyRound, ChevronRight } from "lucide-react";
+import { BookOpen, KeyRound, ChevronRight } from "lucide-react";
 import { assertOwnerSettingsPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
@@ -28,6 +28,31 @@ export default async function IntegrationsPage() {
 
         <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden p-0")}>
           <Link
+            href="/admin/configuracoes/integracoes/documentacao"
+            className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3.5 transition-colors hover:bg-white/[0.04] sm:gap-4 sm:px-5 sm:py-4"
+          >
+            <div className="flex min-w-0 items-start gap-3">
+              <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-[#1a1b1e] sm:size-10">
+                <BookOpen className={cn("size-4", ADMIN_SURFACE.accent)} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                  Documentação da API
+                </p>
+                <p
+                  className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}
+                >
+                  Veja todas as rotas, exemplos e autenticação em formato
+                  profissional.
+                </p>
+              </div>
+            </div>
+            <ChevronRight
+              className={cn("size-4 shrink-0", ADMIN_SURFACE.muted)}
+            />
+          </Link>
+
+          <Link
             href="/admin/configuracoes/integracoes/chaves"
             className="flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.04] sm:gap-4 sm:px-5 sm:py-4"
           >
@@ -39,7 +64,9 @@ export default async function IntegrationsPage() {
                 <p className="text-[15px] font-medium tracking-tight text-[#f5f5f5]">
                   Chaves de API
                 </p>
-                <p className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}>
+                <p
+                  className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}
+                >
                   Gere chaves para o n8n e outras integrações acessarem a API com
                   segurança.
                 </p>

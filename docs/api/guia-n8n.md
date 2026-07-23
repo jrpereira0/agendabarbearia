@@ -44,7 +44,9 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 
 **Resumo:** 4 rotas públicas (1, 2, 4, 6) e 10 privadas de agenda/cliente (3, 5, 7, 8) + **4 rotas de lembretes** (8b–8e, todas privadas) + **6 rotas financeiras** (9–14, todas privadas). Encaixe, status manual e cadastros continuam só pelo painel — exceto comandas/caixa via API com chave.
 
-**Financeiro:** guia detalhado com exemplos de corpo JSON em [API-FINANCE.md](./API-FINANCE.md).
+**Financeiro:** guia detalhado com exemplos de corpo JSON em [financeiro.md](./financeiro.md).
+
+**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — também disponível no painel em **Configurações → Integrações → Documentação da API**.
 
 **Regra do header `Authorization`:** em rotas **públicas**, se você **não** enviar o header, a requisição passa. Se **enviar** `Bearer ...`, a chave será validada — chave inválida retorna **401** (não ignora o header).
 

@@ -2,7 +2,9 @@
 
 Documentação das rotas de **comandas** e **relatórios financeiros** em `/api/v1`. Use com chave de API (n8n) ou sessão do dono no painel.
 
-Guia geral de autenticação e chaves: [API-N8N.md](./API-N8N.md).
+Guia geral de autenticação e chaves: [guia-n8n.md](./guia-n8n.md).
+
+**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — no painel: **Configurações → Integrações → Documentação da API**.
 
 ---
 
@@ -236,7 +238,7 @@ Corpo:
 - Produto **sem** `professionalId`: venda da barbearia, comissão `0`
 - Produto **com** `professionalId`: usa `commissionPercent` (ou a % cadastrada no produto)
 
-Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original. Cada serviço extra novo (não reatribuição) também dispara o webhook `appointment.created` (`source: "comanda_extra"`) — ver [API-N8N.md, seção 6b](./API-N8N.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated).
+Também **espelha na agenda** os serviços extras da comanda: cada item além dos do agendamento principal vira um **encaixe** (card ao lado, borda tracejada), sem alterar o horário do agendamento original. Cada serviço extra novo (não reatribuição) também dispara o webhook `appointment.created` (`source: "comanda_extra"`) — ver [guia-n8n.md, seção 6b](./guia-n8n.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated).
 
 Resposta: `{ "comanda": { ... } }` atualizada.
 

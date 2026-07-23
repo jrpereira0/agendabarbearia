@@ -1,0 +1,1201 @@
+openapi: 3.1.0
+info:
+  title: Agenda Barbearia API
+  version: 1.0.0
+  summary: API de agendamento, lembretes e financeiro
+  description: |
+    Bem-vindo à API do Agenda Barbearia.
+
+    Use esta API para integrar catálogo, disponibilidade, clientes, agendamentos,
+    lembretes por WhatsApp, comandas e relatórios financeiros (n8n, bots e automações).
+
+    ## Autenticação
+
+    Gere a chave no painel: **Configurações → Integrações → Chaves de API**.
+
+    ```
+    Authorization: Bearer dbc_live_<keyId>_<secret>
+    ```
+
+    - **Rotas públicas** (`/catalog`, `/availability`, `/customers/lookup`, `POST /appointments`):
+      funcionam sem header. Se enviar `Bearer`, a chave deve ser válida e ter o scope.
+    - **Rotas privadas**: exigem chave de API, sessão do painel ou cookie de cliente
+      (Meus horários no site).
+
+    ## Formatos
+
+    - **WhatsApp:** DDD + número (10 ou 11 dígitos), com ou sem `55` / máscara. Gravado como `55…`.
+    - **Datas:** `AAAA-MM-DD` (ex.: `2026-07-22`)
+    - **Horários:** `HH:MM` 24h (ex.: `14:30`)
+    - **Fuso:** `America/Sao_Paulo`
+
+    ## Rate limits
+
+    Excesso → **429** com `Retry-After`. Limites típicos por IP (chave de API: até 120/15 min):
+
+    | Rotas | Limite |
+    | --- | --- |
+    | catalog, availability | 60 / 15 min |
+    | customers/*, GET appointments | 10 / 15 min |
+    | POST appointments | 5/h por IP e 3/h por WhatsApp |
+    | PATCH/DELETE appointments | 10 / 15 min |
+
+    ## Erros
+
+    Respostas de erro em JSON: `{ "error": "mensagem" }` ou `{ "ok": false, "error": "..." }`.
+
+    Guias narrativos (webhooks, fluxo n8n): veja `docs/api/` no repositório.
+  contact:
+    name: Agenda Barbearia
+servers:
+  - url: /api/v1
+    description: Relativo ao host da aplicação
+  - url: https://agendabarbearia-seven.vercel.app/api/v1
+    description: Produção
+tags:
+  - name: Catálogo
+    description: Loja, profissionais, serviços e horários de funcionamento
+  - name: Disponibilidade
+    description: Horários livres para agendar
+  - name: Clientes
+    description: Busca de cliente por WhatsApp
+  - name: Agendamentos
+    description: Criar, listar, remarcar e cancelar
+  - name: Lembretes
+    description: Lembretes automáticos ~1h antes do horário
+  - name: Comandas
+    description: Comanda financeira por cliente/dia
+  - name: Financeiro
+    description: Caixa do dia e comissões
+security:
+  - BearerAuth: []
+paths:
+  /catalog:
+    get:
+      tags: [Catálogo]
+      operationId: getCatalog
+      summary: Catálogo completo ou enxuto para booking
+      description: |
+        Público. Scope opcional: `catalog:read`.
+        Use `mode=booking` para payload menor (bots/IA).
+      security: []
+      parameters:
+        - name: mode
+          in: query
+          schema:
+            type: string
+            enum: [booking]
+        - name: date
+          in: query
+          description: Data AAAA-MM-DD (preços do dia no mode=booking)
+          schema:
+            type: string
+            format: date
+        - name: professionalId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Catálogo
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+              example:
+                timezone: America/Sao_Paulo
+                shop:
+                  name: Dinho Barber Coffee
+                  slotStepMinutes: 30
+                professionals:
+                  - id: 054a545a-75c8-4807-b72d-5c460bb3539f
+                    nickname: Junior
+                    serviceIds: []
+                services: []
+                businessHours: []
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /availability:
+    get:
+      tags: [Disponibilidade]
+      operationId: getAvailability
+      summary: Horários livres
+      description: |
+        Público. Scope opcional: `availability:read`.
+        Informe `professionalId` **ou** `anyProfessional=1`.
+      security: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: serviceIds
+          in: query
+          required: true
+          description: UUIDs separados por vírgula
+          schema:
+            type: string
+          example: 3a62b091-6916-4741-a3d4-754a33b2cb31
+        - name: professionalId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: anyProfessional
+          in: query
+          schema:
+            type: string
+            enum: ["1", "true", "yes"]
+        - name: excludeAppointmentId
+          in: query
+          description: Ignora este agendamento ao calcular conflitos (remarcação)
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Slots disponíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  professionalId:
+                    type: string
+                    format: uuid
+                    nullable: true
+                  date:
+                    type: string
+                    format: date
+                  durationMinutes:
+                    type: integer
+                  totalPriceCents:
+                    type: integer
+                  slots:
+                    type: array
+                    items:
+                      type: string
+                      example: "14:30"
+                  available:
+                    type: boolean
+                  unavailableReason:
+                    type: string
+                    nullable: true
+                  message:
+                    type: string
+                  workingPeriods:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        startTime:
+                          type: string
+                        endTime:
+                          type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /customers/lookup:
+    get:
+      tags: [Clientes]
+      operationId: lookupCustomer
+      summary: Buscar cliente (resposta simples)
+      description: |
+        Público (usado pelo site `/agenda`). Scope opcional: `customers:read`.
+        Retorna só se existe e o nome — sem `id`.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Resultado da busca
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    required: [found, firstName, lastName]
+                    properties:
+                      found:
+                        const: true
+                      firstName:
+                        type: string
+                      lastName:
+                        type: string
+                  - type: object
+                    required: [found]
+                    properties:
+                      found:
+                        const: false
+              examples:
+                found:
+                  value:
+                    found: true
+                    firstName: João
+                    lastName: Silva
+                notFound:
+                  value:
+                    found: false
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /customers/by-whatsapp:
+    get:
+      tags: [Clientes]
+      operationId: getCustomerByWhatsapp
+      summary: Buscar cliente com id (n8n)
+      description: "Privada. Scope: `customers:read`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Cliente encontrado ou não
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  found:
+                    type: boolean
+                  customer:
+                    oneOf:
+                      - $ref: "#/components/schemas/Customer"
+                      - type: "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /appointments:
+    get:
+      tags: [Agendamentos]
+      operationId: listAppointments
+      summary: Listar agendamentos futuros do cliente
+      description: "Privada. Scope: `appointments:read`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  appointments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PublicAppointment"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [Agendamentos]
+      operationId: createAppointment
+      summary: Criar agendamento
+      description: |
+        Público (site) ou chave com `appointments:create`.
+        Informe `professionalId` **ou** `anyProfessional: true`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppointmentBody"
+            example:
+              anyProfessional: true
+              date: "2026-07-23"
+              startTime: "10:00"
+              serviceIds:
+                - 3a62b091-6916-4741-a3d4-754a33b2cb31
+              firstName: João
+              lastName: Silva
+              whatsapp: "11999999999"
+      responses:
+        "200":
+          description: Agendamento criado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  appointmentId:
+                    type: string
+                    format: uuid
+                  professionalId:
+                    type: string
+                    format: uuid
+                  professionalNickname:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /appointments/last-completed:
+    get:
+      tags: [Agendamentos]
+      operationId: getLastCompletedAppointment
+      summary: Último atendimento concluído
+      description: "Privada. Scope: `appointments:read`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Último atendimento ou não encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  found:
+                    type: boolean
+                  lastAppointment:
+                    type: object
+                    nullable: true
+                    additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /appointments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/appointmentId"
+    patch:
+      tags: [Agendamentos]
+      operationId: updateAppointment
+      summary: Remarcar agendamento
+      description: "Privada. Scope: `appointments:update`."
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [whatsapp, professionalId, date, startTime, serviceIds]
+              properties:
+                whatsapp:
+                  type: string
+                professionalId:
+                  type: string
+                  format: uuid
+                date:
+                  type: string
+                  format: date
+                startTime:
+                  type: string
+                  example: "15:00"
+                serviceIds:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  minItems: 1
+      responses:
+        "200":
+          description: Remarcado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  appointmentId:
+                    type: string
+                    format: uuid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [Agendamentos]
+      operationId: cancelAppointment
+      summary: Cancelar agendamento
+      description: "Privada. Scope: `appointments:cancel`. Marca `cancelled` (não apaga)."
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Cancelado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  appointmentId:
+                    type: string
+                    format: uuid
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /appointment-reminders/due:
+    get:
+      tags: [Lembretes]
+      operationId: listDueReminders
+      summary: Lembretes vencidos para disparo
+      description: "Privada. Scope: `appointment_reminders:read`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: now
+          in: query
+          description: ISO-8601 com offset (opcional, para testes)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Lista de lembretes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  reminders:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AppointmentReminder"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /appointment-reminders/pending-response:
+    get:
+      tags: [Lembretes]
+      operationId: getPendingReminderResponse
+      summary: Lembrete enviado aguardando confirmação do cliente
+      description: "Privada. Scope: `appointment_reminders:read`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Lembrete pendente ou null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  found:
+                    type: boolean
+                  reminder:
+                    oneOf:
+                      - $ref: "#/components/schemas/AppointmentReminder"
+                      - type: "null"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /appointment-reminders/{id}/mark-sent:
+    post:
+      tags: [Lembretes]
+      operationId: markReminderSent
+      summary: Marcar lembrete como enviado
+      description: "Privada. Scope: `appointment_reminders:write`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                providerMessageId:
+                  type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /appointment-reminders/{id}/confirm:
+    post:
+      tags: [Lembretes]
+      operationId: confirmReminder
+      summary: Marcar lembrete como confirmado pelo cliente
+      description: "Privada. Scope: `appointment_reminders:write`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /comandas:
+    get:
+      tags: [Comandas]
+      operationId: listOrOpenComandas
+      summary: Listar comandas do dia ou abrir por agendamento
+      description: |
+        Privada. Scope: `comandas:read`.
+        Use `appointmentId` (get-or-create) **ou** `date`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed]
+        - name: professionalId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Comanda única ou lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  comanda:
+                    $ref: "#/components/schemas/Comanda"
+                  comandas:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Comanda"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /comandas/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [Comandas]
+      operationId: getComanda
+      summary: Detalhe da comanda
+      description: "Privada. Scope: `comandas:read`."
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Comanda
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  comanda:
+                    $ref: "#/components/schemas/Comanda"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Comandas]
+      operationId: updateComanda
+      summary: Atualizar itens da comanda
+      description: "Privada. Scope: `comandas:write` (dono ou chave)."
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      [serviceId, serviceName, catalogPriceCents, chargedPriceCents]
+                    properties:
+                      serviceId:
+                        type: string
+                        format: uuid
+                      serviceName:
+                        type: string
+                      catalogPriceCents:
+                        type: integer
+                        minimum: 0
+                      chargedPriceCents:
+                        type: integer
+                        minimum: 0
+      responses:
+        "200":
+          description: Comanda atualizada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  comanda:
+                    $ref: "#/components/schemas/Comanda"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /comandas/{id}/close:
+    post:
+      tags: [Comandas]
+      operationId: closeComanda
+      summary: Fechar comanda e registrar pagamento
+      description: "Privada. Scope: `comandas:write`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payments]
+              properties:
+                payments:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [paymentMethod, amountCents]
+                    properties:
+                      paymentMethod:
+                        $ref: "#/components/schemas/PaymentMethod"
+                      amountCents:
+                        type: integer
+                        minimum: 1
+      responses:
+        "200":
+          description: Comanda fechada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  comanda:
+                    $ref: "#/components/schemas/Comanda"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /comandas/{id}/reopen:
+    post:
+      tags: [Comandas]
+      operationId: reopenComanda
+      summary: Reabrir comanda fechada
+      description: "Privada. Scope: `comandas:write`."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                confirmCreditShortfall:
+                  type: boolean
+      responses:
+        "200":
+          description: Comanda reaberta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  comanda:
+                    $ref: "#/components/schemas/Comanda"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Ex. shortfall de crédito
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  error:
+                    type: string
+                  code:
+                    type: string
+                  shortfallCents:
+                    type: integer
+
+  /finance/cash-register:
+    get:
+      tags: [Financeiro]
+      operationId: getCashRegister
+      summary: Caixa do dia
+      description: "Privada. Scope: `finance:read` (dono ou chave)."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Resumo do caixa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  summary:
+                    type: object
+                    additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /finance/commissions:
+    get:
+      tags: [Financeiro]
+      operationId: getCommissions
+      summary: Comissões no período
+      description: "Privada. Scope: `finance:read` (dono ou chave)."
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: professionalId
+          in: query
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Resumo de comissões
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  summary:
+                    type: object
+                    additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: dbc_live_<keyId>_<secret>
+      description: |
+        Chave gerada em Configurações → Integrações → Chaves de API.
+        Exemplo: `Authorization: Bearer dbc_live_abc_xyz`
+
+  parameters:
+    whatsappQuery:
+      name: whatsapp
+      in: query
+      required: true
+      schema:
+        type: string
+      example: "11999999999"
+      description: WhatsApp com DDD (com ou sem 55)
+    appointmentId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        error:
+          type: string
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        firstName:
+          type: string
+        lastName:
+          type: string
+        whatsapp:
+          type: string
+          example: "5511999999999"
+    PublicAppointment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        professionalId:
+          type: string
+          format: uuid
+        professionalName:
+          type: string
+        professionalPhotoUrl:
+          type: string
+          nullable: true
+        professionalPhotoPosition:
+          type: string
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+        serviceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        serviceNames:
+          type: array
+          items:
+            type: string
+        totalMinutes:
+          type: integer
+        totalPriceCents:
+          type: integer
+    CreateAppointmentBody:
+      type: object
+      required: [date, startTime, serviceIds, firstName, lastName, whatsapp]
+      properties:
+        professionalId:
+          type: string
+          format: uuid
+        anyProfessional:
+          type: boolean
+        date:
+          type: string
+          format: date
+        startTime:
+          type: string
+          example: "10:00"
+        serviceIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+        firstName:
+          type: string
+        lastName:
+          type: string
+        whatsapp:
+          type: string
+    AppointmentReminder:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        scheduledFor:
+          type: string
+          format: date-time
+        customer:
+          type: object
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            whatsapp:
+              type: string
+        professional:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              name:
+                type: string
+              priceCents:
+                type: integer
+        shop:
+          type: object
+          properties:
+            name:
+              type: string
+            address:
+              type: string
+    PaymentMethod:
+      type: string
+      enum: [pix, cash, debit, credit, store_credit]
+    Comanda:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [open, closed]
+        totalCents:
+          type: integer
+        commissionCents:
+          type: integer
+        customerFirstName:
+          type: string
+        customerLastName:
+          type: string
+        customerWhatsapp:
+          type: string
+        serviceDate:
+          type: string
+          format: date
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        payments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              paymentMethod:
+                $ref: "#/components/schemas/PaymentMethod"
+              amountCents:
+                type: integer
+
+  responses:
+    BadRequest:
+      description: Parâmetros inválidos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Não autorizado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            ok: false
+            error: Não autorizado.
+    Forbidden:
+      description: Sem permissão
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            ok: false
+            error: Sem permissão.
+    NotFound:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Conflito de regra de negócio
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: Rate limit excedido
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Segundos até tentar de novo
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.

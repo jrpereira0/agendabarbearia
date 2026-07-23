@@ -17,6 +17,7 @@
     "test:api:customer-by-whatsapp": "node scripts/test-customer-by-whatsapp.mjs"
   },
   "dependencies": {
+    "@scalar/api-reference-react": "^0.9.59",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",
     "class-variance-authority": "^0.7.1",
