@@ -4,7 +4,7 @@ Documentação das rotas de **comandas** e **relatórios financeiros** em `/api/
 
 Guia geral de autenticação e chaves: [guia-n8n.md](./guia-n8n.md).
 
-**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — no painel: **Configurações → Integrações → Documentação da API**.
+**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — tela dedicada `/docs/api` (**Configurações → Integrações → Documentação da API**).
 
 ---
 

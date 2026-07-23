@@ -4,7 +4,7 @@ Referência e guias da API REST em `/api/v1`.
 
 ## No painel
 
-**Configurações → Integrações → Documentação da API** — interface interativa (estilo OpenAPI/Scalar), só para o dono.
+**Configurações → Integrações → Documentação da API** — abre a tela dedicada `/docs/api` (Scalar, só para o dono; fora do layout do painel).
 
 ## Arquivos
 

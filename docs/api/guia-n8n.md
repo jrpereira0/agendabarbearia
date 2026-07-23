@@ -23,12 +23,15 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | # | Método | Rota | Auth | Função |
 | --- | --- | --- | --- | --- |
 | 1 | `GET` | `/catalog` | Pública | Catálogo completo ou enxuto (`?date=...&mode=booking`) |
-| 2 | `GET` | `/availability` | Pública | Horários livres de um barbeiro num dia |
+| 1b | `GET` | `/services` | Pública | Listar todos os serviços ativos (opcional `?professionalId=` / `?date=`) |
+| 1c | `GET` | `/professionals` | Pública | Listar profissionais ativos (opcional `?serviceId=`) |
+| 2 | `GET` | `/appointments/availability` | Pública | Horários livres |
 | 3 | `GET` | `/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (**recomendado para n8n**; retorna `id`) |
 | 4 | `GET` | `/customers/lookup` | Pública | Buscar cliente pelo WhatsApp (resposta simples; usado pelo site) |
-| 5 | `GET` | `/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
+| 5 | `GET` | `/appointments?whatsapp=` | **Privada** | Listar / histórico (`mode=upcoming` \| `history` \| `all`) |
 | 5b | `GET` | `/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | 6 | `POST` | `/appointments` | Pública | Criar agendamento (site e bot sem chave) |
+| 6b | `PUT` | `/appointments/:id/status` | **Privada** | Atualizar status (`scheduled` / `confirmed` / `cancelled` / `done`) |
 | 7 | `PATCH` | `/appointments/:id` | **Privada** | Remarcar agendamento |
 | 8 | `DELETE` | `/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
 | 8b | `GET` | `/appointment-reminders/due` | **Privada** | Listar lembretes vencidos (n8n consulta pra disparar no WhatsApp) — ver [seção 6e](#6e-lembretes-automáticos-para-clientes-1h-antes) |
@@ -42,11 +45,11 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar catálogo, h
 | 13 | `GET` | `/finance/cash-register` | **Privada** | Caixa do dia |
 | 14 | `GET` | `/finance/commissions` | **Privada** | Comissões por barbeiro no período |
 
-**Resumo:** 4 rotas públicas (1, 2, 4, 6) e 10 privadas de agenda/cliente (3, 5, 7, 8) + **4 rotas de lembretes** (8b–8e, todas privadas) + **6 rotas financeiras** (9–14, todas privadas). Encaixe, status manual e cadastros continuam só pelo painel — exceto comandas/caixa via API com chave.
+**Resumo:** 6 rotas públicas (1, 1b, 1c, 2, 4, 6) e privadas de agenda/cliente (3, 5, 5b, 6b, 7, 8) + **4 rotas de lembretes** (8b–8e) + **6 rotas financeiras** (9–14). Encaixe e cadastros continuam só pelo painel — status de agendamento também via `PUT /appointments/:id/status`.
 
 **Financeiro:** guia detalhado com exemplos de corpo JSON em [financeiro.md](./financeiro.md).
 
-**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — também disponível no painel em **Configurações → Integrações → Documentação da API**.
+**Referência interativa (OpenAPI):** [../openapi/v1.yaml](../openapi/v1.yaml) — tela dedicada em `/docs/api` (**Configurações → Integrações → Documentação da API**).
 
 **Regra do header `Authorization`:** em rotas **públicas**, se você **não** enviar o header, a requisição passa. Se **enviar** `Bearer ...`, a chave será validada — chave inválida retorna **401** (não ignora o header).
 
@@ -75,7 +78,7 @@ dbc_live_<keyId>_<secret>
 | Nome do header | `Authorization` |
 | Valor | `Bearer dbc_live_SEU_KEYID_SEU_SECRET` |
 
-Use a **mesma credencial** em todos os nós **HTTP Request** e **HTTP Request Tool** — inclusive nos nós de rotas públicas (`/catalog`, `/availability`, `POST /appointments`), para não misturar requisições com e sem header.
+Use a **mesma credencial** em todos os nós **HTTP Request** e **HTTP Request Tool** — inclusive nos nós de rotas públicas (`/catalog`, `/appointments/availability`, `POST /appointments`), para não misturar requisições com e sem header.
 
 ### Exemplo (substitua pela chave copiada no painel — nunca commite a chave real)
 
@@ -88,12 +91,12 @@ Authorization: Bearer <sua-chave-do-painel>
 
 | Scope | Rotas |
 | --- | --- |
-| `catalog:read` | `GET /catalog` |
-| `availability:read` | `GET /availability` |
+| `catalog:read` | `GET /catalog`, `GET /services`, `GET /professionals` |
+| `availability:read` | `GET /appointments/availability` |
 | `customers:read` | `GET /customers/by-whatsapp`, `GET /customers/lookup` |
 | `appointments:read` | `GET /appointments`, `GET /appointments/last-completed` |
 | `appointments:create` | `POST /appointments` |
-| `appointments:update` | `PATCH /appointments/:id` |
+| `appointments:update` | `PATCH /appointments/:id`, `PUT /appointments/:id/status` |
 | `appointments:cancel` | `DELETE /appointments/:id` |
 | `comandas:read` | `GET /comandas`, `GET /comandas/:id` |
 | `comandas:write` | `PATCH /comandas/:id`, `POST /comandas/:id/close`, `POST /comandas/:id/reopen` |
@@ -115,7 +118,7 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 - O site `/agenda` **não usa** chave de API no navegador
 - **Meus horários:** após digitar o WhatsApp, o site chama `POST /api/agenda/session` (cookie httpOnly assinado) e depois as rotas protegidas com `credentials: include`
 - **Novo agendamento:** continua em `POST /api/v1/appointments` sem chave (rate limit por IP/WhatsApp)
-- **Catálogo e disponibilidade:** continuam públicos (`GET /catalog`, `GET /availability`)
+- **Catálogo e disponibilidade:** continuam públicos (`GET /catalog`, `GET /appointments/availability`)
 - **Rotas sensíveis** exigem API Key, sessão admin ou cookie de cliente — sem fallback público:
 
 | Rota | Auth obrigatória |
@@ -123,6 +126,7 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 | `GET /customers/by-whatsapp` | Sim |
 | `GET /appointments` | Sim |
 | `GET /appointments/last-completed` | Sim |
+| `PUT /appointments/:id/status` | Sim (chave ou dono; não sessão do cliente) |
 | `PATCH /appointments/:id` | Sim |
 | `DELETE /appointments/:id` | Sim |
 | `GET /appointment-reminders/due` | Sim |
@@ -174,10 +178,10 @@ Se exceder, a API responde **429** com:
 
 | Rotas | Limite |
 | --- | --- |
-| `GET /catalog`, `GET /availability` | 60 requisições / 15 min por IP (ou por chave de API) |
+| `GET /catalog`, `GET /appointments/availability` | 60 requisições / 15 min por IP (ou por chave de API) |
 | `GET /customers/by-whatsapp`, `GET /customers/lookup`, `GET /appointments?whatsapp=` | 10 / 15 min por IP (ou por chave) |
 | `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp (chave: 120/15min por keyId) |
-| `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP (ou por chave) |
+| `PUT /appointments/:id/status`, `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP (ou por chave) |
 | Qualquer rota com chave de API | 120 / 15 min por `keyId` |
 
 **Dica para n8n:** chamar `/catalog` no início da conversa ou em cache; não repetir a cada mensagem “oi”.
@@ -205,7 +209,7 @@ Obtenha sempre a versão atual via `GET /catalog`. Referência de junho/2026:
 | Junior Barber | `054a545a-75c8-4807-b72d-5c460bb3539f` |
 | Seu Chico | `94e8b62b-366d-4c8d-baf5-2ca07165c93d` |
 
-Cada profissional tem `serviceIds`: lista de serviços que ele realiza (no catálogo).
+Cada profissional tem `serviceIds`: só os **IDs** dos serviços que ele realiza. Detalhes (nome, preço, duração) vêm de `GET /services` — recursos separados.
 
 ### Serviços
 
@@ -374,7 +378,7 @@ Leitura do exemplo: Corte custa **R$ 60,00** (`6000` centavos) seg–qua (índic
 - `priceCents` na resposta com data é o preço **daquele dia**; use `prices` + `dayLabels` para explicar outros dias
 - **Domingo:** se a loja estiver fechada (`businessHours[0].active = false`), retorna `shopClosed: true`, `professionals: []`, `services: []`, `priceBand: "sunday"`
 - **Feriados:** não tratados nesta versão — use exceções de agenda no painel se precisar fechar um dia específico
-- `GET /availability` e `POST /appointments` também validam se o serviço está disponível no dia escolhido
+- `GET /appointments/availability` e `POST /appointments` também validam se o serviço está disponível no dia escolhido
 
 **Campo `displayName`:** igual ao `name` (nome limpo no cadastro). Mantido para o bot/IA.
 
@@ -411,12 +415,82 @@ Retorna todos os serviços com `prices` (sem `priceCents` nem filtro por dia).
 
 ---
 
+### 1b. Serviços (recurso próprio)
+
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/services` |
+| **Auth** | Pública. Opcional: chave com `catalog:read` |
+| **Rate limit** | 60 / 15 min por IP |
+
+Lista dados do serviço úteis pra bot/integração (nome, descrição, duração, preços, foto)
+e **quem realiza**: `professionalIds` + resumo (`id`, `nickname`, `photoUrl`).
+
+Não vêm: `photoPosition`, `bookingCount`, `weekdayPrices`, `priceLabel` (ajuste visual / ranking do site — o detalhe de preço fica em `prices`).
+
+| Query | Descrição |
+| --- | --- |
+| `professionalId` | Opcional — só serviços que esse barbeiro realiza |
+| `date` | Opcional — `AAAA-MM-DD` para preencher `priceCentsForDate` do dia |
+
+```
+GET {{baseUrl}}/services
+GET {{baseUrl}}/services?professionalId=054a545a-75c8-4807-b72d-5c460bb3539f
+GET {{baseUrl}}/services?date=2026-07-22
+```
+
+---
+
+### 1c. Profissionais (recurso próprio)
+
+| | |
+| --- | --- |
+| **Método** | `GET` |
+| **Rota** | `/professionals` |
+| **Auth** | Pública. Opcional: chave com `catalog:read` |
+| **Rate limit** | 60 / 15 min por IP |
+
+Lista **só dados públicos do profissional** (apelido, foto, `serviceIds`). Não embute detalhes de serviços.
+
+Não entram nesta rota pública: `photoPosition`, e-mail, WhatsApp do barbeiro, nome/sobrenome completo nem comissão (dados internos do painel / ajuste visual do site).
+
+| Query | Descrição |
+| --- | --- |
+| `serviceId` | Opcional — só quem realiza aquele serviço |
+
+```
+GET {{baseUrl}}/professionals
+GET {{baseUrl}}/professionals?serviceId=3a62b091-6916-4741-a3d4-754a33b2cb31
+```
+
+**Resposta (exemplo):**
+
+```json
+{
+  "ok": true,
+  "timezone": "America/Sao_Paulo",
+  "professionals": [
+    {
+      "id": "054a545a-75c8-4807-b72d-5c460bb3539f",
+      "nickname": "Junior Barber",
+      "photoUrl": "https://...",
+      "serviceIds": ["0ab080c4-...", "3a62b091-...", "da8126ca-..."]
+    }
+  ]
+}
+```
+
+Para montar o card completo no bot: chame `/professionals` e `/services` e cruze pelos IDs.
+
+---
+
 ### 2. Horários livres
 
 | | |
 | --- | --- |
 | **Método** | `GET` |
-| **Rota** | `/availability` |
+| **Rota** | `/appointments/availability` |
 | **Auth** | Pública (sem header). Opcional: chave com `availability:read` |
 | **Rate limit** | 60 / 15 min por IP |
 
@@ -433,13 +507,13 @@ Retorna todos os serviços com `prices` (sem `priceCents` nem filtro por dia).
 **Sem preferência (qualquer barbeiro livre):**
 
 ```
-GET {{baseUrl}}/availability?anyProfessional=1&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
+GET {{baseUrl}}/appointments/availability?anyProfessional=1&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
 ```
 
 **Exemplo — Junior + Corte e Barba em 15/06/2026:**
 
 ```
-GET https://agendabarbearia-seven.vercel.app/api/v1/availability?professionalId=054a545a-75c8-4807-b72d-5c460bb3539f&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
+GET https://agendabarbearia-seven.vercel.app/api/v1/appointments/availability?professionalId=054a545a-75c8-4807-b72d-5c460bb3539f&date=2026-06-15&serviceIds=da8126ca-730d-49e9-a429-2dd0d6965409
 ```
 
 **Resposta 200 — com horários disponíveis:**
@@ -690,7 +764,7 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=11
 
 ---
 
-### 5. Listar agendamentos futuros do cliente
+### 5. Consultar agendamentos / histórico
 
 | | |
 | --- | --- |
@@ -712,36 +786,28 @@ GET https://agendabarbearia-seven.vercel.app/api/v1/customers/lookup?whatsapp=11
 | Parâmetro | Obrigatório | Descrição |
 | --- | --- | --- |
 | `whatsapp` | Sim | WhatsApp do cliente (normalizado automaticamente) |
+| `mode` | Não | `upcoming` (padrão), `history` ou `all` |
+
+| `mode` | O que retorna |
+| --- | --- |
+| `upcoming` | Futuros ativos (`scheduled` / `confirmed`) — site "Meus horários" |
+| `history` | Passados, cancelados e concluídos (mais recentes primeiro) |
+| `all` | Todos os status (até 50) |
 
 **Exemplo:**
 
 ```
 GET https://agendabarbearia-seven.vercel.app/api/v1/appointments?whatsapp=11981008852
+GET https://agendabarbearia-seven.vercel.app/api/v1/appointments?whatsapp=11981008852&mode=history
 Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
-```
-
-**Sem autenticação (401):**
-
-```json
-{
-  "ok": false,
-  "error": "Não autorizado."
-}
-```
-
-**Cookie de outro WhatsApp (403):**
-
-```json
-{
-  "ok": false,
-  "error": "Sem permissão."
-}
 ```
 
 **Resposta 200:**
 
 ```json
 {
+  "ok": true,
+  "mode": "upcoming",
   "appointments": [
     {
       "id": "uuid-do-agendamento",
@@ -750,6 +816,7 @@ Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
       "professionalPhotoUrl": "https://...",
       "date": "2026-06-15",
       "startTime": "14:30",
+      "status": "scheduled",
       "serviceIds": ["da8126ca-730d-49e9-a429-2dd0d6965409"],
       "serviceNames": ["Corte e Barba"],
       "totalMinutes": 60,
@@ -759,7 +826,7 @@ Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
 }
 ```
 
-Lista só agendamentos **futuros**, status ativo (`scheduled`, `confirmed`), **sem encaixe**. Array vazio se não houver nenhum.
+Sem encaixe. Array vazio se não houver nenhum no modo pedido.
 
 ---
 
@@ -1279,6 +1346,38 @@ Marca `status = confirmed` e `confirmed_at = now()`. Se o agendamento ainda esti
 
 ---
 
+### 6b. Atualizar status do agendamento
+
+| | |
+| --- | --- |
+| **Método** | `PUT` |
+| **Rota** | `/appointments/:id/status` |
+| **Auth** | **Obrigatória** — chave (`appointments:update`) ou sessão do **dono** no painel |
+| **Rate limit** | 10 / 15 min por IP (ou por chave) |
+| **Headers** | `Content-Type: application/json`, `Authorization: Bearer ...` |
+
+Não usa a sessão do cliente do site. Para o cliente cancelar, continue com `DELETE /appointments/:id`.
+
+**Body:**
+
+```json
+{ "status": "confirmed" }
+```
+
+Valores: `scheduled`, `confirmed`, `cancelled`, `done`.
+
+**Resposta 200:**
+
+```json
+{
+  "ok": true,
+  "appointmentId": "uuid-do-agendamento",
+  "status": "confirmed"
+}
+```
+
+---
+
 ### 7. Remarcar agendamento
 
 | | |
@@ -1324,7 +1423,7 @@ Marca `status = confirmed` e `confirmed_at = now()`. Se o agendamento ainda esti
 
 Só funciona para agendamentos **futuros**, status ativo, **sem encaixe**. O `whatsapp` deve ser do dono do agendamento.
 
-**Dica:** use `GET /availability` com `excludeAppointmentId` igual ao `id` do agendamento para listar horários na remarcação.
+**Dica:** use `GET /appointments/availability` com `excludeAppointmentId` igual ao `id` do agendamento para listar horários na remarcação.
 
 **Erros comuns:** 401 (sem auth), 403 (scope ou WhatsApp não confere com cookie), 404 (`Agendamento não encontrado ou não pode ser alterado.`), 409 (horário indisponível ou data passada).
 
@@ -1387,7 +1486,7 @@ FLUXO AGENDAR (com IA):
 5. Perguntar data (validar não domingo/fechado, não passado)
 6. GET /catalog?date=AAAA-MM-DD&mode=booking&professionalId=... → serviços do dia + priceCents + prices completos
 7. IA ou menu: cliente escolhe serviço(s) → guardar serviceIds[] (usar id do JSON)
-8. GET /availability → listar slots
+8. GET /appointments/availability → listar slots
 9. Cliente escolhe horário → guardar startTime
 10. GET /customers/by-whatsapp?whatsapp= → se found: usar customer.firstName + lastName; senão perguntar firstName + lastName
 11. Resumo e confirmação (Sim/Não) — mostrar preço de priceCents ou da faixa em prices
@@ -1400,7 +1499,7 @@ FLUXO AGENDAR (menus 1-2-3, sem IA):
 5. Filtrar services onde id está em professional.serviceIds → listar (priceCents = menor da semana; após escolher data, chame availability para preço certo)
 6. Cliente escolhe serviço(s) → guardar serviceIds[]
 7. Perguntar data (validar não domingo, não passado)
-8. GET /availability → listar slots
+8. GET /appointments/availability → listar slots
 9. Cliente escolhe horário → guardar startTime
 10. GET /customers/by-whatsapp?whatsapp= → se found: usar customer.firstName + lastName; senão perguntar firstName + lastName
 11. Resumo e confirmação (Sim/Não)
@@ -1416,7 +1515,7 @@ FLUXO CANCELAR:
 
 FLUXO REMARCAR (opcional):
 - GET /appointments?whatsapp= → cliente escolhe qual
-- GET /availability?excludeAppointmentId=... → novos horários
+- GET /appointments/availability?excludeAppointmentId=... → novos horários
 - PATCH /appointments/:id
 ```
 
@@ -1431,8 +1530,8 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Catálogo (site) | GET | `{{baseUrl}}/catalog` | Pública (envie a chave mesmo assim) |
 | Catálogo (bot, com data) | GET | `{{baseUrl}}/catalog?date={{data}}&mode=booking&professionalId={{id}}` | Pública |
 | Catálogo (bot, sem data) | GET | `{{baseUrl}}/catalog?mode=booking` | Pública |
-| Disponibilidade | GET | `{{baseUrl}}/availability?professionalId=...&date=...&serviceIds=...` | Pública |
-| Disponibilidade (remarcar) | GET | `{{baseUrl}}/availability?...&excludeAppointmentId=...` | Pública |
+| Horários livres | GET | `{{baseUrl}}/appointments/availability?professionalId=...&date=...&serviceIds=...` | Pública |
+| Horários livres (remarcar) | GET | `{{baseUrl}}/appointments/availability?...&excludeAppointmentId=...` | Pública |
 | Lookup cliente | GET | `{{baseUrl}}/customers/by-whatsapp?whatsapp=...` | **Privada** |
 | Listar agendamentos | GET | `{{baseUrl}}/appointments?whatsapp=...` | **Privada** |
 | Criar | POST | `{{baseUrl}}/appointments` + JSON body | Pública (chave opcional) |

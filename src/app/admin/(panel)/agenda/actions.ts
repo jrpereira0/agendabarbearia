@@ -25,6 +25,11 @@ import {
   type AppointmentStatus,
 } from "@/lib/appointment-status";
 import {
+  applyAppointmentStatusUpdate,
+  appointmentWorkflowStatusSchema,
+  type AppointmentWorkflowStatus,
+} from "@/lib/update-appointment-status";
+import {
   detachEncaixeFromOpenComandas,
   finalizeOpenComandaAfterAppointmentRemoved,
   syncOpenComandaAfterAppointmentEdit,
@@ -1397,69 +1402,9 @@ export async function moveAppointmentToDate(input: {
   return { ok: true };
 }
 
-const workflowStatusSchema = z.enum([
-  "scheduled",
-  "confirmed",
-  "cancelled",
-  "done",
-]);
-
-async function ensureSlotForActiveStatus(
-  check: {
-    professionalId: string;
-    date: string;
-    startTime: string;
-    serviceIds: string[];
-    isSqueezeIn: boolean;
-  },
-  appointmentId: string,
-  isOwner: boolean
-): Promise<ActionResult | null> {
-  if (check.isSqueezeIn || check.serviceIds.length === 0) {
-    return null;
-  }
-
-  const availability = await getAvailability(
-    check.professionalId,
-    check.date,
-    check.serviceIds,
-    undefined,
-    { adminEdit: true, ownerFreeSchedule: isOwner }
-  );
-
-  if (!availability.ok) {
-    return { ok: false, error: availability.error };
-  }
-
-  if (
-    !isOwner &&
-    !availability.slots.includes(check.startTime)
-  ) {
-    return { ok: false, error: "Esse horário não está mais disponível." };
-  }
-
-  const slotCheck = await validateAdminAppointmentSlot(
-    check.professionalId,
-    check.date,
-    check.startTime,
-    availability.durationMinutes,
-    appointmentId,
-    { skipScheduleBlocks: isOwner }
-  );
-
-  if (!slotCheck.ok) {
-    return {
-      ok: false,
-      error: isOwner ? OCCUPIED_SLOT_MESSAGE : slotCheck.error,
-    };
-  }
-
-  return null;
-}
-
 export async function updateAppointmentStatus(
   appointmentId: string,
-  status: z.infer<typeof workflowStatusSchema>
+  status: AppointmentWorkflowStatus
 ): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
@@ -1467,56 +1412,20 @@ export async function updateAppointmentStatus(
   const denied = assertPermission(session, "canEditAppointments");
   if (denied) return denied;
 
-  const parsed = workflowStatusSchema.safeParse(status);
+  const parsed = appointmentWorkflowStatusSchema.safeParse(status);
   if (!parsed.success) {
     return { ok: false, error: "Status inválido." };
   }
 
-  const check = await assertOwnsAppointment(appointmentId, session);
-  if (!("professionalId" in check)) return check;
+  const result = await applyAppointmentStatusUpdate({
+    appointmentId,
+    status: parsed.data,
+    asOwner: session.isOwner,
+    restrictToProfessionalId: session.isOwner ? null : session.professionalId,
+  });
 
-  if (parsed.data === check.status) {
-    return { ok: true };
-  }
-
-  const becomingActive = (
-    ACTIVE_APPOINTMENT_STATUSES as readonly string[]
-  ).includes(parsed.data);
-
-  const wasInactive =
-    check.status === "cancelled" || check.status === "done";
-
-  if (becomingActive && wasInactive) {
-    const slotError = await ensureSlotForActiveStatus(
-      check,
-      appointmentId,
-      session.isOwner
-    );
-    if (slotError) return slotError;
-  }
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) return admin;
-  const { error } = await admin
-    .from("appointments")
-    .update({ status: parsed.data })
-    .eq("id", appointmentId);
-
-  if (error) {
-    if (error.code === "23P01") {
-      return { ok: false, error: "Esse horário já está ocupado." };
-    }
-    if (error.code === "23514") {
-      return {
-        ok: false,
-        error:
-          "O banco ainda não foi atualizado. Rode npm run db:migrate e tente de novo.",
-      };
-    }
-    return {
-      ok: false,
-      error: error.message || "Não foi possível atualizar o status.",
-    };
+  if (!result.ok) {
+    return { ok: false, error: result.error };
   }
 
   revalidateAdminAndPublicAgendaSoon();

@@ -156,7 +156,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - O **intervalo da agenda** (de quantos em quantos minutos os horários aparecem) é configurável em **Configurações**: 15, 30, 45 ou 60 min (`shop_settings.slot_step_minutes`, padrão 15)
 - Pra hoje, só oferece horários com 10 min de antecedência; agenda aberta até **60 dias** à frente
 - Fuso fixo da barbearia: `America/Sao_Paulo`
-- Exposto em `GET /api/v1/availability?professionalId=...&date=AAAA-MM-DD&serviceIds=id1,id2` (público, mesmo endpoint que o site e as automações de WhatsApp usam)
+- Exposto em `GET /api/v1/appointments/availability?professionalId=...&date=AAAA-MM-DD&serviceIds=id1,id2` (público, mesmo endpoint que o site e as automações de WhatsApp usam)
 
 ## Página do cliente (`/agenda`)
 
@@ -170,7 +170,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Preços após escolher a data:** na etapa de data/horário e na confirmação, o total passa a usar o **valor exato** do dia selecionado (mesma regra da API ao gravar)
 - Aba **Horários** (Meus horários): cliente digita WhatsApp, vê agendamentos futuros (total já pelo preço do dia do horário), pode **remarcar** (data, horário, serviços) ou **cancelar**
 - Se o número já existir e não for a pessoa, o cliente troca o WhatsApp (não edita o nome de outro cadastro)
-- Usa a mesma regra de horários livres da API (`GET /api/v1/availability`)
+- Usa a mesma regra de horários livres da API (`GET /api/v1/appointments/availability`)
 - Confirmação via `POST /api/v1/appointments` (servidor valida de novo antes de gravar)
 - O dono edita o perfil público em **Configurações** (`/admin/configuracoes`)
 - Campos do perfil em `shop_settings`: `shop_name`, `bio`, `cep`, `street`, `address_number`, `address_complement`, `neighborhood`, `city`, `state`, `address` (texto montado automaticamente), `whatsapp`, `instagram`, `logo_url`
@@ -181,7 +181,7 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6 operações).
 
 **Documentação:**
-- Referência OpenAPI (interativa no painel): [openapi/v1.yaml](./openapi/v1.yaml) — **Configurações → Integrações → Documentação da API**
+- Referência OpenAPI (tela dedicada `/docs/api`): [openapi/v1.yaml](./openapi/v1.yaml) — **Configurações → Integrações → Documentação da API**
 - Guia n8n / WhatsApp: [api/guia-n8n.md](./api/guia-n8n.md)
 - Financeiro detalhado: [api/financeiro.md](./api/financeiro.md)
 - Índice: [api/README.md](./api/README.md)
@@ -189,12 +189,15 @@ Rotas de agendamento (9 operações) + lembretes (4 operações) + financeiro (6
 | Método | Rota | Auth | Função |
 | --- | --- | --- | --- |
 | GET | `/api/v1/catalog` | Pública | Catálogo completo (`weekdayPrices` em cada serviço) ou `?mode=booking` enxuto para n8n/IA (`dayLabels` + `prices` agrupados) |
-| GET | `/api/v1/availability` | Pública | Horários livres de um barbeiro (`professionalId`) ou de qualquer um (`anyProfessional=1`) |
+| GET | `/api/v1/services` | Pública | Lista **serviços** (preços agrupados + quem realiza); opcional `?professionalId=` e `?date=` |
+| GET | `/api/v1/professionals` | Pública | Lista **profissionais** ativos (dados do barbeiro + `serviceIds`); opcional `?serviceId=` |
+| GET | `/api/v1/appointments/availability` | Pública | Horários livres (`professionalId` ou `anyProfessional=1`) |
 | GET | `/api/v1/customers/by-whatsapp` | **Privada** | Buscar cliente pelo WhatsApp (retorna `id`) — **n8n** |
 | GET | `/api/v1/customers/lookup` | Pública | Buscar cliente (site `/agenda`, resposta simples) |
-| GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos futuros do cliente |
+| GET | `/api/v1/appointments?whatsapp=` | **Privada** | Listar agendamentos (`mode=upcoming` padrão, `history` ou `all`) |
 | GET | `/api/v1/appointments/last-completed?whatsapp=` | **Privada** | Último atendimento concluído do cliente |
 | POST | `/api/v1/appointments` | Pública | Criar agendamento online |
+| PUT | `/api/v1/appointments/:id/status` | **Privada** | Atualizar status (`scheduled` / `confirmed` / `cancelled` / `done`) |
 | PATCH | `/api/v1/appointments/:id` | **Privada** | Remarcar agendamento |
 | DELETE | `/api/v1/appointments/:id?whatsapp=` | **Privada** | Cancelar agendamento |
 | GET | `/api/v1/appointment-reminders/due` | **Privada** | Listar lembretes vencidos (n8n consulta pra disparar no WhatsApp) |
@@ -218,7 +221,7 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 
 | Rotas | Limite |
 | --- | --- |
-| `catalog` e `availability` | 60 a cada 15 min |
+| `catalog` / `services` / `professionals` / `availability` | 60 a cada 15 min |
 | `customers/by-whatsapp`, `customers/lookup` e `appointments?whatsapp=` | 10 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |

@@ -5,13 +5,21 @@ import { safeApiRoute } from "@/lib/api/safe-route";
 import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
 import { resolveApiAuth } from "@/lib/api-key-auth";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
-import { listPublicAppointmentsByWhatsapp } from "@/lib/manage-public-appointment";
+import {
+  LIST_APPOINTMENTS_MODES,
+  listPublicAppointmentsByWhatsapp,
+  type ListAppointmentsMode,
+} from "@/lib/manage-public-appointment";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
   whatsappSchema,
 } from "@/lib/whatsapp";
+
+const listQuerySchema = z.object({
+  mode: z.enum(LIST_APPOINTMENTS_MODES).default("upcoming"),
+});
 
 const bodySchema = z
   .object({
@@ -39,7 +47,7 @@ const bodySchema = z
     }
   });
 
-// GET /api/v1/appointments?whatsapp=... — agendamentos futuros do cliente
+// GET /api/v1/appointments?whatsapp=...&mode=upcoming|history|all
 export async function GET(request: NextRequest) {
   return safeApiRoute(async () => {
     const raw = request.nextUrl.searchParams.get("whatsapp") ?? "";
@@ -51,6 +59,19 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const modeRaw = request.nextUrl.searchParams.get("mode") ?? undefined;
+    const parsedMode = listQuerySchema.safeParse({ mode: modeRaw });
+    if (!parsedMode.success) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "mode inválido. Use upcoming, history ou all.",
+        },
+        { status: 400 }
+      );
+    }
+    const mode: ListAppointmentsMode = parsedMode.data.mode;
+
     return withProtectedApiRouteGuard(
       request,
       {
@@ -59,7 +80,9 @@ export async function GET(request: NextRequest) {
         whatsapp,
       },
       async () => {
-        const result = await listPublicAppointmentsByWhatsapp(whatsapp);
+        const result = await listPublicAppointmentsByWhatsapp(whatsapp, {
+          mode,
+        });
 
         if (!result.ok) {
           return NextResponse.json(
@@ -68,7 +91,11 @@ export async function GET(request: NextRequest) {
           );
         }
 
-        return NextResponse.json({ appointments: result.data });
+        return NextResponse.json({
+          ok: true,
+          mode: result.data.mode,
+          appointments: result.data.appointments,
+        });
       }
     );
   });

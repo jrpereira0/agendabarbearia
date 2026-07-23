@@ -392,7 +392,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         params.set("professionalId", professionalId);
       }
 
-      fetch(`/api/v1/availability?${params}`)
+      fetch(`/api/v1/appointments/availability?${params}`)
         .then(async (res) => {
           const body = await res.json();
           if (cancelled) return;

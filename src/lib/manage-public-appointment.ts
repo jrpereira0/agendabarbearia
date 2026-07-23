@@ -43,11 +43,22 @@ export type PublicAppointmentItem = {
   professionalPhotoPosition: string;
   date: string;
   startTime: string;
+  status: string;
   serviceIds: string[];
   serviceNames: string[];
   totalMinutes: number;
   totalPriceCents: number;
 };
+
+export const LIST_APPOINTMENTS_MODES = [
+  "upcoming",
+  "history",
+  "all",
+] as const;
+
+export type ListAppointmentsMode = (typeof LIST_APPOINTMENTS_MODES)[number];
+
+const LIST_ALL_DEFAULT_LIMIT = 50;
 
 export type LastCompletedAppointment = {
   appointmentId: string;
@@ -168,8 +179,17 @@ async function loadOwnedAppointment(
 }
 
 export async function listPublicAppointmentsByWhatsapp(
-  rawWhatsapp: string
-): Promise<Result<PublicAppointmentItem[]>> {
+  rawWhatsapp: string,
+  options?: { mode?: ListAppointmentsMode; limit?: number }
+): Promise<
+  Result<{ mode: ListAppointmentsMode; appointments: PublicAppointmentItem[] }>
+> {
+  const mode = options?.mode ?? "upcoming";
+  const limit = Math.min(
+    Math.max(options?.limit ?? LIST_ALL_DEFAULT_LIMIT, 1),
+    100
+  );
+
   const whatsapp = normalizeWhatsapp(rawWhatsapp);
   if (!whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE, status: 400 };
@@ -182,7 +202,7 @@ export async function listPublicAppointmentsByWhatsapp(
 
   const today = todayInTimezone();
 
-  const { data: rows, error } = await admin
+  let query = admin
     .from("appointments")
     .select(
       `
@@ -200,11 +220,27 @@ export async function listPublicAppointmentsByWhatsapp(
     `
     )
     .in("customer_whatsapp", whatsappLookupKeys(whatsapp))
-    .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
-    .eq("is_squeeze_in", false)
-    .gte("date", today)
-    .order("date")
-    .order("start_time");
+    .eq("is_squeeze_in", false);
+
+  if (mode === "upcoming") {
+    query = query
+      .in("status", [...ACTIVE_APPOINTMENT_STATUSES])
+      .gte("date", today)
+      .order("date")
+      .order("start_time");
+  } else if (mode === "history") {
+    query = query
+      .order("date", { ascending: false })
+      .order("start_time", { ascending: false })
+      .limit(limit);
+  } else {
+    query = query
+      .order("date", { ascending: false })
+      .order("start_time", { ascending: false })
+      .limit(limit);
+  }
+
+  const { data: rows, error } = await query;
 
   if (error) {
     return {
@@ -239,7 +275,17 @@ export async function listPublicAppointmentsByWhatsapp(
   const appointments = (rows ?? [])
     .map((row) => {
       const startTime = formatTime(row.start_time);
-      if (!isUpcoming(row.date, startTime)) return null;
+      const upcoming = isUpcoming(row.date, startTime);
+      const active = (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(
+        row.status
+      );
+
+      if (mode === "upcoming") {
+        if (!upcoming || !active) return null;
+      } else if (mode === "history") {
+        // Passados, cancelados ou concluídos — não lista futuros ativos.
+        if (upcoming && active) return null;
+      }
 
       const pro = row.professionals as
         | {
@@ -259,8 +305,7 @@ export async function listPublicAppointmentsByWhatsapp(
       const pricing = pricingByDate.get(row.date);
       if (!pricing) return null;
 
-      const { serviceIds, serviceNames, totalMinutes, totalPriceCents } =
-        mapAppointmentServices(links, pricing);
+      const mapped = mapAppointmentServices(links, pricing);
 
       return {
         id: row.id,
@@ -272,15 +317,16 @@ export async function listPublicAppointmentsByWhatsapp(
         ),
         date: row.date,
         startTime,
-        serviceIds,
-        serviceNames,
-        totalMinutes,
-        totalPriceCents,
+        status: row.status,
+        serviceIds: mapped.serviceIds,
+        serviceNames: mapped.serviceNames,
+        totalMinutes: mapped.totalMinutes,
+        totalPriceCents: mapped.totalPriceCents,
       };
     })
     .filter((item): item is PublicAppointmentItem => item !== null);
 
-  return { ok: true, data: appointments };
+  return { ok: true, data: { mode, appointments } };
 }
 
 export async function getLastCompletedAppointmentByWhatsapp(

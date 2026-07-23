@@ -196,7 +196,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         excludeAppointmentId: editing.id,
       });
 
-      fetch(`/api/v1/availability?${params}`)
+      fetch(`/api/v1/appointments/availability?${params}`)
         .then(async (res) => {
           const body = await res.json();
           if (cancelled) return;

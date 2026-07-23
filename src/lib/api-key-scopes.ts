@@ -16,12 +16,12 @@ export const API_SCOPES = [
 export type ApiScope = (typeof API_SCOPES)[number];
 
 export const API_SCOPE_LABELS: Record<ApiScope, string> = {
-  "catalog:read": "Ver catálogo",
-  "availability:read": "Consultar horários livres",
+  "catalog:read": "Ver catálogo, serviços e profissionais",
+  "availability:read": "Consultar horários livres (agendamentos)",
   "customers:read": "Buscar clientes",
   "appointments:read": "Listar agendamentos",
   "appointments:create": "Criar agendamentos",
-  "appointments:update": "Remarcar agendamentos",
+  "appointments:update": "Remarcar e atualizar status",
   "appointments:cancel": "Cancelar agendamentos",
   "appointment_reminders:read": "Consultar lembretes de agendamento",
   "appointment_reminders:write": "Enviar e confirmar lembretes",

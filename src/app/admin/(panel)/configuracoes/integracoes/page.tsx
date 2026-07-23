@@ -28,7 +28,7 @@ export default async function IntegrationsPage() {
 
         <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden p-0")}>
           <Link
-            href="/admin/configuracoes/integracoes/documentacao"
+            href="/docs/api"
             className="flex items-center justify-between gap-3 border-b border-white/8 px-4 py-3.5 transition-colors hover:bg-white/[0.04] sm:gap-4 sm:px-5 sm:py-4"
           >
             <div className="flex min-w-0 items-start gap-3">
@@ -42,8 +42,8 @@ export default async function IntegrationsPage() {
                 <p
                   className={cn("mt-0.5 text-xs sm:text-sm", ADMIN_SURFACE.muted)}
                 >
-                  Veja todas as rotas, exemplos e autenticação em formato
-                  profissional.
+                  Abre numa tela só dela — rotas, exemplos e autenticação, com
+                  menu fixo.
                 </p>
               </div>
             </div>

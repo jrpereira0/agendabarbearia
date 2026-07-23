@@ -9,7 +9,7 @@ type ApiDocsReferenceProps = {
 
 export function ApiDocsReference({ openApiYaml }: ApiDocsReferenceProps) {
   return (
-    <div className="api-docs-scalar min-h-[70vh] overflow-hidden rounded-2xl ring-1 ring-white/10">
+    <div className="api-docs-scalar min-h-0 w-full flex-1">
       <ApiReferenceReact
         configuration={{
           content: openApiYaml,
@@ -17,6 +17,8 @@ export function ApiDocsReference({ openApiYaml }: ApiDocsReferenceProps) {
           forceDarkModeState: "dark",
           hideDarkModeToggle: true,
           theme: "saturn",
+          layout: "modern",
+          showSidebar: true,
           documentDownloadType: "yaml",
           servers: [
             {
