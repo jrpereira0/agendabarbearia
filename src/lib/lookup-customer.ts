@@ -14,6 +14,8 @@ export type CustomerPublic = {
   firstName: string;
   lastName: string;
   whatsapp: string;
+  /** Saldo de crédito na loja (centavos). */
+  creditBalanceCents: number;
 };
 
 export type CustomerByWhatsappResult =
@@ -40,7 +42,7 @@ export async function getCustomerByWhatsapp(
 
   const { data, error } = await admin
     .from("customers")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, credit_balance_cents")
     .in("whatsapp", whatsappLookupKeys(whatsapp))
     .limit(1)
     .maybeSingle();
@@ -65,6 +67,10 @@ export async function getCustomerByWhatsapp(
       firstName: capitalizePersonName(data.first_name),
       lastName: capitalizePersonName(data.last_name),
       whatsapp,
+      creditBalanceCents:
+        typeof data.credit_balance_cents === "number"
+          ? data.credit_balance_cents
+          : 0,
     },
   };
 }
@@ -122,7 +128,7 @@ export async function updateCustomerProfileByWhatsapp(input: {
 
   const { data: existing, error: lookupError } = await admin
     .from("customers")
-    .select("id")
+    .select("id, credit_balance_cents")
     .in("whatsapp", whatsappLookupKeys(whatsapp))
     .limit(1)
     .maybeSingle();
@@ -155,7 +161,16 @@ export async function updateCustomerProfileByWhatsapp(input: {
 
     return {
       ok: true,
-      customer: { id: existing.id, firstName, lastName, whatsapp },
+      customer: {
+        id: existing.id,
+        firstName,
+        lastName,
+        whatsapp,
+        creditBalanceCents:
+          typeof existing.credit_balance_cents === "number"
+            ? existing.credit_balance_cents
+            : 0,
+      },
     };
   }
 
@@ -166,7 +181,7 @@ export async function updateCustomerProfileByWhatsapp(input: {
       last_name: lastName,
       whatsapp,
     })
-    .select("id")
+    .select("id, credit_balance_cents")
     .single();
 
   if (error || !created) {
@@ -186,6 +201,15 @@ export async function updateCustomerProfileByWhatsapp(input: {
 
   return {
     ok: true,
-    customer: { id: created.id, firstName, lastName, whatsapp },
+    customer: {
+      id: created.id,
+      firstName,
+      lastName,
+      whatsapp,
+      creditBalanceCents:
+        typeof created.credit_balance_cents === "number"
+          ? created.credit_balance_cents
+          : 0,
+    },
   };
 }

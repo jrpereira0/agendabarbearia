@@ -176,7 +176,7 @@ Se exceder, a API responde **429** com:
 | Rotas | Limite |
 | --- | --- |
 | `GET /services`, `GET /professionals`, `GET /appointments/availability` | 60 requisições / 15 min por IP (ou por chave de API) |
-| `GET /customers`, `GET|PATCH /customers/me`, `GET /appointments?whatsapp=` | 10 / 15 min por IP (ou por chave) |
+| `GET /customers`, `GET|PATCH /customers/me`, `GET /appointments?whatsapp=` | 60 / 15 min por IP (ou por chave) |
 | `POST /appointments` | 5 / hora por IP **e** 3 / hora por WhatsApp (chave: 120/15min por keyId) |
 | `PUT /appointments/:id/status`, `PATCH /appointments/:id`, `DELETE /appointments/:id` | 10 / 15 min por IP (ou por chave) |
 | Qualquer rota com chave de API | 120 / 15 min por `keyId` |

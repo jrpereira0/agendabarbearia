@@ -58,7 +58,7 @@ info:
     | Rotas | Limite |
     | --- | --- |
     | shop, services, professionals, availability | 60 / 15 min |
-    | customers, customers/me, GET appointments | 10 / 15 min |
+    | customers, customers/me, GET appointments | 60 / 15 min |
     | POST appointments | 5/h por IP e 3/h por WhatsApp |
     | PATCH / DELETE appointments | 10 / 15 min |
 
@@ -1165,8 +1165,8 @@ components:
                 nullable: true
     Customer:
       type: object
-      description: Dados essenciais do cliente (nada além disso nesta API)
-      required: [id, firstName, lastName, whatsapp]
+      description: Dados essenciais do cliente (cadastro + crédito na loja)
+      required: [id, firstName, lastName, whatsapp, creditBalanceCents]
       properties:
         id:
           type: string
@@ -1178,6 +1178,10 @@ components:
         whatsapp:
           type: string
           example: "5511999999999"
+        creditBalanceCents:
+          type: integer
+          description: Saldo de crédito na loja, em centavos
+          example: 5000
     PublicAppointment:
       type: object
       properties:

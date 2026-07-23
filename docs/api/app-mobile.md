@@ -88,10 +88,13 @@ Authorization: Bearer <accessToken>
     "id": "22222222-2222-2222-2222-222222222222",
     "firstName": "João",
     "lastName": "Silva",
-    "whatsapp": "5511999999999"
+    "whatsapp": "5511999999999",
+    "creditBalanceCents": 5000
   }
 }
 ```
+
+`creditBalanceCents` é o crédito na loja (em centavos). Ex.: `5000` = R$ 50,00.
 
 **Ainda sem cadastro** (nunca agendou / nunca salvou perfil):
 

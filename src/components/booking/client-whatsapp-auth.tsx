@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,9 @@ export function ClientWhatsappAuth({
   resumeSession = true,
   className,
 }: ClientWhatsappAuthProps) {
+  const fieldId = useId();
+  const whatsappInputId = `${fieldId}-whatsapp`;
+  const otpInputId = `${fieldId}-otp`;
   const [phase, setPhase] = useState<AuthPhase>("phone");
   const [whatsapp, setWhatsapp] = useState("");
   const [code, setCode] = useState("");
@@ -150,11 +153,11 @@ export function ClientWhatsappAuth({
         )}
       >
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="clientWhatsappAuth" className="text-xs">
+          <Label htmlFor={whatsappInputId} className="text-xs">
             {title}
           </Label>
           <Input
-            id="clientWhatsappAuth"
+            id={whatsappInputId}
             inputMode="numeric"
             placeholder="(11) 99999-9999"
             value={whatsapp}
@@ -197,11 +200,11 @@ export function ClientWhatsappAuth({
       </div>
 
       <div className="mt-3.5">
-        <Label htmlFor="clientOtpCode" className="sr-only">
+        <Label htmlFor={otpInputId} className="sr-only">
           Código
         </Label>
         <Input
-          id="clientOtpCode"
+          id={otpInputId}
           inputMode="numeric"
           autoComplete="one-time-code"
           autoFocus

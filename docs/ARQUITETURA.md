@@ -223,7 +223,7 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 | Rotas | Limite |
 | --- | --- |
 | `shop` / `services` / `professionals` / `availability` | 60 a cada 15 min |
-| `customers` / `customers/me` e `appointments?whatsapp=` | 10 a cada 15 min |
+| `customers` / `customers/me` e `appointments?whatsapp=` | 60 a cada 15 min |
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
 
@@ -244,7 +244,7 @@ Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarc
 - Na ficha do cliente: editar dados e ver histórico de visitas (data, barbeiro, serviços, status)
 - Alterar nome/WhatsApp no painel atualiza também os agendamentos vinculados
 - Exclusão só é permitida se o cliente não tiver agendamentos no histórico
-- **App / site (cliente logado por OTP):** `GET` e `PATCH /api/v1/customers/me` — ver e editar **nome/sobrenome** do próprio cadastro; WhatsApp não muda. Detalhes: [api/app-mobile.md](./api/app-mobile.md)
+- **App / site (cliente logado por OTP):** `GET` e `PATCH /api/v1/customers/me` — ver e editar **nome/sobrenome** do próprio cadastro; WhatsApp não muda. A resposta inclui `creditBalanceCents` (crédito na loja). Detalhes: [api/app-mobile.md](./api/app-mobile.md)
 
 ## Fotos (profissionais, serviços e produtos)
 
