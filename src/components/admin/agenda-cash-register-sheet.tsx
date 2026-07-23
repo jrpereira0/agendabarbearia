@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Unlock,
   Wallet,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -24,11 +25,11 @@ import {
 } from "@/components/ui/dialog";
 import {
   Sheet,
+  SheetClose,
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { SearchInput } from "@/components/admin/search-input";
-import { EmptyState } from "@/components/admin/empty-state";
 import {
   OpenCashRegisterDialog,
   type CashRegisterResponsibleOption,
@@ -62,43 +63,6 @@ function formatClosedTime(iso: string): string {
   const match = iso.match(/T(\d{2}):(\d{2})/);
   if (!match) return "";
   return formatTime(`${match[1]}:${match[2]}:00`);
-}
-
-function customerInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
-}
-
-function PaymentBar({
-  label,
-  amountCents,
-  totalCents,
-}: {
-  label: string;
-  amountCents: number;
-  totalCents: number;
-}) {
-  const pct =
-    totalCents > 0 ? Math.max(2, Math.round((amountCents / totalCents) * 100)) : 0;
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="truncate text-xs text-muted-foreground">{label}</span>
-        <span className="shrink-0 text-xs font-medium tabular-nums text-foreground">
-          {formatPriceBRL(amountCents)}
-        </span>
-      </div>
-      <div className="h-1 overflow-hidden rounded-full bg-muted">
-        <div
-          className="h-full rounded-full bg-foreground transition-[width] duration-300 ease-out"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
 }
 
 export function AgendaCashRegisterSheet({
@@ -174,13 +138,8 @@ export function AgendaCashRegisterSheet({
     );
   };
 
-  const cashInDrawer = paymentMethodTotal("cash");
   const isCashOpen = cashSession?.status === "open";
   const balanceCents = cash.cashInflowCents;
-  const comandaLabel =
-    cash.comandaCount === 1
-      ? "1 comanda"
-      : `${cash.comandaCount} comandas`;
 
   function startOpenCash(mode: "open" | "reopen") {
     setOpenMode(mode);
@@ -209,10 +168,6 @@ export function AgendaCashRegisterSheet({
     setOpen(false);
   }
 
-  function handleRefresh() {
-    refreshSoon();
-  }
-
   return (
     <>
       {!open && (
@@ -220,64 +175,56 @@ export function AgendaCashRegisterSheet({
           type="button"
           onClick={() => setOpen(true)}
           className={cn(
-            "group fixed right-0 top-[42%] z-40 flex -translate-y-1/2 flex-col items-center gap-2.5",
-            "rounded-l-xl border border-r-0 bg-background/95 px-2.5 py-3.5 shadow-sm backdrop-blur-sm",
-            "transition-colors hover:bg-muted/50"
+            "fixed right-0 top-[42%] z-40 flex -translate-y-1/2 flex-col items-center gap-2",
+            "rounded-l-lg border border-r-0 border-white/10 bg-[#151618] px-2 py-3",
+            "text-[#f5f5f5] transition-colors hover:bg-[#1a1b1e]"
           )}
           aria-label="Abrir caixa do dia"
         >
           <span
             className={cn(
               "size-1.5 rounded-full",
-              isCashOpen ? "bg-foreground" : "bg-muted-foreground/35"
+              isCashOpen ? "bg-[#ecf15e]" : "bg-white/25"
             )}
             aria-hidden
           />
           <span
-            className="text-[10px] font-semibold tracking-[0.18em] text-foreground"
+            className="text-[10px] font-medium tracking-[0.16em] text-[#c8c9cc]"
             style={{ writingMode: "vertical-rl" }}
           >
             CAIXA
           </span>
-          {balanceCents > 0 && (
-            <span
-              className="text-[10px] font-medium tabular-nums text-muted-foreground"
-              style={{ writingMode: "vertical-rl" }}
-            >
-              {formatPriceBRL(balanceCents)}
-            </span>
-          )}
         </button>
       )}
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
-          showCloseButton
-          className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-md md:max-w-lg"
+          showCloseButton={false}
+          className="admin-booking-dialog flex h-full w-full flex-col gap-0 overflow-hidden border-l p-0 sm:max-w-md"
         >
           <SheetTitle className="sr-only">Caixa do dia</SheetTitle>
 
-          {/* Cabeçalho + saldo hero */}
-          <header className="shrink-0 border-b px-5 pb-5 pt-5 pr-14">
-            <div className="flex items-start justify-between gap-3">
+          {/* Header curto */}
+          <header className="booking-header shrink-0 border-b px-5 py-4">
+            <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-semibold tracking-tight">
+                  <h2 className="booking-display text-lg font-medium tracking-tight text-[#f5f5f5]">
                     Caixa do dia
                   </h2>
                   <span
                     className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      "inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium",
                       isCashOpen
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-muted-foreground"
+                        ? "text-[#ecf15e]"
+                        : "text-muted-foreground"
                     )}
                   >
                     <span
                       className={cn(
                         "size-1.5 rounded-full",
-                        isCashOpen ? "bg-background" : "bg-muted-foreground/50"
+                        isCashOpen ? "bg-[#ecf15e]" : "bg-white/30"
                       )}
                       aria-hidden
                     />
@@ -286,142 +233,135 @@ export function AgendaCashRegisterSheet({
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {formatDateBR(date)}
-                  {cashSession?.responsibleName && (
-                    <> · {cashSession.responsibleName}</>
-                  )}
+                  {cashSession?.responsibleName
+                    ? ` · ${cashSession.responsibleName}`
+                    : ""}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                className="mt-0.5 shrink-0"
-                disabled={pending}
-                onClick={handleRefresh}
-                aria-label="Atualizar caixa"
-              >
-                <RefreshCw className={cn("size-4", pending && "animate-spin")} />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="booking-btn-ghost size-8 rounded-lg"
+                  disabled={pending}
+                  onClick={() => refreshSoon()}
+                  aria-label="Atualizar caixa"
+                >
+                  <RefreshCw
+                    className={cn("size-3.5", pending && "animate-spin")}
+                  />
+                </Button>
+                <SheetClose asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="booking-btn-ghost size-8 rounded-lg"
+                    aria-label="Fechar"
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </SheetClose>
+              </div>
             </div>
 
-            {otherDayOpen && (
-              <p className="mt-4 rounded-xl border border-dashed bg-muted/20 px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            {otherDayOpen ? (
+              <p className="mt-3 rounded-lg border border-[#ecf15e]/35 bg-[#1c1e12] px-3 py-2.5 text-xs leading-relaxed text-[#f5f5f5]">
                 O caixa de{" "}
                 <Link
                   href={`/admin?date=${otherDayOpen.serviceDate}`}
-                  className="font-medium text-foreground underline-offset-4 hover:underline"
+                  className="font-medium text-[#ecf15e] underline-offset-2 hover:underline"
                   onClick={() => setOpen(false)}
                 >
                   {formatDateBR(otherDayOpen.serviceDate)}
                 </Link>{" "}
-                ainda está aberto. Feche-o antes de abrir este dia.
+                ainda está aberto.
               </p>
-            )}
-
-            <div className="mt-5">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                Saldo do dia
-              </p>
-              <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums sm:text-[2rem]">
-                {formatPriceBRL(balanceCents)}
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {cash.comandaCount > 0
-                  ? `${comandaLabel} fechada${cash.comandaCount === 1 ? "" : "s"}`
-                  : "Nenhuma comanda fechada ainda"}
-                {cashInDrawer > 0 && (
-                  <> · dinheiro {formatPriceBRL(cashInDrawer)}</>
-                )}
-              </p>
-            </div>
-
-            {/* Métricas secundárias */}
-            <div className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-xl border bg-border">
-              <div className="bg-background px-3 py-3">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Entradas
-                </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums leading-none">
-                  {formatPriceBRL(cash.cashInflowCents)}
-                </p>
-              </div>
-              <div className="bg-background px-3 py-3">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Comissões
-                </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums leading-none">
-                  {formatPriceBRL(cash.commissionCents)}
-                </p>
-              </div>
-              <div className="bg-background px-3 py-3">
-                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Barbearia
-                </p>
-                <p className="mt-1 text-sm font-semibold tabular-nums leading-none">
-                  {formatPriceBRL(cash.shopCents)}
-                </p>
-              </div>
-            </div>
-
-            {/* Formas de pagamento */}
-            {activePaymentMethods.length > 0 && (
-              <div className="mt-4 space-y-2.5">
-                {activePaymentMethods.map((method) => (
-                  <PaymentBar
-                    key={method}
-                    label={formatPaymentMethodLabel(method)}
-                    amountCents={paymentMethodTotal(method)}
-                    totalCents={balanceCents}
-                  />
-                ))}
-              </div>
-            )}
+            ) : null}
           </header>
 
-          {/* Lista de comandas */}
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="shrink-0 space-y-3 px-5 pb-3 pt-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-sm font-semibold tracking-tight">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Saldo */}
+            <section className="border-b border-white/8 px-5 py-5">
+              <p className="text-xs text-muted-foreground">Saldo do dia</p>
+              <p className="mt-1 text-[1.75rem] font-semibold tracking-tight tabular-nums text-[#f5f5f5]">
+                {formatPriceBRL(balanceCents)}
+              </p>
+
+              {activePaymentMethods.length > 0 ? (
+                <dl className="mt-4 space-y-2 border-t border-white/8 pt-4 text-sm">
+                  {activePaymentMethods.map((method) => (
+                    <div
+                      key={method}
+                      className="flex items-baseline justify-between gap-3"
+                    >
+                      <dt className="truncate text-muted-foreground">
+                        {formatPaymentMethodLabel(method)}
+                      </dt>
+                      <dd className="shrink-0 tabular-nums text-[#f5f5f5]">
+                        {formatPriceBRL(paymentMethodTotal(method))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+            </section>
+
+            {/* Comandas */}
+            <section className="px-5 py-4">
+              <div className="mb-3 flex items-baseline justify-between gap-2">
+                <h3 className="text-sm font-medium text-[#f5f5f5]">
                   Comandas fechadas
                 </h3>
-                {cash.comandas.length > 0 && (
+                {cash.comandas.length > 0 ? (
                   <span className="text-xs tabular-nums text-muted-foreground">
                     {filteredComandas.length === cash.comandas.length
                       ? cash.comandas.length
-                      : `${filteredComandas.length} de ${cash.comandas.length}`}
+                      : `${filteredComandas.length}/${cash.comandas.length}`}
                   </span>
-                )}
+                ) : null}
               </div>
-              {cash.comandas.length > 3 && (
-                <SearchInput
-                  value={search}
-                  onChange={setSearch}
-                  placeholder="Buscar cliente ou barbeiro…"
-                />
-              )}
-            </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+              {cash.comandas.length > 3 ? (
+                <div className="mb-3">
+                  <SearchInput
+                    value={search}
+                    onChange={setSearch}
+                    placeholder="Buscar cliente ou barbeiro…"
+                  />
+                </div>
+              ) : null}
+
               {!isCashOpen && cash.comandas.length === 0 ? (
-                <EmptyState
-                  icon={Wallet}
-                  title="Caixa fechado"
-                  description="Abra o caixa para finalizar comandas neste dia."
-                />
+                <div className="rounded-xl border border-white/8 bg-[#151618] px-4 py-10 text-center">
+                  <Wallet
+                    className="mx-auto size-5 text-muted-foreground"
+                    strokeWidth={1.5}
+                  />
+                  <p className="mt-3 text-sm font-medium text-[#f5f5f5]">
+                    Caixa fechado
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Abra o caixa pra finalizar comandas neste dia.
+                  </p>
+                </div>
               ) : cash.comandas.length === 0 ? (
-                <EmptyState
-                  icon={Wallet}
-                  title="Nenhuma comanda ainda"
-                  description="Feche comandas na agenda e elas aparecem aqui."
-                />
+                <div className="rounded-xl border border-white/8 bg-[#151618] px-4 py-10 text-center">
+                  <p className="text-sm font-medium text-[#f5f5f5]">
+                    Nenhuma comanda ainda
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                    Feche comandas na agenda e elas aparecem aqui.
+                  </p>
+                </div>
               ) : filteredComandas.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
+                <p className="py-10 text-center text-sm text-muted-foreground">
                   Nenhum resultado para &ldquo;{search}&rdquo;.
                 </p>
               ) : (
-                <ul className="overflow-hidden rounded-xl border">
-                  {filteredComandas.map((comanda, index) => {
+                <ul className="divide-y divide-white/8 overflow-hidden rounded-xl border border-white/8 bg-[#151618]">
+                  {filteredComandas.map((comanda) => {
                     const closedTime = formatClosedTime(comanda.closedAt);
                     const clickable = Boolean(onComandaClick);
                     const paymentLabel = comanda.payments
@@ -429,10 +369,7 @@ export function AgendaCashRegisterSheet({
                       .join(" · ");
 
                     return (
-                      <li
-                        key={comanda.id}
-                        className={cn(index > 0 && "border-t")}
-                      >
+                      <li key={comanda.id}>
                         <button
                           type="button"
                           disabled={!clickable}
@@ -441,50 +378,41 @@ export function AgendaCashRegisterSheet({
                           }
                           className={cn(
                             "flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors",
-                            clickable &&
-                              "hover:bg-muted/40 active:bg-muted/60"
+                            clickable && "hover:bg-white/[0.03]"
                           )}
                         >
-                          <div
-                            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tracking-wide text-muted-foreground"
-                            aria-hidden
-                          >
-                            {customerInitials(comanda.customerName)}
-                          </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-baseline justify-between gap-3">
-                              <p className="truncate text-sm font-medium leading-snug">
+                              <p className="truncate text-sm font-medium text-[#f5f5f5]">
                                 {comanda.customerName}
                               </p>
-                              <p className="shrink-0 text-sm font-semibold tabular-nums">
+                              <p className="shrink-0 text-sm font-semibold tabular-nums text-[#f5f5f5]">
                                 {formatPriceBRL(comanda.totalCents)}
                               </p>
                             </div>
                             <p className="mt-0.5 truncate text-xs text-muted-foreground">
                               {comanda.professionalNickname}
-                              {closedTime && <> · {closedTime}</>}
-                              {paymentLabel && <> · {paymentLabel}</>}
+                              {closedTime ? ` · ${closedTime}` : ""}
+                              {paymentLabel ? ` · ${paymentLabel}` : ""}
                             </p>
                           </div>
-                          {clickable && (
-                            <ChevronRight className="size-4 shrink-0 text-muted-foreground/70" />
-                          )}
+                          {clickable ? (
+                            <ChevronRight className="size-4 shrink-0 text-white/25" />
+                          ) : null}
                         </button>
                       </li>
                     );
                   })}
                 </ul>
               )}
-            </div>
+            </section>
           </div>
 
-          {/* Rodapé de ações */}
-          <footer className="shrink-0 space-y-2 border-t bg-background px-5 py-4">
+          <footer className="booking-footer shrink-0 border-t px-5 py-3.5">
             {isCashOpen ? (
               <Button
                 type="button"
-                variant="outline"
-                className="w-full"
+                className="booking-btn-ghost h-11 w-full rounded-xl border"
                 disabled={pending}
                 onClick={() => setConfirmClose(true)}
               >
@@ -494,7 +422,7 @@ export function AgendaCashRegisterSheet({
             ) : cashSession ? (
               <Button
                 type="button"
-                className="w-full"
+                className="booking-btn-primary h-11 w-full rounded-xl"
                 disabled={pending || Boolean(otherDayOpen)}
                 onClick={() => startOpenCash("reopen")}
               >
@@ -504,7 +432,7 @@ export function AgendaCashRegisterSheet({
             ) : (
               <Button
                 type="button"
-                className="w-full"
+                className="booking-btn-primary h-11 w-full rounded-xl"
                 disabled={pending || Boolean(otherDayOpen)}
                 onClick={() => startOpenCash("open")}
               >
@@ -513,38 +441,38 @@ export function AgendaCashRegisterSheet({
               </Button>
             )}
 
-            <Button variant="ghost" size="sm" className="w-full" asChild>
-              <Link
-                href={`/admin/financeiro?from=${date}&to=${date}`}
-                onClick={() => setOpen(false)}
-              >
-                Ver métricas do dia
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
+            <Link
+              href={`/admin/financeiro?from=${date}&to=${date}`}
+              onClick={() => setOpen(false)}
+              className="mt-2.5 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[#f5f5f5]"
+            >
+              Ver métricas do dia
+              <ArrowRight className="size-3.5" />
+            </Link>
           </footer>
         </SheetContent>
       </Sheet>
 
       <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="admin-booking-dialog max-w-sm rounded-2xl ring-0">
           <DialogHeader>
             <DialogTitle>Encerrar caixa?</DialogTitle>
             <DialogDescription>
-              Depois de encerrar, não será possível finalizar novas comandas
-              neste dia até reabrir o caixa.
+              Depois de encerrar, não dá pra finalizar novas comandas neste dia
+              até reabrir o caixa.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
               type="button"
-              variant="outline"
+              className="booking-btn-ghost rounded-xl border"
               onClick={() => setConfirmClose(false)}
             >
               Cancelar
             </Button>
             <Button
               type="button"
+              className="booking-btn-primary rounded-xl"
               disabled={pending}
               onClick={() => void handleCloseCash()}
             >

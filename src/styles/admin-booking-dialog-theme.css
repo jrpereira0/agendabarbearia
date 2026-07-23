@@ -340,3 +340,41 @@ body:has(.admin-booking-dialog) [data-slot="select-trigger"]:focus-visible {
   background: #1f2023 !important;
 }
 
+/* Sheet do caixa (portal) */
+body:has(.admin-booking-dialog) [data-slot="sheet-overlay"] {
+  background: rgb(0 0 0 / 72%);
+  backdrop-filter: blur(6px);
+}
+
+.admin-booking-dialog[data-slot="sheet-content"] {
+  border-color: var(--booking-border) !important;
+  background: var(--booking-bg) !important;
+  color: #f5f5f5 !important;
+  box-shadow: -24px 0 80px rgb(0 0 0 / 45%) !important;
+}
+
+.admin-booking-dialog [data-slot="sheet-close"] {
+  color: var(--booking-muted);
+  background: var(--booking-elevated);
+  border: 1px solid var(--booking-border);
+  border-radius: 0.5rem;
+}
+
+.admin-booking-dialog [data-slot="sheet-close"]:hover {
+  background: #1a1b1e;
+  color: var(--booking-accent);
+  border-color: rgb(236 241 94 / 35%);
+}
+
+.admin-booking-dialog .booking-metric-cell {
+  background: var(--booking-elevated);
+}
+
+.admin-booking-dialog .booking-pay-track {
+  background: rgb(255 255 255 / 10%);
+}
+
+.admin-booking-dialog .booking-pay-fill {
+  background: var(--booking-accent);
+}
+
