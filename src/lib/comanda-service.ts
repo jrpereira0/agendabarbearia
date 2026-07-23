@@ -1330,6 +1330,27 @@ async function syncItemsFromLinkedAppointments(
       .eq("is_tip", false);
   }
 
+  // Cabeçalho da comanda acompanha o barbeiro do horário principal.
+  const { data: comandaHeader } = await admin
+    .from("comandas")
+    .select("appointment_id")
+    .eq("id", comandaId)
+    .maybeSingle();
+  const headerAptId = comandaHeader?.appointment_id;
+  const headerPro = headerAptId
+    ? appointmentById.get(headerAptId)?.professional_id
+    : null;
+  if (headerPro) {
+    await admin
+      .from("comandas")
+      .update({
+        professional_id: headerPro,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", comandaId)
+      .neq("professional_id", headerPro);
+  }
+
   const excessItemIds: string[] = [];
   const missingRows: DesiredService[] = [];
 
@@ -1494,8 +1515,13 @@ async function isOpenComandaReadyToShow(
   customerWhatsapp: string,
   serviceDate: string
 ): Promise<boolean> {
-  const [{ data: links }, { data: items }, { data: squeezeApts }, { data: aptServices }] =
-    await Promise.all([
+  const [
+    { data: links },
+    { data: items },
+    { data: squeezeApts },
+    { data: aptServices },
+    { data: dayAppointments },
+  ] = await Promise.all([
       admin
         .from("comanda_appointments")
         .select("appointment_id")
@@ -1503,7 +1529,7 @@ async function isOpenComandaReadyToShow(
       admin
         .from("comanda_items")
         .select(
-          "appointment_id, squeeze_appointment_id, service_id, product_id, is_tip"
+          "appointment_id, squeeze_appointment_id, service_id, product_id, is_tip, professional_id"
         )
         .eq("comanda_id", comandaId),
       admin
@@ -1526,10 +1552,21 @@ async function isOpenComandaReadyToShow(
               quantity?: number | null;
             }[],
           }),
+      dayIds.length > 0
+        ? admin
+            .from("appointments")
+            .select("id, professional_id")
+            .in("id", dayIds)
+        : Promise.resolve({
+            data: [] as { id: string; professional_id: string }[],
+          }),
     ]);
 
   const linkedIds = new Set((links ?? []).map((row) => row.appointment_id));
   const daySet = new Set(dayIds);
+  const appointmentProById = new Map(
+    (dayAppointments ?? []).map((apt) => [apt.id, apt.professional_id])
+  );
 
   for (const id of daySet) {
     if (!linkedIds.has(id)) return false;
@@ -1558,6 +1595,11 @@ async function isOpenComandaReadyToShow(
       !daySet.has(item.appointment_id)
     ) {
       continue;
+    }
+    const expectedPro = appointmentProById.get(item.appointment_id);
+    // Comissão segue o barbeiro do horário — se divergiu, precisa ressincronizar.
+    if (expectedPro && item.professional_id !== expectedPro) {
+      return false;
     }
     const key = `${item.appointment_id}:${item.service_id ?? ""}`;
     actualServiceCounts.set(key, (actualServiceCounts.get(key) ?? 0) + 1);
@@ -2992,6 +3034,38 @@ async function restoreProductStockForComanda(
   }
 }
 
+async function alignServiceItemsToAppointmentProfessionals(
+  admin: SupabaseClient,
+  serviceItems: ComandaItemInput[]
+): Promise<ComandaItemInput[]> {
+  const appointmentIds = [
+    ...new Set(
+      serviceItems
+        .map((item) => item.appointmentId)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  if (appointmentIds.length === 0) return serviceItems;
+
+  const { data: appointments } = await admin
+    .from("appointments")
+    .select("id, professional_id")
+    .in("id", appointmentIds);
+
+  const proByAppointment = new Map(
+    (appointments ?? []).map((apt) => [apt.id, apt.professional_id])
+  );
+
+  return serviceItems.map((item) => {
+    if (!item.appointmentId) return item;
+    const professionalId = proByAppointment.get(item.appointmentId);
+    if (!professionalId || professionalId === item.professionalId) {
+      return item;
+    }
+    return { ...item, professionalId };
+  });
+}
+
 export async function updateComandaItems(
   admin: SupabaseClient,
   comandaId: string,
@@ -3014,11 +3088,20 @@ export async function updateComandaItems(
     };
   }
 
-  const serviceItems = items.filter(
+  let serviceItems = items.filter(
     (item) => !item.isTip && !item.productId
   );
   const productItems = items.filter((item) => !item.isTip && item.productId);
   const tipItems = items.filter((item) => item.isTip);
+
+  // No fechamento rápido (sem mexer na agenda), a comissão segue o barbeiro
+  // do horário — nunca o valor eventualmente desatualizado da tela.
+  if (options.skipAgendaSync) {
+    serviceItems = await alignServiceItemsToAppointmentProfessionals(
+      admin,
+      serviceItems
+    );
+  }
 
   if (serviceItems.length === 0 && productItems.length === 0) {
     return {
@@ -3270,14 +3353,27 @@ export async function updateComandaItems(
 
   const totals = await recalculateComandaTotals(admin, comandaId);
 
-  await admin
-    .from("comandas")
-    .update({
-      total_cents: totals.totalCents,
-      commission_cents: totals.commissionCents,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", comandaId);
+  const headerUpdate: {
+    total_cents: number;
+    commission_cents: number;
+    updated_at: string;
+    professional_id?: string;
+  } = {
+    total_cents: totals.totalCents,
+    commission_cents: totals.commissionCents,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (options.skipAgendaSync && current.comanda.appointmentId) {
+    const alignedHeaderPro = serviceItems.find(
+      (item) => item.appointmentId === current.comanda.appointmentId
+    )?.professionalId;
+    if (alignedHeaderPro) {
+      headerUpdate.professional_id = alignedHeaderPro;
+    }
+  }
+
+  await admin.from("comandas").update(headerUpdate).eq("id", comandaId);
 
   if (options.returnDetail === false) {
     return {
