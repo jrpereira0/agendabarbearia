@@ -12,12 +12,6 @@ import { cn } from "@/lib/utils";
 
 type AuthPhase = "phone" | "code";
 
-export type ClientWhatsappAuthStickyAction = {
-  label: string;
-  disabled: boolean;
-  onClick: () => void;
-};
-
 type ClientWhatsappAuthProps = {
   /** Título curto acima do campo. */
   title?: string;
@@ -27,13 +21,6 @@ type ClientWhatsappAuthProps = {
   onAuthenticated: (whatsapp: string) => void;
   /** Se true, ao montar tenta reaproveitar a sessão existente. */
   resumeSession?: boolean;
-  /**
-   * Quando informado, o botão principal da etapa do código sobe pro rodapé
-   * sticky (pai renderiza). Na etapa do telefone o botão continua no card.
-   */
-  onStickyPrimaryChange?: (
-    action: ClientWhatsappAuthStickyAction | null
-  ) => void;
   className?: string;
 };
 
@@ -42,7 +29,6 @@ export function ClientWhatsappAuth({
   hint = "Enviamos um código no WhatsApp pra confirmar que o número é seu.",
   onAuthenticated,
   resumeSession = true,
-  onStickyPrimaryChange,
   className,
 }: ClientWhatsappAuthProps) {
   const [phase, setPhase] = useState<AuthPhase>("phone");
@@ -142,36 +128,6 @@ export function ClientWhatsappAuth({
     }
   }
 
-  useEffect(() => {
-    if (!onStickyPrimaryChange) return;
-
-    if (checkingSession || phase !== "code") {
-      onStickyPrimaryChange(null);
-      return;
-    }
-
-    onStickyPrimaryChange({
-      label: verifying ? "Validando..." : "Confirmar código",
-      disabled: verifying || code.length !== OTP_CODE_LENGTH,
-      onClick: () => {
-        void verifyCode();
-      },
-    });
-    // verifyCode usa code/whatsapp do render atual; deps abaixo recriam o onClick.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync proposital do rodapé sticky
-  }, [
-    checkingSession,
-    phase,
-    verifying,
-    code,
-    onStickyPrimaryChange,
-    whatsapp,
-  ]);
-
-  useEffect(() => {
-    return () => onStickyPrimaryChange?.(null);
-  }, [onStickyPrimaryChange]);
-
   if (checkingSession) {
     return (
       <div
@@ -221,8 +177,6 @@ export function ClientWhatsappAuth({
     );
   }
 
-  const showInlineConfirm = !onStickyPrimaryChange;
-
   return (
     <div
       className={cn(
@@ -266,24 +220,17 @@ export function ClientWhatsappAuth({
         />
       </div>
 
-      {showInlineConfirm ? (
-        <Button
-          type="button"
-          size="lg"
-          disabled={verifying || code.length !== OTP_CODE_LENGTH}
-          onClick={() => void verifyCode()}
-          className="mt-3 h-11 w-full rounded-2xl font-semibold"
-        >
-          {verifying ? "Validando..." : "Confirmar código"}
-        </Button>
-      ) : null}
-
-      <div
-        className={cn(
-          "flex items-center justify-center gap-3 text-xs",
-          showInlineConfirm ? "mt-2.5" : "mt-3"
-        )}
+      <Button
+        type="button"
+        size="lg"
+        disabled={verifying || code.length !== OTP_CODE_LENGTH}
+        onClick={() => void verifyCode()}
+        className="mt-3 h-11 w-full rounded-2xl font-semibold"
       >
+        {verifying ? "Validando..." : "Confirmar código"}
+      </Button>
+
+      <div className="mt-2.5 flex items-center justify-center gap-3 text-xs">
         <button
           type="button"
           disabled={sending || verifying}

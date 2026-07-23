@@ -12,7 +12,6 @@ import { BookingDatePicker } from "@/components/booking/booking-date-picker";
 import {
   ClientWhatsappAuth,
   logoutClientSession,
-  type ClientWhatsappAuthStickyAction,
 } from "@/components/booking/client-whatsapp-auth";
 import { ServiceThumbnail } from "@/components/booking/service-thumbnail";
 import {
@@ -244,8 +243,6 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [whatsappVerified, setWhatsappVerified] = useState(false);
-  const [otpStickyPrimary, setOtpStickyPrimary] =
-    useState<ClientWhatsappAuthStickyAction | null>(null);
   const [customerFound, setCustomerFound] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupDone, setLookupDone] = useState(false);
@@ -298,14 +295,14 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     }
     if (customerFound) {
       return {
-        title: "Quase lá",
-        hint: "Confira se está tudo certo e confirme o horário.",
+        title: "Confirmar agendamento",
+        hint: "Revise os dados e finalize.",
       };
     }
     if (lookupDone) {
       return {
-        title: "Seus dados",
-        hint: "Complete seu nome pra finalizar o agendamento.",
+        title: "Confirmar agendamento",
+        hint: "Complete seu nome pra finalizar.",
       };
     }
     return stepMeta.confirm;
@@ -1028,7 +1025,6 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             {!whatsappVerified ? (
               <ClientWhatsappAuth
                 onAuthenticated={handleWhatsappAuthenticated}
-                onStickyPrimaryChange={setOtpStickyPrimary}
                 hint="Enviamos um código no WhatsApp. Com ele você confirma o horário e fica logado neste aparelho."
               />
             ) : (
@@ -1042,29 +1038,27 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                 ) : null}
 
                 {customerFound ? (
-                  <div className="rounded-2xl bg-[#151618] px-4 py-3.5 ring-1 ring-white/8">
-                    <div className="flex items-start gap-3">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary/15">
-                        <CheckCircle2
-                          className="size-5 text-primary"
-                          strokeWidth={1.75}
-                        />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[0.95rem] font-semibold">
-                          {firstName} {lastName}
-                        </p>
-                        <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                          {formatWhatsapp(whatsapp)}
-                        </p>
+                  <div className="rounded-2xl bg-[#151618] px-4 py-4 ring-1 ring-white/8">
+                    <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Cliente
+                    </p>
+                    <p className="mt-2 text-base font-semibold tracking-tight">
+                      {firstName} {lastName}
+                    </p>
+                    <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+                      {formatWhatsapp(whatsapp)}
+                    </p>
+                    <div className="mt-4 border-t border-white/8 pt-3">
+                      <p className="text-xs text-muted-foreground">
+                        Não é você?{" "}
                         <button
                           type="button"
                           onClick={() => void handleNotMe()}
-                          className="mt-2 text-xs font-medium text-primary"
+                          className="font-medium text-foreground/80 underline-offset-2 hover:text-foreground hover:underline"
                         >
-                          Não sou eu
+                          Usar outro WhatsApp
                         </button>
-                      </div>
+                      </p>
                     </div>
                   </div>
                 ) : null}
@@ -1076,14 +1070,14 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                         <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                           WhatsApp
                         </p>
-                        <p className="mt-1 text-[0.95rem] font-semibold tabular-nums">
+                        <p className="mt-1.5 text-[0.95rem] font-semibold tabular-nums">
                           {formatWhatsapp(whatsapp)}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => void handleNotMe()}
-                        className="shrink-0 pt-0.5 text-xs font-medium text-primary"
+                        className="shrink-0 pt-0.5 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
                       >
                         Trocar
                       </button>
@@ -1092,8 +1086,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                     <div className="my-4 h-px bg-white/8" />
 
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      Não encontramos cadastro com esse número. Informe nome e
-                      sobrenome pra criar o seu.
+                      Primeiro agendamento neste número. Informe nome e sobrenome.
                     </p>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1148,19 +1141,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
               Voltar
             </Button>
           ) : null}
-          {step === "confirm" && !whatsappVerified ? (
-            otpStickyPrimary ? (
-              <Button
-                type="button"
-                size="lg"
-                disabled={otpStickyPrimary.disabled}
-                onClick={otpStickyPrimary.onClick}
-                className="h-12 min-w-0 flex-1 rounded-2xl text-[0.95rem] font-semibold shadow-none"
-              >
-                {otpStickyPrimary.label}
-              </Button>
-            ) : null
-          ) : (
+          {step === "confirm" && !whatsappVerified ? null : (
             <Button
               type="button"
               size="lg"
