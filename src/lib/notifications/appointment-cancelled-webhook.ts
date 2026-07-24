@@ -134,27 +134,25 @@ export async function notifyAppointmentCancelled(
     );
     if (!payload) return;
 
-    // Cliente — só quando o admin cancela (não quando o próprio cliente cancela).
-    if (source === "admin_cancel" || source === "admin_squeeze_cancel") {
-      try {
-        await notifyClientAppointmentCancelled({
-          whatsapp: payload.customer.whatsapp,
-          shopName: payload.shop.name,
-          appointment: {
-            id: payload.appointment.id,
-            date: payload.appointment.date,
-            startTime: payload.appointment.startTime,
-            professionalName: payload.professional.name,
-            serviceNames: payload.services.map((s) => s.name),
-            cancelReason: payload.appointment.cancelReason,
-          },
-        });
-      } catch (error) {
-        console.error("[client-appointment-webhook] erro após cancelamento", {
-          appointmentId,
-          error,
-        });
-      }
+    // Cliente — cancelamento pelo app/site ou pelo admin.
+    try {
+      await notifyClientAppointmentCancelled({
+        whatsapp: payload.customer.whatsapp,
+        shopName: payload.shop.name,
+        appointment: {
+          id: payload.appointment.id,
+          date: payload.appointment.date,
+          startTime: payload.appointment.startTime,
+          professionalName: payload.professional.name,
+          serviceNames: payload.services.map((s) => s.name),
+          cancelReason: payload.appointment.cancelReason,
+        },
+      });
+    } catch (error) {
+      console.error("[client-appointment-webhook] erro após cancelamento", {
+        appointmentId,
+        error,
+      });
     }
 
     const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();

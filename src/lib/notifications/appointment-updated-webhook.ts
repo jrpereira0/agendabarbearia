@@ -314,34 +314,32 @@ export async function notifyAppointmentUpdated(
       );
     }
 
-    // Aviso ao cliente só quando o admin altera (não quando o próprio cliente remarca).
-    if (source === "admin_update" || source === "admin_squeeze_update") {
-      try {
-        await notifyClientAppointmentUpdated({
-          whatsapp: currentSnapshot.customer.whatsapp,
-          shopName: (
-            await loadAppointmentWebhookBaseData(
-              admin,
-              appointmentId,
-              LOG_PREFIX
-            )
-          )?.shopName,
-          changes,
-          appointment: {
-            id: currentSnapshot.appointmentId,
-            date: currentSnapshot.date,
-            startTime: currentSnapshot.startTime,
-            professionalName: currentSnapshot.professionalName,
-            serviceNames: currentSnapshot.services.map((s) => s.name),
-            totalPriceCents: currentSnapshot.totalPriceCents,
-          },
-        });
-      } catch (error) {
-        console.error("[client-appointment-webhook] erro após alteração", {
-          appointmentId,
-          error,
-        });
-      }
+    // Cliente — remarcação pelo app/site ou alteração pelo admin.
+    try {
+      await notifyClientAppointmentUpdated({
+        whatsapp: currentSnapshot.customer.whatsapp,
+        shopName: (
+          await loadAppointmentWebhookBaseData(
+            admin,
+            appointmentId,
+            LOG_PREFIX
+          )
+        )?.shopName,
+        changes,
+        appointment: {
+          id: currentSnapshot.appointmentId,
+          date: currentSnapshot.date,
+          startTime: currentSnapshot.startTime,
+          professionalName: currentSnapshot.professionalName,
+          serviceNames: currentSnapshot.services.map((s) => s.name),
+          totalPriceCents: currentSnapshot.totalPriceCents,
+        },
+      });
+    } catch (error) {
+      console.error("[client-appointment-webhook] erro após alteração", {
+        appointmentId,
+        error,
+      });
     }
 
     const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();

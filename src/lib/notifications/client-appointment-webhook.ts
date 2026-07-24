@@ -59,7 +59,7 @@ export async function notifyClientAppointmentCreated(input: {
 }
 
 /**
- * Push no app do cliente quando o admin altera o horário.
+ * Push no app do cliente quando o horário é alterado (cliente ou admin).
  */
 export async function notifyClientAppointmentUpdated(input: {
   whatsapp: string;
@@ -97,7 +97,7 @@ export async function notifyClientAppointmentUpdated(input: {
 }
 
 /**
- * Push no app do cliente quando o admin cancela o horário.
+ * Push no app do cliente quando o horário é cancelado (cliente ou admin).
  */
 export async function notifyClientAppointmentCancelled(input: {
   whatsapp: string;
