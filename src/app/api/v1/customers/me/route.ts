@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
             {
               ok: false,
               error:
-                "Esta rota é só para o app do cliente (sessão do WhatsApp).",
+                "Confirme o WhatsApp pra acessar seus dados.",
             },
             { status: 403 }
           );
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
             {
               ok: false,
               error:
-                "Esta rota é só para o app do cliente (sessão do WhatsApp).",
+                "Confirme o WhatsApp pra acessar seus dados.",
             },
             { status: 403 }
           );

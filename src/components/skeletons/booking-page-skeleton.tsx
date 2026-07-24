@@ -46,16 +46,15 @@ export function BookingPageSkeleton() {
 
         <nav
           aria-hidden
-          className="relative z-20 shrink-0 bg-[#0e0f11]"
+          className="relative z-20 shrink-0 border-t border-white/10 bg-[#0e0f11]"
         >
-          <div className="mx-auto h-px max-w-lg bg-white/10" />
-          <div className="mx-auto grid max-w-lg grid-cols-3 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5">
-            {Array.from({ length: 3 }).map((_, index) => (
+          <div className="mx-auto grid max-w-lg grid-cols-4 px-1 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-1.5">
+            {Array.from({ length: 4 }).map((_, index) => (
               <div
                 key={index}
-                className="flex min-h-[3.35rem] flex-col items-center justify-center gap-1.5"
+                className="flex min-h-[3.25rem] flex-col items-center justify-center gap-1"
               >
-                <Skeleton className="size-5 rounded-md bg-white/12" />
+                <Skeleton className="size-[22px] rounded-md bg-white/12" />
                 <Skeleton className="h-2 w-10 bg-white/10" />
               </div>
             ))}

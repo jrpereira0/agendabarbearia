@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  CalendarClock,
-  CalendarPlus,
-  MapPinned,
-  UserRound,
-} from "lucide-react";
+import { Calendar, CirclePlus, MapPin, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BookingFlow } from "@/components/booking/booking-flow";
 import { MyAppointments } from "@/components/booking/my-appointments";
@@ -14,34 +9,35 @@ import { MyAccount } from "@/components/booking/my-account";
 import { ShopInfoPanel } from "@/components/booking/shop-info-panel";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
 
-type Mode = "book" | "manage" | "info" | "account";
+type Mode = "book" | "manage" | "account" | "info";
 
 type BookingSectionProps = {
   catalog: ShopCatalog;
   today: string;
 };
 
+/** Ordem e labels iguais ao app (`app/(tabs)/_layout.tsx`). */
 const tabs: {
   id: Mode;
   label: string;
-  icon: typeof CalendarPlus;
+  icon: typeof CirclePlus;
   hash: string | null;
 }[] = [
-  { id: "book", label: "Agendar", icon: CalendarPlus, hash: null },
+  { id: "book", label: "Agendar", icon: CirclePlus, hash: null },
   {
     id: "manage",
     label: "Horários",
-    icon: CalendarClock,
+    icon: Calendar,
     hash: "#meus-agendamentos",
   },
-  { id: "info", label: "Local", icon: MapPinned, hash: "#local" },
-  { id: "account", label: "Conta", icon: UserRound, hash: "#conta" },
+  { id: "account", label: "Conta", icon: User, hash: "#conta" },
+  { id: "info", label: "Local", icon: MapPin, hash: "#local" },
 ];
 
 function modeFromHash(hash: string): Mode {
   if (hash === "#meus-agendamentos") return "manage";
-  if (hash === "#local") return "info";
   if (hash === "#conta") return "account";
+  if (hash === "#local") return "info";
   return "book";
 }
 
@@ -96,6 +92,17 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
             <MyAppointments catalog={catalog} today={today} />
           </div>
           <div
+            id="conta"
+            className={cn(
+              "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
+              mode === "account" ? "flex" : "hidden"
+            )}
+            aria-hidden={mode !== "account"}
+            inert={mode !== "account" ? true : undefined}
+          >
+            <MyAccount />
+          </div>
+          <div
             className={cn(
               "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
               mode === "info" ? "flex" : "hidden"
@@ -108,26 +115,14 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
               businessHours={catalog.businessHours}
             />
           </div>
-          <div
-            id="conta"
-            className={cn(
-              "min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain",
-              mode === "account" ? "flex" : "hidden"
-            )}
-            aria-hidden={mode !== "account"}
-            inert={mode !== "account" ? true : undefined}
-          >
-            <MyAccount />
-          </div>
         </div>
       </main>
 
       <nav
         aria-label="Menu principal"
-        className="relative z-20 shrink-0 bg-[#0e0f11]"
+        className="relative z-20 shrink-0 border-t border-white/10 bg-[#0e0f11]"
       >
-        <div className="mx-auto h-px max-w-lg bg-white/10" />
-        <div className="mx-auto grid max-w-lg grid-cols-4 px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1.5 sm:px-2">
+        <div className="mx-auto grid max-w-lg grid-cols-4 px-1 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-1.5">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = mode === tab.id;
@@ -137,14 +132,20 @@ export function BookingSection({ catalog, today }: BookingSectionProps) {
                 type="button"
                 onClick={() => selectMode(tab.id)}
                 className={cn(
-                  "flex min-h-[3.35rem] flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[10px] font-medium tracking-wide transition-colors sm:px-2",
+                  "flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium tracking-[0.03em] transition-colors",
                   active
                     ? "text-primary"
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <Icon className="size-5" strokeWidth={active ? 2.4 : 1.7} />
-                <span>{tab.label}</span>
+                <Icon
+                  className="size-[22px]"
+                  strokeWidth={active ? 2.25 : 1.75}
+                  fill={
+                    active && tab.id !== "book" ? "currentColor" : "none"
+                  }
+                />
+                <span className="mt-0.5">{tab.label}</span>
               </button>
             );
           })}

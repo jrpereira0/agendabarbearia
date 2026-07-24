@@ -157,19 +157,16 @@ export async function resolveProtectedApiAuth(
       )
     : null;
 
-  // Preferir sessão OTP do cliente quando o WhatsApp da requisição bate com ela.
-  // Assim Agendar/Horários funcionam mesmo com o painel aberto no mesmo navegador.
-  if (clientAuth && options.whatsapp) {
+  // Sessão OTP do cliente (cookie do site /agenda) tem prioridade sobre o
+  // login do painel no mesmo navegador. Sem isso, /customers/me e Conta
+  // quebram quando o dono testa o site logado no admin.
+  if (clientAuth) {
     return { ok: true, auth: clientAuth };
   }
 
   const admin = await getAdminApiSession();
   if (admin && adminHasScope(admin.role, requiredScope)) {
     return { ok: true, auth: admin };
-  }
-
-  if (clientAuth) {
-    return { ok: true, auth: clientAuth };
   }
 
   if (admin) {

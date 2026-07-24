@@ -1,20 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowLeft,
-  CalendarDays,
-  Pencil,
-  Phone,
-  Trash2,
-} from "lucide-react";
+import { CalendarDays, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  ClientWhatsappAuth,
-  logoutClientSession,
-} from "@/components/booking/client-whatsapp-auth";
+import { ClientWhatsappAuth } from "@/components/booking/client-whatsapp-auth";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { BookingDatePicker } from "@/components/booking/booking-date-picker";
 import { AppointmentCardsSkeleton } from "@/components/skeletons/appointment-cards-skeleton";
@@ -45,6 +36,7 @@ import { cn } from "@/lib/utils";
 const MAX_DAYS_AHEAD = 60;
 
 type Step = "phone" | "list" | "edit";
+type ListTab = "upcoming" | "history";
 
 type MyAppointmentsProps = {
   catalog: ShopCatalog;
@@ -57,10 +49,40 @@ function addDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function statusLabel(status?: string): string {
+  switch (status) {
+    case "done":
+      return "Concluído";
+    case "cancelled":
+      return "Cancelado";
+    case "confirmed":
+      return "Confirmado";
+    case "scheduled":
+      return "Agendado";
+    default:
+      return status ?? "—";
+  }
+}
+
+function statusTone(status?: string): { bg: string; text: string } {
+  switch (status) {
+    case "done":
+      return { bg: "rgba(236,241,94,0.12)", text: "#ecf15e" };
+    case "cancelled":
+      return { bg: "rgba(228,0,20,0.12)", text: "#ffb4b8" };
+    default:
+      return { bg: "rgba(255,255,255,0.1)", text: "#a3a3a3" };
+  }
+}
+
 export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
 
   const [step, setStep] = useState<Step>("phone");
+  const stepRef = useRef<Step>("phone");
+  stepRef.current = step;
+
+  const [listTab, setListTab] = useState<ListTab>("upcoming");
   const [whatsappDigits, setWhatsappDigits] = useState("");
   const [appointments, setAppointments] = useState<PublicAppointmentItem[]>([]);
   const [loadingList, setLoadingList] = useState(false);
@@ -73,6 +95,8 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const [editing, setEditing] = useState<PublicAppointmentItem | null>(null);
   const [editDate, setEditDate] = useState(today);
   const [editStartTime, setEditStartTime] = useState<string | null>(null);
+  const editStartTimeRef = useRef<string | null>(null);
+  editStartTimeRef.current = editStartTime;
   const [editServiceIds, setEditServiceIds] = useState<string[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -86,113 +110,158 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const editingProfessional = professionals.find(
     (p) => p.id === editing?.professionalId
   );
+  const editingProName =
+    editingProfessional?.nickname ?? editing?.professionalName ?? "Barbeiro";
+  const editingProPhoto =
+    editingProfessional?.photoUrl ?? editing?.professionalPhotoUrl ?? null;
 
   const availableServices = useMemo(() => {
-    const allowed = new Set(editingProfessional?.serviceIds ?? []);
-    return sortServicesByPopularity(
+    const allowed = new Set(
+      editingProfessional?.serviceIds ?? editing?.serviceIds ?? []
+    );
+    const fromCatalog = sortServicesByPopularity(
       catalog.services.filter((s) => allowed.has(s.id))
     );
-  }, [catalog.services, editingProfessional]);
+    if (fromCatalog.length > 0) return fromCatalog;
+    return (editing?.serviceIds ?? []).map((id, index) => ({
+      id,
+      name: editing?.serviceNames[index] ?? "Serviço",
+      description: "",
+      photoUrl: null,
+      photoPosition: "50% 50%",
+      durationMinutes: editing?.totalMinutes ?? 0,
+      priceCents: editing?.totalPriceCents ?? 0,
+      priceFrom: false,
+      weekdayPrices: [] as { weekday: number; priceCents: number }[],
+      bookingCount: 0,
+    }));
+  }, [catalog.services, editingProfessional, editing]);
 
   const selectedServices = catalog.services.filter((s) =>
     editServiceIds.includes(s.id)
   );
-  const editTotalMinutes = selectedServices.reduce(
-    (sum, s) => sum + s.durationMinutes,
-    0
-  );
-  const editTotalPriceLabel = formatPublicServicesTotalLabel(
-    selectedServices,
-    editDate
-  );
+  const editTotalMinutes =
+    selectedServices.length > 0
+      ? selectedServices.reduce((sum, s) => sum + s.durationMinutes, 0)
+      : (editing?.totalMinutes ?? 0);
+  const editTotalPriceLabel =
+    selectedServices.length > 0
+      ? formatPublicServicesTotalLabel(selectedServices, editDate)
+      : formatPriceBRL(editing?.totalPriceCents ?? 0);
 
-  const fetchAppointments = useCallback(async (canonical: string) => {
-    setLoadingList(true);
-    try {
-      const res = await fetch(
-        `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}`,
-        { credentials: "include" }
-      );
-      const body = await res.json();
-      if (!res.ok) {
-        toast.error(body.error ?? "Não foi possível buscar seus horários.");
+  const fetchAppointments = useCallback(
+    async (canonical: string, tab: ListTab = "upcoming") => {
+      setLoadingList(true);
+      try {
+        const res = await fetch(
+          `/api/v1/appointments?whatsapp=${encodeURIComponent(canonical)}&mode=${tab}`,
+          { credentials: "include" }
+        );
+        const body = await res.json();
+        if (!res.ok) {
+          toast.error(body.error ?? "Não foi possível buscar seus horários.");
+          return false;
+        }
+        setAppointments(body.appointments ?? []);
+        setWhatsappDigits(canonical);
+        if (stepRef.current !== "edit") {
+          setStep("list");
+        }
+        return true;
+      } catch {
+        toast.error("Não foi possível buscar seus horários.");
         return false;
+      } finally {
+        setLoadingList(false);
       }
-      setAppointments(body.appointments ?? []);
-      setWhatsappDigits(canonical);
-      setStep("list");
-      return true;
-    } catch {
-      toast.error("Não foi possível buscar seus horários.");
-      return false;
-    } finally {
-      setLoadingList(false);
-    }
-  }, []);
+    },
+    []
+  );
 
   const handleAuthenticated = useCallback(
     (canonical: string) => {
-      void fetchAppointments(canonical);
+      setListTab("upcoming");
+      void fetchAppointments(canonical, "upcoming");
     },
     [fetchAppointments]
   );
 
+  const switchTab = (tab: ListTab) => {
+    if (tab === listTab || step === "edit") return;
+    setListTab(tab);
+    if (whatsappDigits) {
+      void fetchAppointments(whatsappDigits, tab);
+    }
+  };
+
   useEffect(() => {
-    if (step !== "edit" || !editing || editServiceIds.length === 0) return;
+    if (step !== "edit" || !editing || editServiceIds.length === 0) {
+      setAvailableSlots([]);
+      setSlotsError(null);
+      setLoadingSlots(false);
+      return;
+    }
 
     let cancelled = false;
-    const timer = setTimeout(() => {
-      if (cancelled) return;
-      setLoadingSlots(true);
-      setSlotsError(null);
+    setLoadingSlots(true);
+    setSlotsError(null);
 
-      const params = new URLSearchParams({
-        professionalId: editing.professionalId,
-        date: editDate,
-        serviceIds: editServiceIds.join(","),
-        excludeAppointmentId: editing.id,
+    const params = new URLSearchParams({
+      professionalId: editing.professionalId,
+      date: editDate,
+      serviceIds: editServiceIds.join(","),
+      excludeAppointmentId: editing.id,
+    });
+
+    fetch(`/api/v1/appointments/availability?${params}`)
+      .then(async (res) => {
+        const body = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setAvailableSlots([]);
+          setSlotsError(body.error ?? "Não foi possível carregar os horários.");
+          return;
+        }
+        const loaded: string[] = body.slots ?? [];
+        setAvailableSlots(loaded);
+        if (loaded.length === 0) {
+          setSlotsError("Nenhum horário livre neste dia para esses serviços.");
+        }
+        const current = editStartTimeRef.current;
+        if (current && !loaded.includes(current)) {
+          setEditStartTime(null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAvailableSlots([]);
+          setSlotsError("Não foi possível carregar os horários.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingSlots(false);
       });
-
-      fetch(`/api/v1/appointments/availability?${params}`)
-        .then(async (res) => {
-          const body = await res.json();
-          if (cancelled) return;
-          if (!res.ok) {
-            setAvailableSlots([]);
-            setSlotsError(body.error ?? "Não foi possível carregar os horários.");
-            return;
-          }
-          const loaded: string[] = body.slots ?? [];
-          setAvailableSlots(loaded);
-          if (loaded.length === 0) {
-            setSlotsError("Nenhum horário livre neste dia para esses serviços.");
-          } else if (editStartTime && !loaded.includes(editStartTime)) {
-            setEditStartTime(null);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setAvailableSlots([]);
-            setSlotsError("Não foi possível carregar os horários.");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) setLoadingSlots(false);
-        });
-    }, 0);
 
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [step, editing, editDate, editServiceIds, editStartTime]);
+  }, [step, editing, editDate, editServiceIds]);
 
   function startEdit(appointment: PublicAppointmentItem) {
     setEditing(appointment);
-    setEditDate(appointment.date);
+    setEditDate(appointment.date < today ? today : appointment.date);
     setEditStartTime(appointment.startTime);
-    setEditServiceIds(appointment.serviceIds);
+    setEditServiceIds([...appointment.serviceIds]);
+    setAvailableSlots([]);
+    setSlotsError(null);
     setStep("edit");
+  }
+
+  function leaveEdit() {
+    setEditing(null);
+    setAvailableSlots([]);
+    setSlotsError(null);
+    setStep("list");
   }
 
   function toggleEditService(id: string, checked: boolean) {
@@ -221,7 +290,8 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
       toast.success("Agendamento cancelado.");
       setCancelTarget(null);
-      await fetchAppointments(whatsappDigits);
+      await fetchAppointments(whatsappDigits, "upcoming");
+      setListTab("upcoming");
     } catch {
       toast.error("Não foi possível cancelar.");
     }
@@ -231,7 +301,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   async function handleSaveEdit() {
     if (!editing || !editStartTime || editServiceIds.length === 0) {
-      toast.error("Escolha data, horário e serviços.");
+      toast.error("Escolha data, horário e pelo menos um serviço.");
       return;
     }
 
@@ -245,7 +315,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         body: JSON.stringify({
           whatsapp: whatsappDigits,
           professionalId: editing.professionalId,
-          date: editDate,
+          date: editDate < today ? today : editDate,
           startTime: editStartTime,
           serviceIds: editServiceIds,
         }),
@@ -261,7 +331,9 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
       toast.success("Horário atualizado.");
       setEditing(null);
-      await fetchAppointments(whatsappDigits);
+      setListTab("upcoming");
+      setStep("list");
+      await fetchAppointments(whatsappDigits, "upcoming");
     } catch {
       toast.error("Não foi possível salvar.");
     }
@@ -269,33 +341,14 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
     setSaving(false);
   }
 
-  async function handleLogout() {
-    await logoutClientSession();
-    setWhatsappDigits("");
-    setAppointments([]);
-    setEditing(null);
-    setStep("phone");
-  }
-
-  function goBack() {
-    if (step === "edit") {
-      setEditing(null);
-      setStep("list");
-      return;
-    }
-    if (step === "list") {
-      void handleLogout();
-    }
-  }
-
   if (step === "phone") {
     return (
       <div className="flex min-h-0 flex-1 flex-col px-5 pt-6">
         <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
-          Meus horários
+          Horários
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Confirme o WhatsApp com o código pra consultar, remarcar ou cancelar.
+          Confirme o WhatsApp pra ver próximos horários e o histórico.
         </p>
 
         <div className="mt-8">
@@ -304,16 +357,16 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             hint="Enviamos um código no WhatsApp. Depois disso você fica logado neste aparelho."
           />
           {loadingList ? (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Carregando seus horários...
-            </p>
+            <p className="mt-4 text-sm text-muted-foreground">Carregando...</p>
           ) : null}
         </div>
       </div>
     );
   }
 
-  if (step === "edit" && editing && editingProfessional) {
+  if (step === "edit" && editing) {
+    const safeDate = editDate < today ? today : editDate;
+
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="shrink-0 px-5 pt-5">
@@ -321,77 +374,94 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             Remarcar
           </h2>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            {editingProfessional.nickname} · data, horário ou serviços.
+            {editingProName} · escolha serviços, data e horário.
           </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-3 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8">
-            <ProfessionalAvatar
-              photoUrl={editingProfessional.photoUrl}
-              photoPosition={editingProfessional.photoPosition}
-              name={editingProfessional.nickname}
-              size="md"
-            />
-            <div>
-              <p className="font-medium">{editingProfessional.nickname}</p>
-              <p className="text-xs text-muted-foreground">
-                {formatWhatsapp(whatsappDigits)}
-              </p>
+            <div className="flex items-center gap-3 rounded-2xl bg-[#151618] px-3 py-2.5 ring-1 ring-white/8">
+              <ProfessionalAvatar
+                photoUrl={editingProPhoto}
+                photoPosition={editingProfessional?.photoPosition}
+                name={editingProName}
+                size="md"
+              />
+              <div>
+                <p className="font-medium">{editingProName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatWhatsapp(whatsappDigits)}
+                </p>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">
-              Serviços
-            </p>
-            <ul className="flex flex-col gap-2">
-              {availableServices.map((svc) => {
-                const checked = editServiceIds.includes(svc.id);
-                return (
-                  <li key={svc.id}>
-                    <label
-                      className={cn(
-                        "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
-                        checked
-                          ? "border-primary bg-primary/10"
-                          : "border-white/10 bg-white/[0.03]"
-                      )}
-                    >
-                      <Checkbox
-                        checked={checked}
-                        onCheckedChange={(c) =>
-                          toggleEditService(svc.id, c === true)
-                        }
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">{svc.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDuration(svc.durationMinutes)} ·{" "}
-                          {formatPublicServicePriceLabel(svc, editDate)}
-                        </p>
-                      </div>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                1. Serviços
+              </p>
+              {availableServices.length === 0 ? (
+                <p className="rounded-2xl bg-white/[0.04] px-4 py-5 text-center text-sm text-muted-foreground">
+                  Não foi possível carregar os serviços deste barbeiro.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {availableServices.map((svc) => {
+                    const checked = editServiceIds.includes(svc.id);
+                    return (
+                      <li key={svc.id}>
+                        <label
+                          className={cn(
+                            "flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 transition-all",
+                            checked
+                              ? "border-primary bg-primary/10"
+                              : "border-white/10 bg-white/[0.03]"
+                          )}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(c) =>
+                              toggleEditService(svc.id, c === true)
+                            }
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium">{svc.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDuration(svc.durationMinutes)} ·{" "}
+                              {formatPublicServicePriceLabel(svc, safeDate)}
+                            </p>
+                          </div>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
 
-          <BookingDatePicker
-            selectedDate={editDate}
-            today={today}
-            maxDate={maxDate}
-            onSelectDate={(d) => {
-              setEditDate(d);
-              setEditStartTime(null);
-            }}
-          />
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                2. Data
+              </p>
+              <BookingDatePicker
+                selectedDate={safeDate}
+                today={today}
+                maxDate={maxDate}
+                onSelectDate={(d) => {
+                  setEditDate(d);
+                  setEditStartTime(null);
+                }}
+              />
+            </div>
 
-          {editServiceIds.length > 0 && (
-            <>
-              {loadingSlots ? (
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">
+                3. Horário
+              </p>
+              {editServiceIds.length === 0 ? (
+                <p className="rounded-2xl bg-white/[0.04] px-4 py-5 text-center text-sm text-muted-foreground">
+                  Escolha pelo menos um serviço pra ver os horários.
+                </p>
+              ) : loadingSlots ? (
                 <SlotGridSkeleton />
               ) : slotsError ? (
                 <p className="rounded-2xl bg-white/[0.04] px-4 py-5 text-center text-sm text-muted-foreground">
@@ -413,32 +483,25 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                   ))}
                 </div>
               )}
+            </div>
 
-              {editStartTime && (
-                <p className="text-center text-xs text-muted-foreground">
-                  Total: {formatDuration(editTotalMinutes)} ·{" "}
-                  {editTotalPriceLabel}
-                </p>
-              )}
-            </>
-          )}
+            {editStartTime && editServiceIds.length > 0 ? (
+              <p className="text-center text-xs text-muted-foreground">
+                Total: {formatDuration(editTotalMinutes)} · {editTotalPriceLabel}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <div className="relative shrink-0 px-5 pb-3 pt-2">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 -top-6 h-6 bg-gradient-to-t from-[#0e0f11] to-transparent"
-          />
+        <div className="relative shrink-0 border-t border-white/8 px-5 pb-3 pt-2">
           <div className="flex items-center gap-2">
             <Button
               type="button"
               variant="ghost"
               size="lg"
-              onClick={goBack}
+              onClick={leaveEdit}
               className="h-12 shrink-0 rounded-2xl px-3 text-muted-foreground"
             >
-              <ArrowLeft className="size-4" />
               Voltar
             </Button>
             <Button
@@ -464,98 +527,166 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   return (
     <>
       <div className="px-5 pb-6 pt-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
-              Meus horários
-            </h2>
-            <p className="mt-1.5 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Phone className="size-3.5 shrink-0" />
-              {formatWhatsapp(whatsappDigits)}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            className="mt-1 shrink-0 rounded-full bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors active:bg-white/10"
-          >
-            Sair
-          </button>
+        <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
+          Horários
+        </h2>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Próximos e histórico deste WhatsApp
+        </p>
+
+        <div className="mt-4 flex rounded-[14px] bg-white/[0.06] p-1">
+          {(
+            [
+              { id: "upcoming", label: "Próximos" },
+              { id: "history", label: "Histórico" },
+            ] as const
+          ).map((tab) => {
+            const active = listTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => switchTab(tab.id)}
+                className={cn(
+                  "h-10 flex-1 rounded-[11px] text-[13px] font-semibold transition-colors",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground"
+                )}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
 
-        <div className="mt-6">
+        <div className="mt-4">
           {loadingList ? (
             <AppointmentCardsSkeleton />
           ) : appointments.length === 0 ? (
-            <div className="rounded-2xl bg-[#151618] px-5 py-12 text-center ring-1 ring-white/8">
-              <CalendarDays className="mx-auto size-8 text-muted-foreground" strokeWidth={1.5} />
-              <p className="mt-3 font-medium">Nenhum horário marcado</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Não há agendamentos futuros com esse WhatsApp.
+            <div className="rounded-2xl bg-[#151618] px-5 py-10 text-center ring-1 ring-white/8">
+              {listTab === "upcoming" ? (
+                <CalendarDays
+                  className="mx-auto size-8 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
+              ) : (
+                <Clock
+                  className="mx-auto size-8 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
+              )}
+              <p className="mt-3 font-medium text-[#f5f5f5]">
+                {listTab === "upcoming"
+                  ? "Nenhum horário marcado"
+                  : "Nenhum atendimento no histórico"}
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
+                {listTab === "upcoming"
+                  ? "Quando você agendar, os próximos horários aparecem aqui pra remarcar ou cancelar."
+                  : "Atendimentos passados e cancelados aparecem nesta lista."}
               </p>
             </div>
           ) : (
             <ul className="flex flex-col gap-3">
-              {appointments.map((a) => (
-                <li
-                  key={a.id}
-                  className="rounded-2xl bg-[#151618] p-4 ring-1 ring-white/8"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[1.75rem] font-semibold tabular-nums leading-none tracking-tight">
-                        {a.startTime}
-                      </p>
-                      <p className="mt-1.5 text-sm capitalize text-muted-foreground">
-                        {formatDateBR(a.date)}
-                      </p>
+              {appointments.map((a) => {
+                const tone = statusTone(a.status);
+                return (
+                  <li
+                    key={a.id}
+                    className="rounded-2xl bg-[#151618] p-4 ring-1 ring-white/8"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[1.75rem] font-semibold tabular-nums leading-none tracking-tight text-[#f5f5f5]">
+                          {a.startTime}
+                        </p>
+                        <p className="mt-1.5 text-sm capitalize text-muted-foreground">
+                          {formatDateBR(a.date)}
+                        </p>
+                      </div>
+                      {listTab === "history" ? (
+                        <span
+                          className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                          style={{
+                            backgroundColor: tone.bg,
+                            color: tone.text,
+                          }}
+                        >
+                          {statusLabel(a.status)}
+                        </span>
+                      ) : (
+                        <ProfessionalAvatar
+                          photoUrl={a.professionalPhotoUrl}
+                          photoPosition={
+                            catalog.professionals.find(
+                              (p) => p.id === a.professionalId
+                            )?.photoPosition
+                          }
+                          name={a.professionalName}
+                          size="md"
+                        />
+                      )}
                     </div>
-                    <ProfessionalAvatar
-                      photoUrl={a.professionalPhotoUrl}
-                      photoPosition={
-                        catalog.professionals.find((p) => p.id === a.professionalId)
-                          ?.photoPosition
-                      }
-                      name={a.professionalName}
-                      size="md"
-                    />
-                  </div>
 
-                  <div className="mt-4 border-t border-white/8 pt-3">
-                    <p className="text-sm font-medium">{a.professionalName}</p>
-                    <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
-                      {a.serviceNames.join(", ")}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDuration(a.totalMinutes)} ·{" "}
-                      {formatPriceBRL(a.totalPriceCents)}
-                    </p>
-                  </div>
+                    <div className="mt-4 border-t border-white/8 pt-3">
+                      <div
+                        className={cn(
+                          listTab === "history" && "flex items-start gap-3"
+                        )}
+                      >
+                        {listTab === "history" ? (
+                          <ProfessionalAvatar
+                            photoUrl={a.professionalPhotoUrl}
+                            photoPosition={
+                              catalog.professionals.find(
+                                (p) => p.id === a.professionalId
+                              )?.photoPosition
+                            }
+                            name={a.professionalName}
+                            size="md"
+                          />
+                        ) : null}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-[#f5f5f5]">
+                            {a.professionalName}
+                          </p>
+                          <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
+                            {a.serviceNames.join(", ")}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDuration(a.totalMinutes)} ·{" "}
+                            {formatPriceBRL(a.totalPriceCents)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="h-11 rounded-xl bg-white/[0.06] hover:bg-white/10"
-                      onClick={() => startEdit(a)}
-                    >
-                      <Pencil className="size-3.5" />
-                      Remarcar
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="h-11 rounded-xl bg-white/[0.06] text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => setCancelTarget(a)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      Cancelar
-                    </Button>
-                  </div>
-                </li>
-              ))}
+                    {listTab === "upcoming" ? (
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-11 rounded-xl bg-white/[0.06] hover:bg-white/10"
+                          onClick={() => startEdit(a)}
+                        >
+                          Remarcar
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          className="h-11 rounded-xl bg-white/[0.06] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setCancelTarget(a)}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -575,7 +706,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
             </DialogDescription>
           </DialogHeader>
 
-          {cancelTarget && (
+          {cancelTarget ? (
             <div className="px-6 py-5">
               <div className="rounded-xl border p-5">
                 <div className="flex items-end justify-between gap-4">
@@ -615,27 +746,29 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
                     <p className="mt-0.5 truncate font-semibold">
                       {cancelTarget.professionalName}
                     </p>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                       {cancelTarget.serviceNames.join(", ")}
                     </p>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
-          <DialogFooter className="-mx-0 -mb-0 flex-col-reverse gap-3 border-t bg-muted/20 px-6 py-5 sm:flex-row sm:justify-end">
+          <DialogFooter className="flex-row gap-2 border-t px-6 py-5 sm:justify-stretch">
             <Button
-              variant="outline"
-              className="w-full sm:w-auto"
+              type="button"
+              variant="secondary"
+              className="h-11 flex-1 rounded-2xl"
               onClick={() => setCancelTarget(null)}
               disabled={cancelBusy}
             >
               Voltar
             </Button>
             <Button
+              type="button"
               variant="destructive"
-              className="w-full sm:w-auto"
+              className="h-11 flex-1 rounded-2xl font-semibold"
               onClick={() => void handleCancelConfirm()}
               disabled={cancelBusy}
             >
