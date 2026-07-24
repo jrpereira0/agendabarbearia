@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadAppointmentWebhookBaseData } from "@/lib/notifications/shared";
 import { cancelAppointmentReminder } from "@/lib/appointment-reminders";
+import { notifyClientAppointmentCancelled } from "@/lib/notifications/client-appointment-webhook";
 
 const EVENT_APPOINTMENT_CANCELLED = "appointment.cancelled";
 const LOG_PREFIX = "[appointment-cancelled-webhook]";
@@ -91,12 +92,8 @@ async function buildPayload(
 
 /**
  * Avisa o n8n (webhook) que um agendamento foi cancelado, para notificar o
- * barbeiro no WhatsApp. Chamar depois que o status já foi salvo como
- * "cancelled" no banco — de qualquer ponto de cancelamento do sistema
- * (API pública, painel admin, encaixe manual).
- *
- * Busca os dados completos pelo appointmentId (não depende de dados
- * parciais de quem chamou), então funciona igual não importa a origem.
+ * barbeiro no WhatsApp. Também avisa o cliente. Chamar depois que o status
+ * já foi salvo como "cancelled" no banco.
  *
  * Nunca lança erro: qualquer falha aqui é só registrada em log, sem afetar
  * o fluxo de quem chamou (cancelamento continua válido).
@@ -120,19 +117,6 @@ export async function notifyAppointmentCancelled(
     source,
   });
 
-  const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-  console.log(
-    "[appointment-cancelled-webhook] env url existe:",
-    Boolean(webhookUrl)
-  );
-
-  if (!webhookUrl) {
-    console.warn(
-      "[appointment-cancelled-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
-    );
-    return;
-  }
-
   try {
     const admin = createAdminClient();
     if (!admin) {
@@ -142,10 +126,51 @@ export async function notifyAppointmentCancelled(
       return;
     }
 
-    // Mesma proteção de idempotência do appointment.created: reaproveita a
-    // tabela appointment_notifications, só muda o "event". A chave única
-    // (appointment_id, event) garante que o mesmo cancelamento não seja
-    // avisado duas vezes.
+    const payload = await buildPayload(
+      admin,
+      appointmentId,
+      source,
+      cancelReason ?? null
+    );
+    if (!payload) return;
+
+    // Cliente — só quando o admin cancela (não quando o próprio cliente cancela).
+    if (source === "admin_cancel" || source === "admin_squeeze_cancel") {
+      try {
+        await notifyClientAppointmentCancelled({
+          whatsapp: payload.customer.whatsapp,
+          shopName: payload.shop.name,
+          appointment: {
+            id: payload.appointment.id,
+            date: payload.appointment.date,
+            startTime: payload.appointment.startTime,
+            professionalName: payload.professional.name,
+            serviceNames: payload.services.map((s) => s.name),
+            cancelReason: payload.appointment.cancelReason,
+          },
+        });
+      } catch (error) {
+        console.error("[client-appointment-webhook] erro após cancelamento", {
+          appointmentId,
+          error,
+        });
+      }
+    }
+
+    const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
+    console.log(
+      "[appointment-cancelled-webhook] env url existe:",
+      Boolean(webhookUrl)
+    );
+
+    if (!webhookUrl) {
+      console.warn(
+        "[appointment-cancelled-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
+      );
+      return;
+    }
+
+    // Idempotência do aviso ao barbeiro.
     const { error: dedupeError } = await admin
       .from("appointment_notifications")
       .insert({
@@ -166,14 +191,6 @@ export async function notifyAppointmentCancelled(
         `[appointment-cancelled-webhook] Não foi possível registrar notificação do cancelamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
       );
     }
-
-    const payload = await buildPayload(
-      admin,
-      appointmentId,
-      source,
-      cancelReason ?? null
-    );
-    if (!payload) return;
 
     if (!payload.professional.whatsapp.trim()) {
       console.warn(

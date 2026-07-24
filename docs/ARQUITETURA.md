@@ -50,7 +50,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/lib/notifications/appointment-created-webhook.ts` | Avisa o n8n (webhook) sempre que um agendamento é criado, para notificar o barbeiro no WhatsApp |
 | `src/lib/notifications/appointment-cancelled-webhook.ts` | Mesma ideia, para quando um agendamento é cancelado |
 | `src/lib/notifications/appointment-updated-webhook.ts` | Mesma ideia, para quando um agendamento é alterado/remarcado |
-| `src/lib/appointment-reminders.ts` | Lembretes automáticos para clientes (1h antes): criar, cancelar, listar vencidos, marcar enviado e confirmar |
+| `src/lib/appointment-reminders.ts` | Lembretes automáticos para clientes (1h e 30min antes): criar, cancelar, listar vencidos, marcar enviado e confirmar |
 | `src/lib/notifications/shared.ts` | Busca de dados (agendamento, profissional, serviços, loja) compartilhada pelos webhooks acima |
 
 ## Banco de dados
@@ -81,7 +81,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `commission_payouts` | Repasse de comissão pago a um profissional num período (`period_from`/`period_to`, valor, quem pagou) |
 | `commission_payout_items` | Itens da comanda incluídos em cada repasse (evita pagar a mesma comissão duas vezes) |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
-| `appointment_reminders` | Lembretes para clientes (ex.: 1h antes do atendimento); o n8n consulta os vencidos via API e marca envio/confirmação |
+| `appointment_reminders` | Lembretes para clientes (1h e 30min antes); o n8n consulta os vencidos via API e marca envio/confirmação |
 | `api_keys` | Chaves de API para integrações (n8n): nome, prefixo, hash do segredo, scopes, validade — geradas em Configurações > Integrações |
 | `dinho_ai_status` | Por conversa de WhatsApp (`session_id` = telefone): se o atendimento por IA está ativo ou pausado (`ia_ativa`). Só service role / n8n |
 

@@ -1254,6 +1254,10 @@ components:
         appointmentId:
           type: string
           format: uuid
+        reminderType:
+          type: string
+          enum: [one_hour_before, thirty_minutes_before]
+          description: Tipo do lembrete (1h ou 30min antes)
         scheduledFor:
           type: string
           format: date-time

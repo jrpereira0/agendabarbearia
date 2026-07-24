@@ -16,8 +16,22 @@ import { firstOrSelf } from "@/lib/notifications/shared";
 import { whatsappMatches } from "@/lib/whatsapp";
 
 const LOG_PREFIX = "[appointment-reminder]";
+
 export const REMINDER_TYPE_ONE_HOUR = "one_hour_before";
-const REMINDER_LEAD_MS = 60 * 60 * 1000;
+export const REMINDER_TYPE_THIRTY_MINUTES = "thirty_minutes_before";
+
+export const REMINDER_TYPES = [
+  REMINDER_TYPE_ONE_HOUR,
+  REMINDER_TYPE_THIRTY_MINUTES,
+] as const;
+
+export type AppointmentReminderType = (typeof REMINDER_TYPES)[number];
+
+const REMINDER_LEAD_MS: Record<AppointmentReminderType, number> = {
+  [REMINDER_TYPE_ONE_HOUR]: 60 * 60 * 1000,
+  [REMINDER_TYPE_THIRTY_MINUTES]: 30 * 60 * 1000,
+};
+
 const PENDING_RESPONSE_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export type AppointmentReminderStatus =
@@ -54,6 +68,7 @@ type RawReminderAppointmentRow = {
 export type AppointmentReminderPayload = {
   id: string;
   appointmentId: string;
+  reminderType: AppointmentReminderType;
   scheduledFor: string;
   appointment: {
     id: string;
@@ -95,16 +110,23 @@ export function appointmentInstantUtc(
   return new Date(`${date}T${time}:00-03:00`);
 }
 
-function computeScheduledFor(date: string, startTime: string): Date {
+function computeScheduledFor(
+  date: string,
+  startTime: string,
+  reminderType: AppointmentReminderType
+): Date {
   const startUtc = appointmentInstantUtc(date, startTime);
   const now = new Date();
-  const oneHourBefore = new Date(startUtc.getTime() - REMINDER_LEAD_MS);
+  const leadBefore = new Date(
+    startUtc.getTime() - REMINDER_LEAD_MS[reminderType]
+  );
 
-  if (oneHourBefore < now && startUtc > now) {
+  // Se o lead já passou mas o horário ainda é futuro, dispara agora.
+  if (leadBefore < now && startUtc > now) {
     return now;
   }
 
-  return oneHourBefore;
+  return leadBefore;
 }
 
 async function loadAppointmentForReminder(
@@ -145,6 +167,7 @@ async function loadAppointmentForReminder(
 async function buildReminderPayload(
   admin: SupabaseClient,
   reminderId: string,
+  reminderType: AppointmentReminderType,
   scheduledFor: string,
   appointment: RawReminderAppointmentRow
 ): Promise<AppointmentReminderPayload | null> {
@@ -199,6 +222,7 @@ async function buildReminderPayload(
   return {
     id: reminderId,
     appointmentId: appointment.id,
+    reminderType,
     scheduledFor,
     appointment: {
       id: appointment.id,
@@ -228,8 +252,12 @@ function isActiveAppointmentStatus(status: string): boolean {
   return (ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(status);
 }
 
+function isReminderType(value: string): value is AppointmentReminderType {
+  return (REMINDER_TYPES as readonly string[]).includes(value);
+}
+
 /**
- * Garante que exista um lembrete pendente 1h antes do atendimento.
+ * Garante lembretes pendentes 1h e 30min antes do atendimento.
  * Chamar depois de criar ou alterar um agendamento ativo.
  */
 export async function upsertAppointmentReminder(
@@ -256,40 +284,54 @@ export async function upsertAppointmentReminder(
     return;
   }
 
-  const scheduledFor = computeScheduledFor(appointment.date, startTime);
   const now = new Date().toISOString();
 
-  const { error } = await admin.from("appointment_reminders").upsert(
-    {
-      appointment_id: appointmentId,
-      reminder_type: REMINDER_TYPE_ONE_HOUR,
-      scheduled_for: scheduledFor.toISOString(),
-      status: "pending",
-      sent_at: null,
-      confirmed_at: null,
-      cancelled_at: null,
-      failed_at: null,
-      fail_reason: null,
-      updated_at: now,
-    },
-    { onConflict: "appointment_id,reminder_type" }
-  );
-
-  if (error) {
-    console.warn(
-      `${LOG_PREFIX} Não foi possível gravar lembrete do agendamento ${appointmentId}: ${error.message}`
+  for (const reminderType of REMINDER_TYPES) {
+    const scheduledFor = computeScheduledFor(
+      appointment.date,
+      startTime,
+      reminderType
     );
-    return;
-  }
 
-  console.log(`${LOG_PREFIX} lembrete sincronizado`, {
-    appointmentId,
-    scheduledFor: scheduledFor.toISOString(),
-  });
+    // Se o horário do lembrete já passou do start, não cria (ex.: 30min quando falta 10min).
+    const startUtc = appointmentInstantUtc(appointment.date, startTime);
+    if (scheduledFor.getTime() >= startUtc.getTime()) {
+      continue;
+    }
+
+    const { error } = await admin.from("appointment_reminders").upsert(
+      {
+        appointment_id: appointmentId,
+        reminder_type: reminderType,
+        scheduled_for: scheduledFor.toISOString(),
+        status: "pending",
+        sent_at: null,
+        confirmed_at: null,
+        cancelled_at: null,
+        failed_at: null,
+        fail_reason: null,
+        updated_at: now,
+      },
+      { onConflict: "appointment_id,reminder_type" }
+    );
+
+    if (error) {
+      console.warn(
+        `${LOG_PREFIX} Não foi possível gravar lembrete ${reminderType} do agendamento ${appointmentId}: ${error.message}`
+      );
+      continue;
+    }
+
+    console.log(`${LOG_PREFIX} lembrete sincronizado`, {
+      appointmentId,
+      reminderType,
+      scheduledFor: scheduledFor.toISOString(),
+    });
+  }
 }
 
 /**
- * Cancela lembrete pendente ou já enviado (aguardando resposta do cliente).
+ * Cancela lembretes pendentes ou já enviados (aguardando resposta do cliente).
  */
 export async function cancelAppointmentReminder(
   appointmentId: string,
@@ -312,17 +354,17 @@ export async function cancelAppointmentReminder(
       updated_at: now,
     })
     .eq("appointment_id", appointmentId)
-    .eq("reminder_type", REMINDER_TYPE_ONE_HOUR)
+    .in("reminder_type", [...REMINDER_TYPES])
     .in("status", ["pending", "sent"]);
 
   if (error) {
     console.warn(
-      `${LOG_PREFIX} Não foi possível cancelar lembrete do agendamento ${appointmentId}: ${error.message}`
+      `${LOG_PREFIX} Não foi possível cancelar lembretes do agendamento ${appointmentId}: ${error.message}`
     );
     return;
   }
 
-  console.log(`${LOG_PREFIX} lembrete cancelado`, { appointmentId, reason });
+  console.log(`${LOG_PREFIX} lembretes cancelados`, { appointmentId, reason });
 }
 
 export async function listDueAppointmentReminders(options?: {
@@ -337,9 +379,9 @@ export async function listDueAppointmentReminders(options?: {
 
   const { data: rows, error } = await admin
     .from("appointment_reminders")
-    .select("id, scheduled_for, appointment_id")
+    .select("id, scheduled_for, appointment_id, reminder_type")
     .eq("status", "pending")
-    .eq("reminder_type", REMINDER_TYPE_ONE_HOUR)
+    .in("reminder_type", [...REMINDER_TYPES])
     .lte("scheduled_for", nowIso)
     .order("scheduled_for", { ascending: true })
     .limit(limit);
@@ -349,6 +391,8 @@ export async function listDueAppointmentReminders(options?: {
   const results: AppointmentReminderPayload[] = [];
 
   for (const row of rows) {
+    if (!isReminderType(row.reminder_type)) continue;
+
     const appointment = await loadAppointmentForReminder(
       admin,
       row.appointment_id
@@ -366,6 +410,7 @@ export async function listDueAppointmentReminders(options?: {
     const payload = await buildReminderPayload(
       admin,
       row.id,
+      row.reminder_type,
       row.scheduled_for,
       appointment
     );
@@ -383,9 +428,10 @@ export async function findPendingResponseReminder(
 
   const since = new Date(Date.now() - PENDING_RESPONSE_WINDOW_MS).toISOString();
 
+  // Só o lembrete de 1h pede confirmação do cliente.
   const { data: rows, error } = await admin
     .from("appointment_reminders")
-    .select("id, scheduled_for, sent_at, appointment_id")
+    .select("id, scheduled_for, sent_at, appointment_id, reminder_type")
     .eq("status", "sent")
     .eq("reminder_type", REMINDER_TYPE_ONE_HOUR)
     .gte("sent_at", since)
@@ -413,6 +459,7 @@ export async function findPendingResponseReminder(
     return buildReminderPayload(
       admin,
       row.id,
+      REMINDER_TYPE_ONE_HOUR,
       row.scheduled_for,
       appointment
     );
@@ -480,12 +527,20 @@ export async function confirmAppointmentReminder(
 
   const { data: existing, error: fetchError } = await admin
     .from("appointment_reminders")
-    .select("id, status, appointment_id")
+    .select("id, status, appointment_id, reminder_type")
     .eq("id", reminderId)
     .maybeSingle();
 
   if (fetchError || !existing) {
     return { ok: false, error: "Lembrete não encontrado.", status: 404 };
+  }
+
+  if (existing.reminder_type !== REMINDER_TYPE_ONE_HOUR) {
+    return {
+      ok: false,
+      error: "Só o lembrete de 1 hora aceita confirmação do cliente.",
+      status: 409,
+    };
   }
 
   if (existing.status !== "sent") {

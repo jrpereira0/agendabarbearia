@@ -10,6 +10,7 @@ import {
   type RawServiceRow,
 } from "@/lib/notifications/shared";
 import { upsertAppointmentReminder } from "@/lib/appointment-reminders";
+import { notifyClientAppointmentUpdated } from "@/lib/notifications/client-appointment-webhook";
 
 const EVENT_APPOINTMENT_UPDATED = "appointment.updated";
 const LOG_PREFIX = "[appointment-updated-webhook]";
@@ -279,19 +280,6 @@ export async function notifyAppointmentUpdated(
     source,
   });
 
-  const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-  console.log(
-    "[appointment-updated-webhook] env url existe:",
-    Boolean(webhookUrl)
-  );
-
-  if (!webhookUrl) {
-    console.warn(
-      "[appointment-updated-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
-    );
-    return;
-  }
-
   try {
     const admin = createAdminClient();
     if (!admin) {
@@ -316,13 +304,57 @@ export async function notifyAppointmentUpdated(
       return;
     }
 
+    // Lembretes 1h / 30min — independente do webhook do barbeiro.
     try {
       await upsertAppointmentReminder(appointmentId);
     } catch (error) {
-      console.error("[appointment-reminder] erro ao sincronizar lembrete após alteração", {
-        appointmentId,
-        error,
-      });
+      console.error(
+        "[appointment-reminder] erro ao sincronizar lembrete após alteração",
+        { appointmentId, error }
+      );
+    }
+
+    // Aviso ao cliente só quando o admin altera (não quando o próprio cliente remarca).
+    if (source === "admin_update" || source === "admin_squeeze_update") {
+      try {
+        await notifyClientAppointmentUpdated({
+          whatsapp: currentSnapshot.customer.whatsapp,
+          shopName: (
+            await loadAppointmentWebhookBaseData(
+              admin,
+              appointmentId,
+              LOG_PREFIX
+            )
+          )?.shopName,
+          changes,
+          appointment: {
+            id: currentSnapshot.appointmentId,
+            date: currentSnapshot.date,
+            startTime: currentSnapshot.startTime,
+            professionalName: currentSnapshot.professionalName,
+            serviceNames: currentSnapshot.services.map((s) => s.name),
+            totalPriceCents: currentSnapshot.totalPriceCents,
+          },
+        });
+      } catch (error) {
+        console.error("[client-appointment-webhook] erro após alteração", {
+          appointmentId,
+          error,
+        });
+      }
+    }
+
+    const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
+    console.log(
+      "[appointment-updated-webhook] env url existe:",
+      Boolean(webhookUrl)
+    );
+
+    if (!webhookUrl) {
+      console.warn(
+        "[appointment-updated-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
+      );
+      return;
     }
 
     const payload = await buildPayload(

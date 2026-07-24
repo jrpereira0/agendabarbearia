@@ -1035,9 +1035,13 @@ curl -X POST https://SEU-N8N/webhook/agendamento-criado \
 
 ---
 
-### 6e. Lembretes automáticos para clientes (1h antes)
+### 6e. Lembretes automáticos para clientes (1h e 30 min antes)
 
 O sistema **controla** os lembretes na tabela `appointment_reminders`. O n8n **não usa Wait** — consulta periodicamente os lembretes vencidos, envia o WhatsApp e marca o status via API.
+
+Tipos:
+- `one_hour_before` — 1 hora antes (pede confirmação do cliente)
+- `thirty_minutes_before` — 30 minutos antes (só lembrete, sem confirmação)
 
 **Quando o lembrete é criado/atualizado:**
 - Após `appointment.created` (qualquer origem)
@@ -1056,7 +1060,7 @@ O sistema **controla** os lembretes na tabela `appointment_reminders`. O n8n **n
 | **Auth** | `appointment_reminders:read` |
 | **Query** | `limit` (1–100, padrão 50), `now` (ISO opcional — para testes) |
 
-Retorna lembretes com `status = pending`, `scheduled_for <= now`, agendamento ativo e ainda no futuro.
+Retorna lembretes com `status = pending`, `scheduled_for <= now`, agendamento ativo e ainda no futuro (1h e 30min).
 
 **Resposta:**
 
@@ -1067,6 +1071,7 @@ Retorna lembretes com `status = pending`, `scheduled_for <= now`, agendamento at
     {
       "id": "uuid-reminder",
       "appointmentId": "uuid",
+      "reminderType": "one_hour_before",
       "scheduledFor": "2026-07-08T18:00:00.000Z",
       "appointment": {
         "id": "uuid",
@@ -1096,6 +1101,10 @@ Retorna lembretes com `status = pending`, `scheduled_for <= now`, agendamento at
 }
 ```
 
+No n8n, use `reminderType` pra montar a mensagem:
+- `one_hour_before` → “Seu horário é daqui a 1 hora… Confirma?”
+- `thirty_minutes_before` → “Lembrete: seu horário é daqui a 30 minutos.”
+
 #### POST `/appointment-reminders/:id/mark-sent`
 
 | | |
@@ -1111,7 +1120,7 @@ Marca `status = sent` e `sent_at = now()`. Só aceita lembrete com `status = pen
 | --- | --- |
 | **Auth** | `appointment_reminders:read` |
 
-Busca o lembrete mais recente **enviado** nas últimas 4 horas para o WhatsApp informado, com agendamento ainda ativo e futuro. Usado pelo bot para saber qual agendamento o cliente está confirmando.
+Busca o lembrete de **1 hora** mais recente **enviado** nas últimas 4 horas para o WhatsApp informado, com agendamento ainda ativo e futuro. Usado pelo bot para saber qual agendamento o cliente está confirmando. O lembrete de 30 min **não** entra aqui.
 
 **Resposta (encontrou):**
 
@@ -1122,6 +1131,7 @@ Busca o lembrete mais recente **enviado** nas últimas 4 horas para o WhatsApp i
   "reminder": {
     "id": "uuid-reminder",
     "appointmentId": "uuid",
+    "reminderType": "one_hour_before",
     "appointment": { "id": "uuid", "date": "2026-07-08", "startTime": "19:00", "endTime": "19:30", "totalPriceCents": 6000 },
     "customer": { "firstName": "Matheus", "lastName": "Silva", "whatsapp": "5513999999999" },
     "professional": { "id": "uuid", "name": "Chico" },
@@ -1147,15 +1157,70 @@ Busca o lembrete mais recente **enviado** nas últimas 4 horas para o WhatsApp i
 | --- | --- |
 | **Auth** | `appointment_reminders:write` |
 
-Marca `status = confirmed` e `confirmed_at = now()`. Se o agendamento ainda estiver `scheduled`, passa para `confirmed`. Só aceita lembrete com `status = sent`.
+Marca `status = confirmed` e `confirmed_at = now()`. Se o agendamento ainda estiver `scheduled`, passa para `confirmed`. Só aceita lembrete `one_hour_before` com `status = sent`.
 
 **Fluxo sugerido no n8n:**
 
 1. **Schedule** (ex.: a cada 5 min) → `GET /appointment-reminders/due`
-2. Para cada lembrete → enviar WhatsApp ao **cliente** (`customer.whatsapp`)
+2. Para cada lembrete → enviar WhatsApp ao **cliente** (`customer.whatsapp`), com texto conforme `reminderType`
 3. `POST /appointment-reminders/:id/mark-sent`
-4. Quando o cliente responder → `GET /appointment-reminders/pending-response?whatsapp=...`
+4. Só para `one_hour_before`: quando o cliente responder → `GET /appointment-reminders/pending-response?whatsapp=...`
 5. Se confirmar → `POST /appointment-reminders/:id/confirm`
+
+### 6e2. Aviso ao cliente quando o admin altera ou cancela
+
+Quando o **admin** altera ou cancela um horário, a API dispara um webhook pro n8n com a mensagem pronta pro WhatsApp do cliente.
+
+**URL:** `N8N_CLIENT_APPOINTMENT_WEBHOOK_URL` (opcional). Se vazia, usa `N8N_CLIENT_OTP_WEBHOOK_URL` (mesmo fluxo do OTP — faça um Switch no `event`).
+
+**Segredo:** `N8N_CLIENT_APPOINTMENT_WEBHOOK_SECRET` ou, se vazio, `N8N_CLIENT_OTP_WEBHOOK_SECRET` (header `x-client-otp-webhook-secret`).
+
+**Eventos:**
+
+`client.appointment.updated` — alteração pelo admin:
+
+```json
+{
+  "event": "client.appointment.updated",
+  "whatsapp": "5513999999999",
+  "message": "Oi! Seu horário na Dinho Barber Coffee foi atualizado.\n\n• Horário alterado de 14h para 15h\n\nAgora: ...",
+  "shop": { "name": "Dinho Barber Coffee" },
+  "changes": ["Horário alterado de 14h para 15h"],
+  "appointment": {
+    "id": "uuid",
+    "date": "2026-07-08",
+    "startTime": "15:00",
+    "professionalName": "Chico",
+    "serviceNames": ["Corte"],
+    "totalPriceCents": 6000
+  }
+}
+```
+
+`client.appointment.cancelled` — cancelamento pelo admin:
+
+```json
+{
+  "event": "client.appointment.cancelled",
+  "whatsapp": "5513999999999",
+  "message": "Oi! Seu horário na Dinho Barber Coffee foi cancelado.\n\nEra: ...",
+  "shop": { "name": "Dinho Barber Coffee" },
+  "appointment": {
+    "id": "uuid",
+    "date": "2026-07-08",
+    "startTime": "15:00",
+    "professionalName": "Chico",
+    "serviceNames": ["Corte"],
+    "cancelReason": "Cliente pediu"
+  }
+}
+```
+
+**No n8n:** no workflow do OTP (ou um dedicado), adicione Switch em `event`:
+- `client.otp` → envia o código
+- `client.appointment.updated` / `client.appointment.cancelled` → envia `message` pro `whatsapp`
+
+Remarcação/cancelamento feitos pelo **próprio cliente** no app/site **não** disparam esse aviso.
 
 ---
 
@@ -1377,6 +1442,8 @@ Substitua `[Evolution API / Z-API / ...]` pelo provedor que você usar.
 - [ ] Variáveis no painel Vercel: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - [ ] **`CLIENT_SESSION_SECRET`** (32+ caracteres) — obrigatório para login OTP do cliente (site e app)
 - [ ] **`N8N_CLIENT_OTP_WEBHOOK_URL`** / **`N8N_CLIENT_OTP_WEBHOOK_SECRET`** — envio do código no WhatsApp
+- [ ] Workflow OTP com Switch em `event` para também tratar `client.appointment.updated` / `client.appointment.cancelled` (ou URL dedicada `N8N_CLIENT_APPOINTMENT_WEBHOOK_URL`)
+- [ ] Schedule de lembretes (`due`) diferenciando `one_hour_before` vs `thirty_minutes_before`
 - [ ] **`N8N_APPOINTMENT_WEBHOOK_URL`** e **`N8N_APPOINTMENT_WEBHOOK_SECRET`** — opcionais, só para o aviso automático ao barbeiro (ver [seção 6b](#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated))
 - [ ] Rodar as migrations (`npm run db:migrate`) — incluir `0053` (OTP do cliente)
 - [ ] Rodar também `0047` (status do atendimento por IA) e `0048` (`booking_source` — ícone de origem na agenda)

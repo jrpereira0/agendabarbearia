@@ -56,6 +56,8 @@ Opcionais (só quem usa a funcionalidade correspondente):
 | `N8N_APPOINTMENT_WEBHOOK_SECRET` | Segredo do webhook acima (header `x-appointment-webhook-secret`) |
 | `N8N_CLIENT_OTP_WEBHOOK_URL` | Envia o **código de login** do cliente no WhatsApp — ver [docs/api/cliente-otp-whatsapp.md](docs/api/cliente-otp-whatsapp.md) |
 | `N8N_CLIENT_OTP_WEBHOOK_SECRET` | Segredo do webhook OTP (header `x-client-otp-webhook-secret`) |
+| `N8N_CLIENT_APPOINTMENT_WEBHOOK_URL` | Opcional. Avisos ao cliente quando o admin altera/cancela. Se vazio, usa a URL do OTP |
+| `N8N_CLIENT_APPOINTMENT_WEBHOOK_SECRET` | Opcional. Segredo dos avisos de agendamento ao cliente |
 
 Automações externas (n8n) usam **chaves de API** geradas no painel em **Configurações > Integrações**, não uma variável de ambiente.
 
