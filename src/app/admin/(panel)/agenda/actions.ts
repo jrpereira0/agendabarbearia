@@ -673,26 +673,20 @@ export async function updateAppointment(input: {
     : "admin_update";
   const snapshot = previousSnapshot;
 
-  after(() => {
-    void (async () => {
-      if (snapshot) {
-        try {
-          await notifyAppointmentUpdated(
-            appointmentId,
-            updateSource,
-            snapshot
-          );
-        } catch (webhookError) {
-          console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
-            appointmentId,
-            error: webhookError,
-          });
-        }
-      }
-      revalidatePath("/admin");
-    })();
-  });
+  // Aguardar aviso ao cliente (caixa do app + push). Não usar after():
+  // no Vercel o callback pode morrer antes de gravar a notificação.
+  if (snapshot) {
+    try {
+      await notifyAppointmentUpdated(appointmentId, updateSource, snapshot);
+    } catch (webhookError) {
+      console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
+        appointmentId,
+        error: webhookError,
+      });
+    }
+  }
 
+  revalidatePath("/admin");
   return { ok: true };
 }
 
@@ -1180,26 +1174,18 @@ export async function cancelAppointmentService(input: {
     );
   }
 
-  after(() => {
-    void (async () => {
-      try {
-        if (snapshot) {
-          await notifyAppointmentUpdated(
-            appointmentId,
-            "admin_update",
-            snapshot
-          );
-        }
-      } catch (error) {
-        console.error(
-          "[admin-appointment-cancel-service] erro ao enviar webhook:",
-          { appointmentId, error }
-        );
-      }
-      revalidatePath("/admin");
-      revalidatePath("/agenda");
-    })();
-  });
+  if (snapshot) {
+    try {
+      await notifyAppointmentUpdated(appointmentId, "admin_update", snapshot);
+    } catch (error) {
+      console.error(
+        "[admin-appointment-cancel-service] erro ao enviar webhook:",
+        { appointmentId, error }
+      );
+    }
+  }
+  revalidatePath("/admin");
+  revalidatePath("/agenda");
 
   return { ok: true };
 }
@@ -1389,6 +1375,11 @@ export async function moveAppointmentToDate(input: {
     await admin.from("appointments").delete().in("id", squeezeIds);
   }
 
+  const previousSnapshot = await captureAppointmentUpdateSnapshot(
+    admin,
+    parsed.data.appointmentId
+  );
+
   const { error } = await admin
     .from("appointments")
     .update({ date: parsed.data.newDate })
@@ -1396,6 +1387,21 @@ export async function moveAppointmentToDate(input: {
 
   if (error) {
     return { ok: false, error: "Não foi possível mudar a data do agendamento." };
+  }
+
+  if (previousSnapshot) {
+    try {
+      await notifyAppointmentUpdated(
+        parsed.data.appointmentId,
+        "admin_update",
+        previousSnapshot
+      );
+    } catch (webhookError) {
+      console.error("[moveAppointmentToDate] erro ao notificar cliente:", {
+        appointmentId: parsed.data.appointmentId,
+        error: webhookError,
+      });
+    }
   }
 
   revalidateAdminAgendaSoon();
