@@ -6,6 +6,7 @@ import {
 } from "@/lib/service-prices-for-date";
 import { loadAppointmentWebhookBaseData } from "@/lib/notifications/shared";
 import { upsertAppointmentReminder } from "@/lib/appointment-reminders";
+import { notifyClientAppointmentCreated } from "@/lib/notifications/client-appointment-webhook";
 
 const EVENT_APPOINTMENT_CREATED = "appointment.created";
 const LOG_PREFIX = "[appointment-webhook]";
@@ -129,19 +130,43 @@ export async function notifyAppointmentCreated(
     source,
   });
 
-  const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-  if (!webhookUrl) {
-    console.warn(
-      "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
-    );
-    return;
-  }
-
   try {
     const admin = createAdminClient();
     if (!admin) {
       console.warn(
         `[appointment-webhook] Supabase indisponível ao notificar agendamento ${appointmentId} (${source}).`
+      );
+      return;
+    }
+
+    const payload = await buildPayload(admin, appointmentId, source);
+    if (payload) {
+      try {
+        await notifyClientAppointmentCreated({
+          whatsapp: payload.customer.whatsapp,
+          shopName: payload.shop.name,
+          source,
+          appointment: {
+            id: payload.appointment.id,
+            date: payload.appointment.date,
+            startTime: payload.appointment.startTime,
+            professionalName: payload.professional.name,
+            serviceNames: payload.services.map((s) => s.name),
+            totalPriceCents: payload.appointment.totalPriceCents,
+          },
+        });
+      } catch (error) {
+        console.error("[client-appointment-push] erro após criação", {
+          appointmentId,
+          error,
+        });
+      }
+    }
+
+    const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
+    if (!webhookUrl) {
+      console.warn(
+        "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
       );
       return;
     }
@@ -172,7 +197,6 @@ export async function notifyAppointmentCreated(
       );
     }
 
-    const payload = await buildPayload(admin, appointmentId, source);
     if (!payload) return;
 
     if (!payload.professional.whatsapp.trim()) {
