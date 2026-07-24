@@ -6,6 +6,7 @@ import {
   REMINDER_TYPE_THIRTY_MINUTES,
   type AppointmentReminderPayload,
 } from "@/lib/appointment-reminders";
+import { createCustomerNotification } from "@/lib/customer-notifications";
 import {
   deleteCustomerPushToken,
   listExpoPushTokensForWhatsapp,
@@ -37,7 +38,7 @@ function reminderCopy(reminder: AppointmentReminderPayload): {
 }
 
 /**
- * Processa lembretes vencidos e envia push no app (sem n8n).
+ * Processa lembretes vencidos: grava na caixa do app + envia push.
  */
 export async function processDueAppointmentReminderPushes(options?: {
   limit?: number;
@@ -50,18 +51,28 @@ export async function processDueAppointmentReminderPushes(options?: {
 
   for (const reminder of due) {
     processed += 1;
+    const copy = reminderCopy(reminder);
+    const data = {
+      type: "appointment_reminder",
+      reminderType: reminder.reminderType,
+      appointmentId: reminder.appointmentId,
+      reminderId: reminder.id,
+    };
+
+    await createCustomerNotification({
+      whatsapp: reminder.customer.whatsapp,
+      title: copy.title,
+      body: copy.body,
+      type: "appointment_reminder",
+      data,
+    });
+
     const tokens = await listExpoPushTokensForWhatsapp(reminder.customer.whatsapp);
     if (tokens.length === 0) {
-      console.log(`${LOG_PREFIX} sem token, marcando enviado`, {
-        reminderId: reminder.id,
-        reminderType: reminder.reminderType,
-      });
-      // Sem aparelho registrado: marca como enviado pra não ficar reprocessando.
       await markAppointmentReminderSent(reminder.id);
       continue;
     }
 
-    const copy = reminderCopy(reminder);
     const result = await sendExpoPushNotifications(
       tokens.map((to) => ({
         to,
@@ -69,12 +80,7 @@ export async function processDueAppointmentReminderPushes(options?: {
         body: copy.body,
         sound: "default",
         channelId: "appointments",
-        data: {
-          type: "appointment_reminder",
-          reminderType: reminder.reminderType,
-          appointmentId: reminder.appointmentId,
-          reminderId: reminder.id,
-        },
+        data,
       })),
       {
         onInvalidToken: async (token) => {
@@ -88,10 +94,7 @@ export async function processDueAppointmentReminderPushes(options?: {
 
     sent += result.sent;
     failed += result.failed;
-
-    if (result.sent > 0 || tokens.length > 0) {
-      await markAppointmentReminderSent(reminder.id);
-    }
+    await markAppointmentReminderSent(reminder.id);
   }
 
   console.log(`${LOG_PREFIX} ciclo`, { processed, sent, failed });
@@ -104,9 +107,20 @@ export async function sendClientAppointmentPush(input: {
   body: string;
   data?: Record<string, unknown>;
 }): Promise<void> {
+  const type =
+    typeof input.data?.type === "string" ? input.data.type : "appointment_update";
+
+  await createCustomerNotification({
+    whatsapp: input.whatsapp,
+    title: input.title,
+    body: input.body,
+    type,
+    data: input.data,
+  });
+
   const tokens = await listExpoPushTokensForWhatsapp(input.whatsapp);
   if (tokens.length === 0) {
-    console.log(`${LOG_PREFIX} sem token para aviso`, {
+    console.log(`${LOG_PREFIX} sem token para aviso (já gravado na caixa)`, {
       whatsapp: input.whatsapp,
     });
     return;
