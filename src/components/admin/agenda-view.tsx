@@ -25,6 +25,7 @@ import {
   type ServiceOption,
 } from "@/components/admin/new-appointment-dialog";
 import { formatAgendaHeaderParts } from "@/lib/agenda-grid-utils";
+import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { shiftDate } from "@/lib/date-range";
 import type { AgendaDayContext } from "@/lib/get-agenda-day";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
@@ -480,9 +481,6 @@ export function AgendaView({
       if (prev.some((apt) => apt.id === appointment.id)) return prev;
       return [...prev, appointment];
     });
-    startTransition(() => {
-      router.refresh();
-    });
   }
 
   function handleAppointmentCancelled(appointmentId: string) {
@@ -491,9 +489,28 @@ export function AgendaView({
     );
     setActionsOpen(false);
     setSelectedAppointment(null);
-    startTransition(() => {
-      router.refresh();
-    });
+  }
+
+  function handleAppointmentServiceRemoved(
+    appointmentId: string,
+    serviceIndex: number
+  ) {
+    setLocalAppointments((prev) =>
+      prev.map((apt) => {
+        if (apt.id !== appointmentId) return apt;
+        const services = apt.services.filter((_, index) => index !== serviceIndex);
+        if (services.length === 0) return apt;
+        const durationMinutes = services.reduce(
+          (sum, service) => sum + service.durationMinutes,
+          0
+        );
+        return {
+          ...apt,
+          services,
+          endTime: minutesToTime(timeToMinutes(apt.startTime) + durationMinutes),
+        };
+      })
+    );
   }
 
   // A transição do `router.refresh()` terminou → desliga o indicador de "atualizando".
@@ -755,6 +772,7 @@ export function AgendaView({
         onOpenComanda={handleOpenComanda}
         onEditAppointment={() => handleEditAppointment()}
         onCancelled={handleAppointmentCancelled}
+        onServiceRemoved={handleAppointmentServiceRemoved}
       />
 
       <ComandaDialog

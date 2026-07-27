@@ -63,6 +63,8 @@ type AppointmentActionsDialogProps = {
   focusedServiceIndex?: number | null;
   /** Remove o card da grade na hora (cancelamento completo). */
   onCancelled?: (appointmentId: string) => void;
+  /** Atualiza o card na hora ao cancelar só um serviço. */
+  onServiceRemoved?: (appointmentId: string, serviceIndex: number) => void;
 };
 
 type SubView = "main" | "cancel" | "changeClient";
@@ -104,6 +106,7 @@ export function AppointmentActionsDialog({
   onEditAppointment,
   focusedServiceIndex = null,
   onCancelled,
+  onServiceRemoved,
 }: AppointmentActionsDialogProps) {
   const router = useRouter();
   // Estado reinicia a cada agendamento aberto — ver `key` no componente-pai.
@@ -240,10 +243,10 @@ export function AppointmentActionsDialog({
     if (result.ok) {
       toast.success(cancelSuccessMessage);
       onOpenChange(false);
-      if (!cancelOnlyFocusedService) {
-        onCancelled?.(appointment!.id);
+      if (cancelOnlyFocusedService && focusedServiceIndex != null) {
+        onServiceRemoved?.(appointment!.id, focusedServiceIndex);
       } else {
-        router.refresh();
+        onCancelled?.(appointment!.id);
       }
     } else {
       toast.error(result.error);

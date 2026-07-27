@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Check, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -394,7 +393,6 @@ export function NewAppointmentDialog({
   const presetFromGrid = Boolean(
     !isEncaixe && defaultProfessionalId && defaultStartTime
   );
-  const router = useRouter();
   const [step, setStep] = useState<Step>("services");
   const [professionalId, setProfessionalId] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
@@ -816,8 +814,6 @@ export function NewAppointmentDialog({
             priceCents: s.priceCents,
           })),
         });
-      } else {
-        router.refresh();
       }
     } else {
       toast.error(result.error);
