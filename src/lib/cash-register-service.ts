@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getCashRegisterSummary } from "@/lib/finance-reports";
+import { getCashRegisterSummary, countOpenComandasWithItems } from "@/lib/finance-reports";
 import { formatDateBR } from "@/lib/format";
 
 export type CashRegisterSessionStatus = "open" | "closed";
@@ -326,6 +326,18 @@ export async function closeCashRegister(
     return {
       ok: false,
       error: "O caixa deste dia não está aberto.",
+      status: 409,
+    };
+  }
+
+  const openCount = await countOpenComandasWithItems(admin, serviceDate);
+  if (openCount > 0) {
+    return {
+      ok: false,
+      error:
+        openCount === 1
+          ? "Ainda tem 1 comanda aberta neste dia. Finalize ou exclua antes de encerrar o caixa."
+          : `Ainda tem ${openCount} comandas abertas neste dia. Finalize ou exclua antes de encerrar o caixa.`,
       status: 409,
     };
   }

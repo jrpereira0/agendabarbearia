@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Scissors } from "lucide-react";
+import { Package, Scissors } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DEFAULT_PHOTO_POSITION,
@@ -11,6 +11,8 @@ type ServiceThumbnailProps = {
   name: string;
   photoPosition?: string | null;
   size?: "sm" | "md";
+  /** Ícone quando não há foto (serviço = tesoura, produto = pacote). */
+  emptyIcon?: "service" | "product";
   className?: string;
 };
 
@@ -29,11 +31,13 @@ export function ServiceThumbnail({
   name,
   photoPosition,
   size = "md",
+  emptyIcon = "service",
   className,
 }: ServiceThumbnailProps) {
   const position = normalizePhotoPosition(
     photoPosition ?? DEFAULT_PHOTO_POSITION
   );
+  const EmptyIcon = emptyIcon === "product" ? Package : Scissors;
 
   return (
     <div
@@ -55,7 +59,7 @@ export function ServiceThumbnail({
         />
       ) : (
         <div className="flex size-full items-center justify-center">
-          <Scissors className={cn("text-muted-foreground", icons[size])} />
+          <EmptyIcon className={cn("text-muted-foreground", icons[size])} />
         </div>
       )}
     </div>

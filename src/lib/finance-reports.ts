@@ -11,6 +11,17 @@ import {
 } from "@/lib/comanda-types";
 import { loadPaidComandaItemIds } from "@/lib/commission-payout-service";
 
+export type CashRegisterOpenComanda = {
+  id: string;
+  appointmentId: string | null;
+  serviceDate: string;
+  totalCents: number;
+  itemCount: number;
+  itemPreview: string;
+  customerName: string;
+  isWalkIn: boolean;
+};
+
 export type CashRegisterSummary = {
   from: string;
   to: string;
@@ -25,7 +36,7 @@ export type CashRegisterSummary = {
   comandaCount: number;
   comandas: {
     id: string;
-    appointmentId: string;
+    appointmentId: string | null;
     serviceDate: string;
     closedAt: string;
     professionalNickname: string;
@@ -34,6 +45,8 @@ export type CashRegisterSummary = {
     commissionCents: number;
     payments: { method: PaymentMethod; amountCents: number }[];
   }[];
+  /** Comandas abertas do dia (venda rápida ou horário), ainda não finalizadas. */
+  openComandas: CashRegisterOpenComanda[];
 };
 
 export type CommissionSummaryRow = {
@@ -163,6 +176,7 @@ export async function getFinancePeriodSummary(
       closed_at,
       total_cents,
       commission_cents,
+      customer_whatsapp,
       professionals ( nickname ),
       appointments (
         customer_first_name,
@@ -212,13 +226,15 @@ export async function getFinancePeriodSummary(
 
     return {
       id: row.id,
-      appointmentId: row.appointment_id,
+      appointmentId: row.appointment_id ?? null,
       serviceDate: row.service_date as string,
       closedAt: row.closed_at as string,
       professionalNickname: pro?.nickname ?? "—",
       customerName: apt
         ? `${apt.customer_first_name} ${apt.customer_last_name}`
-        : "—",
+        : !row.customer_whatsapp
+          ? "Venda rápida"
+          : "—",
       totalCents: row.total_cents,
       commissionCents: row.commission_cents,
       payments,
@@ -259,7 +275,79 @@ export async function getFinancePeriodSummary(
     cashInflowCents,
     comandaCount: comandas.length,
     comandas,
+    openComandas: [],
   };
+}
+
+async function loadOpenComandasForDate(
+  admin: SupabaseClient,
+  date: string
+): Promise<CashRegisterOpenComanda[]> {
+  const { data } = await admin
+    .from("comandas")
+    .select(
+      `
+      id,
+      appointment_id,
+      customer_whatsapp,
+      service_date,
+      total_cents,
+      appointments (
+        customer_first_name,
+        customer_last_name
+      ),
+      comanda_items ( id, service_name, quantity, is_tip )
+    `
+    )
+    .eq("status", "open")
+    .eq("service_date", date)
+    .order("created_at", { ascending: false });
+
+  return (data ?? [])
+    .map((row) => {
+      const items = (row.comanda_items ?? []).filter((item) => !item.is_tip);
+      if (items.length === 0) return null;
+
+      const isWalkIn = !row.customer_whatsapp && !row.appointment_id;
+      const apt = Array.isArray(row.appointments)
+        ? row.appointments[0]
+        : row.appointments;
+      const customerName = isWalkIn
+        ? "Venda rápida"
+        : apt
+          ? `${apt.customer_first_name} ${apt.customer_last_name}`
+          : "Comanda aberta";
+
+      const names = items.map((item) => {
+        const qty = item.quantity && item.quantity > 1 ? `${item.quantity}x ` : "";
+        return `${qty}${item.service_name}`;
+      });
+      const itemPreview =
+        names.length <= 2
+          ? names.join(" · ")
+          : `${names.slice(0, 2).join(" · ")} +${names.length - 2}`;
+
+      return {
+        id: row.id as string,
+        appointmentId: (row.appointment_id as string | null) ?? null,
+        serviceDate: row.service_date as string,
+        totalCents: row.total_cents as number,
+        itemCount: items.length,
+        itemPreview,
+        customerName,
+        isWalkIn,
+      };
+    })
+    .filter((row): row is CashRegisterOpenComanda => row != null);
+}
+
+/** Quantidade de comandas abertas com itens no dia (bloqueia encerrar caixa). */
+export async function countOpenComandasWithItems(
+  admin: SupabaseClient,
+  date: string
+): Promise<number> {
+  const open = await loadOpenComandasForDate(admin, date);
+  return open.length;
 }
 
 export async function getCashRegisterSummary(
@@ -267,7 +355,11 @@ export async function getCashRegisterSummary(
   date: string,
   options: { cashRegisterSessionId?: string } = {}
 ): Promise<CashRegisterSummary> {
-  return getFinancePeriodSummary(admin, date, date, options);
+  const [summary, openComandas] = await Promise.all([
+    getFinancePeriodSummary(admin, date, date, options),
+    loadOpenComandasForDate(admin, date),
+  ]);
+  return { ...summary, openComandas };
 }
 
 export async function getCommissionSummary(

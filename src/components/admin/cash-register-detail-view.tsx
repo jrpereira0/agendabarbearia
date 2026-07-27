@@ -11,6 +11,7 @@ import {
   Lock,
   QrCode,
   RotateCcw,
+  Trash2,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
@@ -32,7 +33,10 @@ import {
   type CashRegisterResponsibleOption,
 } from "@/components/admin/open-cash-register-dialog";
 import { closeCashRegisterAction } from "@/app/admin/(panel)/financeiro/actions";
-import { loadAppointmentItemAction } from "@/app/admin/(panel)/comandas/actions";
+import {
+  deleteOpenWalkInComandaAction,
+  loadAppointmentItemAction,
+} from "@/app/admin/(panel)/comandas/actions";
 import {
   formatPaymentMethodLabel,
   type CashRegisterSummary,
@@ -126,9 +130,12 @@ export function CashRegisterDetailView({
   const [openDialog, setOpenDialog] = useState(false);
   const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
   const [confirmClose, setConfirmClose] = useState(false);
+  const [deleteWalkInId, setDeleteWalkInId] = useState<string | null>(null);
+  const [deletingWalkIn, setDeletingWalkIn] = useState(false);
   const [comandaOpen, setComandaOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] =
     useState<AppointmentItem | null>(null);
+  const [walkInComandaId, setWalkInComandaId] = useState<string | null>(null);
   const [openingComandaId, setOpeningComandaId] = useState<string | null>(null);
 
   const dialogAppointments = useMemo(
@@ -187,8 +194,40 @@ export function CashRegisterDetailView({
     }
   }
 
-  async function openComanda(appointmentId: string, comandaId: string) {
+  async function handleDeleteWalkIn() {
+    if (!deleteWalkInId || deletingWalkIn) return;
+    setDeletingWalkIn(true);
+    try {
+      const result = await deleteOpenWalkInComandaAction(deleteWalkInId);
+      if (!mountedRef.current) return;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Venda rápida excluída.");
+      setDeleteWalkInId(null);
+      window.setTimeout(() => refreshSoon(), 0);
+    } catch {
+      if (mountedRef.current) {
+        toast.error("Não foi possível excluir a venda rápida.");
+      }
+    } finally {
+      if (mountedRef.current) setDeletingWalkIn(false);
+    }
+  }
+
+  async function openComanda(
+    appointmentId: string | null,
+    comandaId: string
+  ) {
     setOpeningComandaId(comandaId);
+    if (!appointmentId) {
+      setSelectedAppointment(null);
+      setWalkInComandaId(comandaId);
+      setOpeningComandaId(null);
+      setComandaOpen(true);
+      return;
+    }
     const result = await loadAppointmentItemAction(appointmentId);
     if (!mountedRef.current) return;
     setOpeningComandaId(null);
@@ -196,6 +235,7 @@ export function CashRegisterDetailView({
       toast.error(result.error);
       return;
     }
+    setWalkInComandaId(null);
     setSelectedAppointment(result.appointment);
     setComandaOpen(true);
   }
@@ -226,17 +266,24 @@ export function CashRegisterDetailView({
           backLabel="Voltar aos caixas"
           action={
             isCashOpen ? (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className={ADMIN_SURFACE.btnGhost}
-                disabled={pending}
-                onClick={() => setConfirmClose(true)}
-              >
-                <Lock className="size-4" />
-                Fechar caixa
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnGhost}
+                  disabled={pending || cash.openComandas.length > 0}
+                  onClick={() => setConfirmClose(true)}
+                >
+                  <Lock className="size-4" />
+                  Fechar caixa
+                </Button>
+                {cash.openComandas.length > 0 ? (
+                  <p className={cn("max-w-[16rem] text-right text-[11px]", ADMIN_SURFACE.accent)}>
+                    Finalize as comandas em aberto antes de encerrar.
+                  </p>
+                ) : null}
+              </div>
             ) : cashSession ? (
               <Button
                 type="button"
@@ -363,10 +410,78 @@ export function CashRegisterDetailView({
           ) : null}
         </div>
 
+        {cash.openComandas.length > 0 ? (
+          <section className="flex flex-col gap-3">
+            <div className="flex items-baseline gap-2">
+              <p className={ADMIN_SURFACE.sectionLabel}>Em aberto</p>
+              <span className={cn("text-xs", ADMIN_SURFACE.accent)}>
+                {cash.openComandas.length}
+              </span>
+            </div>
+            <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              <ul className="divide-y divide-white/10">
+                {cash.openComandas.map((row) => (
+                  <li key={row.id}>
+                    <div className="flex items-stretch">
+                      <button
+                        type="button"
+                        disabled={openingComandaId === row.id}
+                        onClick={() =>
+                          void openComanda(row.appointmentId, row.id)
+                        }
+                        className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.03] disabled:opacity-60 sm:px-5"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[15px] font-medium tracking-tight text-[#f5f5f5]">
+                            {row.customerName}
+                          </p>
+                          <p
+                            className={cn(
+                              "mt-0.5 truncate text-xs",
+                              ADMIN_SURFACE.muted
+                            )}
+                          >
+                            {row.itemPreview} ·{" "}
+                            <span className={ADMIN_SURFACE.accent}>
+                              Toque para finalizar
+                            </span>
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            "shrink-0 text-sm font-semibold tabular-nums",
+                            ADMIN_SURFACE.accent
+                          )}
+                        >
+                          {formatPriceBRL(row.totalCents)}
+                        </span>
+                        <ChevronRight
+                          className={cn("size-4 shrink-0", ADMIN_SURFACE.muted)}
+                          aria-hidden
+                        />
+                      </button>
+                      {row.isWalkIn ? (
+                        <button
+                          type="button"
+                          aria-label="Excluir venda rápida"
+                          onClick={() => setDeleteWalkInId(row.id)}
+                          className="flex shrink-0 items-center border-l border-white/10 px-3.5 text-[#f87171] transition-colors hover:bg-white/[0.03]"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : null}
+
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-baseline gap-2">
-              <p className={ADMIN_SURFACE.sectionLabel}>Comandas</p>
+              <p className={ADMIN_SURFACE.sectionLabel}>Comandas fechadas</p>
               {cash.comandas.length > 0 ? (
                 <span className={cn("text-xs", ADMIN_SURFACE.muted)}>
                   {filteredComandas.length}
@@ -386,7 +501,9 @@ export function CashRegisterDetailView({
             ) : null}
           </div>
 
-          {!cashSession && cash.comandas.length === 0 ? (
+          {!cashSession &&
+          cash.comandas.length === 0 &&
+          cash.openComandas.length === 0 ? (
             <EmptyState
               icon={Wallet}
               className="border-white/10 text-[#f5f5f5]"
@@ -411,8 +528,12 @@ export function CashRegisterDetailView({
             <EmptyState
               icon={Wallet}
               className="border-white/10 text-[#f5f5f5]"
-              title="Nenhuma comanda ainda"
-              description="Feche comandas na agenda e elas aparecem aqui."
+              title="Nenhuma comanda fechada ainda"
+              description={
+                cash.openComandas.length > 0
+                  ? "Finalize as comandas em aberto acima para entrar no caixa."
+                  : "Feche comandas na agenda e elas aparecem aqui."
+              }
               action={
                 <Button
                   variant="outline"
@@ -519,11 +640,13 @@ export function CashRegisterDetailView({
 
         <ComandaDialog
           appointment={selectedAppointment}
+          initialComandaId={walkInComandaId}
           open={comandaOpen}
           onOpenChange={(open) => {
             setComandaOpen(open);
             if (!open) {
               setSelectedAppointment(null);
+              setWalkInComandaId(null);
               window.setTimeout(() => refreshSoon(), 0);
             }
           }}
@@ -563,6 +686,44 @@ export function CashRegisterDetailView({
                 onClick={() => void handleCloseCash()}
               >
                 Encerrar caixa
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={deleteWalkInId !== null}
+          onOpenChange={(next) => {
+            if (!next && !deletingWalkIn) setDeleteWalkInId(null);
+          }}
+        >
+          <DialogContent className="max-w-sm border-white/10 bg-[#151618] text-[#f5f5f5]">
+            <DialogHeader>
+              <DialogTitle className="text-[#f5f5f5]">
+                Excluir venda rápida?
+              </DialogTitle>
+              <DialogDescription className={ADMIN_SURFACE.muted}>
+                Os produtos desta comanda serão removidos. Isso não dá para
+                desfazer.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                className={ADMIN_SURFACE.btnGhost}
+                disabled={deletingWalkIn}
+                onClick={() => setDeleteWalkInId(null)}
+              >
+                Manter
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deletingWalkIn}
+                onClick={() => void handleDeleteWalkIn()}
+              >
+                {deletingWalkIn ? "Excluindo…" : "Excluir"}
               </Button>
             </DialogFooter>
           </DialogContent>

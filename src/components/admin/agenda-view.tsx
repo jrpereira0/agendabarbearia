@@ -2,7 +2,8 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -75,12 +76,14 @@ function AgendaToolbar({
   isRefreshing,
   canBookNormal,
   canBookEncaixe,
+  canWalkInSale = false,
   onPrevDay,
   onToday,
   onNextDay,
   onRefresh,
   onBookNormal,
   onBookEncaixe,
+  onWalkInSale,
   onMore,
   mobile = false,
 }: {
@@ -90,12 +93,14 @@ function AgendaToolbar({
   isRefreshing: boolean;
   canBookNormal: boolean;
   canBookEncaixe: boolean;
+  canWalkInSale?: boolean;
   onPrevDay: () => void;
   onToday: () => void;
   onNextDay: () => void;
   onRefresh: () => void;
   onBookNormal: () => void;
   onBookEncaixe: () => void;
+  onWalkInSale?: () => void;
   onMore?: () => void;
   mobile?: boolean;
 }) {
@@ -267,6 +272,18 @@ function AgendaToolbar({
               Encaixe
             </Button>
           )}
+          {canWalkInSale && onWalkInSale ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="agenda-btn-outline"
+              onClick={onWalkInSale}
+              disabled={busy}
+            >
+              <ShoppingBag className="size-3.5" />
+              Venda rápida
+            </Button>
+          ) : null}
         </div>
       </div>
       {isNavigating ? <AgendaNavProgress /> : null}
@@ -352,6 +369,8 @@ export function AgendaView({
   );
   const [actionsOpen, setActionsOpen] = useState(false);
   const [comandaOpen, setComandaOpen] = useState(false);
+  const [walkInComandaId, setWalkInComandaId] = useState<string | null>(null);
+  const [walkInStarting, setWalkInStarting] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [bookingMode, setBookingMode] = useState<BookingMode>("normal");
   const [bookingProfessionalId, setBookingProfessionalId] = useState<
@@ -553,7 +572,30 @@ export function AgendaView({
   }
 
   function handleOpenComanda() {
+    setWalkInComandaId(null);
     setComandaOpen(true);
+  }
+
+  async function handleWalkInSale() {
+    if (walkInStarting) return;
+    setWalkInStarting(true);
+    try {
+      const { startWalkInComanda } = await import(
+        "@/app/admin/(panel)/comandas/actions"
+      );
+      const result = await startWalkInComanda(date);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setSelectedAppointment(null);
+      setWalkInComandaId(result.comanda.id);
+      setComandaOpen(true);
+    } catch {
+      toast.error("Não foi possível abrir a venda rápida.");
+    } finally {
+      setWalkInStarting(false);
+    }
   }
 
   function handleEditAppointment(apt?: AppointmentItem) {
@@ -561,10 +603,18 @@ export function AgendaView({
     setEditOpen(true);
   }
 
-  function handleCashComandaClick(appointmentId: string) {
-    const apt = localAppointments.find((row) => row.id === appointmentId);
-    if (!apt) return;
-    setSelectedAppointment(apt);
+  function handleCashComandaClick(comandaId: string, appointmentId: string | null) {
+    if (appointmentId) {
+      const apt = localAppointments.find((row) => row.id === appointmentId);
+      if (apt) {
+        setWalkInComandaId(null);
+        setSelectedAppointment(apt);
+        setComandaOpen(true);
+        return;
+      }
+    }
+    setSelectedAppointment(null);
+    setWalkInComandaId(comandaId);
     setComandaOpen(true);
   }
 
@@ -592,12 +642,14 @@ export function AgendaView({
     isRefreshing,
     canBookNormal,
     canBookEncaixe,
+    canWalkInSale: isOwner && permissions.canOpenComanda,
     onPrevDay: () => goToDate(shiftDate(displayDate, -1)),
     onToday: () => goToDate(today),
     onNextDay: () => goToDate(shiftDate(displayDate, 1)),
     onRefresh: handleRefresh,
     onBookNormal: () => openBooking("normal"),
     onBookEncaixe: () => openBooking("encaixe"),
+    onWalkInSale: () => void handleWalkInSale(),
     onMore: () => setMobileMoreOpen(true),
   };
 
@@ -777,8 +829,15 @@ export function AgendaView({
 
       <ComandaDialog
         appointment={selectedAppointment}
+        initialComandaId={walkInComandaId}
         open={comandaOpen}
-        onOpenChange={setComandaOpen}
+        onOpenChange={(open) => {
+          setComandaOpen(open);
+          if (!open) {
+            setWalkInComandaId(null);
+            router.refresh();
+          }
+        }}
         permissions={permissions}
         servicesCatalog={services}
         productsCatalog={productsCatalog}
@@ -789,9 +848,10 @@ export function AgendaView({
         initialCashRegisterOpen={
           Boolean(
             cashRegister?.openCashRegister &&
-              selectedAppointment &&
-              cashRegister.openCashRegister.serviceDate ===
-                selectedAppointment.date
+              (selectedAppointment
+                ? cashRegister.openCashRegister.serviceDate ===
+                  selectedAppointment.date
+                : cashRegister.openCashRegister.serviceDate === date)
           )
         }
         initialOpenCashRegisterDate={

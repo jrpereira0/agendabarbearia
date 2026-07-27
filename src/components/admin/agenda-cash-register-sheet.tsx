@@ -10,6 +10,7 @@ import {
   Lock,
   RefreshCw,
   RotateCcw,
+  Trash2,
   Unlock,
   Wallet,
   X,
@@ -35,6 +36,7 @@ import {
   type CashRegisterResponsibleOption,
 } from "@/components/admin/open-cash-register-dialog";
 import { closeCashRegisterAction } from "@/app/admin/(panel)/financeiro/actions";
+import { deleteOpenWalkInComandaAction } from "@/app/admin/(panel)/comandas/actions";
 import {
   formatPaymentMethodLabel,
   type CashRegisterSummary,
@@ -56,7 +58,10 @@ type AgendaCashRegisterSheetProps = {
   cashSession: CashRegisterSession | null;
   openCashRegister: CashRegisterSession | null;
   responsibleOptions: CashRegisterResponsibleOption[];
-  onComandaClick?: (appointmentId: string) => void;
+  onComandaClick?: (
+    comandaId: string,
+    appointmentId: string | null
+  ) => void;
 };
 
 function formatClosedTime(iso: string): string {
@@ -78,6 +83,8 @@ export function AgendaCashRegisterSheet({
   const [open, setOpen] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [deleteWalkInId, setDeleteWalkInId] = useState<string | null>(null);
+  const [deletingWalkIn, setDeletingWalkIn] = useState(false);
   const [openMode, setOpenMode] = useState<"open" | "reopen">("open");
   const [search, setSearch] = useState("");
   const [pending, startTransition] = useTransition();
@@ -163,9 +170,34 @@ export function AgendaCashRegisterSheet({
     }
   }
 
-  function handleComandaClick(appointmentId: string) {
-    onComandaClick?.(appointmentId);
+  function handleComandaClick(
+    comandaId: string,
+    appointmentId: string | null
+  ) {
+    onComandaClick?.(comandaId, appointmentId);
     setOpen(false);
+  }
+
+  async function handleDeleteWalkIn() {
+    if (!deleteWalkInId || deletingWalkIn) return;
+    setDeletingWalkIn(true);
+    try {
+      const result = await deleteOpenWalkInComandaAction(deleteWalkInId);
+      if (!mountedRef.current) return;
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Venda rápida excluída.");
+      setDeleteWalkInId(null);
+      window.setTimeout(() => refreshSoon(), 0);
+    } catch {
+      if (mountedRef.current) {
+        toast.error("Não foi possível excluir a venda rápida.");
+      }
+    } finally {
+      if (mountedRef.current) setDeletingWalkIn(false);
+    }
   }
 
   return (
@@ -194,6 +226,11 @@ export function AgendaCashRegisterSheet({
           >
             CAIXA
           </span>
+          {cash.openComandas.length > 0 ? (
+            <span className="flex size-4 items-center justify-center rounded-full bg-[#ecf15e] text-[9px] font-semibold text-[#151618]">
+              {cash.openComandas.length > 9 ? "9+" : cash.openComandas.length}
+            </span>
+          ) : null}
         </button>
       )}
 
@@ -308,6 +345,79 @@ export function AgendaCashRegisterSheet({
               ) : null}
             </section>
 
+            {/* Comandas em aberto */}
+            {cash.openComandas.length > 0 ? (
+              <section className="border-b border-white/8 px-5 py-4">
+                <div className="mb-3 flex items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-medium text-[#f5f5f5]">
+                    Em aberto
+                  </h3>
+                  <span className="text-xs tabular-nums text-[#ecf15e]">
+                    {cash.openComandas.length}
+                  </span>
+                </div>
+                <ul className="divide-y divide-white/8 overflow-hidden rounded-xl border border-[#ecf15e]/25 bg-[#151618]">
+                  {cash.openComandas.map((openComanda) => {
+                    const clickable = Boolean(onComandaClick);
+                    return (
+                      <li key={openComanda.id}>
+                        <div className="flex items-stretch">
+                          <button
+                            type="button"
+                            disabled={!clickable}
+                            onClick={() =>
+                              handleComandaClick(
+                                openComanda.id,
+                                openComanda.appointmentId
+                              )
+                            }
+                            className={cn(
+                              "flex min-w-0 flex-1 items-center gap-3 px-3.5 py-3 text-left transition-colors",
+                              clickable && "hover:bg-white/[0.03]"
+                            )}
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline justify-between gap-2">
+                                <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                                  {openComanda.customerName}
+                                </p>
+                                <p className="shrink-0 text-sm font-medium tabular-nums text-[#f5f5f5]">
+                                  {formatPriceBRL(openComanda.totalCents)}
+                                </p>
+                              </div>
+                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                                {openComanda.itemPreview}
+                                {" · "}
+                                <span className="text-[#ecf15e]">
+                                  Toque para finalizar
+                                </span>
+                              </p>
+                            </div>
+                            {clickable ? (
+                              <ChevronRight
+                                className="size-4 shrink-0 text-muted-foreground"
+                                aria-hidden
+                              />
+                            ) : null}
+                          </button>
+                          {openComanda.isWalkIn ? (
+                            <button
+                              type="button"
+                              aria-label="Excluir venda rápida"
+                              onClick={() => setDeleteWalkInId(openComanda.id)}
+                              className="flex shrink-0 items-center border-l border-white/8 px-3 text-[#f87171] transition-colors hover:bg-white/[0.03]"
+                            >
+                              <Trash2 className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
+
             {/* Comandas */}
             <section className="px-5 py-4">
               <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -333,7 +443,9 @@ export function AgendaCashRegisterSheet({
                 </div>
               ) : null}
 
-              {!isCashOpen && cash.comandas.length === 0 ? (
+              {!isCashOpen &&
+              cash.comandas.length === 0 &&
+              cash.openComandas.length === 0 ? (
                 <div className="rounded-xl border border-white/8 bg-[#151618] px-4 py-10 text-center">
                   <Wallet
                     className="mx-auto size-5 text-muted-foreground"
@@ -347,12 +459,14 @@ export function AgendaCashRegisterSheet({
                   </p>
                 </div>
               ) : cash.comandas.length === 0 ? (
-                <div className="rounded-xl border border-white/8 bg-[#151618] px-4 py-10 text-center">
+                <div className="rounded-xl border border-white/8 bg-[#151618] px-4 py-8 text-center">
                   <p className="text-sm font-medium text-[#f5f5f5]">
-                    Nenhuma comanda ainda
+                    Nenhuma comanda fechada ainda
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    Feche comandas na agenda e elas aparecem aqui.
+                    {cash.openComandas.length > 0
+                      ? "Finalize as comandas em aberto acima para entrar no caixa."
+                      : "Feche comandas na agenda e elas aparecem aqui."}
                   </p>
                 </div>
               ) : filteredComandas.length === 0 ? (
@@ -374,7 +488,10 @@ export function AgendaCashRegisterSheet({
                           type="button"
                           disabled={!clickable}
                           onClick={() =>
-                            handleComandaClick(comanda.appointmentId)
+                            handleComandaClick(
+                              comanda.id,
+                              comanda.appointmentId
+                            )
                           }
                           className={cn(
                             "flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors",
@@ -410,15 +527,26 @@ export function AgendaCashRegisterSheet({
 
           <footer className="booking-footer shrink-0 border-t px-5 py-3.5">
             {isCashOpen ? (
-              <Button
-                type="button"
-                className="booking-btn-ghost h-11 w-full rounded-xl border"
-                disabled={pending}
-                onClick={() => setConfirmClose(true)}
-              >
-                <Lock className="size-4" />
-                Encerrar caixa
-              </Button>
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  className="booking-btn-ghost h-11 w-full rounded-xl border"
+                  disabled={pending || cash.openComandas.length > 0}
+                  onClick={() => setConfirmClose(true)}
+                >
+                  <Lock className="size-4" />
+                  Encerrar caixa
+                </Button>
+                {cash.openComandas.length > 0 ? (
+                  <p className="text-center text-xs text-[#ecf15e]">
+                    Finalize as {cash.openComandas.length}{" "}
+                    {cash.openComandas.length === 1
+                      ? "comanda aberta"
+                      : "comandas abertas"}{" "}
+                    antes de encerrar.
+                  </p>
+                ) : null}
+              </div>
             ) : cashSession ? (
               <Button
                 type="button"
@@ -477,6 +605,42 @@ export function AgendaCashRegisterSheet({
               onClick={() => void handleCloseCash()}
             >
               Encerrar caixa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteWalkInId !== null}
+        onOpenChange={(next) => {
+          if (!next && !deletingWalkIn) setDeleteWalkInId(null);
+        }}
+      >
+        <DialogContent className="admin-booking-dialog max-w-sm rounded-2xl ring-0">
+          <DialogHeader>
+            <DialogTitle>Excluir venda rápida?</DialogTitle>
+            <DialogDescription>
+              Os produtos desta comanda serão removidos. Isso não dá para
+              desfazer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              className="booking-btn-ghost rounded-xl border"
+              disabled={deletingWalkIn}
+              onClick={() => setDeleteWalkInId(null)}
+            >
+              Manter
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              className="rounded-xl"
+              disabled={deletingWalkIn}
+              onClick={() => void handleDeleteWalkIn()}
+            >
+              {deletingWalkIn ? "Excluindo…" : "Excluir"}
             </Button>
           </DialogFooter>
         </DialogContent>

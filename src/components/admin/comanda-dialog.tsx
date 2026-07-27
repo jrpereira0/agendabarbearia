@@ -26,6 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -82,11 +83,15 @@ import { matchesSearch } from "@/lib/text";
 import type { ProductOption } from "@/lib/product-types";
 import { encaixeTimeSlots, findAppointmentConflicts } from "@/lib/encaixe";
 import { timeToMinutes } from "@/lib/availability";
+import { ServiceThumbnail } from "@/components/booking/service-thumbnail";
 import {
   cancelAppointment,
 } from "@/app/admin/(panel)/agenda/actions";
 import {
   closeComandaWithItemsAction,
+  discardEmptyWalkInComandaAction,
+  deleteOpenWalkInComandaAction,
+  loadComandaById,
   loadComandaForAppointment,
   reopenComandaAction,
   saveComandaItems,
@@ -271,6 +276,8 @@ type ComandaProfessionalOption = ProfessionalOption & {
 
 type ComandaDialogProps = {
   appointment: AppointmentItem | null;
+  /** Abre comanda já existente (ex.: venda rápida) sem horário na agenda. */
+  initialComandaId?: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   permissions?: ProfessionalPermissions;
@@ -371,6 +378,7 @@ const EMPTY_PROFESSIONALS: ComandaProfessionalOption[] = [];
 
 export function ComandaDialog({
   appointment,
+  initialComandaId = null,
   open,
   onOpenChange,
   permissions = OWNER_PERMISSIONS,
@@ -424,6 +432,7 @@ export function ComandaDialog({
   const [tipProfessionalId, setTipProfessionalId] = useState("");
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
   const [confirmOverpayCredit, setConfirmOverpayCredit] = useState(false);
+  const [confirmDeleteWalkIn, setConfirmDeleteWalkIn] = useState(false);
   const [confirmCreditShortfallCents, setConfirmCreditShortfallCents] = useState<
     number | null
   >(null);
@@ -432,15 +441,17 @@ export function ComandaDialog({
   const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
 
   const load = useCallback(async () => {
-    if (!appointment) return;
+    if (!appointment && !initialComandaId) return;
     const gen = ++loadGenRef.current;
     setLoading(true);
     setLoadError(false);
     try {
-      const result = await loadComandaForAppointment(
-        appointment.id,
-        appointment.customerWhatsapp
-      );
+      const result = initialComandaId
+        ? await loadComandaById(initialComandaId)
+        : await loadComandaForAppointment(
+            appointment!.id,
+            appointment!.customerWhatsapp
+          );
       if (gen !== loadGenRef.current) return;
       if (!result.ok) {
         setLoadError(true);
@@ -457,7 +468,7 @@ export function ComandaDialog({
       const nextTipCents = tipItem?.chargedPriceCents ?? 0;
       const nextTipProfessionalId =
         tipItem?.professionalId ??
-        appointment.professionalId ??
+        appointment?.professionalId ??
         sessionProfessionalId ??
         "";
       setItems(editable);
@@ -492,14 +503,11 @@ export function ComandaDialog({
         setLoading(false);
       }
     }
-  }, [appointment, sessionProfessionalId]);
+  }, [appointment, initialComandaId, sessionProfessionalId]);
 
-  // Dispara a busca da comanda no servidor sempre que o diálogo abre pra um
-  // agendamento (ou os dados relevantes mudam enquanto já está aberto).
+  // Dispara a busca da comanda no servidor sempre que o diálogo abre.
   useEffect(() => {
-    if (open && appointment) {
-      // Defer pro próximo tick: evita "setState direto no efeito" e permite
-      // cancelar (abaixo) se o diálogo fechar antes da busca começar.
+    if (open && (appointment || initialComandaId)) {
       const timer = setTimeout(() => void load(), 0);
       return () => clearTimeout(timer);
     }
@@ -509,6 +517,7 @@ export function ComandaDialog({
   }, [
     open,
     appointment,
+    initialComandaId,
     load,
     appointments,
     isOwnerHint,
@@ -521,6 +530,7 @@ export function ComandaDialog({
   const [syncedFor, setSyncedFor] = useState({
     open,
     appointmentId: appointment?.id ?? null,
+    comandaId: initialComandaId,
     appointments,
     isOwnerHint,
     initialCashRegisterOpen,
@@ -530,6 +540,7 @@ export function ComandaDialog({
   const needsSync =
     open !== syncedFor.open ||
     (appointment?.id ?? null) !== syncedFor.appointmentId ||
+    (initialComandaId ?? null) !== syncedFor.comandaId ||
     appointments !== syncedFor.appointments ||
     isOwnerHint !== syncedFor.isOwnerHint ||
     initialCashRegisterOpen !== syncedFor.initialCashRegisterOpen ||
@@ -540,6 +551,7 @@ export function ComandaDialog({
     setSyncedFor({
       open,
       appointmentId: appointment?.id ?? null,
+      comandaId: initialComandaId,
       appointments,
       isOwnerHint,
       initialCashRegisterOpen,
@@ -580,12 +592,27 @@ export function ComandaDialog({
         appointment.professionalId || sessionProfessionalId || ""
       );
       setCustomerCreditBalanceCents(0);
+    } else if (open && initialComandaId) {
+      setFocusAppointmentId(null);
+      setLoading(true);
+      setLoadError(false);
+      setComanda(null);
+      setItems([]);
+      setLoadedItemsKey(null);
+      setPayments([]);
+      setIsOwner(isOwnerHint);
+      setCashRegisterOpen(initialCashRegisterOpen);
+      setOpenCashRegisterDate(initialOpenCashRegisterDate);
+      setTipCents(0);
+      setTipProfessionalId(sessionProfessionalId || "");
+      setCustomerCreditBalanceCents(0);
     } else if (!open) {
       setComanda(null);
       setLoadError(false);
       setLoading(false);
       setConfirmCancel(false);
       setConfirmOverpayCredit(false);
+      setConfirmDeleteWalkIn(false);
       setConfirmCreditShortfallCents(null);
       setServiceSearch("");
       setServicePickerOpen(false);
@@ -738,6 +765,14 @@ export function ComandaDialog({
     );
   }, [productsCatalog, productSearch]);
 
+  const productById = useMemo(() => {
+    const map = new Map<string, ProductOption>();
+    for (const product of productsCatalog) {
+      map.set(product.id, product);
+    }
+    return map;
+  }, [productsCatalog]);
+
   const linkedAppointmentsForMemo = useMemo((): ComandaLinkedAppointment[] => {
     if (!appointment) return [];
     if (comanda?.linkedAppointments) return comanda.linkedAppointments;
@@ -749,7 +784,10 @@ export function ComandaDialog({
   // Skeleton até a comanda chegar do servidor — evita crédito/gorjeta
   // "aparecendo depois" em cima do rascunho local.
   const showSkeleton = Boolean(
-    open && appointment && !loadError && (loading || !comanda)
+    open &&
+      (appointment || initialComandaId) &&
+      !loadError &&
+      (loading || !comanda)
   );
 
   const extraTimeSlots = useMemo(
@@ -796,19 +834,29 @@ export function ComandaDialog({
     const linkedProIds = new Set(
       linkedAppointmentsForMemo.map((apt) => apt.professionalId)
     );
+    if (linkedProIds.size === 0) {
+      // Venda rápida / sem horário: qualquer barbeiro pode receber gorjeta.
+      return professionals;
+    }
     return professionals.filter((pro) => linkedProIds.has(pro.id));
   }, [linkedAppointmentsForMemo, professionals]);
 
-  if (!appointment) return null;
+  if (!appointment && !initialComandaId) return null;
 
+  const isWalkIn = Boolean(comanda?.isWalkIn || (!appointment && initialComandaId));
   const linkedAppointments = linkedAppointmentsForMemo;
 
   const customerName = comanda
     ? `${comanda.customerFirstName} ${comanda.customerLastName}`
-    : `${appointment.customerFirstName} ${appointment.customerLastName}`;
+    : appointment
+      ? `${appointment.customerFirstName} ${appointment.customerLastName}`
+      : "Venda rápida";
   const customerWhatsapp =
-    comanda?.customerWhatsapp ?? appointment.customerWhatsapp;
-  const serviceDate = comanda?.serviceDate ?? appointment.date;
+    comanda?.customerWhatsapp ?? appointment?.customerWhatsapp ?? "";
+  const serviceDate = comanda?.serviceDate ?? appointment?.date ?? "";
+  const paymentMethodsForUi = isWalkIn
+    ? availablePaymentMethods.filter((method) => method !== "store_credit")
+    : availablePaymentMethods;
   const whatsappLink = `https://wa.me/55${customerWhatsapp}`;
   const isClosed = comanda?.status === "closed";
   const hasActiveLinked = linkedAppointments.some((apt) =>
@@ -818,12 +866,12 @@ export function ComandaDialog({
     Boolean(comanda) &&
     (isOwner || permissions.canEditComanda) &&
     !isClosed &&
-    hasActiveLinked;
+    (isWalkIn || hasActiveLinked);
   const canFinalize =
     Boolean(comanda) &&
     (isOwner || permissions.canCloseComanda) &&
     !isClosed &&
-    hasActiveLinked;
+    (isWalkIn || hasActiveLinked);
 
   function getItemProfessionalName(item: EditableItem): string {
     if (item.professionalNickname && item.professionalNickname !== "—") {
@@ -935,7 +983,9 @@ export function ComandaDialog({
     : false;
 
   const hasSecondaryActions =
-    Boolean(canEdit && onEditSchedule) || canCancelFocused;
+    Boolean(canEdit && onEditSchedule) ||
+    canCancelFocused ||
+    (isWalkIn && !isClosed && canEdit);
 
   const paymentShortfall = canEdit && paymentShortfallCents > 0;
 
@@ -1302,6 +1352,44 @@ export function ComandaDialog({
     void finalizeComanda(false);
   }
 
+  /** Fecha a janela; se for venda rápida vazia, apaga a comanda aberta. */
+  function dismissDialog() {
+    if (closing) return;
+
+    const id = comanda?.id ?? initialComandaId ?? null;
+    const walkIn =
+      Boolean(comanda?.isWalkIn) || Boolean(!appointment && initialComandaId);
+    const empty =
+      items.length === 0 && tipCents <= 0 && (comanda?.status ?? "open") === "open";
+
+    if (id && walkIn && empty) {
+      void discardEmptyWalkInComandaAction(id);
+    }
+
+    onOpenChange(false);
+  }
+
+  async function handleDeleteWalkIn() {
+    const id = comanda?.id ?? initialComandaId;
+    if (!id || busy) return;
+    setBusy(true);
+    try {
+      const result = await deleteOpenWalkInComandaAction(id);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setConfirmDeleteWalkIn(false);
+      toast.success("Venda rápida excluída.");
+      onOpenChange(false);
+      router.refresh();
+    } catch {
+      toast.error("Não foi possível excluir a venda rápida.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleReopen(confirmCreditShortfall = false) {
     if (!comanda) return;
     setBusy(true);
@@ -1500,6 +1588,10 @@ export function ComandaDialog({
         open={open && !confirmCancel && !pendingExtraService && !pendingProduct}
         onOpenChange={(next) => {
           if (closing) return;
+          if (!next) {
+            dismissDialog();
+            return;
+          }
           onOpenChange(next);
         }}
       >
@@ -1528,7 +1620,7 @@ export function ComandaDialog({
             type="button"
             aria-label="Fechar"
             onClick={() => {
-              if (!closing) onOpenChange(false);
+              dismissDialog();
             }}
             disabled={busy || closing}
             className="booking-close absolute top-3 right-3 z-20 flex size-9 items-center justify-center rounded-lg transition-colors"
@@ -1617,36 +1709,42 @@ export function ComandaDialog({
                       Itens
                     </h3>
                     <p className="text-xs text-muted-foreground">
-                      O que o cliente fez neste dia
+                      {isWalkIn
+                        ? "Produtos desta venda rápida"
+                        : "O que o cliente fez neste dia"}
                     </p>
                   </div>
                   {canEdit && (
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="booking-btn-ghost h-8"
-                        disabled={busy}
-                        onClick={openTipDialog}
-                      >
-                        <Coins className="size-4" />
-                        Gorjeta
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="booking-btn-ghost h-8"
-                        disabled={busy}
-                        onClick={() => {
-                          setServicePickerOpen(true);
-                          setProductPickerOpen(false);
-                        }}
-                      >
-                        <Plus className="size-4" />
-                        Serviço
-                      </Button>
+                      {!isWalkIn && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="booking-btn-ghost h-8"
+                          disabled={busy}
+                          onClick={openTipDialog}
+                        >
+                          <Coins className="size-4" />
+                          Gorjeta
+                        </Button>
+                      )}
+                      {!isWalkIn && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="booking-btn-ghost h-8"
+                          disabled={busy}
+                          onClick={() => {
+                            setServicePickerOpen(true);
+                            setProductPickerOpen(false);
+                          }}
+                        >
+                          <Plus className="size-4" />
+                          Serviço
+                        </Button>
+                      )}
                       {productsCatalog.length > 0 && (
                         <Button
                           type="button"
@@ -1676,6 +1774,9 @@ export function ComandaDialog({
                     <ul className="min-h-0 flex-1 divide-y overflow-y-auto overscroll-contain">
                       {items.map((item) => {
                         const product = isProductItem(item);
+                        const catalogProduct = item.productId
+                          ? productById.get(item.productId)
+                          : undefined;
                         const timeLabel = getItemAppointmentTime(item);
                         return (
                           <li
@@ -1683,13 +1784,20 @@ export function ComandaDialog({
                             className="flex flex-col gap-1.5 bg-transparent px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-2"
                           >
                             <div className="flex min-w-0 flex-1 items-start gap-3">
-                              <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] text-[var(--booking-accent,#ecf15e)] sm:size-8">
-                                {product ? (
-                                  <Package className="size-4" />
-                                ) : (
+                              {product ? (
+                                <ServiceThumbnail
+                                  photoUrl={catalogProduct?.photoUrl ?? null}
+                                  photoPosition={catalogProduct?.photoPosition}
+                                  name={item.serviceName}
+                                  size="sm"
+                                  emptyIcon="product"
+                                  className="border-[var(--booking-border)] bg-[var(--booking-input)]"
+                                />
+                              ) : (
+                                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] text-[var(--booking-accent,#ecf15e)] sm:size-8">
                                   <Scissors className="size-4" />
-                                )}
-                              </div>
+                                </div>
+                              )}
                               <div className="min-w-0 flex-1">
                                 <p className="font-medium leading-snug text-[#f5f5f5]">
                                   {item.serviceName}
@@ -2092,7 +2200,7 @@ export function ComandaDialog({
                                   <SelectContent
                                     className={ADMIN_SURFACE.popover}
                                   >
-                                    {availablePaymentMethods.map((m) => (
+                                    {paymentMethodsForUi.map((m) => (
                                       <SelectItem key={m} value={m}>
                                         {PAYMENT_METHOD_LABELS[m]}
                                       </SelectItem>
@@ -2218,7 +2326,7 @@ export function ComandaDialog({
                     type="button"
                     variant="outline"
                     className="booking-btn-ghost h-10 shrink-0 sm:h-9"
-                    onClick={() => onOpenChange(false)}
+                    onClick={dismissDialog}
                     disabled={busy}
                   >
                     Voltar
@@ -2259,12 +2367,23 @@ export function ComandaDialog({
                               openCancelDialog(
                                 cancelTargetId ??
                                   focusAppointmentId ??
-                                  appointment.id
+                                  appointment?.id ??
+                                  ""
                               )
                             }
                           >
                             <X className="size-4" />
                             Cancelar horário
+                          </DropdownMenuItem>
+                        )}
+                        {isWalkIn && !isClosed && canEdit && (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            disabled={busy}
+                            onSelect={() => setConfirmDeleteWalkIn(true)}
+                          >
+                            <Trash2 className="size-4" />
+                            Excluir venda rápida
                           </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
@@ -2550,13 +2669,23 @@ export function ComandaDialog({
                     onClick={() => pickProduct(product)}
                     disabled={busy}
                   >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-[#f5f5f5]">
-                        {product.name}
-                      </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {product.categoryName} · estoque{" "}
-                        {product.stockQuantity}
+                    <span className="flex min-w-0 items-center gap-3">
+                      <ServiceThumbnail
+                        photoUrl={product.photoUrl}
+                        photoPosition={product.photoPosition}
+                        name={product.name}
+                        size="sm"
+                        emptyIcon="product"
+                        className="border-[var(--booking-border)] bg-[var(--booking-input)]"
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-[#f5f5f5]">
+                          {product.name}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {product.categoryName} · estoque{" "}
+                          {product.stockQuantity}
+                        </span>
                       </span>
                     </span>
                     <span className="shrink-0 text-sm font-medium tabular-nums text-[#f5f5f5]">
@@ -2702,6 +2831,51 @@ export function ComandaDialog({
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={confirmDeleteWalkIn}
+        onOpenChange={(next) => {
+          if (!busy) setConfirmDeleteWalkIn(next);
+        }}
+      >
+        <DialogContent className="admin-booking-dialog rounded-2xl ring-0 sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="booking-display text-[#f5f5f5]">
+              Excluir venda rápida?
+            </DialogTitle>
+            <DialogDescription>
+              Os produtos desta comanda serão removidos. Isso não dá para
+              desfazer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="booking-btn-ghost"
+              disabled={busy}
+              onClick={() => setConfirmDeleteWalkIn(false)}
+            >
+              Manter
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busy}
+              onClick={() => void handleDeleteWalkIn()}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Excluindo…
+                </>
+              ) : (
+                "Excluir"
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -3010,15 +3184,25 @@ export function ComandaDialog({
 
           <div className="space-y-4 px-4 py-4 sm:px-5">
             {pendingProduct ? (
-              <div className="booking-context rounded-xl px-3.5 py-3">
-                <p className="text-sm font-medium text-[#f5f5f5]">
-                  {pendingProduct.name}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatPriceBRL(pendingProduct.priceCents)} cada ·{" "}
-                  {pendingProduct.categoryName} · estoque{" "}
-                  {pendingProduct.stockQuantity}
-                </p>
+              <div className="booking-context flex items-center gap-3 rounded-xl px-3.5 py-3">
+                <ServiceThumbnail
+                  photoUrl={pendingProduct.photoUrl}
+                  photoPosition={pendingProduct.photoPosition}
+                  name={pendingProduct.name}
+                  size="md"
+                  emptyIcon="product"
+                  className="border-[var(--booking-border)] bg-[var(--booking-input)]"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-[#f5f5f5]">
+                    {pendingProduct.name}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {formatPriceBRL(pendingProduct.priceCents)} cada ·{" "}
+                    {pendingProduct.categoryName} · estoque{" "}
+                    {pendingProduct.stockQuantity}
+                  </p>
+                </div>
               </div>
             ) : null}
 

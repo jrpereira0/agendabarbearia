@@ -13,6 +13,10 @@ import {
 } from "@/lib/comanda-types";
 import {
   closeComanda,
+  createWalkInComanda,
+  discardEmptyWalkInComanda,
+  deleteOpenWalkInComanda,
+  getComandaById,
   getComandaForAppointment,
   reopenComanda,
   updateComandaItems,
@@ -195,10 +199,12 @@ export async function loadComandaForAppointment(
 
   const customerCreditBalanceCents = creditPromise
     ? await creditPromise
-    : await getCustomerCreditBalanceByWhatsapp(
-        admin,
-        result.comanda.customerWhatsapp
-      );
+    : result.comanda.customerWhatsapp
+      ? await getCustomerCreditBalanceByWhatsapp(
+          admin,
+          result.comanda.customerWhatsapp
+        )
+      : 0;
 
   return {
     ok: true,
@@ -212,6 +218,160 @@ export async function loadComandaForAppointment(
     openCashRegisterDate: openCashRegister?.serviceDate ?? null,
     customerCreditBalanceCents,
   };
+}
+
+export async function loadComandaById(
+  comandaId: string
+): Promise<
+  | {
+      ok: true;
+      comanda: ComandaDetail;
+      isOwner: boolean;
+      cashRegisterOpen: boolean;
+      openCashRegisterDate: string | null;
+      customerCreditBalanceCents: number;
+    }
+  | { ok: false; error: string }
+> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  const [result, openCashRegister] = await Promise.all([
+    getComandaById(admin, comandaId, { sync: false }),
+    getOpenCashRegisterSessionBasic(admin),
+  ]);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  if (!session.isOwner) {
+    if (!session.professionalId) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
+    if (!session.permissions.canOpenComanda) {
+      return { ok: false, error: "Você não pode abrir comandas." };
+    }
+    if (!barberCanAccessComanda(result.comanda, session.professionalId)) {
+      return { ok: false, error: "Você não pode ver esta comanda." };
+    }
+  }
+
+  return {
+    ok: true,
+    comanda: result.comanda,
+    isOwner: session.isOwner,
+    cashRegisterOpen: await canCloseComandaInOpenCashRegister(
+      admin,
+      result.comanda.serviceDate,
+      openCashRegister
+    ),
+    openCashRegisterDate: openCashRegister?.serviceDate ?? null,
+    customerCreditBalanceCents: result.comanda.customerWhatsapp
+      ? await getCustomerCreditBalanceByWhatsapp(
+          admin,
+          result.comanda.customerWhatsapp
+        )
+      : 0,
+  };
+}
+
+/** Abre uma comanda de venda rápida (sem cliente / sem horário). */
+export async function startWalkInComanda(
+  serviceDate: string
+): Promise<
+  | {
+      ok: true;
+      comanda: ComandaDetail;
+      isOwner: boolean;
+      cashRegisterOpen: boolean;
+      openCashRegisterDate: string | null;
+      customerCreditBalanceCents: number;
+    }
+  | { ok: false; error: string }
+> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+
+  const denied = assertPermission(session, "canOpenComanda");
+  if (denied && !denied.ok) return { ok: false, error: denied.error };
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  const [created, openCashRegister] = await Promise.all([
+    createWalkInComanda(admin, serviceDate),
+    getOpenCashRegisterSessionBasic(admin),
+  ]);
+  if (!created.ok) return { ok: false, error: created.error };
+
+  revalidatePath("/admin");
+
+  return {
+    ok: true,
+    comanda: created.comanda,
+    isOwner: session.isOwner,
+    cashRegisterOpen: await canCloseComandaInOpenCashRegister(
+      admin,
+      created.comanda.serviceDate,
+      openCashRegister
+    ),
+    openCashRegisterDate: openCashRegister?.serviceDate ?? null,
+    customerCreditBalanceCents: 0,
+  };
+}
+
+/** Remove venda rápida aberta e vazia ao fechar a janela sem finalizar. */
+export async function discardEmptyWalkInComandaAction(
+  comandaId: string
+): Promise<{ ok: true; discarded: boolean } | { ok: false; error: string }> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+
+  const denied = assertPermission(session, "canOpenComanda");
+  if (denied && !denied.ok) return { ok: false, error: denied.error };
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  return discardEmptyWalkInComanda(admin, comandaId);
+}
+
+/** Exclui venda rápida aberta (com produtos, ainda sem finalizar). */
+export async function deleteOpenWalkInComandaAction(
+  comandaId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) {
+    return { ok: false, error: "error" in session ? session.error : "Erro." };
+  }
+
+  const denied = assertPermission(session, "canOpenComanda");
+  if (denied && !denied.ok) return { ok: false, error: denied.error };
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) {
+    return { ok: false, error: admin.error };
+  }
+
+  const result = await deleteOpenWalkInComanda(admin, comandaId);
+  if (!result.ok) return result;
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/financeiro");
+  return { ok: true };
 }
 
 export async function saveComandaItems(

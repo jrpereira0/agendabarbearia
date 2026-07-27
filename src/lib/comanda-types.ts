@@ -79,6 +79,8 @@ export type ComandaDetail = {
   customerLastName: string;
   customerWhatsapp: string;
   serviceDate: string;
+  /** Venda rápida sem cliente/horário (geladeira, avulso). */
+  isWalkIn: boolean;
   /** @deprecated use linkedAppointments */
   appointment: {
     date: string;

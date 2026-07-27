@@ -32,10 +32,11 @@ import {
 type DbComandaRow = {
   id: string;
   appointment_id: string | null;
-  professional_id: string;
-  customer_whatsapp: string;
+  professional_id: string | null;
+  customer_whatsapp: string | null;
   service_date: string;
   status: "open" | "closed";
+  is_walk_in?: boolean | null;
   commission_percent_snapshot: number | null;
   total_cents: number;
   commission_cents: number;
@@ -158,6 +159,14 @@ function mapComandaRow(
   const primary = linkedAppointments.find((linked) => !linked.isSqueezeIn);
   const validSqueezeAppointmentIds =
     customerFromAppointment.validSqueezeAppointmentIds ?? new Set<string>();
+  const isWalkIn = !row.customer_whatsapp;
+  const customerFirstName = isWalkIn
+    ? "Venda"
+    : (apt?.customer_first_name ?? customerFromAppointment.customerFirstName);
+  const customerLastName = isWalkIn
+    ? "rápida"
+    : (apt?.customer_last_name ?? customerFromAppointment.customerLastName);
+  const customerWhatsapp = row.customer_whatsapp ?? "";
 
   const items: ComandaItem[] = [...(row.comanda_items ?? [])]
     .filter((item) => {
@@ -197,16 +206,10 @@ function mapComandaRow(
     amountCents: p.amount_cents,
   }));
 
-  const customerFirstName =
-    apt?.customer_first_name ?? customerFromAppointment.customerFirstName;
-  const customerLastName =
-    apt?.customer_last_name ?? customerFromAppointment.customerLastName;
-  const customerWhatsapp = row.customer_whatsapp;
-
   return {
     id: row.id,
     appointmentId: row.appointment_id ?? primary?.id ?? "",
-    professionalId: row.professional_id,
+    professionalId: row.professional_id ?? primary?.professionalId ?? "",
     professionalNickname: pro?.nickname ?? primary?.professionalNickname ?? "—",
     status: row.status,
     commissionPercentSnapshot: row.commission_percent_snapshot,
@@ -220,6 +223,7 @@ function mapComandaRow(
     customerLastName,
     customerWhatsapp,
     serviceDate: row.service_date,
+    isWalkIn,
     appointment: {
       date: row.service_date,
       startTime: primary?.startTime ?? (apt ? formatTime(apt.start_time) : "—"),
@@ -235,10 +239,12 @@ function mapComandaRow(
 
 async function loadCustomerDayEncaixes(
   admin: SupabaseClient,
-  customerWhatsapp: string,
+  customerWhatsapp: string | null,
   serviceDate: string,
   options: { includeDone?: boolean } = {}
 ): Promise<ComandaLinkedAppointment[]> {
+  if (!customerWhatsapp) return [];
+
   const statuses = options.includeDone
     ? [...ACTIVE_APPOINTMENT_STATUSES, "done"]
     : [...ACTIVE_APPOINTMENT_STATUSES];
@@ -671,7 +677,7 @@ async function resolveComandaDetail(
   const mapped = mapComandaRow(row, linkedAppointments, validAppointmentIds, {
     customerFirstName: apt?.customer_first_name ?? "",
     customerLastName: apt?.customer_last_name ?? "",
-    customerWhatsapp: row.customer_whatsapp,
+    customerWhatsapp: row.customer_whatsapp ?? "",
     validSqueezeAppointmentIds,
   });
 
@@ -2011,6 +2017,172 @@ export type ComandaLoadOptions = {
   sync?: boolean;
 };
 
+export async function createWalkInComanda(
+  admin: SupabaseClient,
+  serviceDate: string
+): Promise<
+  { ok: true; comanda: ComandaDetail } | { ok: false; error: string; status: number }
+> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(serviceDate)) {
+    return { ok: false, error: "Data inválida.", status: 400 };
+  }
+
+  const { data: created, error } = await admin
+    .from("comandas")
+    .insert({
+      appointment_id: null,
+      professional_id: null,
+      customer_whatsapp: null,
+      service_date: serviceDate,
+      status: "open",
+      total_cents: 0,
+      commission_cents: 0,
+    })
+    .select("id")
+    .single();
+
+  if (error || !created) {
+    console.error("[comanda] falha ao criar venda rápida", error);
+    return {
+      ok: false,
+      error: "Não foi possível abrir a venda rápida.",
+      status: 500,
+    };
+  }
+
+  return getComandaById(admin, created.id, { sync: false });
+}
+
+/**
+ * Apaga venda rápida aberta sem itens (janela fechada sem finalizar).
+ * Não mexe em comanda de horário nem em venda com produtos/serviços.
+ */
+export async function discardEmptyWalkInComanda(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<{ ok: true; discarded: boolean } | { ok: false; error: string }> {
+  const { data: row } = await admin
+    .from("comandas")
+    .select("id, status, customer_whatsapp, appointment_id")
+    .eq("id", comandaId)
+    .maybeSingle();
+
+  if (!row || row.status !== "open") {
+    return { ok: true, discarded: false };
+  }
+
+  const isWalkIn = !row.customer_whatsapp && !row.appointment_id;
+  if (!isWalkIn) {
+    return { ok: true, discarded: false };
+  }
+
+  const { count: itemCount } = await admin
+    .from("comanda_items")
+    .select("id", { count: "exact", head: true })
+    .eq("comanda_id", comandaId);
+
+  if ((itemCount ?? 0) > 0) {
+    return { ok: true, discarded: false };
+  }
+
+  const { count: paymentCount } = await admin
+    .from("comanda_payments")
+    .select("id", { count: "exact", head: true })
+    .eq("comanda_id", comandaId);
+
+  if ((paymentCount ?? 0) > 0) {
+    return { ok: true, discarded: false };
+  }
+
+  await admin.from("comanda_appointments").delete().eq("comanda_id", comandaId);
+
+  const { error } = await admin
+    .from("comandas")
+    .delete()
+    .eq("id", comandaId)
+    .eq("status", "open");
+
+  if (error) {
+    console.error("[comanda] falha ao descartar venda rápida vazia", error);
+    return { ok: false, error: "Não foi possível limpar a venda rápida." };
+  }
+
+  return { ok: true, discarded: true };
+}
+
+/**
+ * Exclui venda rápida aberta (com ou sem itens).
+ * Estoque só baixa no fechamento — aqui não precisa devolver.
+ */
+export async function deleteOpenWalkInComanda(
+  admin: SupabaseClient,
+  comandaId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data: row } = await admin
+    .from("comandas")
+    .select("id, status, customer_whatsapp, appointment_id")
+    .eq("id", comandaId)
+    .maybeSingle();
+
+  if (!row) {
+    return { ok: false, error: "Venda rápida não encontrada." };
+  }
+  if (row.status !== "open") {
+    return {
+      ok: false,
+      error: "Só dá para excluir venda rápida ainda aberta.",
+    };
+  }
+
+  const isWalkIn = !row.customer_whatsapp && !row.appointment_id;
+  if (!isWalkIn) {
+    return {
+      ok: false,
+      error: "Essa comanda não é uma venda rápida.",
+    };
+  }
+
+  const { data: items } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId);
+
+  const deleteItems = await deleteComandaItemsSafely(
+    admin,
+    (items ?? []).map((item) => item.id)
+  );
+  if (!deleteItems.ok) return deleteItems;
+
+  const { data: leftovers } = await admin
+    .from("comanda_items")
+    .select("id")
+    .eq("comanda_id", comandaId)
+    .limit(1);
+
+  if (leftovers && leftovers.length > 0) {
+    return {
+      ok: false,
+      error: "Não foi possível excluir os itens desta venda.",
+    };
+  }
+
+  await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
+  await admin.from("comanda_appointments").delete().eq("comanda_id", comandaId);
+
+  const { error } = await admin
+    .from("comandas")
+    .delete()
+    .eq("id", comandaId)
+    .eq("status", "open");
+
+  if (error) {
+    console.error("[comanda] falha ao excluir venda rápida", error);
+    return { ok: false, error: "Não foi possível excluir a venda rápida." };
+  }
+
+  return { ok: true };
+}
+
 export async function getComandaById(
   admin: SupabaseClient,
   comandaId: string,
@@ -2027,12 +2199,14 @@ export async function getComandaById(
   }
 
   if (data.status === "open" && options.sync) {
-    await syncManualEncaixeItemsToComanda(
-      admin,
-      comandaId,
-      data.customer_whatsapp,
-      data.service_date
-    );
+    if (data.customer_whatsapp) {
+      await syncManualEncaixeItemsToComanda(
+        admin,
+        comandaId,
+        data.customer_whatsapp,
+        data.service_date
+      );
+    }
     await refreshLinkedAppointmentItemPrices(
       admin,
       comandaId,
@@ -3496,6 +3670,15 @@ export async function closeComanda(
 
   const needsCustomer =
     storeCreditCents > 0 || creditDeposits.length > 0;
+
+  if (needsCustomer && !comanda.customerWhatsapp) {
+    return {
+      ok: false,
+      error:
+        "Venda rápida não usa crédito do cliente. Escolha Pix, dinheiro ou cartão.",
+      status: 400,
+    };
+  }
 
   const [stockCheck, cashCheck, balanceOrCustomer] = await Promise.all([
     validateProductStockForClose(admin, comandaId),
