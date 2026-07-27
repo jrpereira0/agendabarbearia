@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import Image from "next/image";
 import { toast } from "sonner";
-import { Calendar, Phone, Wallet } from "lucide-react";
+import { Calendar, Phone, UserRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +19,12 @@ import {
   ClientWhatsappAuth,
   logoutClientSession,
 } from "@/components/booking/client-whatsapp-auth";
+import { PhotoField } from "@/components/admin/photo-field";
 import { formatPriceBRL, formatWhatsapp } from "@/lib/format";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 
 type Phase = "auth" | "profile";
 
@@ -28,55 +34,78 @@ export function MyAccount() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [creditCents, setCreditCents] = useState(0);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoPosition, setPhotoPosition] = useState(DEFAULT_PHOTO_POSITION);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const loadProfile = useCallback(async (wa: string) => {
-    setLoading(true);
-    setWhatsapp(wa);
-    try {
-      const res = await fetch("/api/v1/customers/me", {
-        credentials: "include",
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(body.error ?? "Não foi possível carregar sua conta.");
-        setFirstName("");
-        setLastName("");
-        setCreditCents(0);
-        setHasProfile(false);
+  const resetPhotoDraft = useCallback((url: string | null, position: string) => {
+    setPhotoUrl(url);
+    setPhotoPreview(url);
+    setPhotoPosition(normalizePhotoPosition(position));
+  }, []);
+
+  const loadProfile = useCallback(
+    async (wa: string) => {
+      setLoading(true);
+      setWhatsapp(wa);
+      try {
+        const res = await fetch("/api/v1/customers/me", {
+          credentials: "include",
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast.error(body.error ?? "Não foi possível carregar sua conta.");
+          setFirstName("");
+          setLastName("");
+          setCreditCents(0);
+          resetPhotoDraft(null, DEFAULT_PHOTO_POSITION);
+          setHasProfile(false);
+          setEditing(false);
+          setPhase("profile");
+          return;
+        }
+        if (body.found && body.customer) {
+          setFirstName(body.customer.firstName?.trim() ?? "");
+          setLastName(body.customer.lastName?.trim() ?? "");
+          setCreditCents(
+            typeof body.customer.creditBalanceCents === "number"
+              ? body.customer.creditBalanceCents
+              : 0
+          );
+          resetPhotoDraft(
+            typeof body.customer.photoUrl === "string"
+              ? body.customer.photoUrl
+              : null,
+            typeof body.customer.photoPosition === "string"
+              ? body.customer.photoPosition
+              : DEFAULT_PHOTO_POSITION
+          );
+          setHasProfile(true);
+        } else {
+          setFirstName("");
+          setLastName("");
+          setCreditCents(0);
+          resetPhotoDraft(null, DEFAULT_PHOTO_POSITION);
+          setHasProfile(false);
+        }
         setEditing(false);
         setPhase("profile");
-        return;
+      } catch {
+        toast.error("Não foi possível carregar sua conta.");
+        setPhase("profile");
+      } finally {
+        setLoading(false);
       }
-      if (body.found && body.customer) {
-        setFirstName(body.customer.firstName?.trim() ?? "");
-        setLastName(body.customer.lastName?.trim() ?? "");
-        setCreditCents(
-          typeof body.customer.creditBalanceCents === "number"
-            ? body.customer.creditBalanceCents
-            : 0
-        );
-        setHasProfile(true);
-      } else {
-        setFirstName("");
-        setLastName("");
-        setCreditCents(0);
-        setHasProfile(false);
-      }
-      setEditing(false);
-      setPhase("profile");
-    } catch {
-      toast.error("Não foi possível carregar sua conta.");
-      setPhase("profile");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [resetPhotoDraft]
+  );
 
   const handleAuthenticated = useCallback(
     (wa: string) => {
@@ -95,11 +124,23 @@ export function MyAccount() {
 
     setSaving(true);
     try {
+      const formData = new FormData();
+      formData.set("firstName", nome);
+      formData.set("lastName", sobrenome);
+      formData.set("photoPosition", photoPosition);
+
+      const photoInput = formRef.current?.querySelector(
+        'input[name="photo"]'
+      ) as HTMLInputElement | null;
+      const file = photoInput?.files?.[0];
+      if (file && file.size > 0) {
+        formData.set("photo", file);
+      }
+
       const res = await fetch("/api/v1/customers/me", {
         method: "PATCH",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName: nome, lastName: sobrenome }),
+        body: formData,
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -111,6 +152,14 @@ export function MyAccount() {
       if (typeof body.customer?.creditBalanceCents === "number") {
         setCreditCents(body.customer.creditBalanceCents);
       }
+      resetPhotoDraft(
+        typeof body.customer?.photoUrl === "string"
+          ? body.customer.photoUrl
+          : photoUrl,
+        typeof body.customer?.photoPosition === "string"
+          ? body.customer.photoPosition
+          : photoPosition
+      );
       setHasProfile(true);
       setEditing(false);
       toast.success("Dados salvos com sucesso.");
@@ -131,6 +180,7 @@ export function MyAccount() {
       setFirstName("");
       setLastName("");
       setCreditCents(0);
+      resetPhotoDraft(null, DEFAULT_PHOTO_POSITION);
       setHasProfile(false);
       setEditing(false);
     } finally {
@@ -160,21 +210,44 @@ export function MyAccount() {
 
   const displayName =
     firstName || lastName ? `${firstName} ${lastName}`.trim() : "Cliente";
+  const avatarSrc = photoPreview ?? photoUrl;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-5 pt-5 pb-8">
       <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 pr-3">
-          <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
-            Conta
-          </h2>
-          <p className="mt-1 truncate text-base font-semibold text-[#f5f5f5]">
-            {displayName}
-          </p>
-          <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Phone className="size-3.5 shrink-0" strokeWidth={1.75} />
-            <span className="tabular-nums">{formatWhatsapp(whatsapp)}</span>
-          </p>
+        <div className="flex min-w-0 flex-1 items-start gap-3 pr-3">
+          <div className="relative size-14 shrink-0 overflow-hidden rounded-full border border-white/10 bg-[#151618]">
+            {avatarSrc ? (
+              <Image
+                src={avatarSrc}
+                alt={displayName}
+                fill
+                className="object-cover"
+                style={{ objectPosition: photoPosition }}
+                sizes="56px"
+                unoptimized
+              />
+            ) : (
+              <div className="flex size-full items-center justify-center">
+                <UserRound
+                  className="size-6 text-muted-foreground"
+                  strokeWidth={1.75}
+                />
+              </div>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h2 className="booking-display text-[1.75rem] font-medium leading-tight tracking-tight">
+              Conta
+            </h2>
+            <p className="mt-1 truncate text-base font-semibold text-[#f5f5f5]">
+              {displayName}
+            </p>
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Phone className="size-3.5 shrink-0" strokeWidth={1.75} />
+              <span className="tabular-nums">{formatWhatsapp(whatsapp)}</span>
+            </p>
+          </div>
         </div>
         <button
           type="button"
@@ -224,13 +297,31 @@ export function MyAccount() {
 
           <div className="rounded-[18px] border border-white/[0.08] bg-[#151618] p-4">
             {editing ? (
-              <>
+              <form
+                ref={formRef}
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleSave();
+                }}
+              >
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {hasProfile
-                    ? "Altere nome e sobrenome. O WhatsApp não muda."
-                    : "Complete seu cadastro pra salvar na conta."}
+                    ? "Altere foto, nome e sobrenome. O WhatsApp não muda."
+                    : "Complete seu cadastro e adicione uma foto se quiser."}
                 </p>
-                <div className="mt-3.5 space-y-3">
+
+                <PhotoField
+                  preview={photoPreview}
+                  position={photoPosition}
+                  onPreviewChange={setPhotoPreview}
+                  onPositionChange={setPhotoPosition}
+                  shape="circle"
+                  tone="dark"
+                  hint="Opcional. Recorte e arraste pra enquadrar o rosto."
+                />
+
+                <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="account-first-name">Nome</Label>
                     <Input
@@ -252,7 +343,7 @@ export function MyAccount() {
                     />
                   </div>
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="flex gap-2">
                   <Button
                     type="button"
                     variant="ghost"
@@ -266,15 +357,14 @@ export function MyAccount() {
                     Cancelar
                   </Button>
                   <Button
-                    type="button"
+                    type="submit"
                     className="h-11 flex-1 rounded-2xl font-semibold"
                     disabled={saving}
-                    onClick={() => void handleSave()}
                   >
                     {saving ? "Salvando…" : "Salvar"}
                   </Button>
                 </div>
-              </>
+              </form>
             ) : (
               <>
                 <div>
@@ -294,6 +384,14 @@ export function MyAccount() {
                     {formatWhatsapp(whatsapp)}
                   </p>
                 </div>
+                {!photoUrl ? (
+                  <>
+                    <div className="my-3.5 h-px bg-white/[0.08]" />
+                    <p className="text-sm text-muted-foreground">
+                      Sem foto ainda. Toque em Editar pra adicionar.
+                    </p>
+                  </>
+                ) : null}
               </>
             )}
           </div>

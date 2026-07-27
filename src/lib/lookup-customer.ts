@@ -4,6 +4,10 @@ import {
   whatsappLookupKeys,
 } from "@/lib/whatsapp";
 import { capitalizePersonName } from "@/lib/text";
+import {
+  DEFAULT_PHOTO_POSITION,
+  normalizePhotoPosition,
+} from "@/lib/photo-position";
 
 export type CustomerLookupResult =
   | { found: true; firstName: string; lastName: string }
@@ -16,12 +20,41 @@ export type CustomerPublic = {
   whatsapp: string;
   /** Saldo de crédito na loja (centavos). */
   creditBalanceCents: number;
+  photoUrl: string | null;
+  photoPosition: string;
 };
 
 export type CustomerByWhatsappResult =
   | { ok: true; found: true; customer: CustomerPublic }
   | { ok: true; found: false; customer: null }
   | { ok: false; error: string; httpStatus: number };
+
+function mapCustomerRow(
+  data: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    credit_balance_cents?: number | null;
+    photo_url?: string | null;
+    photo_position?: string | null;
+  },
+  whatsapp: string
+): CustomerPublic {
+  return {
+    id: data.id,
+    firstName: capitalizePersonName(data.first_name),
+    lastName: capitalizePersonName(data.last_name),
+    whatsapp,
+    creditBalanceCents:
+      typeof data.credit_balance_cents === "number"
+        ? data.credit_balance_cents
+        : 0,
+    photoUrl: data.photo_url?.trim() || null,
+    photoPosition: normalizePhotoPosition(
+      data.photo_position ?? DEFAULT_PHOTO_POSITION
+    ),
+  };
+}
 
 export async function getCustomerByWhatsapp(
   rawWhatsapp: string
@@ -42,7 +75,9 @@ export async function getCustomerByWhatsapp(
 
   const { data, error } = await admin
     .from("customers")
-    .select("id, first_name, last_name, credit_balance_cents")
+    .select(
+      "id, first_name, last_name, credit_balance_cents, photo_url, photo_position"
+    )
     .in("whatsapp", whatsappLookupKeys(whatsapp))
     .limit(1)
     .maybeSingle();
@@ -62,16 +97,7 @@ export async function getCustomerByWhatsapp(
   return {
     ok: true,
     found: true,
-    customer: {
-      id: data.id,
-      firstName: capitalizePersonName(data.first_name),
-      lastName: capitalizePersonName(data.last_name),
-      whatsapp,
-      creditBalanceCents:
-        typeof data.credit_balance_cents === "number"
-          ? data.credit_balance_cents
-          : 0,
-    },
+    customer: mapCustomerRow(data, whatsapp),
   };
 }
 
@@ -95,13 +121,15 @@ export type UpdateCustomerProfileResult =
   | { ok: false; error: string; httpStatus: number };
 
 /**
- * Atualiza nome/sobrenome do cliente autenticado (WhatsApp imutável).
- * Se ainda não existir cadastro, cria.
+ * Atualiza nome/sobrenome (e opcionalmente foto) do cliente autenticado.
+ * WhatsApp imutável. Se ainda não existir cadastro, cria.
  */
 export async function updateCustomerProfileByWhatsapp(input: {
   whatsapp: string;
   firstName: string;
   lastName: string;
+  photoUrl?: string | null;
+  photoPosition?: string | null;
 }): Promise<UpdateCustomerProfileResult> {
   const whatsapp = normalizeWhatsapp(input.whatsapp);
   if (!whatsapp) {
@@ -126,9 +154,16 @@ export async function updateCustomerProfileByWhatsapp(input: {
     };
   }
 
+  const photoPosition =
+    input.photoPosition != null
+      ? normalizePhotoPosition(input.photoPosition)
+      : null;
+  const hasPhotoUpdate =
+    input.photoUrl !== undefined || input.photoPosition != null;
+
   const { data: existing, error: lookupError } = await admin
     .from("customers")
-    .select("id, credit_balance_cents")
+    .select("id, credit_balance_cents, photo_url, photo_position")
     .in("whatsapp", whatsappLookupKeys(whatsapp))
     .limit(1)
     .maybeSingle();
@@ -142,13 +177,21 @@ export async function updateCustomerProfileByWhatsapp(input: {
   }
 
   if (existing) {
+    const updates: Record<string, unknown> = {
+      first_name: firstName,
+      last_name: lastName,
+      updated_at: new Date().toISOString(),
+    };
+    if (input.photoUrl !== undefined) {
+      updates.photo_url = input.photoUrl;
+    }
+    if (photoPosition != null) {
+      updates.photo_position = photoPosition;
+    }
+
     const { error } = await admin
       .from("customers")
-      .update({
-        first_name: firstName,
-        last_name: lastName,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq("id", existing.id);
 
     if (error) {
@@ -161,27 +204,38 @@ export async function updateCustomerProfileByWhatsapp(input: {
 
     return {
       ok: true,
-      customer: {
-        id: existing.id,
-        firstName,
-        lastName,
-        whatsapp,
-        creditBalanceCents:
-          typeof existing.credit_balance_cents === "number"
-            ? existing.credit_balance_cents
-            : 0,
-      },
+      customer: mapCustomerRow(
+        {
+          id: existing.id,
+          first_name: firstName,
+          last_name: lastName,
+          credit_balance_cents: existing.credit_balance_cents,
+          photo_url:
+            input.photoUrl !== undefined ? input.photoUrl : existing.photo_url,
+          photo_position:
+            photoPosition ?? existing.photo_position ?? DEFAULT_PHOTO_POSITION,
+        },
+        whatsapp
+      ),
     };
+  }
+
+  const insertRow: Record<string, unknown> = {
+    first_name: firstName,
+    last_name: lastName,
+    whatsapp,
+  };
+  if (hasPhotoUpdate) {
+    if (input.photoUrl !== undefined) insertRow.photo_url = input.photoUrl;
+    if (photoPosition != null) insertRow.photo_position = photoPosition;
   }
 
   const { data: created, error } = await admin
     .from("customers")
-    .insert({
-      first_name: firstName,
-      last_name: lastName,
-      whatsapp,
-    })
-    .select("id, credit_balance_cents")
+    .insert(insertRow)
+    .select(
+      "id, first_name, last_name, credit_balance_cents, photo_url, photo_position"
+    )
     .single();
 
   if (error || !created) {
@@ -201,15 +255,6 @@ export async function updateCustomerProfileByWhatsapp(input: {
 
   return {
     ok: true,
-    customer: {
-      id: created.id,
-      firstName,
-      lastName,
-      whatsapp,
-      creditBalanceCents:
-        typeof created.credit_balance_cents === "number"
-          ? created.credit_balance_cents
-          : 0,
-    },
+    customer: mapCustomerRow(created, whatsapp),
   };
 }
