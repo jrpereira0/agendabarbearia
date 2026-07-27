@@ -16,6 +16,8 @@ type FinanceMetricCardProps = {
   className?: string;
   /** "dark" = identidade agenda/login; default = tema claro do financeiro. */
   tone?: "default" | "dark";
+  /** Torna o card clicável (sem envolver em <button> externo). */
+  onSelect?: () => void;
 };
 
 /** Card de métrica padrão das telas de financeiro, caixa e comissões. */
@@ -26,15 +28,32 @@ export function FinanceMetricCard({
   tooltip,
   className,
   tone = "default",
+  onSelect,
 }: FinanceMetricCardProps) {
   const dark = tone === "dark";
+  const clickable = Boolean(onSelect);
 
   return (
     <div
       data-slot="finance-metric-card"
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onSelect}
+      onKeyDown={
+        clickable
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelect?.();
+              }
+            }
+          : undefined
+      }
       className={cn(
         "rounded-xl border px-3.5 py-3 sm:px-5 sm:py-4",
         dark ? ADMIN_SURFACE.panel : "bg-card",
+        clickable &&
+          "cursor-pointer transition-colors hover:border-[#ecf15e]/35",
         className
       )}
     >
@@ -59,6 +78,7 @@ export function FinanceMetricCard({
                     : "text-muted-foreground/70 hover:text-foreground"
                 )}
                 aria-label={`Explicar ${label.toLowerCase()}`}
+                onClick={(event) => event.stopPropagation()}
               >
                 <CircleHelp className="size-3.5" />
               </button>

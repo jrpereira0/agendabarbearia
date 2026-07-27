@@ -393,14 +393,6 @@ export async function saveComandaItems(
     return { ok: false, error: parsed.error.issues[0].message };
   }
 
-  const billableItems = parsed.data.filter((item) => !item.isTip);
-  if (billableItems.length === 0) {
-    return {
-      ok: false,
-      error: "Informe ao menos um serviço ou produto na comanda.",
-    };
-  }
-
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
     return { ok: false, error: admin.error };

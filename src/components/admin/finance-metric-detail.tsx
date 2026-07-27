@@ -212,7 +212,9 @@ export function FinanceMetricDetail({
                   ? "Como o movimento se distribui na semana"
                   : metric === "ranking"
                     ? "Serviços cadastrados com movimento"
-                    : undefined;
+                    : metric === "produtos"
+                      ? `${report.productSales.totalQuantity} un. · ${report.productSales.byProduct.length} produto${report.productSales.byProduct.length === 1 ? "" : "s"}`
+                      : undefined;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -777,6 +779,99 @@ export function FinanceMetricDetail({
           </Section>
         </>
       )}
+
+      {metric === "produtos" && (
+        <>
+          <Section
+            title="Resumo"
+            description="Só produtos — sem serviços nem gorjeta"
+          >
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <MiniStat
+                label="Faturamento"
+                value={formatPriceBRL(report.productSales.totalRevenueCents)}
+              />
+              <MiniStat
+                label="Unidades"
+                value={String(report.productSales.totalQuantity)}
+              />
+              <MiniStat
+                label="Comissão"
+                value={formatPriceBRL(report.productSales.totalCommissionCents)}
+              />
+            </div>
+          </Section>
+
+          <Section title="Por produto" description="Quem mais vendeu em valor">
+            {report.productSales.byProduct.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <HorizontalBarChart
+                    items={report.productSales.byProduct
+                      .slice(0, 10)
+                      .map((row) => ({
+                        label: row.productName,
+                        value: row.revenueCents,
+                        sublabel: `${row.quantitySold} un.`,
+                      }))}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Por barbeiro" description="Inclui vendas sem profissional">
+            {report.productSales.byProfessional.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <HorizontalBarChart
+                    items={report.productSales.byProfessional.map((row) => ({
+                      label: row.professionalNickname,
+                      value: row.revenueCents,
+                      sublabel: `${row.quantitySold} un.`,
+                    }))}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Por dia" description="Faturamento de produtos no período">
+            {report.productSales.byDay.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart
+                    items={report.productSales.byDay.map((row) => ({
+                      label: shortDate(row.date),
+                      value: row.revenueCents,
+                    }))}
+                    height={148}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className={cn(ADMIN_SURFACE.panel, "px-4 py-3")}>
+      <p className={cn("text-xs uppercase tracking-wide", ADMIN_SURFACE.muted)}>
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-[#f5f5f5]">
+        {value}
+      </p>
     </div>
   );
 }

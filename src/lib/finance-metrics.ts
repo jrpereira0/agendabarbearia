@@ -7,6 +7,7 @@ export const FINANCE_METRIC_IDS = [
   "caixa",
   "ticket",
   "servicos",
+  "produtos",
   "comissoes",
   "pagamentos",
   "barbeiros",
@@ -25,6 +26,7 @@ export const FINANCE_METRIC_OPTIONS: {
   { id: "caixa", label: "Entradas no caixa" },
   { id: "ticket", label: "Ticket médio" },
   { id: "servicos", label: "Serviços realizados" },
+  { id: "produtos", label: "Produtos vendidos" },
   { id: "comissoes", label: "Comissões" },
   { id: "pagamentos", label: "Formas de pagamento" },
   { id: "barbeiros", label: "Por barbeiro" },
@@ -89,6 +91,8 @@ export function financeHeroValue(
       return formatPriceBRL(averageServiceCents);
     case "servicos":
       return String(totals.serviceItemCount);
+    case "produtos":
+      return formatPriceBRL(report.productSales.totalRevenueCents);
     case "comissoes":
       return formatPriceBRL(totals.commissionCents);
     case "pagamentos":

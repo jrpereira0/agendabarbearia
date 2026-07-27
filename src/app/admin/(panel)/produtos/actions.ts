@@ -7,6 +7,12 @@ import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { uploadPublicPhoto } from "@/lib/upload-photo";
 import { normalizePhotoPosition } from "@/lib/photo-position";
+import {
+  applyProductStockDelta,
+  STOCK_ADJUST_REASONS,
+  type StockAdjustReason,
+} from "@/lib/product-stock";
+import { createClient } from "@/lib/supabase/server";
 
 const productSchema = z.object({
   name: z.string().trim().min(1, "Informe o nome do produto."),
@@ -84,6 +90,16 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 
   if (error) return { ok: false, error: `Erro ao salvar: ${error.message}` };
 
+  if (parsed.data.stockQuantity > 0) {
+    await admin.from("product_stock_movements").insert({
+      product_id: product.id,
+      delta: parsed.data.stockQuantity,
+      quantity_after: parsed.data.stockQuantity,
+      reason: "purchase",
+      note: "Estoque inicial",
+    });
+  }
+
   const photo = formData.get("photo");
   const photoPosition = normalizePhotoPosition(
     String(formData.get("photoPosition") ?? "")
@@ -128,7 +144,6 @@ export async function updateProduct(
     category_id: parsed.data.categoryId,
     price_cents: parsed.data.priceCents,
     commission_percent: parsed.data.commissionPercent,
-    stock_quantity: parsed.data.stockQuantity,
     photo_position: normalizePhotoPosition(
       String(formData.get("photoPosition") ?? "")
     ),
@@ -146,6 +161,50 @@ export async function updateProduct(
 
   revalidatePath("/admin/produtos");
   return { ok: true };
+}
+
+export async function adjustProductStockAction(input: {
+  productId: string;
+  delta: number;
+  reason: StockAdjustReason;
+  note?: string;
+}): Promise<ActionResult & { quantityAfter?: number }> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  if (
+    !STOCK_ADJUST_REASONS.includes(input.reason) ||
+    !Number.isInteger(input.delta) ||
+    input.delta === 0
+  ) {
+    return { ok: false, error: "Informe uma quantidade e o motivo do ajuste." };
+  }
+
+  let createdBy: string | null = null;
+  const supabase = await createClient();
+  if (supabase) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    createdBy = user?.id ?? null;
+  }
+
+  const result = await applyProductStockDelta(admin, {
+    productId: input.productId,
+    delta: input.delta,
+    reason: input.reason,
+    note: input.note,
+    createdBy,
+  });
+
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidatePath("/admin/produtos");
+  revalidatePath(`/admin/produtos/${input.productId}`);
+  return { ok: true, quantityAfter: result.quantityAfter };
 }
 
 export async function setProductActive(

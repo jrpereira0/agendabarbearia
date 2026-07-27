@@ -76,8 +76,14 @@ export function FinanceView({
   }
 
   const hasData =
-    report.totals.comandaCount > 0 || report.totals.serviceItemCount > 0;
+    report.totals.comandaCount > 0 ||
+    report.totals.serviceItemCount > 0 ||
+    report.productSales.saleLineCount > 0;
   const isDetail = metric !== "geral";
+  const hasMetricData =
+    metric === "produtos"
+      ? report.productSales.saleLineCount > 0
+      : hasData;
 
   const attendanceCount = report.totals.comandaCount;
   const ticketAverageCents =
@@ -200,7 +206,7 @@ export function FinanceView({
             }
           />
         ) : isDetail ? (
-          hasData ? (
+          hasMetricData ? (
             <FinanceMetricDetail
               metric={metric}
               report={report}
@@ -212,12 +218,16 @@ export function FinanceView({
               icon={BarChart3}
               className="border-white/10 text-[#f5f5f5]"
               title="Sem dados para esta métrica"
-              description="Não há atendimento finalizado neste período. Tente outra faixa de datas."
+              description={
+                metric === "produtos"
+                  ? "Não há venda de produto fechada neste período."
+                  : "Não há atendimento finalizado neste período. Tente outra faixa de datas."
+              }
             />
           )
         ) : (
           <div className="flex flex-col gap-4 sm:gap-6">
-            <section className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-4">
+            <section className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
               <FinanceMetricCard
                 tone="dark"
                 label="Faturamento"
@@ -249,6 +259,19 @@ export function FinanceView({
                 value={formatPriceBRL(report.totals.commissionCents)}
                 hint={`${report.commissionRatePercent}% do faturamento`}
                 tooltip="Quanto do faturamento vai para os barbeiros em comissão."
+              />
+              <FinanceMetricCard
+                tone="dark"
+                label="Produtos"
+                value={formatPriceBRL(report.productSales.totalRevenueCents)}
+                hint={
+                  report.productSales.totalQuantity > 0
+                    ? `${report.productSales.totalQuantity} un. · toque`
+                    : "Toque para detalhar"
+                }
+                tooltip="Faturamento só de produtos. Abre a métrica Produtos vendidos."
+                className="col-span-2 xl:col-span-1"
+                onSelect={() => navigate(from, to, "produtos")}
               />
             </section>
 

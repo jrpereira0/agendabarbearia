@@ -1062,8 +1062,11 @@ export function ComandaDialog({
 
     const nonTipCount = nextItems.length;
     if (nonTipCount === 0) {
-      toast.error("A comanda precisa de ao menos um serviço ou produto.");
-      return false;
+      // Venda rápida pode ficar sem itens (depois exclui ou adiciona de novo).
+      if (!isWalkIn) {
+        toast.error("A comanda precisa de ao menos um serviço ou produto.");
+        return false;
+      }
     }
 
     if (nextTipCents > 0 && !nextTipProfessionalId) {
@@ -1263,6 +1266,65 @@ export function ComandaDialog({
     } else {
       setItems(previous);
     }
+  }
+
+  function productQtyInComanda(productId: string): number {
+    return items
+      .filter((item) => item.productId === productId)
+      .reduce((sum, item) => sum + (item.quantity ?? 1), 0);
+  }
+
+  /** +1 / −1 na lista, sem abrir o modal. Sem barbeiro por padrão. */
+  async function bumpProductQty(product: ProductOption, delta: 1 | -1) {
+    if (!canEdit || busy) return;
+
+    const previous = items;
+    const productLines = items.filter((item) => item.productId === product.id);
+    const otherItems = items.filter((item) => item.productId !== product.id);
+    const currentQty = productLines.reduce(
+      (sum, item) => sum + (item.quantity ?? 1),
+      0
+    );
+    const nextQty = currentQty + delta;
+
+    if (nextQty < 0) return;
+    if (delta > 0 && nextQty > product.stockQuantity) {
+      toast.error(`Estoque disponível: ${product.stockQuantity}.`);
+      return;
+    }
+
+    let nextItems: EditableItem[];
+    if (nextQty === 0) {
+      nextItems = otherItems;
+    } else if (productLines.length === 0) {
+      nextItems = [
+        ...otherItems,
+        {
+          localKey: newLocalKey(),
+          productId: product.id,
+          serviceName: product.name,
+          catalogPriceCents: product.priceCents,
+          chargedPriceCents: product.priceCents,
+          quantity: 1,
+          commissionPercent: 0,
+          professionalNickname: "Sem profissional",
+        },
+      ];
+    } else {
+      const first = productLines[0]!;
+      nextItems = [
+        ...otherItems,
+        {
+          ...first,
+          quantity: nextQty,
+          chargedPriceCents: first.catalogPriceCents * nextQty,
+        },
+      ];
+    }
+
+    setItems(nextItems);
+    const ok = await persistItems(nextItems);
+    if (!ok) setItems(previous);
   }
 
   function pickProduct(product: ProductOption) {
@@ -2637,7 +2699,7 @@ export function ComandaDialog({
                   Adicionar produto
                 </DialogTitle>
                 <DialogDescription>
-                  Escolha o item vendido. Depois você define quantidade e
+                  Use + e − para quantidade. Toque no nome se quiser escolher
                   barbeiro.
                 </DialogDescription>
               </div>
@@ -2659,17 +2721,19 @@ export function ComandaDialog({
                 Nenhum produto encontrado.
               </li>
             ) : (
-              filteredProducts.map((product) => (
+              filteredProducts.map((product) => {
+                const qty = productQtyInComanda(product.id);
+                return (
                 <li key={product.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    className="booking-pick flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors"
-                    onClick={() => pickProduct(product)}
-                    disabled={busy}
-                  >
-                    <span className="flex min-w-0 items-center gap-3">
+                  <div className="booking-pick flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors sm:gap-3 sm:px-3 sm:py-2.5">
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={qty > 0}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      onClick={() => pickProduct(product)}
+                      disabled={busy}
+                    >
                       <ServiceThumbnail
                         photoUrl={product.photoUrl}
                         photoPosition={product.photoPosition}
@@ -2683,17 +2747,42 @@ export function ComandaDialog({
                           {product.name}
                         </span>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
-                          {product.categoryName} · estoque{" "}
+                          {formatPriceBRL(product.priceCents)} · estoque{" "}
                           {product.stockQuantity}
                         </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-sm font-medium tabular-nums text-[#f5f5f5]">
-                      {formatPriceBRL(product.priceCents)}
-                    </span>
-                  </button>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`Diminuir ${product.name}`}
+                        className="booking-btn-ghost flex size-9 items-center justify-center rounded-lg border disabled:opacity-40"
+                        disabled={busy || !canEdit || qty <= 0}
+                        onClick={() => void bumpProductQty(product, -1)}
+                      >
+                        <Minus className="size-3.5" />
+                      </button>
+                      <span className="min-w-6 text-center text-sm font-medium tabular-nums text-[#f5f5f5]">
+                        {qty}
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Aumentar ${product.name}`}
+                        className="booking-btn-ghost flex size-9 items-center justify-center rounded-lg border disabled:opacity-40"
+                        disabled={
+                          busy ||
+                          !canEdit ||
+                          qty >= product.stockQuantity
+                        }
+                        onClick={() => void bumpProductQty(product, 1)}
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 </li>
-              ))
+                );
+              })
             )}
           </ul>
         </DialogContent>

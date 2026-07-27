@@ -42,6 +42,24 @@ export default async function ProductsPage() {
               ? "Cadastre produtos e itens da geladeira para vender na comanda."
               : `${list.length} cadastrado${list.length > 1 ? "s" : ""} · ${activeCount} ativo${activeCount === 1 ? "" : "s"}`
           }
+          action={
+            list.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
+                  <Link href="/admin/financeiro?metric=produtos">Vendas</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
+                  <Link href="/admin/produtos/categorias">Categorias</Link>
+                </Button>
+                <Button asChild size="sm" className={ADMIN_SURFACE.btnPrimary}>
+                  <Link href="/admin/produtos/novo">
+                    <Plus />
+                    Novo
+                  </Link>
+                </Button>
+              </div>
+            ) : undefined
+          }
         />
 
         {list.length === 0 ? (

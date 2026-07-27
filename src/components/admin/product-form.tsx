@@ -21,6 +21,7 @@ import {
 } from "@/components/admin/admin-form-layout";
 import { FormSectionTitle } from "@/components/admin/form-section";
 import { PhotoField } from "@/components/admin/photo-field";
+import { StockAdjustPanel } from "@/components/admin/stock-adjust-panel";
 import { formatPriceBRL } from "@/lib/format";
 import {
   DEFAULT_PHOTO_POSITION,
@@ -49,6 +50,9 @@ export type ProductFormValues = {
 type ProductFormProps = {
   categories: ProductCategoryOption[];
   initialValues?: ProductFormValues;
+  /** Em edição o estoque sobe/desce pelo painel de ajuste, não pelo formulário. */
+  mode?: "create" | "edit";
+  productId?: string;
   onSubmit: (formData: FormData) => Promise<ActionResult>;
   submitLabel: string;
 };
@@ -88,6 +92,8 @@ function FormPanel({ children }: { children: React.ReactNode }) {
 export function ProductForm({
   categories,
   initialValues,
+  mode = initialValues ? "edit" : "create",
+  productId,
   onSubmit,
   submitLabel,
 }: ProductFormProps) {
@@ -234,11 +240,15 @@ export function ProductForm({
         <FormSectionTitle
           tone="dark"
           icon={CircleDollarSign}
-          title="Valores e estoque"
-          description="Comissão por produto. O estoque baixa no fechamento da comanda."
+          title={mode === "edit" ? "Valores" : "Valores e estoque"}
+          description={
+            mode === "edit"
+              ? "Comissão por produto. O estoque é ajustado no painel abaixo."
+              : "Comissão por produto. O estoque baixa no fechamento da comanda."
+          }
         />
 
-        <AdminFormFields columns={3}>
+        <AdminFormFields columns={mode === "edit" ? 2 : 3}>
           <div className="space-y-2">
             <DarkLabel htmlFor="priceCents">Preço de venda</DarkLabel>
             <Input
@@ -274,23 +284,32 @@ export function ProductForm({
             />
           </div>
 
-          <div className="space-y-2">
-            <DarkLabel htmlFor="stockQuantity">Estoque</DarkLabel>
-            <Input
-              id="stockQuantity"
-              inputMode="numeric"
-              value={stockInput}
-              onChange={(event) =>
-                setStockInput(event.target.value.replace(/\D/g, ""))
-              }
-              placeholder="0"
-              disabled={busy}
-              className={ADMIN_SURFACE.input}
-              autoComplete="off"
-            />
-          </div>
+          {mode === "create" ? (
+            <div className="space-y-2">
+              <DarkLabel htmlFor="stockQuantity">Estoque inicial</DarkLabel>
+              <Input
+                id="stockQuantity"
+                inputMode="numeric"
+                value={stockInput}
+                onChange={(event) =>
+                  setStockInput(event.target.value.replace(/\D/g, ""))
+                }
+                placeholder="0"
+                disabled={busy}
+                className={ADMIN_SURFACE.input}
+                autoComplete="off"
+              />
+            </div>
+          ) : null}
         </AdminFormFields>
       </FormPanel>
+
+      {mode === "edit" && productId ? (
+        <StockAdjustPanel
+          productId={productId}
+          stockQuantity={initialValues?.stockQuantity ?? 0}
+        />
+      ) : null}
 
       <AdminFormActions
         tone="dark"

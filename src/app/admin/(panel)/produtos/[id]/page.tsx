@@ -60,6 +60,8 @@ export default async function EditProductPage({ params }: PageProps) {
 
         <ProductForm
           categories={categories}
+          mode="edit"
+          productId={product.id}
           initialValues={{
             name: product.name,
             description: product.description,

@@ -28,6 +28,7 @@ import {
   loadServicePricingContext,
   resolvePriceCentsOrFallback,
 } from "@/lib/service-prices-for-date";
+import { applyProductStockDelta } from "@/lib/product-stock";
 
 type DbComandaRow = {
   id: string;
@@ -3134,48 +3135,21 @@ async function validateProductStockForClose(
 
 async function deductProductStockForComanda(
   admin: SupabaseClient,
-  comandaId: string
+  comandaId: string,
+  createdBy?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const required = await listComandaProductQuantities(admin, comandaId);
   if (required.size === 0) return { ok: true };
 
   for (const [productId, quantity] of required) {
-    const { data: product } = await admin
-      .from("products")
-      .select("id, name, stock_quantity")
-      .eq("id", productId)
-      .maybeSingle();
-
-    if (!product) {
-      return { ok: false, error: "Produto não encontrado.", status: 400 };
-    }
-
-    if (product.stock_quantity < quantity) {
-      return {
-        ok: false,
-        error: `Estoque insuficiente para "${product.name}".`,
-        status: 400,
-      };
-    }
-
-    const { data: updated, error } = await admin
-      .from("products")
-      .update({
-        stock_quantity: product.stock_quantity - quantity,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", productId)
-      .eq("stock_quantity", product.stock_quantity)
-      .select("id")
-      .maybeSingle();
-
-    if (error || !updated) {
-      return {
-        ok: false,
-        error: `Não foi possível baixar o estoque de "${product.name}".`,
-        status: 409,
-      };
-    }
+    const result = await applyProductStockDelta(admin, {
+      productId,
+      delta: -quantity,
+      reason: "sale",
+      comandaId,
+      createdBy,
+    });
+    if (!result.ok) return result;
   }
 
   return { ok: true };
@@ -3183,27 +3157,20 @@ async function deductProductStockForComanda(
 
 async function restoreProductStockForComanda(
   admin: SupabaseClient,
-  comandaId: string
+  comandaId: string,
+  createdBy?: string | null
 ): Promise<void> {
   const required = await listComandaProductQuantities(admin, comandaId);
   if (required.size === 0) return;
 
   for (const [productId, quantity] of required) {
-    const { data: product } = await admin
-      .from("products")
-      .select("stock_quantity")
-      .eq("id", productId)
-      .maybeSingle();
-
-    if (!product) continue;
-
-    await admin
-      .from("products")
-      .update({
-        stock_quantity: product.stock_quantity + quantity,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", productId);
+    await applyProductStockDelta(admin, {
+      productId,
+      delta: quantity,
+      reason: "sale_reopen",
+      comandaId,
+      createdBy,
+    });
   }
 }
 
@@ -3277,11 +3244,15 @@ export async function updateComandaItems(
   }
 
   if (serviceItems.length === 0 && productItems.length === 0) {
-    return {
-      ok: false,
-      error: "Informe ao menos um serviço ou produto na comanda.",
-      status: 400,
-    };
+    const isWalkIn =
+      !current.comanda.customerWhatsapp && !current.comanda.appointmentId;
+    if (!isWalkIn) {
+      return {
+        ok: false,
+        error: "Informe ao menos um serviço ou produto na comanda.",
+        status: 400,
+      };
+    }
   }
 
   for (const item of items) {
@@ -3726,7 +3697,11 @@ export async function closeComanda(
       ? Math.round((totals.commissionCents / totals.totalCents) * 100)
       : 50;
 
-  const stockDeduct = await deductProductStockForComanda(admin, comandaId);
+  const stockDeduct = await deductProductStockForComanda(
+    admin,
+    comandaId,
+    closedByUserId
+  );
   if (!stockDeduct.ok) return stockDeduct;
 
   const now = new Date().toISOString();
@@ -3760,7 +3735,7 @@ export async function closeComanda(
   );
 
   if (payError) {
-    await restoreProductStockForComanda(admin, comandaId);
+    await restoreProductStockForComanda(admin, comandaId, closedByUserId);
     if (deductedStoreCredit) {
       await reverseComandaCreditTransactions(admin, comandaId);
     }
@@ -3786,7 +3761,7 @@ export async function closeComanda(
     .eq("id", comandaId);
 
   if (comandaError) {
-    await restoreProductStockForComanda(admin, comandaId);
+    await restoreProductStockForComanda(admin, comandaId, closedByUserId);
     await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
     if (deductedStoreCredit) {
       await reverseComandaCreditTransactions(admin, comandaId);
@@ -4008,7 +3983,7 @@ export async function reopenComanda(
     return { ok: false, error: creditReverse.error, status: 400 };
   }
 
-  await restoreProductStockForComanda(admin, comandaId);
+  await restoreProductStockForComanda(admin, comandaId, null);
 
   await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
 

@@ -10,6 +10,10 @@ import {
   type PaymentMethod,
 } from "@/lib/comanda-types";
 import { loadPaidComandaItemIds } from "@/lib/commission-payout-service";
+import {
+  getProductSalesReport,
+  type ProductSalesReport,
+} from "@/lib/product-sales-report";
 
 export type CashRegisterOpenComanda = {
   id: string;
@@ -557,6 +561,8 @@ export type FinanceMetricsReport = {
   serviceBreakdown: FinanceServiceRow[];
   weekdayBreakdown: FinanceWeekdayRow[];
   comparison: FinancePeriodComparison | null;
+  /** Vendas de produto (comandas fechadas) no período. */
+  productSales: ProductSalesReport;
 };
 
 function shiftIsoDate(isoDate: string, days: number): string {
@@ -758,10 +764,11 @@ export async function getFinanceMetricsReport(
   from: string,
   to: string
 ): Promise<FinanceMetricsReport> {
-  const [summary, commissions, serviceVolume] = await Promise.all([
+  const [summary, commissions, serviceVolume, productSales] = await Promise.all([
     getFinancePeriodSummary(admin, from, to),
     getCommissionSummary(admin, from, to, undefined, { excludePaid: false }),
     loadFinanceServiceVolume(admin, from, to),
+    getProductSalesReport(admin, from, to),
   ]);
 
   const serviceBreakdown = await loadFinanceServiceBreakdown(
@@ -859,6 +866,7 @@ export async function getFinanceMetricsReport(
     serviceBreakdown,
     weekdayBreakdown,
     comparison,
+    productSales,
   };
 }
 
