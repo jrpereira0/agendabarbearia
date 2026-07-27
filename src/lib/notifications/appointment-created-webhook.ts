@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   loadServicePricingContext,
@@ -101,30 +102,28 @@ async function buildPayload(
 }
 
 /**
- * Avisa o n8n (webhook) que um agendamento foi criado, para notificar o
- * barbeiro no WhatsApp. Chamar depois que o agendamento e os serviços já
- * foram salvos com sucesso no banco — de qualquer ponto de criação do
- * sistema (site público, painel admin, encaixe, serviço extra da comanda).
- *
- * Busca os dados completos pelo appointmentId (não depende de dados
- * parciais de quem chamou), então funciona igual não importa a origem.
- *
- * Nunca lança erro: qualquer falha aqui é só registrada em log, sem afetar
- * o fluxo de quem chamou (agendamento continua válido).
+ * Agenda avisos (caixa do app, push, WhatsApp do barbeiro) **depois** da
+ * resposta ao site/app. O horário já está salvo — o cliente não espera isso.
+ * Usar nos pontos de criação em vez de `await notifyAppointmentCreated`.
+ */
+export function scheduleAppointmentCreatedNotify(
+  appointmentId: string,
+  source: AppointmentCreatedSource
+): void {
+  after(() => {
+    void notifyAppointmentCreated(appointmentId, source);
+  });
+}
+
+/**
+ * Lembretes + caixa/push do cliente + webhook n8n (barbeiro).
+ * Preferir `scheduleAppointmentCreatedNotify` no create para não atrasar
+ * a confirmação no site/app. Nunca lança erro.
  */
 export async function notifyAppointmentCreated(
   appointmentId: string,
   source: AppointmentCreatedSource
 ): Promise<void> {
-  try {
-    await upsertAppointmentReminder(appointmentId);
-  } catch (error) {
-    console.error("[appointment-reminder] erro ao sincronizar lembrete após criação", {
-      appointmentId,
-      error,
-    });
-  }
-
   console.log("[appointment-webhook] appointment.created solicitado", {
     appointmentId,
     source,
@@ -139,103 +138,119 @@ export async function notifyAppointmentCreated(
       return;
     }
 
-    const payload = await buildPayload(admin, appointmentId, source);
-    if (payload) {
-      try {
-        await notifyClientAppointmentCreated({
-          whatsapp: payload.customer.whatsapp,
-          shopName: payload.shop.name,
-          source,
-          appointment: {
-            id: payload.appointment.id,
-            date: payload.appointment.date,
-            startTime: payload.appointment.startTime,
-            professionalName: payload.professional.name,
-            serviceNames: payload.services.map((s) => s.name),
-            totalPriceCents: payload.appointment.totalPriceCents,
-          },
-        });
-      } catch (error) {
-        console.error("[client-appointment-push] erro após criação", {
-          appointmentId,
-          error,
-        });
-      }
-    }
+    const [, payload] = await Promise.all([
+      upsertAppointmentReminder(appointmentId).catch((error) => {
+        console.error(
+          "[appointment-reminder] erro ao sincronizar lembrete após criação",
+          { appointmentId, error }
+        );
+      }),
+      buildPayload(admin, appointmentId, source),
+    ]);
 
-    const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
-    if (!webhookUrl) {
-      console.warn(
-        "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
-      );
-      return;
-    }
-
-    // Idempotência: só insere se ainda não existir um registro para esse
-    // (appointment_id, event) — a constraint única da tabela garante isso
-    // mesmo em caso de corrida (dois retries ao mesmo tempo, por exemplo).
-    // Se o insert falhar por unique violation, é porque já foi enviado antes.
-    const { error: dedupeError } = await admin
-      .from("appointment_notifications")
-      .insert({
-        appointment_id: appointmentId,
-        event: EVENT_APPOINTMENT_CREATED,
-        source,
-      });
-
-    if (dedupeError) {
-      // 23505 = unique_violation: já existe registro para esse agendamento+evento.
-      if (dedupeError.code === "23505") {
-        console.warn("[appointment-webhook] notificação já enviada, ignorando", {
-          appointmentId,
-          source,
-        });
-        return;
-      }
-      console.warn(
-        `[appointment-webhook] Não foi possível registrar notificação do agendamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
-      );
-    }
-
-    if (!payload) return;
-
-    if (!payload.professional.whatsapp.trim()) {
-      console.warn(
-        "[appointment-webhook] profissional sem WhatsApp, não enviando",
-        payload.professional.id
-      );
-      return;
-    }
-
-    const secret = process.env.N8N_APPOINTMENT_WEBHOOK_SECRET?.trim();
-
-    console.log("[appointment-webhook] enviando para n8n", {
-      appointmentId,
-      source,
-    });
-
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(secret ? { "x-appointment-webhook-secret": secret } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-
-    console.log("[appointment-webhook] status n8n", response.status);
-
-    if (!response.ok) {
-      const responseText = await response.text();
-      console.warn(
-        `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId} (${source}): ${responseText}`
-      );
-    }
+    await Promise.all([
+      (async () => {
+        if (!payload) return;
+        try {
+          await notifyClientAppointmentCreated({
+            whatsapp: payload.customer.whatsapp,
+            shopName: payload.shop.name,
+            source,
+            appointment: {
+              id: payload.appointment.id,
+              date: payload.appointment.date,
+              startTime: payload.appointment.startTime,
+              professionalName: payload.professional.name,
+              serviceNames: payload.services.map((s) => s.name),
+              totalPriceCents: payload.appointment.totalPriceCents,
+            },
+          });
+        } catch (error) {
+          console.error("[client-appointment-push] erro após criação", {
+            appointmentId,
+            error,
+          });
+        }
+      })(),
+      sendBarberCreatedWebhook(admin, appointmentId, source, payload),
+    ]);
   } catch (error) {
     console.error("[appointment-webhook] erro ao enviar webhook", {
       appointmentId,
       source,
       error,
     });
+  }
+}
+
+async function sendBarberCreatedWebhook(
+  admin: SupabaseClient,
+  appointmentId: string,
+  source: AppointmentCreatedSource,
+  payload: AppointmentCreatedWebhookPayload | null
+): Promise<void> {
+  const webhookUrl = process.env.N8N_APPOINTMENT_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    console.warn(
+      "[appointment-webhook] N8N_APPOINTMENT_WEBHOOK_URL não configurada"
+    );
+    return;
+  }
+
+  // Idempotência: constraint única (appointment_id, event).
+  const { error: dedupeError } = await admin
+    .from("appointment_notifications")
+    .insert({
+      appointment_id: appointmentId,
+      event: EVENT_APPOINTMENT_CREATED,
+      source,
+    });
+
+  if (dedupeError) {
+    if (dedupeError.code === "23505") {
+      console.warn("[appointment-webhook] notificação já enviada, ignorando", {
+        appointmentId,
+        source,
+      });
+      return;
+    }
+    console.warn(
+      `[appointment-webhook] Não foi possível registrar notificação do agendamento ${appointmentId} (${dedupeError.code ?? "sem código"}): ${dedupeError.message}`
+    );
+  }
+
+  if (!payload) return;
+
+  if (!payload.professional.whatsapp.trim()) {
+    console.warn(
+      "[appointment-webhook] profissional sem WhatsApp, não enviando",
+      payload.professional.id
+    );
+    return;
+  }
+
+  const secret = process.env.N8N_APPOINTMENT_WEBHOOK_SECRET?.trim();
+
+  console.log("[appointment-webhook] enviando para n8n", {
+    appointmentId,
+    source,
+  });
+
+  const response = await fetch(webhookUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(secret ? { "x-appointment-webhook-secret": secret } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  console.log("[appointment-webhook] status n8n", response.status);
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    console.warn(
+      `[appointment-webhook] n8n respondeu ${response.status} para o agendamento ${appointmentId} (${source}): ${responseText}`
+    );
   }
 }

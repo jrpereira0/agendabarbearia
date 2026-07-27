@@ -14,7 +14,7 @@ import {
   PAYMENT_METHODS,
 } from "@/lib/comanda-types";
 import { ACTIVE_APPOINTMENT_STATUSES } from "@/lib/appointment-status";
-import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
+import { scheduleAppointmentCreatedNotify } from "@/lib/notifications/appointment-created-webhook";
 import { assertComandaClosableInOpenCashRegister } from "@/lib/cash-register-service";
 import {
   addCustomerCredit,
@@ -2332,9 +2332,8 @@ async function upsertSqueezeAppointment(
     };
   }
 
-  // Serviço extra novo na agenda (não é atualização de um encaixe existente)
-  // — avisa o barbeiro. Nunca lança exceção.
-  await notifyAppointmentCreated(created.id, "comanda_extra");
+  // Avisos (app / WhatsApp barbeiro) em segundo plano — não atrasam a comanda.
+  scheduleAppointmentCreatedNotify(created.id, "comanda_extra");
 
   return { ok: true, appointmentId: created.id };
 }

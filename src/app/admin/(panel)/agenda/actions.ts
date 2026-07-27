@@ -34,7 +34,7 @@ import {
   finalizeOpenComandaAfterAppointmentRemoved,
   syncOpenComandaAfterAppointmentEdit,
 } from "@/lib/comanda-service";
-import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
+import { scheduleAppointmentCreatedNotify } from "@/lib/notifications/appointment-created-webhook";
 import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
 import {
   captureAppointmentUpdateSnapshot,
@@ -268,22 +268,9 @@ async function insertAppointment(
   const source = isSqueezeIn ? "admin_squeeze_in" : "admin_agenda";
   const createdId = appointment.id;
 
-  // Aguardar caixa do app + push (after no Vercel pode morrer cedo demais).
-  try {
-    console.log(
-      "[admin-appointment-create] chamando webhook appointment.created:",
-      createdId
-    );
-    await notifyAppointmentCreated(createdId, source);
-    console.log("[admin-appointment-create] webhook finalizado:", createdId);
-  } catch (error) {
-    console.error("[admin-appointment-create] erro ao enviar webhook:", {
-      appointmentId: createdId,
-      error,
-    });
-  }
-
-  revalidatePath("/admin");
+  // Site/app confirmam na hora; WhatsApp barbeiro + push vão em segundo plano.
+  scheduleAppointmentCreatedNotify(createdId, source);
+  revalidateAdminAgendaSoon();
   return { ok: true, appointmentId: appointment.id };
 }
 

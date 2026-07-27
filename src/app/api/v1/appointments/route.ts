@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
@@ -158,8 +158,10 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        revalidatePath("/admin");
-        revalidatePath("/agenda");
+        after(() => {
+          revalidatePath("/admin");
+          revalidatePath("/agenda");
+        });
         return NextResponse.json({
           ok: true,
           appointmentId: result.appointmentId,

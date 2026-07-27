@@ -4,7 +4,7 @@ import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { pickLeastBusyProfessionalForSlot } from "@/lib/any-professional-booking";
 import { getAvailability } from "@/lib/get-availability";
 import { upsertCustomer } from "@/lib/upsert-customer";
-import { notifyAppointmentCreated } from "@/lib/notifications/appointment-created-webhook";
+import { scheduleAppointmentCreatedNotify } from "@/lib/notifications/appointment-created-webhook";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -113,7 +113,7 @@ async function insertAppointment(params: {
     };
   }
 
-  await notifyAppointmentCreated(appointment.id, "public_api");
+  scheduleAppointmentCreatedNotify(appointment.id, "public_api");
 
   return { ok: true, appointmentId: appointment.id };
 }
