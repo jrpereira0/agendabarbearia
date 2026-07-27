@@ -26,7 +26,10 @@ import {
   formatTime,
 } from "@/lib/format";
 import type { MinuteRange } from "@/lib/availability";
-import { timeToMinutes } from "@/lib/availability";
+import {
+  minutesToTime,
+  timeToMinutes,
+} from "@/lib/availability";
 import {
   encaixeTimeSlots,
   findAppointmentConflicts,
@@ -76,6 +79,8 @@ type NewAppointmentDialogProps = {
   slotStepMinutes: number;
   appointments: AppointmentItem[];
   professionalSchedules: { id: string; availableRanges: MinuteRange[] }[];
+  /** Chamado assim que o horário é salvo — pra card aparecer na grade na hora. */
+  onCreated?: (appointment: AppointmentItem) => void;
 };
 
 function initialStep(
@@ -383,6 +388,7 @@ export function NewAppointmentDialog({
   slotStepMinutes,
   appointments,
   professionalSchedules,
+  onCreated,
 }: NewAppointmentDialogProps) {
   const isEncaixe = mode === "encaixe";
   const presetFromGrid = Boolean(
@@ -784,7 +790,35 @@ export function NewAppointmentDialog({
       toast.success(isEncaixe ? "Encaixe criado." : "Agendamento criado.");
       setSaving(false);
       onOpenChange(false);
-      router.refresh();
+
+      const appointmentId =
+        "appointmentId" in result ? result.appointmentId : null;
+      const professional = professionals.find((p) => p.id === professionalId);
+      if (appointmentId && professional && startTime) {
+        const endMinutes = timeToMinutes(startTime) + totalMinutes;
+        onCreated?.({
+          id: appointmentId,
+          date,
+          professionalId,
+          professionalNickname: professional.nickname,
+          customerFirstName: firstName.trim(),
+          customerLastName: lastName.trim(),
+          customerWhatsapp: whatsapp.replace(/\D/g, ""),
+          startTime,
+          endTime: minutesToTime(endMinutes),
+          status: "scheduled",
+          isSqueezeIn: isEncaixe,
+          bookingSource: "admin",
+          services: selectedServices.map((s) => ({
+            id: s.id,
+            name: s.name,
+            durationMinutes: s.durationMinutes,
+            priceCents: s.priceCents,
+          })),
+        });
+      } else {
+        router.refresh();
+      }
     } else {
       toast.error(result.error);
       setSaving(false);

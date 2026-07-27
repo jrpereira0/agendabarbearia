@@ -35,7 +35,7 @@ import {
   syncOpenComandaAfterAppointmentEdit,
 } from "@/lib/comanda-service";
 import { scheduleAppointmentCreatedNotify } from "@/lib/notifications/appointment-created-webhook";
-import { notifyAppointmentCancelled } from "@/lib/notifications/appointment-cancelled-webhook";
+import { scheduleAppointmentCancelledNotify } from "@/lib/notifications/appointment-cancelled-webhook";
 import {
   captureAppointmentUpdateSnapshot,
   notifyAppointmentUpdated,
@@ -361,7 +361,7 @@ export async function createNormalAppointment(input: {
   firstName: string;
   lastName: string;
   whatsapp: string;
-}): Promise<ActionResult> {
+}): Promise<InsertAppointmentResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
@@ -438,7 +438,7 @@ export async function createSqueezeInAppointment(input: {
   firstName: string;
   lastName: string;
   whatsapp: string;
-}): Promise<ActionResult> {
+}): Promise<InsertAppointmentResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
 
@@ -856,30 +856,11 @@ export async function cancelAppointment(input: {
 
     await detachEncaixeFromOpenComandas(admin, appointmentId);
 
-    // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
-    // o barbeiro não pode desfazer o cancelamento nem quebrar a tela do
-    // admin. A função abaixo nunca lança exceção, mas o try/catch aqui é
-    // uma segunda camada de proteção.
-    try {
-      console.log(
-        "[admin-appointment-cancel] chamando webhook appointment.cancelled:",
-        appointmentId
-      );
-      await notifyAppointmentCancelled(
-        appointmentId,
-        "admin_squeeze_cancel",
-        reason
-      );
-      console.log(
-        "[admin-appointment-cancel] webhook finalizado:",
-        appointmentId
-      );
-    } catch (error) {
-      console.error("[admin-appointment-cancel] erro ao enviar webhook:", {
-        appointmentId,
-        error,
-      });
-    }
+    scheduleAppointmentCancelledNotify(
+      appointmentId,
+      "admin_squeeze_cancel",
+      reason
+    );
 
     revalidateAdminAndPublicAgendaSoon();
     return { ok: true };
@@ -951,44 +932,13 @@ export async function cancelAppointment(input: {
     await finalizeOpenComandaAfterAppointmentRemoved(admin, comanda.id);
   }
 
-  // Status já salvo como cancelled — a partir daqui, uma falha ao notificar
-  // o barbeiro não pode desfazer o cancelamento nem quebrar a tela do
-  // admin. As funções abaixo nunca lançam exceção, mas o try/catch aqui é
-  // uma segunda camada de proteção.
-  try {
-    console.log(
-      "[admin-appointment-cancel] chamando webhook appointment.cancelled:",
-      appointmentId
-    );
-    await notifyAppointmentCancelled(appointmentId, "admin_cancel", reason);
-    console.log("[admin-appointment-cancel] webhook finalizado:", appointmentId);
-  } catch (error) {
-    console.error("[admin-appointment-cancel] erro ao enviar webhook:", {
-      appointmentId,
-      error,
-    });
-  }
-
-  // Encaixes vinculados que foram cancelados junto (mesmo cliente/dia) —
-  // cada um também avisa o barbeiro, com o source do encaixe.
+  scheduleAppointmentCancelledNotify(appointmentId, "admin_cancel", reason);
   for (const squeezeId of squeezeIds) {
-    try {
-      console.log(
-        "[admin-appointment-cancel] chamando webhook appointment.cancelled:",
-        squeezeId
-      );
-      await notifyAppointmentCancelled(
-        squeezeId,
-        "admin_squeeze_cancel",
-        reason
-      );
-      console.log("[admin-appointment-cancel] webhook finalizado:", squeezeId);
-    } catch (error) {
-      console.error("[admin-appointment-cancel] erro ao enviar webhook:", {
-        appointmentId: squeezeId,
-        error,
-      });
-    }
+    scheduleAppointmentCancelledNotify(
+      squeezeId,
+      "admin_squeeze_cancel",
+      reason
+    );
   }
 
   revalidateAdminAndPublicAgendaSoon();

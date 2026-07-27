@@ -363,6 +363,17 @@ export function AgendaView({
   const [mobileProFocus, setMobileProFocus] = useState<string | null>(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [prevDate, setPrevDate] = useState(date);
+  /** Lista local pra o card aparecer/sumir na hora (sem esperar o refresh). */
+  const [localAppointments, setLocalAppointments] =
+    useState<AppointmentItem[]>(appointments);
+  const [syncedServerAppointments, setSyncedServerAppointments] =
+    useState(appointments);
+
+  // Quando o servidor manda dados novos (refresh), adota a lista oficial.
+  if (appointments !== syncedServerAppointments) {
+    setSyncedServerAppointments(appointments);
+    setLocalAppointments(appointments);
+  }
 
   const displayDate = pendingDate ?? date;
   const isNavigating =
@@ -412,7 +423,9 @@ export function AgendaView({
 
   // Mantém o agendamento selecionado sincronizado com dados mais recentes da agenda.
   if (selectedAppointment) {
-    const fresh = appointments.find((apt) => apt.id === selectedAppointment.id);
+    const fresh = localAppointments.find(
+      (apt) => apt.id === selectedAppointment.id
+    );
     if (!fresh) {
       setSelectedAppointment(null);
     } else {
@@ -457,6 +470,27 @@ export function AgendaView({
 
   function handleRefresh() {
     setIsRefreshing(true);
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  function handleAppointmentCreated(appointment: AppointmentItem) {
+    setLocalAppointments((prev) => {
+      if (prev.some((apt) => apt.id === appointment.id)) return prev;
+      return [...prev, appointment];
+    });
+    startTransition(() => {
+      router.refresh();
+    });
+  }
+
+  function handleAppointmentCancelled(appointmentId: string) {
+    setLocalAppointments((prev) =>
+      prev.filter((apt) => apt.id !== appointmentId)
+    );
+    setActionsOpen(false);
+    setSelectedAppointment(null);
     startTransition(() => {
       router.refresh();
     });
@@ -511,7 +545,7 @@ export function AgendaView({
   }
 
   function handleCashComandaClick(appointmentId: string) {
-    const apt = appointments.find((row) => row.id === appointmentId);
+    const apt = localAppointments.find((row) => row.id === appointmentId);
     if (!apt) return;
     setSelectedAppointment(apt);
     setComandaOpen(true);
@@ -552,7 +586,7 @@ export function AgendaView({
 
   const mainContentProps = {
     dayContext,
-    appointments,
+    appointments: localAppointments,
     isOwner,
     canBookClients: permissions.canBookClients,
     onSlotClick: handleSlotClick,
@@ -698,11 +732,12 @@ export function AgendaView({
         defaultProfessionalId={bookingProfessionalId}
         defaultStartTime={bookingStartTime}
         slotStepMinutes={dayContext.slotStepMinutes}
-        appointments={appointments}
+        appointments={localAppointments}
         professionalSchedules={dayContext.professionals.map((p) => ({
           id: p.id,
           availableRanges: p.availableRanges,
         }))}
+        onCreated={handleAppointmentCreated}
       />
 
       <AppointmentActionsDialog
@@ -719,6 +754,7 @@ export function AgendaView({
         sessionProfessionalId={professionalId}
         onOpenComanda={handleOpenComanda}
         onEditAppointment={() => handleEditAppointment()}
+        onCancelled={handleAppointmentCancelled}
       />
 
       <ComandaDialog
@@ -730,7 +766,7 @@ export function AgendaView({
         productsCatalog={productsCatalog}
         sessionProfessionalId={professionalId}
         slotStepMinutes={dayContext.slotStepMinutes}
-        appointments={appointments}
+        appointments={localAppointments}
         isOwnerHint={isOwner}
         initialCashRegisterOpen={
           Boolean(
@@ -768,7 +804,7 @@ export function AgendaView({
         services={services}
         isOwner={isOwner}
         slotStepMinutes={dayContext.slotStepMinutes}
-        appointments={appointments}
+        appointments={localAppointments}
         professionalSchedules={dayContext.professionals.map((p) => ({
           id: p.id,
           availableRanges: p.availableRanges,
