@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, CircleHelp } from "lucide-react";
+import { ChevronDown, CircleHelp, Wallet } from "lucide-react";
 import { AgendaMiniCalendar } from "@/components/admin/agenda-mini-calendar";
 import { ScheduleBlocksPanel } from "@/components/admin/schedule-blocks-panel";
 import { agendaLegend } from "@/lib/agenda-colors";
@@ -219,6 +219,44 @@ function LegendGrid({ compact }: { compact?: boolean }) {
           })}
         </ul>
       </div>
+
+      <div className="border-t border-white/10 pt-3.5">
+        <p
+          className={cn(
+            "agenda-display mb-2.5 font-medium tracking-[0.14em] text-[var(--agenda-accent,#ecf15e)] uppercase",
+            compact ? "text-[10px]" : "text-[11px]"
+          )}
+        >
+          Cliente
+        </p>
+        <ul
+          className={cn(
+            "grid gap-2",
+            compact ? "grid-cols-1 text-xs" : "grid-cols-1 text-[13px]"
+          )}
+        >
+          <li className="flex items-center gap-2.5">
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center justify-center rounded-sm bg-[#0e0f11]/14 ring-1 ring-[#0e0f11]/10",
+                compact ? "size-3.5" : "size-4"
+              )}
+              aria-hidden
+            >
+              <Wallet
+                className={cn(
+                  "text-[#3f4f08]",
+                  compact ? "size-2" : "size-2.5"
+                )}
+                strokeWidth={2.25}
+              />
+            </span>
+            <span className="leading-snug text-[#e8e8ea]">
+              Crédito na loja
+            </span>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 }
@@ -242,7 +280,7 @@ function LegendHelpButton({ compact }: { compact?: boolean }) {
         <DialogHeader>
           <DialogTitle className="agenda-display">Legenda</DialogTitle>
           <DialogDescription className="text-[var(--agenda-muted,#8b8d93)]">
-            Cores da grade, status e origem do agendamento.
+            Cores da grade, status, origem do agendamento e indicadores do cliente.
           </DialogDescription>
         </DialogHeader>
         <LegendGrid />

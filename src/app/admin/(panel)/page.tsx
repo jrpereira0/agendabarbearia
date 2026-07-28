@@ -18,6 +18,7 @@ import {
 import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { formatTime } from "@/lib/format";
 import { capitalizePersonName } from "@/lib/text";
+import { normalizeWhatsapp, whatsappLookupKeys } from "@/lib/whatsapp";
 import { getAdminSession } from "@/lib/require-admin";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 import { AgendaView } from "@/components/admin/agenda-view";
@@ -71,6 +72,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       is_squeeze_in,
       is_comanda_extra,
       booking_source,
+      customers ( credit_balance_cents ),
       professionals ( nickname ),
       appointment_services (
         quantity,
@@ -139,7 +141,48 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     }
   }
 
+  const creditByWhatsapp = new Map<string, number>();
+  const whatsappsWithoutCustomerId = [
+    ...new Set(
+      (rawAppointments ?? [])
+        .filter((row) => !row.customer_id && row.customer_whatsapp)
+        .map((row) => normalizeWhatsapp(row.customer_whatsapp))
+        .filter((whatsapp): whatsapp is string => Boolean(whatsapp))
+    ),
+  ];
+
+  if (whatsappsWithoutCustomerId.length > 0) {
+    const lookupKeys = [
+      ...new Set(
+        whatsappsWithoutCustomerId.flatMap((whatsapp) =>
+          whatsappLookupKeys(whatsapp)
+        )
+      ),
+    ];
+    const { data: creditRows } = await supabase
+      .from("customers")
+      .select("whatsapp, credit_balance_cents")
+      .in("whatsapp", lookupKeys);
+
+    for (const row of creditRows ?? []) {
+      const key = normalizeWhatsapp(row.whatsapp);
+      if (!key) continue;
+      creditByWhatsapp.set(key, row.credit_balance_cents ?? 0);
+    }
+  }
+
   const appointments: AppointmentItem[] = (rawAppointments ?? []).map((a) => {
+    const rawCustomer = a.customers as
+      | { credit_balance_cents?: number | null }
+      | null;
+    const customerWhatsapp = normalizeWhatsapp(a.customer_whatsapp);
+    const customerCreditBalanceCents =
+      typeof rawCustomer?.credit_balance_cents === "number"
+        ? rawCustomer.credit_balance_cents
+        : customerWhatsapp
+          ? (creditByWhatsapp.get(customerWhatsapp) ?? 0)
+          : 0;
+
     const rawPro = a.professionals as
       | { nickname: string }
       | { nickname: string }[]
@@ -154,6 +197,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     professionalId: a.professional_id,
     professionalNickname,
     customerId: a.customer_id ?? null,
+    customerCreditBalanceCents,
     customerFirstName: capitalizePersonName(a.customer_first_name),
     customerLastName: capitalizePersonName(a.customer_last_name),
     customerWhatsapp: a.customer_whatsapp,

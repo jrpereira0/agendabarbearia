@@ -659,6 +659,7 @@ export async function loadAppointmentItemAction(
       is_squeeze_in,
       is_comanda_extra,
       booking_source,
+      customers ( credit_balance_cents ),
       professionals ( nickname ),
       appointment_services (
         quantity,
@@ -690,12 +691,20 @@ export async function loadAppointmentItemAction(
     ? (rawPro[0]?.nickname ?? "—")
     : (rawPro?.nickname ?? "—");
 
+  const rawCustomer = data.customers as
+    | { credit_balance_cents?: number | null }
+    | null;
+
   const appointment: AppointmentItem = {
     id: data.id,
     date: data.date,
     professionalId: data.professional_id,
     professionalNickname,
     customerId: data.customer_id ?? null,
+    customerCreditBalanceCents:
+      typeof rawCustomer?.credit_balance_cents === "number"
+        ? rawCustomer.credit_balance_cents
+        : 0,
     customerFirstName: data.customer_first_name,
     customerLastName: data.customer_last_name,
     customerWhatsapp: data.customer_whatsapp,

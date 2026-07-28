@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatDuration,
@@ -46,6 +47,35 @@ type AppointmentGridBlockProps = {
   onHoverTime?: (clientY: number, top: number, height: number) => void;
 };
 
+function formatCustomerName(apt: AppointmentItem): string {
+  return [apt.customerFirstName, apt.customerLastName]
+    .filter((part) => part.trim())
+    .join(" ");
+}
+
+function CustomerCreditIcon({
+  cents,
+  className,
+}: {
+  cents: number;
+  className?: string;
+}) {
+  const label = `Crédito disponível: ${formatPriceBRL(cents)}`;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex size-4 shrink-0 items-center justify-center rounded-sm bg-[#0e0f11]/14 ring-1 ring-[#0e0f11]/10",
+        className
+      )}
+      aria-label={label}
+      title={label}
+    >
+      <Wallet className="size-2.5 text-[#3f4f08]" strokeWidth={2.25} />
+    </span>
+  );
+}
+
 function BookingSourceBadge({ source }: { source: BookingSource }) {
   const Icon = BOOKING_SOURCE_ICONS[source];
   const label = BOOKING_SOURCE_LABELS[source];
@@ -66,27 +96,38 @@ function AppointmentTooltipContent({
 }: {
   appointment: AppointmentItem;
 }) {
-  const name = `${apt.customerFirstName} ${apt.customerLastName}`;
-  const services = (() => {
-    const counts = new Map<string, number>();
-    for (const s of apt.services) {
-      counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
-    }
-    return [...counts.entries()].map(([name, qty]) =>
-      qty > 1 ? `${name} ×${qty}` : name
-    );
-  })();
+  const name = formatCustomerName(apt);
   const totalMinutes = apt.services.reduce((s, svc) => s + svc.durationMinutes, 0);
   const totalPrice = apt.services.reduce((s, svc) => s + svc.priceCents, 0);
   const timeRange = `${formatTime(apt.startTime)} – ${formatTime(apt.endTime)}`;
+  const creditCents = apt.customerCreditBalanceCents ?? 0;
 
   return (
     <div className="flex flex-col gap-1.5 text-left">
       <p className="font-medium leading-snug text-[#f5f5f5]">{name}</p>
 
-      {services.length > 0 && (
-        <p className="leading-snug text-[#c8c9cc]">{services.join(" · ")}</p>
-      )}
+      {creditCents > 0 ? (
+        <p className="flex items-center gap-1.5 text-[var(--agenda-accent,#ecf15e)]">
+          <Wallet className="size-3 shrink-0" strokeWidth={2} />
+          <span className="tabular-nums">
+            {formatPriceBRL(creditCents)} em crédito
+          </span>
+        </p>
+      ) : null}
+
+      {(() => {
+        const counts = new Map<string, number>();
+        for (const s of apt.services) {
+          counts.set(s.name, (counts.get(s.name) ?? 0) + 1);
+        }
+        const services = [...counts.entries()].map(([serviceName, qty]) =>
+          qty > 1 ? `${serviceName} ×${qty}` : serviceName
+        );
+        if (services.length === 0) return null;
+        return (
+          <p className="leading-snug text-[#c8c9cc]">{services.join(" · ")}</p>
+        );
+      })()}
 
       <p className="tabular-nums text-[#e8e8ea]">{timeRange}</p>
 
@@ -142,7 +183,7 @@ export function AppointmentGridBlock({
     y: number;
   } | null>(null);
 
-  const name = `${apt.customerFirstName} ${apt.customerLastName}`;
+  const name = formatCustomerName(apt);
   const startTime = formatTime(segmentStartTime ?? apt.startTime);
   const endTime = formatTime(segmentEndTime ?? apt.endTime);
   const timeRange = `${startTime} – ${endTime}`;
@@ -163,6 +204,8 @@ export function AppointmentGridBlock({
     })();
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
   const showSourceIcon = Boolean(showBookingSource && apt.bookingSource);
+  const showCreditIcon = (apt.customerCreditBalanceCents ?? 0) > 0;
+  const cornerPadding = showSourceIcon;
 
   // Prioridade: nome completo, horário e ícone da origem. Serviço só se couber.
   const density: "single" | "double" | "full" =
@@ -215,14 +258,19 @@ export function AppointmentGridBlock({
         {density === "single" ? (
           <p
             className={cn(
-              "truncate text-[10px] font-medium leading-tight",
-              showSourceIcon && "pr-3.5"
+              "flex min-w-0 items-center gap-1 truncate text-[10px] font-medium leading-tight",
+              showSourceIcon && cornerPadding && "pr-3.5"
             )}
           >
-            {name}
-            <span className="font-normal tabular-nums opacity-85">
-              {" "}
-              · {startTime}
+            {showCreditIcon ? (
+              <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
+            ) : null}
+            <span className="truncate">
+              {name}
+              <span className="font-normal tabular-nums opacity-85">
+                {" "}
+                · {startTime}
+              </span>
             </span>
           </p>
         ) : null}
@@ -231,11 +279,14 @@ export function AppointmentGridBlock({
           <>
             <p
               className={cn(
-                "truncate text-[10px] font-medium leading-tight",
-                showSourceIcon && "pr-3.5"
+                "flex min-w-0 items-center gap-1 truncate text-[10px] font-medium leading-tight",
+                showSourceIcon && cornerPadding && "pr-3.5"
               )}
             >
-              {name}
+              {showCreditIcon ? (
+                <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
+              ) : null}
+              <span className="truncate">{name}</span>
             </p>
             <p className="truncate text-[9px] leading-tight tabular-nums opacity-85">
               {timeRange}
@@ -247,11 +298,14 @@ export function AppointmentGridBlock({
           <>
             <p
               className={cn(
-                "truncate text-[11px] font-medium leading-tight sm:text-xs",
-                showSourceIcon && "pr-3.5"
+                "flex min-w-0 items-center gap-1 truncate text-[11px] font-medium leading-tight sm:text-xs",
+                showSourceIcon && cornerPadding && "pr-3.5"
               )}
             >
-              {name}
+              {showCreditIcon ? (
+                <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
+              ) : null}
+              <span className="truncate">{name}</span>
             </p>
             <p className="truncate text-[10px] leading-tight tabular-nums opacity-85">
               {timeRange}

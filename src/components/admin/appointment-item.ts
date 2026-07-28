@@ -7,6 +7,8 @@ export type AppointmentItem = {
   professionalNickname: string;
   /** Id do cliente cadastrado, quando existir. */
   customerId?: string | null;
+  /** Saldo de crédito na loja (centavos), quando o cliente está cadastrado. */
+  customerCreditBalanceCents?: number;
   customerFirstName: string;
   customerLastName: string;
   customerWhatsapp: string;
