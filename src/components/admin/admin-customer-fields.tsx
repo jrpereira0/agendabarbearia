@@ -58,7 +58,7 @@ function hasCustomerData(
   whatsapp: string
 ): boolean {
   return Boolean(
-    firstName.trim() && lastName.trim() && whatsapp.replace(/\D/g, "").length >= 10
+    firstName.trim() && whatsapp.replace(/\D/g, "").length >= 10
   );
 }
 
@@ -475,7 +475,7 @@ export function AdminCustomerFields({
 
           {customerFound === false && (
             <div className="booking-notice rounded-xl px-3 py-2.5 text-xs">
-              WhatsApp novo — preencha nome e sobrenome para cadastrar.
+              WhatsApp novo — preencha o nome para cadastrar. Sobrenome é opcional.
             </div>
           )}
 
@@ -514,7 +514,9 @@ export function AdminCustomerFields({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor={`${idPrefix}LastName`}>Sobrenome</Label>
+              <Label htmlFor={`${idPrefix}LastName`}>
+                Sobrenome (opcional)
+              </Label>
               <Input
                 id={`${idPrefix}LastName`}
                 value={lastName}

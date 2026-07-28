@@ -297,7 +297,7 @@ export function AppointmentActionsDialog({
 
   async function handleChangeClient(e: React.FormEvent) {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !whatsapp.replace(/\D/g, "")) {
+    if (!firstName.trim() || !whatsapp.replace(/\D/g, "")) {
       toast.error("Preencha os dados do cliente.");
       return;
     }

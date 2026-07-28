@@ -67,7 +67,7 @@ const createSchema = z.object({
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
-  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  lastName: z.string().trim().optional().default(""),
   whatsapp: whatsappSchema,
 });
 
@@ -477,7 +477,7 @@ const updateSchema = z.object({
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
-  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  lastName: z.string().trim().optional().default(""),
   whatsapp: whatsappSchema,
 });
 
