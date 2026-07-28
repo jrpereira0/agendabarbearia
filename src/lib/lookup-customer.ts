@@ -141,9 +141,6 @@ export async function updateCustomerProfileByWhatsapp(input: {
   if (!firstName) {
     return { ok: false, error: "Informe o nome.", httpStatus: 400 };
   }
-  if (!lastName) {
-    return { ok: false, error: "Informe o sobrenome.", httpStatus: 400 };
-  }
 
   const admin = createAdminClient();
   if (!admin) {

@@ -141,3 +141,47 @@ export function nowMinutesInTimezone(timeZone = TIMEZONE): number {
 export function weekdayOf(date: string): number {
   return new Date(`${date}T00:00:00Z`).getUTCDay();
 }
+
+function addCalendarDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export type BookableBusinessHour = {
+  weekday: number;
+  active: boolean;
+  closeTime: string;
+};
+
+/**
+ * Primeira data que ainda dá pra agendar no calendário público.
+ * Se o expediente de hoje já encerrou (ou o dia está fechado), pula pro
+ * próximo dia com horário ativo — assim o cliente não cai num dia sem vaga.
+ */
+export function earliestBookableDate(params: {
+  today: string;
+  nowMinutes: number;
+  businessHours: BookableBusinessHour[];
+  maxDaysAhead?: number;
+}): string {
+  const { today, nowMinutes, businessHours, maxDaysAhead = 60 } = params;
+  const byWeekday = new Map(
+    businessHours.map((row) => [row.weekday, row] as const)
+  );
+
+  for (let offset = 0; offset <= maxDaysAhead; offset++) {
+    const date = addCalendarDays(today, offset);
+    const hours = byWeekday.get(weekdayOf(date));
+    if (!hours?.active) continue;
+
+    if (date === today) {
+      if (nowMinutes < timeToMinutes(hours.closeTime)) return date;
+      continue;
+    }
+
+    return date;
+  }
+
+  return today;
+}

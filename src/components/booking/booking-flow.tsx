@@ -27,6 +27,10 @@ import {
   sumPublicServicesPriceCents,
 } from "@/lib/public-service-prices";
 import { groupServicesForBooking } from "@/lib/booking-service-groups";
+import {
+  earliestBookableDate,
+  nowMinutesInTimezone,
+} from "@/lib/availability";
 import { normalizeWhatsapp, whatsappLookupDelayMs } from "@/lib/whatsapp";
 import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import { cn } from "@/lib/utils";
@@ -229,6 +233,16 @@ function SlotGroups({
 
 export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
+  const minDate = useMemo(
+    () =>
+      earliestBookableDate({
+        today,
+        nowMinutes: nowMinutesInTimezone(),
+        businessHours: catalog.businessHours,
+        maxDaysAhead: MAX_DAYS_AHEAD,
+      }),
+    [today, catalog.businessHours]
+  );
   const rootRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const skipInitialScrollRef = useRef(true);
@@ -237,7 +251,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
   const [professionalId, setProfessionalId] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
-  const [date, setDate] = useState(today);
+  const [date, setDate] = useState(minDate);
   const [startTime, setStartTime] = useState<string | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -518,7 +532,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     setProfessionalId("");
     setServiceIds([]);
     setServiceSearch("");
-    setDate(today);
+    setDate(minDate);
     setStartTime(null);
     setAvailableSlots([]);
     setSlotsError(null);
@@ -565,8 +579,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
 
   async function handleConfirm() {
     const digits = normalizeWhatsapp(whatsapp);
-    if (!firstName.trim() || !lastName.trim() || !digits || !startTime) {
-      toast.error("Preencha nome e WhatsApp.");
+    if (!firstName.trim() || !digits || !startTime) {
+      toast.error("Preencha o nome e confirme o WhatsApp.");
       return;
     }
 
@@ -613,7 +627,9 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         serviceNames: selectedServices.map((s) => s.name),
         totalPriceCents: totalPrice,
         totalMinutes,
-        customerName: `${firstName.trim()} ${lastName.trim()}`,
+        customerName: [firstName.trim(), lastName.trim()]
+          .filter(Boolean)
+          .join(" "),
       });
       setSaving(false);
     } catch {
@@ -643,8 +659,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
         lookupLoading ||
         !lookupDone ||
         !normalizeWhatsapp(whatsapp) ||
-        !firstName.trim() ||
-        !lastName.trim()));
+        !firstName.trim()));
 
   if (confirmation) {
     const confirmedProfessional = catalog.professionals.find(
@@ -997,6 +1012,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             <BookingDatePicker
               selectedDate={date}
               today={today}
+              minDate={minDate}
               maxDate={maxDate}
               onSelectDate={(next) => {
                 setDate(next);
@@ -1043,7 +1059,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                       Cliente
                     </p>
                     <p className="mt-2 text-base font-semibold tracking-tight">
-                      {firstName} {lastName}
+                      {[firstName, lastName].filter(Boolean).join(" ")}
                     </p>
                     <p className="mt-1 text-sm tabular-nums text-muted-foreground">
                       {formatWhatsapp(whatsapp)}
@@ -1086,7 +1102,8 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                     <div className="my-4 h-px bg-white/8" />
 
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      Primeiro agendamento neste número. Informe nome e sobrenome.
+                      Primeiro agendamento neste número. Informe seu nome.
+                      Sobrenome é opcional.
                     </p>
 
                     <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1104,7 +1121,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <Label htmlFor="bookingLastName" className="text-xs">
-                          Sobrenome
+                          Sobrenome (opcional)
                         </Label>
                         <Input
                           id="bookingLastName"

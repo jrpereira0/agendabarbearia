@@ -5,7 +5,10 @@ import { cn } from "@/lib/utils";
 
 type BookingDatePickerProps = {
   selectedDate: string;
+  /** Dia civil de hoje (só pra destacar o chip "hoje", se ainda aparecer). */
   today: string;
+  /** Primeira data listada (ex.: amanhã se o expediente de hoje já encerrou). */
+  minDate?: string;
   maxDate: string;
   onSelectDate: (date: string) => void;
 };
@@ -55,6 +58,7 @@ type DragState = {
 export function BookingDatePicker({
   selectedDate,
   today,
+  minDate,
   maxDate,
   onSelectDate,
 }: BookingDatePickerProps) {
@@ -67,16 +71,17 @@ export function BookingDatePicker({
     startScroll: 0,
     pointerId: -1,
   });
+  const startDate = minDate && minDate > today ? minDate : today;
 
   const dates = useMemo(() => {
     const list: string[] = [];
-    let cursor = today;
+    let cursor = startDate;
     while (cursor <= maxDate) {
       list.push(cursor);
       cursor = addDays(cursor, 1);
     }
     return list;
-  }, [today, maxDate]);
+  }, [startDate, maxDate]);
 
   useEffect(() => {
     const root = scrollRef.current;

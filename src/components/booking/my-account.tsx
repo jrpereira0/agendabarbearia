@@ -117,8 +117,8 @@ export function MyAccount() {
   async function handleSave() {
     const nome = firstName.trim();
     const sobrenome = lastName.trim();
-    if (!nome || !sobrenome) {
-      toast.error("Preencha nome e sobrenome.");
+    if (!nome) {
+      toast.error("Preencha o nome.");
       return;
     }
 
@@ -307,8 +307,8 @@ export function MyAccount() {
               >
                 <p className="text-xs leading-relaxed text-muted-foreground">
                   {hasProfile
-                    ? "Altere foto, nome e sobrenome. O WhatsApp não muda."
-                    : "Complete seu cadastro e adicione uma foto se quiser."}
+                    ? "Altere foto e nome. Sobrenome é opcional. O WhatsApp não muda."
+                    : "Complete seu cadastro e adicione uma foto se quiser. Sobrenome é opcional."}
                 </p>
 
                 <PhotoField
@@ -333,7 +333,9 @@ export function MyAccount() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="account-last-name">Sobrenome</Label>
+                    <Label htmlFor="account-last-name">
+                      Sobrenome (opcional)
+                    </Label>
                     <Input
                       id="account-last-name"
                       value={lastName}

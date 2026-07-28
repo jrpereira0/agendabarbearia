@@ -22,6 +22,22 @@ function namesMatch(a: string, b: string): boolean {
   );
 }
 
+function customerNamesCompatible(
+  inputFirst: string,
+  inputLast: string,
+  existingFirst: string,
+  existingLast: string
+): boolean {
+  if (!namesMatch(inputFirst, existingFirst)) return false;
+  if (!inputLast.trim()) return true;
+  if (!existingLast.trim()) return true;
+  return namesMatch(inputLast, existingLast);
+}
+
+function formatCustomerLabel(firstName: string, lastName: string): string {
+  return [firstName, lastName].filter((part) => part.trim()).join(" ").trim();
+}
+
 export async function upsertCustomer(
   input: UpsertCustomerInput
 ): Promise<UpsertCustomerResult> {
@@ -50,14 +66,20 @@ export async function upsertCustomer(
   }
 
   if (existing) {
-    const nameDiffers =
-      !namesMatch(firstName, existing.first_name) ||
-      !namesMatch(lastName, existing.last_name);
-
-    if (nameDiffers) {
+    if (
+      !customerNamesCompatible(
+        firstName,
+        lastName,
+        existing.first_name,
+        existing.last_name
+      )
+    ) {
       return {
         ok: false,
-        error: `Este WhatsApp já pertence a ${capitalizePersonName(existing.first_name)} ${capitalizePersonName(existing.last_name)}. Verifique o número ou edite o cadastro em Clientes.`,
+        error: `Este WhatsApp já pertence a ${formatCustomerLabel(
+          capitalizePersonName(existing.first_name),
+          capitalizePersonName(existing.last_name)
+        )}. Verifique o número ou edite o cadastro em Clientes.`,
       };
     }
 

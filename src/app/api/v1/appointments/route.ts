@@ -31,7 +31,7 @@ const bodySchema = z
       .array(z.uuid("serviceIds contém um id inválido."))
       .min(1, "Informe ao menos um serviço."),
     firstName: z.string().trim().min(1, "Informe o nome."),
-    lastName: z.string().trim().min(1, "Informe o sobrenome."),
+    lastName: z.string().trim().optional().default(""),
     whatsapp: whatsappSchema,
   })
   .superRefine((data, ctx) => {

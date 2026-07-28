@@ -12,7 +12,7 @@ import { normalizePhotoPosition } from "@/lib/photo-position";
 
 const patchBodySchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
-  lastName: z.string().trim().min(1, "Informe o sobrenome."),
+  lastName: z.string().trim().optional().default(""),
 });
 
 function requireClientWhatsapp(auth: { type: string; whatsapp?: string }) {
@@ -85,9 +85,6 @@ async function parsePatchInput(request: NextRequest): Promise<
     const lastName = String(form.get("lastName") ?? "").trim();
     if (!firstName) {
       return { ok: false, error: "Informe o nome.", status: 400 };
-    }
-    if (!lastName) {
-      return { ok: false, error: "Informe o sobrenome.", status: 400 };
     }
 
     const photoRaw = form.get("photo");

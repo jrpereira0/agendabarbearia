@@ -29,6 +29,10 @@ import {
   formatPublicServicesTotalLabel,
 } from "@/lib/public-service-prices";
 import { sortServicesByPopularity } from "@/lib/booking-service-groups";
+import {
+  earliestBookableDate,
+  nowMinutesInTimezone,
+} from "@/lib/availability";
 import type { PublicAppointmentItem } from "@/lib/manage-public-appointment";
 import type { ShopCatalog } from "@/lib/get-shop-catalog";
 import { cn } from "@/lib/utils";
@@ -77,6 +81,16 @@ function statusTone(status?: string): { bg: string; text: string } {
 
 export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const maxDate = addDays(today, MAX_DAYS_AHEAD);
+  const minDate = useMemo(
+    () =>
+      earliestBookableDate({
+        today,
+        nowMinutes: nowMinutesInTimezone(),
+        businessHours: catalog.businessHours,
+        maxDaysAhead: MAX_DAYS_AHEAD,
+      }),
+    [today, catalog.businessHours]
+  );
 
   const [step, setStep] = useState<Step>("phone");
   const stepRef = useRef<Step>("phone");
@@ -93,7 +107,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const [cancelBusy, setCancelBusy] = useState(false);
 
   const [editing, setEditing] = useState<PublicAppointmentItem | null>(null);
-  const [editDate, setEditDate] = useState(today);
+  const [editDate, setEditDate] = useState(minDate);
   const [editStartTime, setEditStartTime] = useState<string | null>(null);
   const editStartTimeRef = useRef<string | null>(null);
   editStartTimeRef.current = editStartTime;
@@ -249,7 +263,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   function startEdit(appointment: PublicAppointmentItem) {
     setEditing(appointment);
-    setEditDate(appointment.date < today ? today : appointment.date);
+    setEditDate(appointment.date < minDate ? minDate : appointment.date);
     setEditStartTime(appointment.startTime);
     setEditServiceIds([...appointment.serviceIds]);
     setAvailableSlots([]);
@@ -315,7 +329,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
         body: JSON.stringify({
           whatsapp: whatsappDigits,
           professionalId: editing.professionalId,
-          date: editDate < today ? today : editDate,
+          date: editDate < minDate ? minDate : editDate,
           startTime: editStartTime,
           serviceIds: editServiceIds,
         }),
@@ -365,7 +379,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   }
 
   if (step === "edit" && editing) {
-    const safeDate = editDate < today ? today : editDate;
+    const safeDate = editDate < minDate ? minDate : editDate;
 
     return (
       <div className="flex min-h-0 flex-1 flex-col">
@@ -445,6 +459,7 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
               <BookingDatePicker
                 selectedDate={safeDate}
                 today={today}
+                minDate={minDate}
                 maxDate={maxDate}
                 onSelectDate={(d) => {
                   setEditDate(d);
