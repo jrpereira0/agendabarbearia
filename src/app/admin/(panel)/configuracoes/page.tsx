@@ -98,6 +98,9 @@ export default async function SettingsPage() {
               ? settings.confirmation_whatsapp_message
               : DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE
           }
+          confirmationWhatsappEnabled={
+            settings?.confirmation_whatsapp_enabled ?? true
+          }
         />
       </div>
     </div>

@@ -67,6 +67,8 @@ type AppointmentActionsDialogProps = {
   focusedServiceIndex?: number | null;
   /** Modelo da mensagem de confirmação (com tags). */
   confirmationWhatsappMessage?: string;
+  /** Quando false, esconde o botão Confirmar no WhatsApp. */
+  confirmationWhatsappEnabled?: boolean;
   /** Nome da loja pra tag {{loja}}. */
   shopName?: string;
   /** Remove o card da grade na hora (cancelamento completo). */
@@ -114,6 +116,7 @@ export function AppointmentActionsDialog({
   onEditAppointment,
   focusedServiceIndex = null,
   confirmationWhatsappMessage = DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE,
+  confirmationWhatsappEnabled = true,
   shopName = "",
   onCancelled,
   onServiceRemoved,
@@ -418,21 +421,23 @@ export function AppointmentActionsDialog({
               ) : null}
 
               <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="booking-btn-ghost h-8"
-                  asChild
-                >
-                  <a
-                    href={whatsappLink}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                {confirmationWhatsappEnabled ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="booking-btn-ghost h-8"
+                    asChild
                   >
-                    <MessageCircle className="size-3.5" />
-                    Confirmar no WhatsApp
-                  </a>
-                </Button>
+                    <a
+                      href={whatsappLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="size-3.5" />
+                      Confirmar no WhatsApp
+                    </a>
+                  </Button>
+                ) : null}
                 {customerId ? (
                   <Button
                     type="button"

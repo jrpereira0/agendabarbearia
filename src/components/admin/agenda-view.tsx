@@ -58,6 +58,7 @@ type AgendaViewProps = {
   cashRegister?: AgendaCashRegisterData;
   /** Modelo da mensagem de confirmação (Configurações → Mensagens). */
   confirmationWhatsappMessage?: string;
+  confirmationWhatsappEnabled?: boolean;
   shopName?: string;
 };
 
@@ -374,6 +375,7 @@ export function AgendaView({
   productsCatalog = [],
   cashRegister,
   confirmationWhatsappMessage,
+  confirmationWhatsappEnabled = true,
   shopName = "",
 }: AgendaViewProps) {
   const router = useRouter();
@@ -918,6 +920,7 @@ export function AgendaView({
         permissions={permissions}
         sessionProfessionalId={professionalId}
         confirmationWhatsappMessage={confirmationWhatsappMessage}
+        confirmationWhatsappEnabled={confirmationWhatsappEnabled}
         shopName={shopName}
         onOpenComanda={handleOpenComanda}
         onEditAppointment={() => handleEditAppointment()}

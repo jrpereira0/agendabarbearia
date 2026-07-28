@@ -26,6 +26,7 @@ type SettingsViewProps = {
   exceptions: ExceptionItem[];
   professionals: { id: string; nickname: string }[];
   confirmationWhatsappMessage: string;
+  confirmationWhatsappEnabled: boolean;
 };
 
 export function SettingsView({
@@ -35,6 +36,7 @@ export function SettingsView({
   exceptions,
   professionals,
   confirmationWhatsappMessage,
+  confirmationWhatsappEnabled,
 }: SettingsViewProps) {
   return (
     <Tabs defaultValue="perfil" className="flex w-full flex-col gap-4">
@@ -84,6 +86,7 @@ export function SettingsView({
       <TabsContent value="mensagens" className="mt-0">
         <ConfirmationMessageForm
           initialMessage={confirmationWhatsappMessage}
+          initialEnabled={confirmationWhatsappEnabled}
           shopName={profile.shopName}
         />
       </TabsContent>

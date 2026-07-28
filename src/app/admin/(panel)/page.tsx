@@ -112,7 +112,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       loadServiceBookingCounts(),
       supabase
         .from("shop_settings")
-        .select("shop_name, confirmation_whatsapp_message")
+        .select(
+          "shop_name, confirmation_whatsapp_message, confirmation_whatsapp_enabled"
+        )
         .eq("id", 1)
         .maybeSingle(),
     ]);
@@ -282,6 +284,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
         shopSettings?.confirmation_whatsapp_message?.trim()
           ? shopSettings.confirmation_whatsapp_message
           : DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE
+      }
+      confirmationWhatsappEnabled={
+        shopSettings?.confirmation_whatsapp_enabled ?? true
       }
     />
   );

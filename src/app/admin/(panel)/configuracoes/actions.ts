@@ -253,13 +253,14 @@ const confirmationMessageSchema = z
   .min(1, "Escreva a mensagem de confirmação.")
   .max(2000, "A mensagem pode ter no máximo 2000 caracteres.");
 
-export async function saveConfirmationWhatsappMessage(
-  message: string
-): Promise<ActionResult> {
+export async function saveConfirmationWhatsappMessage(input: {
+  message: string;
+  enabled: boolean;
+}): Promise<ActionResult> {
   const denied = await requireOwner();
   if (denied) return denied;
 
-  const parsed = confirmationMessageSchema.safeParse(message);
+  const parsed = confirmationMessageSchema.safeParse(input.message);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
   }
@@ -269,7 +270,10 @@ export async function saveConfirmationWhatsappMessage(
 
   const { error } = await admin
     .from("shop_settings")
-    .update({ confirmation_whatsapp_message: parsed.data })
+    .update({
+      confirmation_whatsapp_message: parsed.data,
+      confirmation_whatsapp_enabled: Boolean(input.enabled),
+    })
     .eq("id", 1);
 
   if (error) {

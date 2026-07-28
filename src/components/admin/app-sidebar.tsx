@@ -13,6 +13,7 @@ import {
   Percent,
   Scissors,
   Settings,
+  UserRound,
   Users,
 } from "lucide-react";
 import {
@@ -29,18 +30,9 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { signOut } from "@/app/admin/(panel)/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { BOOKING_PATH } from "@/lib/booking-path";
-import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
 const dayToDayItems = [
@@ -72,11 +64,25 @@ const managementItems = [
   { title: "Clientes", url: "/admin/clientes", icon: Contact },
 ];
 
+type NavItem = {
+  title: string;
+  url: string;
+  icon: typeof CalendarDays;
+  ownerOnly?: boolean;
+  barberTitle?: string;
+};
+
 type AppSidebarProps = {
   isOwner: boolean;
   userName: string;
   userEmail: string;
 };
+
+function isNavActive(pathname: string, url: string): boolean {
+  if (url === "/admin") return pathname === "/admin";
+  if (url === "/admin/financeiro") return pathname === "/admin/financeiro";
+  return pathname === url || pathname.startsWith(`${url}/`);
+}
 
 export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
   const pathname = usePathname();
@@ -90,15 +96,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
     .join("")
     .toUpperCase();
 
-  function renderItems(
-    items: {
-      title: string;
-      url: string;
-      icon: typeof CalendarDays;
-      ownerOnly?: boolean;
-      barberTitle?: string;
-    }[]
-  ) {
+  function renderItems(items: NavItem[]) {
     return items
       .filter((item) => !item.ownerOnly || isOwner)
       .map((item) => {
@@ -108,14 +106,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
           <SidebarMenuItem key={item.url}>
             <SidebarMenuButton
               asChild
-              isActive={
-                item.url === "/admin"
-                  ? pathname === "/admin"
-                  : item.url === "/admin/financeiro"
-                    ? pathname === "/admin/financeiro"
-                    : pathname === item.url ||
-                      pathname.startsWith(`${item.url}/`)
-              }
+              isActive={isNavActive(pathname, item.url)}
               tooltip={label}
               onClick={() => setOpenMobile(false)}
             >
@@ -161,19 +152,49 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isOwner && (
+        {isOwner ? (
           <SidebarGroup>
             <SidebarGroupLabel>Gerenciamento</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>{renderItems(managementItems)}</SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
-        )}
+        ) : null}
 
         <SidebarGroup>
-          <SidebarGroupLabel>Atalhos</SidebarGroupLabel>
+          <SidebarGroupLabel>Conta</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              {isOwner ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isNavActive(pathname, "/admin/configuracoes")}
+                    tooltip="Configurações"
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <Link href="/admin/configuracoes">
+                      <Settings />
+                      <span>Configurações</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isNavActive(pathname, "/admin/minha-conta")}
+                    tooltip="Minha conta"
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <Link href="/admin/minha-conta">
+                      <UserRound />
+                      <span>Minha conta</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Página de agendamento">
                   <a
@@ -194,81 +215,33 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
       <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="lg"
-                  isActive={
-                    pathname === "/admin/configuracoes" ||
-                    pathname === "/admin/minha-conta"
-                  }
+            <div className="flex w-full items-center gap-2 overflow-hidden rounded-md p-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0">
+              <Avatar className="size-8 shrink-0 rounded-md ring-1 ring-[rgb(236_241_94_/_25%)]">
+                <AvatarFallback className="admin-sidebar-avatar rounded-md text-xs font-medium">
+                  {initials || "DB"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="grid min-w-0 flex-1 text-left leading-tight group-data-[collapsible=icon]:hidden">
+                <span className="truncate text-sm font-medium">{userName}</span>
+                <span
+                  className="truncate text-xs text-sidebar-foreground/50"
+                  title={userEmail}
                 >
-                  <Avatar className="size-8 rounded-md ring-1 ring-[rgb(236_241_94_/_25%)]">
-                    <AvatarFallback className="admin-sidebar-avatar rounded-md text-xs font-medium">
-                      {initials || "DB"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left leading-tight">
-                    <span className="truncate text-sm font-medium">
-                      {userName}
-                    </span>
-                    <span className="truncate text-xs text-sidebar-foreground/50">
-                      {isOwner ? "Dono" : "Barbeiro"}
-                    </span>
-                  </div>
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                align="start"
-                sideOffset={8}
-                className={cn(
-                  ADMIN_SURFACE.popover,
-                  "w-(--radix-dropdown-menu-trigger-width) min-w-60 p-1.5"
-                )}
-              >
-                <DropdownMenuLabel className="px-2.5 py-2.5 font-normal">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="size-9 rounded-md ring-1 ring-[rgb(236_241_94_/_25%)]">
-                      <AvatarFallback className="admin-sidebar-avatar rounded-md text-xs font-medium">
-                        {initials || "DB"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
-                      <span className="truncate text-sm font-medium text-[#f5f5f5]">
-                        {userName}
-                      </span>
-                      <span className="truncate text-xs text-[#b4b6bb]">
-                        {userEmail}
-                      </span>
-                      <span className="mt-1 w-fit rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-[#ecf15e] uppercase">
-                        {isOwner ? "Dono" : "Barbeiro"}
-                      </span>
-                    </div>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="mx-1 my-1.5 bg-white/10" />
-                <DropdownMenuItem asChild>
-                  <Link
-                    href={
-                      isOwner ? "/admin/configuracoes" : "/admin/minha-conta"
-                    }
-                    onClick={() => setOpenMobile(false)}
-                  >
-                    <Settings className="size-4" />
-                    {isOwner ? "Configurações" : "Minha conta"}
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="mx-1 my-1.5 bg-white/10" />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onSelect={() => signOut()}
-                >
-                  <LogOut className="size-4" />
-                  Sair
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {isOwner ? "Dono" : "Barbeiro"}
+                </span>
+              </div>
+            </div>
+          </SidebarMenuItem>
+
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Sair"
+              onClick={() => signOut()}
+              className="text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
+            >
+              <LogOut />
+              <span>Sair</span>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
