@@ -743,7 +743,7 @@ export function AgendaView({
     isRefreshing,
     canBookNormal,
     canBookEncaixe,
-    canWalkInSale: isOwner && permissions.canOpenComanda,
+    canWalkInSale: canViewAllAgendas && permissions.canOpenComanda,
     onPrevDay: () => goToDate(shiftDate(displayDate, -1)),
     onToday: () => goToDate(today),
     onNextDay: () => goToDate(shiftDate(displayDate, 1)),

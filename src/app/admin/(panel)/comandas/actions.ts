@@ -307,8 +307,8 @@ export async function startWalkInComanda(
   const denied = assertPermission(session, "canOpenComanda");
   if (denied && !denied.ok) return { ok: false, error: denied.error };
 
-  if (!session.isOwner) {
-    return { ok: false, error: "Só o dono pode fazer venda rápida." };
+  if (!canViewAllAgendas(session)) {
+    return { ok: false, error: "Só o dono ou a recepção podem fazer venda rápida." };
   }
 
   const admin = requireAdminClient();
