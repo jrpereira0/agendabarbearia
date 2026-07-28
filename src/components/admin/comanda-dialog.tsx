@@ -289,6 +289,8 @@ type ComandaDialogProps = {
   appointments?: AppointmentItem[];
   /** Dono da barbearia — evita esperar o load só para liberar ações. */
   isOwnerHint?: boolean;
+  /** Dono ou recepção: opera agenda/comanda de todos os barbeiros. */
+  canManageAllAgendasHint?: boolean;
   /** Caixa já conhecido na agenda — libera finalizar sem esperar o servidor. */
   initialCashRegisterOpen?: boolean;
   initialOpenCashRegisterDate?: string | null;
@@ -389,6 +391,7 @@ export function ComandaDialog({
   slotStepMinutes = 15,
   appointments = EMPTY_APPOINTMENTS,
   isOwnerHint = false,
+  canManageAllAgendasHint = false,
   initialCashRegisterOpen = false,
   initialOpenCashRegisterDate = null,
   onEditSchedule,
@@ -399,6 +402,9 @@ export function ComandaDialog({
   const [items, setItems] = useState<EditableItem[]>([]);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [isOwner, setIsOwner] = useState(isOwnerHint);
+  const [canManageAllAgendas, setCanManageAllAgendas] = useState(
+    canManageAllAgendasHint
+  );
   const [cashRegisterOpen, setCashRegisterOpen] = useState(
     initialCashRegisterOpen
   );
@@ -460,6 +466,7 @@ export function ComandaDialog({
       }
       setComanda(result.comanda);
       setIsOwner(result.isOwner);
+      setCanManageAllAgendas(result.canManageAllAgendas);
       setCashRegisterOpen(result.cashRegisterOpen);
       setOpenCashRegisterDate(result.openCashRegisterDate);
       setCustomerCreditBalanceCents(result.customerCreditBalanceCents);
@@ -521,6 +528,7 @@ export function ComandaDialog({
     load,
     appointments,
     isOwnerHint,
+    canManageAllAgendasHint,
     initialCashRegisterOpen,
     initialOpenCashRegisterDate,
     sessionProfessionalId,
@@ -533,6 +541,7 @@ export function ComandaDialog({
     comandaId: initialComandaId,
     appointments,
     isOwnerHint,
+    canManageAllAgendasHint,
     initialCashRegisterOpen,
     initialOpenCashRegisterDate,
     sessionProfessionalId,
@@ -543,6 +552,7 @@ export function ComandaDialog({
     (initialComandaId ?? null) !== syncedFor.comandaId ||
     appointments !== syncedFor.appointments ||
     isOwnerHint !== syncedFor.isOwnerHint ||
+    canManageAllAgendasHint !== syncedFor.canManageAllAgendasHint ||
     initialCashRegisterOpen !== syncedFor.initialCashRegisterOpen ||
     initialOpenCashRegisterDate !== syncedFor.initialOpenCashRegisterDate ||
     sessionProfessionalId !== syncedFor.sessionProfessionalId;
@@ -554,6 +564,7 @@ export function ComandaDialog({
       comandaId: initialComandaId,
       appointments,
       isOwnerHint,
+      canManageAllAgendasHint,
       initialCashRegisterOpen,
       initialOpenCashRegisterDate,
       sessionProfessionalId,
@@ -585,6 +596,7 @@ export function ComandaDialog({
           : []
       );
       setIsOwner(isOwnerHint);
+      setCanManageAllAgendas(canManageAllAgendasHint);
       setCashRegisterOpen(initialCashRegisterOpen);
       setOpenCashRegisterDate(initialOpenCashRegisterDate);
       setTipCents(0);
@@ -601,6 +613,7 @@ export function ComandaDialog({
       setLoadedItemsKey(null);
       setPayments([]);
       setIsOwner(isOwnerHint);
+      setCanManageAllAgendas(canManageAllAgendasHint);
       setCashRegisterOpen(initialCashRegisterOpen);
       setOpenCashRegisterDate(initialOpenCashRegisterDate);
       setTipCents(0);
@@ -913,7 +926,11 @@ export function ComandaDialog({
     if (!(ACTIVE_APPOINTMENT_STATUSES as readonly string[]).includes(apt.status)) {
       return false;
     }
-    return isOwner || apt.professionalId === sessionProfessionalId;
+    return (
+      canManageAllAgendas ||
+      isOwner ||
+      apt.professionalId === sessionProfessionalId
+    );
   }
 
   function getCancelTargetForItem(item: EditableItem): string | null {
@@ -2087,7 +2104,7 @@ export function ComandaDialog({
                   )}
                 </div>
 
-                {!isClosed && !cashRegisterOpen && isOwner && (
+                {!isClosed && !cashRegisterOpen && (isOwner || canFinalize) && (
                   <div className="booking-notice shrink-0 rounded-xl px-3 py-2.5 text-xs">
                     {openCashRegisterDate &&
                     openCashRegisterDate !== serviceDate ? (
@@ -2102,7 +2119,7 @@ export function ComandaDialog({
                         </span>
                         .
                       </>
-                    ) : (
+                    ) : isOwner ? (
                       <>
                         Sem caixa aberto em {formatDateBR(serviceDate)}. Abra em{" "}
                         <Link
@@ -2112,6 +2129,11 @@ export function ComandaDialog({
                           Caixas
                         </Link>
                         .
+                      </>
+                    ) : (
+                      <>
+                        Sem caixa aberto em {formatDateBR(serviceDate)}. Peça
+                        para o dono abrir o caixa do dia.
                       </>
                     )}
                   </div>
@@ -2360,7 +2382,7 @@ export function ComandaDialog({
                       )}
                     </div>
 
-                    {(isOwner || canEdit) && (
+                    {isOwner && (
                       <details className="mt-auto text-xs text-muted-foreground">
                         <summary className="cursor-pointer select-none py-1 hover:text-[#f5f5f5]">
                           Comissão e casa

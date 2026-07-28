@@ -19,7 +19,7 @@ export default async function MyAccountPage() {
   const session = await getAdminSession();
   if (!session) redirect(LOGIN_PATH);
   if (session.isOwner) redirect("/admin/configuracoes");
-
+  // Recepção e barbeiro usam esta tela pra trocar senha; só barbeiro tem grade.
   const supabase = await requireServerClient();
   const {
     data: { user },
@@ -65,14 +65,21 @@ export default async function MyAccountPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="Minha conta"
-        description="Sua grade de atendimento e senha de acesso ao painel."
+        description={
+          session.isReception
+            ? "Senha de acesso ao painel da recepção."
+            : "Sua grade de atendimento e senha de acesso ao painel."
+        }
       />
 
       <Card>
         <CardContent className="flex flex-col gap-4">
           <FormSectionTitle
             icon={User}
-            title={professional?.nickname ?? "Seu perfil"}
+            title={
+              professional?.nickname ??
+              (session.isReception ? "Recepção" : "Seu perfil")
+            }
             description="Dados do seu login no painel."
           />
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -81,15 +88,20 @@ export default async function MyAccountPage() {
               <dd className="mt-0.5 font-medium">{user?.email ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Apelido na agenda</dt>
+              <dt className="text-muted-foreground">
+                {session.isReception ? "Função" : "Apelido na agenda"}
+              </dt>
               <dd className="mt-0.5 font-medium">
-                {professional?.nickname ?? "—"}
+                {session.isReception
+                  ? "Recepção"
+                  : (professional?.nickname ?? "—")}
               </dd>
             </div>
           </dl>
         </CardContent>
       </Card>
 
+      {!session.isReception ? (
       <Card>
         <CardContent className="flex flex-col gap-5">
           <FormSectionTitle
@@ -114,6 +126,7 @@ export default async function MyAccountPage() {
           </ul>
         </CardContent>
       </Card>
+      ) : null}
 
       {professional && (
         <Card>

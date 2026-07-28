@@ -30,7 +30,7 @@ import {
 import { getCustomerCreditBalanceByWhatsapp } from "@/lib/customer-credit-service";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
-import { requireAdmin } from "@/lib/require-admin";
+import { requireAdmin, canViewAllAgendas } from "@/lib/require-admin";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import { assertPermission } from "@/lib/professional-permissions";
 import { formatTime } from "@/lib/format";
@@ -94,7 +94,7 @@ async function assertBarberComandaAccess(
   comandaId: string,
   session: Awaited<ReturnType<typeof requireAdmin>>
 ): Promise<ActionResult | null> {
-  if (!("userId" in session) || session.isOwner) return null;
+  if (!("userId" in session) || canViewAllAgendas(session)) return null;
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) return admin;
@@ -159,6 +159,7 @@ export async function loadComandaForAppointment(
       ok: true;
       comanda: ComandaDetail;
       isOwner: boolean;
+      canManageAllAgendas: boolean;
       cashRegisterOpen: boolean;
       openCashRegisterDate: string | null;
       customerCreditBalanceCents: number;
@@ -185,7 +186,7 @@ export async function loadComandaForAppointment(
   ]);
   if (!result.ok) return { ok: false, error: result.error };
 
-  if (!session.isOwner) {
+  if (!canViewAllAgendas(session)) {
     if (!session.professionalId) {
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
@@ -210,6 +211,7 @@ export async function loadComandaForAppointment(
     ok: true,
     comanda: result.comanda,
     isOwner: session.isOwner,
+    canManageAllAgendas: canViewAllAgendas(session),
     cashRegisterOpen: await canCloseComandaInOpenCashRegister(
       admin,
       result.comanda.serviceDate,
@@ -227,6 +229,7 @@ export async function loadComandaById(
       ok: true;
       comanda: ComandaDetail;
       isOwner: boolean;
+      canManageAllAgendas: boolean;
       cashRegisterOpen: boolean;
       openCashRegisterDate: string | null;
       customerCreditBalanceCents: number;
@@ -249,7 +252,7 @@ export async function loadComandaById(
   ]);
   if (!result.ok) return { ok: false, error: result.error };
 
-  if (!session.isOwner) {
+  if (!canViewAllAgendas(session)) {
     if (!session.professionalId) {
       return { ok: false, error: "Você não pode ver esta comanda." };
     }
@@ -265,6 +268,7 @@ export async function loadComandaById(
     ok: true,
     comanda: result.comanda,
     isOwner: session.isOwner,
+    canManageAllAgendas: canViewAllAgendas(session),
     cashRegisterOpen: await canCloseComandaInOpenCashRegister(
       admin,
       result.comanda.serviceDate,
@@ -288,6 +292,7 @@ export async function startWalkInComanda(
       ok: true;
       comanda: ComandaDetail;
       isOwner: boolean;
+      canManageAllAgendas: boolean;
       cashRegisterOpen: boolean;
       openCashRegisterDate: string | null;
       customerCreditBalanceCents: number;
@@ -301,6 +306,10 @@ export async function startWalkInComanda(
 
   const denied = assertPermission(session, "canOpenComanda");
   if (denied && !denied.ok) return { ok: false, error: denied.error };
+
+  if (!session.isOwner) {
+    return { ok: false, error: "Só o dono pode fazer venda rápida." };
+  }
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
@@ -319,6 +328,7 @@ export async function startWalkInComanda(
     ok: true,
     comanda: created.comanda,
     isOwner: session.isOwner,
+    canManageAllAgendas: canViewAllAgendas(session),
     cashRegisterOpen: await canCloseComandaInOpenCashRegister(
       admin,
       created.comanda.serviceDate,
@@ -605,7 +615,7 @@ export async function previewComandaTotals(
   const session = await requireAdmin();
   if (!("userId" in session)) return null;
 
-  if (!session.isOwner && session.professionalId !== professionalId) {
+  if (!canViewAllAgendas(session) && session.professionalId !== professionalId) {
     return null;
   }
 
@@ -674,7 +684,7 @@ export async function loadAppointmentItemAction(
     return { ok: false, error: "Agendamento não encontrado." };
   }
 
-  if (!session.isOwner) {
+  if (!canViewAllAgendas(session)) {
     if (!session.professionalId) {
       return { ok: false, error: "Você não pode ver esta comanda." };
     }

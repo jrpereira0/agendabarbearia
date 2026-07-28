@@ -35,18 +35,25 @@ export default async function AdminLayout({
 
   if (
     !profile ||
-    (profile.role !== "owner" && profile.role !== "barber")
+    (profile.role !== "owner" &&
+      profile.role !== "barber" &&
+      profile.role !== "reception")
   ) {
     redirect(loginUrl("perfil"));
   }
 
-  const isOwner = profile.role === "owner";
+  const role =
+    profile.role === "owner" ||
+    profile.role === "barber" ||
+    profile.role === "reception"
+      ? profile.role
+      : "barber";
 
   return (
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar
-          isOwner={isOwner}
+          role={role}
           userName={profile?.full_name || "Usuário"}
           userEmail={user.email ?? ""}
         />

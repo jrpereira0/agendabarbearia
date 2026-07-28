@@ -16,6 +16,8 @@ import {
   type ExceptionItem,
 } from "@/components/admin/exceptions-card";
 import { ConfirmationMessageForm } from "@/components/admin/confirmation-message-form";
+import { ReceptionStaffForm } from "@/components/admin/reception-staff-form";
+import type { ReceptionStaffItem } from "@/app/admin/(panel)/configuracoes/reception-actions";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +29,7 @@ type SettingsViewProps = {
   professionals: { id: string; nickname: string }[];
   confirmationWhatsappMessage: string;
   confirmationWhatsappEnabled: boolean;
+  receptionStaff: ReceptionStaffItem[];
 };
 
 export function SettingsView({
@@ -37,6 +40,7 @@ export function SettingsView({
   professionals,
   confirmationWhatsappMessage,
   confirmationWhatsappEnabled,
+  receptionStaff,
 }: SettingsViewProps) {
   return (
     <Tabs defaultValue="perfil" className="flex w-full flex-col gap-4">
@@ -58,6 +62,9 @@ export function SettingsView({
           </TabsTrigger>
           <TabsTrigger value="mensagens" className="flex-none px-3">
             Mensagens
+          </TabsTrigger>
+          <TabsTrigger value="recepcao" className="flex-none px-3">
+            Recepção
           </TabsTrigger>
           <TabsTrigger value="integracoes" className="flex-none px-3">
             Integrações
@@ -89,6 +96,10 @@ export function SettingsView({
           initialEnabled={confirmationWhatsappEnabled}
           shopName={profile.shopName}
         />
+      </TabsContent>
+
+      <TabsContent value="recepcao" className="mt-0">
+        <ReceptionStaffForm initialStaff={receptionStaff} />
       </TabsContent>
 
       <TabsContent value="integracoes" className="mt-0">

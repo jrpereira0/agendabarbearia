@@ -23,6 +23,7 @@ type PageProps = {
 export default async function ComissoesPage({ searchParams }: PageProps) {
   const session = await getAdminSession();
   if (!session) redirect(LOGIN_PATH);
+  if (session.isReception) redirect("/admin");
 
   const { from: fromParam, to: toParam, professionalId } = await searchParams;
   const today = todayInTimezone();

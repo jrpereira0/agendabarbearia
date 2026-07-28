@@ -34,6 +34,7 @@ import { signOut } from "@/app/admin/(panel)/actions";
 import { BrandLogo } from "@/components/brand-logo";
 import { BOOKING_PATH } from "@/lib/booking-path";
 import { cn } from "@/lib/utils";
+import type { AdminRole } from "@/lib/require-admin";
 
 const dayToDayItems = [
   { title: "Agenda", url: "/admin", icon: CalendarDays },
@@ -42,18 +43,19 @@ const dayToDayItems = [
     url: "/admin/financeiro/comissoes",
     icon: Percent,
     barberTitle: "Minhas comissões",
+    roles: ["owner", "barber"] as AdminRole[],
   },
   {
     title: "Caixas",
     url: "/admin/financeiro/caixas",
     icon: History,
-    ownerOnly: true,
+    roles: ["owner"] as AdminRole[],
   },
   {
     title: "Financeiro",
     url: "/admin/financeiro",
     icon: BarChart3,
-    ownerOnly: true,
+    roles: ["owner"] as AdminRole[],
   },
 ];
 
@@ -68,12 +70,12 @@ type NavItem = {
   title: string;
   url: string;
   icon: typeof CalendarDays;
-  ownerOnly?: boolean;
+  roles?: AdminRole[];
   barberTitle?: string;
 };
 
 type AppSidebarProps = {
-  isOwner: boolean;
+  role: AdminRole;
   userName: string;
   userEmail: string;
 };
@@ -84,9 +86,17 @@ function isNavActive(pathname: string, url: string): boolean {
   return pathname === url || pathname.startsWith(`${url}/`);
 }
 
-export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
+function roleLabel(role: AdminRole): string {
+  if (role === "owner") return "Dono";
+  if (role === "reception") return "Recepção";
+  return "Barbeiro";
+}
+
+export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
+  const isOwner = role === "owner";
+  const isReception = role === "reception";
 
   const initials = userName
     .split(" ")
@@ -98,10 +108,10 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
 
   function renderItems(items: NavItem[]) {
     return items
-      .filter((item) => !item.ownerOnly || isOwner)
+      .filter((item) => !item.roles || item.roles.includes(role))
       .map((item) => {
         const label =
-          !isOwner && item.barberTitle ? item.barberTitle : item.title;
+          role === "barber" && item.barberTitle ? item.barberTitle : item.title;
         return (
           <SidebarMenuItem key={item.url}>
             <SidebarMenuButton
@@ -195,18 +205,20 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                 </SidebarMenuItem>
               )}
 
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Página de agendamento">
-                  <a
-                    href={BOOKING_PATH}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <ExternalLink />
-                    <span>Página de agendamento</span>
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {!isReception ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild tooltip="Página de agendamento">
+                    <a
+                      href={BOOKING_PATH}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink />
+                      <span>Página de agendamento</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -227,7 +239,7 @@ export function AppSidebar({ isOwner, userName, userEmail }: AppSidebarProps) {
                   className="truncate text-xs text-sidebar-foreground/50"
                   title={userEmail}
                 >
-                  {isOwner ? "Dono" : "Barbeiro"}
+                  {roleLabel(role)}
                 </span>
               </div>
             </div>

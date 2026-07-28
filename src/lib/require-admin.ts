@@ -7,12 +7,21 @@ import {
   type ProfessionalPermissions,
 } from "@/lib/professional-permissions";
 
+export type AdminRole = "owner" | "barber" | "reception";
+
 export type AdminSession = {
   userId: string;
+  role: AdminRole;
   isOwner: boolean;
+  isReception: boolean;
   professionalId: string | null;
   permissions: ProfessionalPermissions;
 };
+
+/** Dono e recepção veem/operam a agenda de todos os barbeiros. */
+export function canViewAllAgendas(session: AdminSession): boolean {
+  return session.isOwner || session.isReception;
+}
 
 export async function getAdminSession(): Promise<AdminSession | null> {
   if (!isSupabaseConfigured()) return null;
@@ -32,15 +41,34 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     .eq("id", user.id)
     .single();
 
-  if (!profile || (profile.role !== "owner" && profile.role !== "barber")) {
+  if (
+    !profile ||
+    (profile.role !== "owner" &&
+      profile.role !== "barber" &&
+      profile.role !== "reception")
+  ) {
     return null;
   }
 
   if (profile.role === "owner") {
     return {
       userId: user.id,
+      role: "owner",
       isOwner: true,
+      isReception: false,
       professionalId: null,
+      permissions: OWNER_PERMISSIONS,
+    };
+  }
+
+  if (profile.role === "reception") {
+    return {
+      userId: user.id,
+      role: "reception",
+      isOwner: false,
+      isReception: true,
+      professionalId: null,
+      // Dia a dia completo na agenda/comanda; financeiro e cadastros ficam no isOwner.
       permissions: OWNER_PERMISSIONS,
     };
   }
@@ -55,7 +83,9 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
   return {
     userId: user.id,
+    role: "barber",
     isOwner: false,
+    isReception: false,
     professionalId: pro?.id ?? null,
     permissions: mapProfessionalPermissionsRow(pro),
   };

@@ -49,6 +49,8 @@ type AgendaViewProps = {
   date: string;
   today: string;
   isOwner: boolean;
+  /** Dono ou recepção: vê e opera a agenda de todos. */
+  canViewAllAgendas?: boolean;
   professionalId: string | null;
   permissions: ProfessionalPermissions;
   dayContext: AgendaDayContext;
@@ -367,6 +369,7 @@ export function AgendaView({
   date,
   today,
   isOwner,
+  canViewAllAgendas = isOwner,
   professionalId,
   permissions,
   dayContext,
@@ -497,7 +500,7 @@ export function AgendaView({
   const canBookBase =
     professionals.length > 0 &&
     services.length > 0 &&
-    (isOwner || professionalId !== null);
+    (canViewAllAgendas || professionalId !== null);
   const canBookNormal = canBookBase && permissions.canBookClients;
   const canBookEncaixe = canBookBase && permissions.canCreateSqueezeIn;
 
@@ -649,7 +652,7 @@ export function AgendaView({
     setBookingProfessionalId(
       proId !== undefined
         ? proId
-        : isOwner
+        : canViewAllAgendas
           ? null
           : (professionalId ?? professionals[0]?.id ?? null)
     );
@@ -721,7 +724,7 @@ export function AgendaView({
     displayDate,
     today,
     isNavigating,
-    isOwner,
+    isOwner: canViewAllAgendas,
     professionalId,
     canManageScheduleBlocks: permissions.canManageScheduleBlocks,
     slotStepMinutes: dayContext.slotStepMinutes,
@@ -754,7 +757,7 @@ export function AgendaView({
   const mainContentProps = {
     dayContext,
     appointments: localAppointments,
-    isOwner,
+    isOwner: canViewAllAgendas,
     canBookClients: permissions.canBookClients,
     canEditAppointments: permissions.canEditAppointments,
     sessionProfessionalId: professionalId,
@@ -901,7 +904,7 @@ export function AgendaView({
         date={date}
         professionals={professionals}
         services={services}
-        isOwner={isOwner}
+        isOwner={canViewAllAgendas}
         mode={bookingMode}
         defaultProfessionalId={bookingProfessionalId}
         defaultStartTime={bookingStartTime}
@@ -923,7 +926,7 @@ export function AgendaView({
           setActionsOpen(open);
           if (!open) setSelectedServiceIndex(null);
         }}
-        isOwner={isOwner}
+        isOwner={canViewAllAgendas}
         permissions={permissions}
         sessionProfessionalId={professionalId}
         confirmationWhatsappMessage={confirmationWhatsappMessage}
@@ -953,6 +956,7 @@ export function AgendaView({
         slotStepMinutes={dayContext.slotStepMinutes}
         appointments={localAppointments}
         isOwnerHint={isOwner}
+        canManageAllAgendasHint={canViewAllAgendas}
         initialCashRegisterOpen={
           Boolean(
             cashRegister?.openCashRegister &&
@@ -973,7 +977,7 @@ export function AgendaView({
           commissionPercent: p.commissionPercent,
         }))}
         onEditSchedule={
-          isOwner && selectedAppointment
+          canViewAllAgendas && selectedAppointment
             ? () => {
                 setComandaOpen(false);
                 handleEditAppointment();
@@ -988,7 +992,7 @@ export function AgendaView({
         onOpenChange={setEditOpen}
         professionals={professionals}
         services={services}
-        isOwner={isOwner}
+        isOwner={canViewAllAgendas}
         slotStepMinutes={dayContext.slotStepMinutes}
         appointments={localAppointments}
         professionalSchedules={dayContext.professionals.map((p) => ({

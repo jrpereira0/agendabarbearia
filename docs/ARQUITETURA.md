@@ -57,7 +57,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 
 | Tabela | Função |
 | --- | --- |
-| `profiles` | Usuários do painel (papel: `owner` ou `barber`) |
+| `profiles` | Usuários do painel (papel: `owner`, `barber` ou `reception`) |
 | `professionals` | Barbeiros: nome, sobrenome, apelido, WhatsApp, e-mail, Instagram, foto, ponto focal (`photo_position`), **% comissão** |
 | `services` | Serviços: nome, foto, ponto focal (`photo_position`), preço mínimo de referência (centavos), duração (minutos) |
 | `service_weekday_prices` | Preço do serviço por dia da semana (0=dom … 6=sáb); só existem linhas nos dias oferecidos. Leitura pública (catálogo e site); policies de escrita só para o dono (migration `0031`) |
@@ -93,7 +93,8 @@ Regras importantes no banco:
 
 ## Papéis e permissões
 
-- **Dono (`owner`)**: vê e gerencia tudo (profissionais, serviços, horários, agendamentos)
+- **Dono (`owner`)**: vê e gerencia tudo (profissionais, serviços, horários, agendamentos). Em **Configurações → Recepção** cria logins de recepção
+- **Recepção (`reception`)**: vê a agenda de **todos** os barbeiros, marca/edita/cancela horários e opera comandas; **não** acessa comissões, faturamento, produtos, profissionais nem configurações. Em **Minha conta** só troca a senha
 - **Barbeiro (`barber`)**: entra com e-mail/senha criados pelo dono; vê a própria agenda e **Minhas comissões** (`/admin/financeiro/comissoes`) — só os dados dele, sem ver outros barbeiros nem o financeiro geral. Em **Minha conta** (`/admin/minha-conta`) consulta a grade e altera a senha. Páginas só do dono redirecionam para a agenda ou para Minha conta (`/admin/configuracoes` → Minha conta)
 - O painel admin (`/admin`) usa `noindex` para não aparecer em buscadores
 

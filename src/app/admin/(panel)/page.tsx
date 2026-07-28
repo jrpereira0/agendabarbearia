@@ -19,7 +19,7 @@ import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options"
 import { formatTime } from "@/lib/format";
 import { capitalizePersonName } from "@/lib/text";
 import { normalizeWhatsapp, whatsappLookupKeys } from "@/lib/whatsapp";
-import { getAdminSession } from "@/lib/require-admin";
+import { getAdminSession, canViewAllAgendas } from "@/lib/require-admin";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
 import { AgendaView } from "@/components/admin/agenda-view";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
@@ -50,7 +50,9 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     .eq("active", true)
     .order("nickname");
 
-  const professionalIds = session.isOwner
+  const viewAllAgendas = canViewAllAgendas(session);
+
+  const professionalIds = viewAllAgendas
     ? (allProfessionals ?? []).map((p) => p.id)
     : session.professionalId
       ? [session.professionalId]
@@ -85,7 +87,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     .neq("status", "cancelled")
     .order("start_time");
 
-  if (!session.isOwner && session.professionalId) {
+  if (!viewAllAgendas && session.professionalId) {
     appointmentsQuery = appointmentsQuery.eq(
       "professional_id",
       session.professionalId
@@ -268,6 +270,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       date={date}
       today={today}
       isOwner={session.isOwner}
+      canViewAllAgendas={viewAllAgendas}
       professionalId={session.professionalId}
       permissions={session.permissions}
       dayContext={dayContext}

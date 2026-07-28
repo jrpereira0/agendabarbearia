@@ -11,7 +11,7 @@ import {
   getAvailability,
   validateAdminAppointmentSlot,
 } from "@/lib/get-availability";
-import { requireAdmin, type AdminSession } from "@/lib/require-admin";
+import { requireAdmin, canViewAllAgendas, type AdminSession } from "@/lib/require-admin";
 import type { ActionResult } from "@/lib/require-owner";
 import { assertPermission } from "@/lib/professional-permissions";
 import { upsertCustomer } from "@/lib/upsert-customer";
@@ -119,7 +119,7 @@ async function assertCanManageAppointment(
   }
 
   if (
-    !session.isOwner &&
+    !canViewAllAgendas(session) &&
     appointment.professional_id !== session.professionalId
   ) {
     return { ok: false, error: "Você não pode alterar este agendamento." };
@@ -171,7 +171,7 @@ async function assertOwnsAppointment(
   }
 
   if (
-    !session.isOwner &&
+    !canViewAllAgendas(session) &&
     appointment.professional_id !== session.professionalId
   ) {
     return { ok: false, error: "Você não pode alterar este agendamento." };
@@ -279,7 +279,7 @@ async function validateCreateInput(
   session: AdminSession
 ): Promise<ActionResult | { durationMinutes: number }> {
   if (
-    !session.isOwner &&
+    !canViewAllAgendas(session) &&
     input.professionalId !== session.professionalId
   ) {
     return { ok: false, error: "Você só pode agendar na sua própria agenda." };
@@ -391,7 +391,7 @@ export async function createNormalAppointment(input: {
   );
   if (pastError) return pastError;
 
-  if (session.isOwner) {
+  if (canViewAllAgendas(session)) {
     const slotCheck = await validateAdminAppointmentSlot(
       parsed.data.professionalId,
       parsed.data.date,
@@ -555,13 +555,13 @@ export async function updateAppointment(input: {
       parsed.data.startTime,
       validated.durationMinutes,
       parsed.data.appointmentId,
-      { skipScheduleBlocks: session.isOwner }
+      { skipScheduleBlocks: canViewAllAgendas(session) }
     );
 
     if (!slotCheck.ok) {
       return {
         ok: false,
-        error: session.isOwner
+        error: canViewAllAgendas(session)
           ? OCCUPIED_SLOT_MESSAGE
           : slotCheck.error,
       };
@@ -760,13 +760,13 @@ export async function moveAppointment(input: {
       parsed.data.startTime,
       validated.durationMinutes,
       parsed.data.appointmentId,
-      { skipScheduleBlocks: session.isOwner }
+      { skipScheduleBlocks: canViewAllAgendas(session) }
     );
 
     if (!slotCheck.ok) {
       return {
         ok: false,
-        error: session.isOwner ? OCCUPIED_SLOT_MESSAGE : slotCheck.error,
+        error: canViewAllAgendas(session) ? OCCUPIED_SLOT_MESSAGE : slotCheck.error,
       };
     }
   }
@@ -853,7 +853,7 @@ export async function createScheduleBlock(input: {
   }
 
   if (
-    !session.isOwner &&
+    !canViewAllAgendas(session) &&
     parsed.data.professionalId !== session.professionalId
   ) {
     return { ok: false, error: "Você só pode bloquear a sua própria agenda." };
@@ -915,7 +915,7 @@ export async function deleteScheduleBlock(
     return { ok: false, error: "Bloqueio não encontrado." };
   }
 
-  if (!session.isOwner && block.professional_id !== session.professionalId) {
+  if (!canViewAllAgendas(session) && block.professional_id !== session.professionalId) {
     return { ok: false, error: "Você não pode remover este bloqueio." };
   }
 
@@ -1497,8 +1497,10 @@ export async function updateAppointmentStatus(
   const result = await applyAppointmentStatusUpdate({
     appointmentId,
     status: parsed.data,
-    asOwner: session.isOwner,
-    restrictToProfessionalId: session.isOwner ? null : session.professionalId,
+    asOwner: canViewAllAgendas(session),
+    restrictToProfessionalId: canViewAllAgendas(session)
+      ? null
+      : session.professionalId,
   });
 
   if (!result.ok) {
@@ -1523,7 +1525,7 @@ export async function getEditAvailabilitySlots(input: {
   }
 
   if (
-    !session.isOwner &&
+    !canViewAllAgendas(session) &&
     input.professionalId !== session.professionalId
   ) {
     return {
@@ -1539,7 +1541,7 @@ export async function getEditAvailabilitySlots(input: {
     input.excludeAppointmentId,
     {
       adminEdit: true,
-      ownerFreeSchedule: session.isOwner,
+      ownerFreeSchedule: canViewAllAgendas(session),
     }
   );
 

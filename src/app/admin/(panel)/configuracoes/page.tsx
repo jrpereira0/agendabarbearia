@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { BusinessDay } from "@/components/admin/business-hours-form";
 import type { ExceptionItem } from "@/components/admin/exceptions-card";
 import { DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE } from "@/lib/confirmation-message";
+import { loadReceptionStaffForSettings } from "@/app/admin/(panel)/configuracoes/reception-actions";
 
 export const metadata = { title: "Configurações" };
 
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
     { data: professionals },
     { data: exceptions },
     { data: settings },
+    receptionStaff,
   ] = await Promise.all([
     supabase.from("business_hours").select("*").order("weekday"),
     supabase
@@ -37,6 +39,7 @@ export default async function SettingsPage() {
       .gte("date", today)
       .order("date"),
     supabase.from("shop_settings").select("*").single(),
+    loadReceptionStaffForSettings(),
   ]);
 
   const businessDays: BusinessDay[] = (businessHours ?? []).map((b) => ({
@@ -68,7 +71,7 @@ export default async function SettingsPage() {
         <PageHeader
           tone="dark"
           title="Configurações"
-          description="Perfil, horários, dias especiais, mensagens e integrações da barbearia."
+          description="Perfil, horários, dias especiais, recepção, mensagens e integrações da barbearia."
         />
 
         <SettingsView
@@ -101,6 +104,7 @@ export default async function SettingsPage() {
           confirmationWhatsappEnabled={
             settings?.confirmation_whatsapp_enabled ?? true
           }
+          receptionStaff={receptionStaff}
         />
       </div>
     </div>
