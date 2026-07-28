@@ -623,6 +623,13 @@ export function AgendaView({
     }
   }
 
+  function handleAppointmentUpdated(appointment: AppointmentItem) {
+    setLocalAppointments((prev) =>
+      prev.map((apt) => (apt.id === appointment.id ? appointment : apt))
+    );
+    setSelectedAppointment(appointment);
+  }
+
   // A transição do `router.refresh()` terminou → desliga o indicador de "atualizando".
   if (!isPending && isRefreshing) {
     setIsRefreshing(false);
@@ -988,6 +995,7 @@ export function AgendaView({
           id: p.id,
           availableRanges: p.availableRanges,
         }))}
+        onUpdated={handleAppointmentUpdated}
       />
 
       {isOwner && cashRegister && (

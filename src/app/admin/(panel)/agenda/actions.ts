@@ -38,7 +38,7 @@ import { scheduleAppointmentCreatedNotify } from "@/lib/notifications/appointmen
 import { scheduleAppointmentCancelledNotify } from "@/lib/notifications/appointment-cancelled-webhook";
 import {
   captureAppointmentUpdateSnapshot,
-  notifyAppointmentUpdated,
+  scheduleAppointmentUpdatedNotify,
 } from "@/lib/notifications/appointment-updated-webhook";
 import {
   appointmentServiceRowsFromIds,
@@ -648,26 +648,15 @@ export async function updateAppointment(input: {
     });
   }
 
-  const appointmentId = parsed.data.appointmentId;
-  const updateSource = existing.is_squeeze_in
-    ? "admin_squeeze_update"
-    : "admin_update";
-  const snapshot = previousSnapshot;
-
-  // Aguardar aviso ao cliente (caixa do app + push). Não usar after():
-  // no Vercel o callback pode morrer antes de gravar a notificação.
-  if (snapshot) {
-    try {
-      await notifyAppointmentUpdated(appointmentId, updateSource, snapshot);
-    } catch (webhookError) {
-      console.error("[appointment-updated-webhook] erro ao enviar webhook:", {
-        appointmentId,
-        error: webhookError,
-      });
-    }
+  if (previousSnapshot) {
+    scheduleAppointmentUpdatedNotify(
+      parsed.data.appointmentId,
+      existing.is_squeeze_in ? "admin_squeeze_update" : "admin_update",
+      previousSnapshot
+    );
   }
 
-  revalidatePath("/admin");
+  revalidateAdminAgendaSoon();
   return { ok: true };
 }
 
@@ -826,18 +815,11 @@ export async function moveAppointment(input: {
   }
 
   if (previousSnapshot) {
-    try {
-      await notifyAppointmentUpdated(
-        parsed.data.appointmentId,
-        existing.is_squeeze_in ? "admin_squeeze_update" : "admin_update",
-        previousSnapshot
-      );
-    } catch (webhookError) {
-      console.error("[moveAppointment] erro ao notificar cliente:", {
-        appointmentId: parsed.data.appointmentId,
-        error: webhookError,
-      });
-    }
+    scheduleAppointmentUpdatedNotify(
+      parsed.data.appointmentId,
+      existing.is_squeeze_in ? "admin_squeeze_update" : "admin_update",
+      previousSnapshot
+    );
   }
 
   revalidateAdminAndPublicAgendaSoon();
@@ -1279,18 +1261,10 @@ export async function cancelAppointmentService(input: {
   }
 
   if (snapshot) {
-    try {
-      await notifyAppointmentUpdated(appointmentId, "admin_update", snapshot);
-    } catch (error) {
-      console.error(
-        "[admin-appointment-cancel-service] erro ao enviar webhook:",
-        { appointmentId, error }
-      );
-    }
+    scheduleAppointmentUpdatedNotify(appointmentId, "admin_update", snapshot);
   }
-  revalidatePath("/admin");
-  revalidatePath("/agenda");
 
+  revalidateAdminAndPublicAgendaSoon();
   return { ok: true };
 }
 
@@ -1494,18 +1468,11 @@ export async function moveAppointmentToDate(input: {
   }
 
   if (previousSnapshot) {
-    try {
-      await notifyAppointmentUpdated(
-        parsed.data.appointmentId,
-        "admin_update",
-        previousSnapshot
-      );
-    } catch (webhookError) {
-      console.error("[moveAppointmentToDate] erro ao notificar cliente:", {
-        appointmentId: parsed.data.appointmentId,
-        error: webhookError,
-      });
-    }
+    scheduleAppointmentUpdatedNotify(
+      parsed.data.appointmentId,
+      "admin_update",
+      previousSnapshot
+    );
   }
 
   revalidateAdminAgendaSoon();

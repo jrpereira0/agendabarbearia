@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, X } from "lucide-react";
 import {
@@ -33,7 +32,7 @@ import {
   formatWhatsapp,
 } from "@/lib/format";
 import type { MinuteRange } from "@/lib/availability";
-import { timeToMinutes } from "@/lib/availability";
+import { timeToMinutes, minutesToTime } from "@/lib/availability";
 import {
   encaixeTimeSlots,
   findAppointmentConflicts,
@@ -60,6 +59,8 @@ type EditAppointmentDialogProps = {
   slotStepMinutes: number;
   appointments: AppointmentItem[];
   professionalSchedules: { id: string; availableRanges: MinuteRange[] }[];
+  /** Atualiza o card na grade na hora (sem esperar refresh). */
+  onUpdated?: (appointment: AppointmentItem) => void;
 };
 
 function stepOrder(isOwner: boolean): Step[] {
@@ -105,8 +106,8 @@ export function EditAppointmentDialog({
   slotStepMinutes,
   appointments,
   professionalSchedules,
+  onUpdated,
 }: EditAppointmentDialogProps) {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("services");
   const [professionalId, setProfessionalId] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -446,7 +447,27 @@ export function EditAppointmentDialog({
       toast.success("Agendamento atualizado.");
       setSaving(false);
       onOpenChange(false);
-      router.refresh();
+
+      const professional = professionals.find((p) => p.id === professionalId);
+      if (professional && startTime) {
+        const endMinutes = timeToMinutes(startTime) + totalMinutes;
+        onUpdated?.({
+          ...appointment,
+          professionalId,
+          professionalNickname: professional.nickname,
+          customerFirstName: firstName.trim(),
+          customerLastName: lastName.trim(),
+          customerWhatsapp: whatsapp.replace(/\D/g, ""),
+          startTime,
+          endTime: minutesToTime(endMinutes),
+          services: selectedServices.map((s) => ({
+            id: s.id,
+            name: s.name,
+            durationMinutes: s.durationMinutes,
+            priceCents: s.priceCents,
+          })),
+        });
+      }
     } else {
       toast.error(result.error);
       setSaving(false);

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatPriceBRL } from "@/lib/format";
 import {
@@ -257,6 +258,20 @@ async function buildPayload(
       name: base.shopName,
     },
   };
+}
+
+/**
+ * Agenda aviso de alteração em segundo plano (igual à criação).
+ * Preferir isto no painel pra não segurar o "salvo" na tela.
+ */
+export function scheduleAppointmentUpdatedNotify(
+  appointmentId: string,
+  source: AppointmentUpdatedSource,
+  previousSnapshot: AppointmentUpdateSnapshot
+): void {
+  after(() => {
+    void notifyAppointmentUpdated(appointmentId, source, previousSnapshot);
+  });
 }
 
 /**
