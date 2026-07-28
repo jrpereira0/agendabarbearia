@@ -79,20 +79,20 @@ function rejectPastBookingForBarber(
   date: string,
   startTime: string
 ): ActionResult | null {
-  if (session.isOwner) return null;
+  if (canViewAllAgendas(session)) return null;
 
   const today = todayInTimezone();
   if (date < today) {
     return {
       ok: false,
-      error: "Só o dono pode agendar em datas passadas.",
+      error: "Só o dono ou a recepção podem agendar em datas passadas.",
     };
   }
 
   if (date === today && timeToMinutes(startTime) < nowMinutesInTimezone()) {
     return {
       ok: false,
-      error: "Só o dono pode agendar em horários que já passaram.",
+      error: "Só o dono ou a recepção podem agendar em horários que já passaram.",
     };
   }
 
