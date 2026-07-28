@@ -15,6 +15,7 @@ import {
   ExceptionsCard,
   type ExceptionItem,
 } from "@/components/admin/exceptions-card";
+import { ConfirmationMessageForm } from "@/components/admin/confirmation-message-form";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ type SettingsViewProps = {
   slotStepMinutes: number;
   exceptions: ExceptionItem[];
   professionals: { id: string; nickname: string }[];
+  confirmationWhatsappMessage: string;
 };
 
 export function SettingsView({
@@ -32,6 +34,7 @@ export function SettingsView({
   slotStepMinutes,
   exceptions,
   professionals,
+  confirmationWhatsappMessage,
 }: SettingsViewProps) {
   return (
     <Tabs defaultValue="perfil" className="flex w-full flex-col gap-4">
@@ -50,6 +53,9 @@ export function SettingsView({
                 ({exceptions.length})
               </span>
             ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="mensagens" className="flex-none px-3">
+            Mensagens
           </TabsTrigger>
           <TabsTrigger value="integracoes" className="flex-none px-3">
             Integrações
@@ -72,6 +78,13 @@ export function SettingsView({
         <ExceptionsCard
           exceptions={exceptions}
           professionals={professionals}
+        />
+      </TabsContent>
+
+      <TabsContent value="mensagens" className="mt-0">
+        <ConfirmationMessageForm
+          initialMessage={confirmationWhatsappMessage}
+          shopName={profile.shopName}
         />
       </TabsContent>
 

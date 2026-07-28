@@ -243,3 +243,40 @@ export async function saveShopProfile(formData: FormData): Promise<ActionResult>
   revalidatePath(BOOKING_PATH);
   return { ok: true };
 }
+
+// ------------------------------------------------------------
+// Mensagem de confirmação no WhatsApp
+// ------------------------------------------------------------
+const confirmationMessageSchema = z
+  .string()
+  .trim()
+  .min(1, "Escreva a mensagem de confirmação.")
+  .max(2000, "A mensagem pode ter no máximo 2000 caracteres.");
+
+export async function saveConfirmationWhatsappMessage(
+  message: string
+): Promise<ActionResult> {
+  const denied = await requireOwner();
+  if (denied) return denied;
+
+  const parsed = confirmationMessageSchema.safeParse(message);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { error } = await admin
+    .from("shop_settings")
+    .update({ confirmation_whatsapp_message: parsed.data })
+    .eq("id", 1);
+
+  if (error) {
+    return { ok: false, error: `Erro ao salvar: ${error.message}` };
+  }
+
+  revalidatePath(SETTINGS_PATH);
+  revalidatePath("/admin");
+  return { ok: true };
+}

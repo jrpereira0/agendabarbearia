@@ -27,6 +27,7 @@ import type { ProductOption } from "@/lib/product-types";
 import type { CashRegisterResponsibleOption } from "@/components/admin/open-cash-register-dialog";
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import type { CashRegisterSummary } from "@/lib/finance-reports";
+import { DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE } from "@/lib/confirmation-message";
 
 type PageProps = {
   searchParams: Promise<{ date?: string }>;
@@ -91,7 +92,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     );
   }
 
-  const [dayContext, { data: services }, { data: products }, { data: rawAppointments }, pricingContext, bookingCounts] =
+  const [dayContext, { data: services }, { data: products }, { data: rawAppointments }, pricingContext, bookingCounts, { data: shopSettings }] =
     await Promise.all([
       getAgendaDayContext(date, professionalIds),
       supabase
@@ -109,6 +110,11 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       appointmentsQuery,
       loadServicePricingContext(supabase, date),
       loadServiceBookingCounts(),
+      supabase
+        .from("shop_settings")
+        .select("shop_name, confirmation_whatsapp_message")
+        .eq("id", 1)
+        .maybeSingle(),
     ]);
 
   let cashRegister:
@@ -271,6 +277,12 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
       )}
       productsCatalog={productsCatalog}
       cashRegister={cashRegister}
+      shopName={shopSettings?.shop_name ?? ""}
+      confirmationWhatsappMessage={
+        shopSettings?.confirmation_whatsapp_message?.trim()
+          ? shopSettings.confirmation_whatsapp_message
+          : DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE
+      }
     />
   );
 }

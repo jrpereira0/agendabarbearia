@@ -56,6 +56,9 @@ type AgendaViewProps = {
   services: ServiceOption[];
   productsCatalog?: ProductOption[];
   cashRegister?: AgendaCashRegisterData;
+  /** Modelo da mensagem de confirmação (Configurações → Mensagens). */
+  confirmationWhatsappMessage?: string;
+  shopName?: string;
 };
 
 function AgendaNavProgress() {
@@ -370,6 +373,8 @@ export function AgendaView({
   services,
   productsCatalog = [],
   cashRegister,
+  confirmationWhatsappMessage,
+  shopName = "",
 }: AgendaViewProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -912,6 +917,8 @@ export function AgendaView({
         isOwner={isOwner}
         permissions={permissions}
         sessionProfessionalId={professionalId}
+        confirmationWhatsappMessage={confirmationWhatsappMessage}
+        shopName={shopName}
         onOpenComanda={handleOpenComanda}
         onEditAppointment={() => handleEditAppointment()}
         onCancelled={handleAppointmentCancelled}

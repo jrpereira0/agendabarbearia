@@ -7,6 +7,7 @@ import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 import type { BusinessDay } from "@/components/admin/business-hours-form";
 import type { ExceptionItem } from "@/components/admin/exceptions-card";
+import { DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE } from "@/lib/confirmation-message";
 
 export const metadata = { title: "Configurações" };
 
@@ -67,7 +68,7 @@ export default async function SettingsPage() {
         <PageHeader
           tone="dark"
           title="Configurações"
-          description="Perfil, horários, dias especiais e integrações da barbearia."
+          description="Perfil, horários, dias especiais, mensagens e integrações da barbearia."
         />
 
         <SettingsView
@@ -92,6 +93,11 @@ export default async function SettingsPage() {
             id: p.id,
             nickname: p.nickname,
           }))}
+          confirmationWhatsappMessage={
+            settings?.confirmation_whatsapp_message?.trim()
+              ? settings.confirmation_whatsapp_message
+              : DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE
+          }
         />
       </div>
     </div>

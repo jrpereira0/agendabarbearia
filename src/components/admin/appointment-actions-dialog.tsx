@@ -47,6 +47,10 @@ import {
   formatTime,
   formatWhatsapp,
 } from "@/lib/format";
+import {
+  buildConfirmationWhatsappUrl,
+  DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE,
+} from "@/lib/confirmation-message";
 import { cn } from "@/lib/utils";
 import type { ProfessionalPermissions } from "@/lib/professional-permissions";
 
@@ -61,6 +65,10 @@ type AppointmentActionsDialogProps = {
   onEditAppointment: () => void;
   /** Índice do serviço do card clicado (quando há vários no mesmo horário). */
   focusedServiceIndex?: number | null;
+  /** Modelo da mensagem de confirmação (com tags). */
+  confirmationWhatsappMessage?: string;
+  /** Nome da loja pra tag {{loja}}. */
+  shopName?: string;
   /** Remove o card da grade na hora (cancelamento completo). */
   onCancelled?: (appointmentId: string) => void;
   /** Atualiza o card na hora ao cancelar só um serviço. */
@@ -105,6 +113,8 @@ export function AppointmentActionsDialog({
   onOpenComanda,
   onEditAppointment,
   focusedServiceIndex = null,
+  confirmationWhatsappMessage = DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE,
+  shopName = "",
   onCancelled,
   onServiceRemoved,
 }: AppointmentActionsDialogProps) {
@@ -210,7 +220,20 @@ export function AppointmentActionsDialog({
         (sum, service) => sum + service.durationMinutes,
         0
       );
-  const whatsappLink = `https://wa.me/55${appointment.customerWhatsapp}`;
+  const whatsappLink =
+    buildConfirmationWhatsappUrl(
+      appointment.customerWhatsapp,
+      confirmationWhatsappMessage || DEFAULT_CONFIRMATION_WHATSAPP_MESSAGE,
+      {
+        customerFirstName: appointment.customerFirstName,
+        customerLastName: appointment.customerLastName,
+        professionalNickname: appointment.professionalNickname,
+        date: appointment.date,
+        startTime: appointment.startTime,
+        serviceNames: appointment.services.map((service) => service.name),
+        shopName,
+      }
+    ) ?? `https://wa.me/${appointment.customerWhatsapp.replace(/\D/g, "")}`;
   const customerName = `${appointment.customerFirstName} ${appointment.customerLastName}`;
   const serviceNames = cancelOnlyFocusedService
     ? focusedService!.name
@@ -407,7 +430,7 @@ export function AppointmentActionsDialog({
                     rel="noopener noreferrer"
                   >
                     <MessageCircle className="size-3.5" />
-                    Abrir WhatsApp
+                    Confirmar no WhatsApp
                   </a>
                 </Button>
                 {customerId ? (
