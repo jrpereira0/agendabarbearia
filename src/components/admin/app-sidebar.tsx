@@ -60,10 +60,30 @@ const dayToDayItems = [
 ];
 
 const managementItems = [
-  { title: "Profissionais", url: "/admin/profissionais", icon: Users },
-  { title: "Serviços", url: "/admin/servicos", icon: Scissors },
-  { title: "Produtos", url: "/admin/produtos", icon: Package },
-  { title: "Clientes", url: "/admin/clientes", icon: Contact },
+  {
+    title: "Profissionais",
+    url: "/admin/profissionais",
+    icon: Users,
+    roles: ["owner"] as AdminRole[],
+  },
+  {
+    title: "Serviços",
+    url: "/admin/servicos",
+    icon: Scissors,
+    roles: ["owner"] as AdminRole[],
+  },
+  {
+    title: "Produtos",
+    url: "/admin/produtos",
+    icon: Package,
+    roles: ["owner"] as AdminRole[],
+  },
+  {
+    title: "Clientes",
+    url: "/admin/clientes",
+    icon: Contact,
+    roles: ["owner", "reception"] as AdminRole[],
+  },
 ];
 
 type NavItem = {
@@ -162,7 +182,7 @@ export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isOwner ? (
+        {isOwner || isReception ? (
           <SidebarGroup>
             <SidebarGroupLabel>Gerenciamento</SidebarGroupLabel>
             <SidebarGroupContent>

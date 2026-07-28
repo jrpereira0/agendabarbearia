@@ -25,6 +25,7 @@ type CustomerDetailTabsProps = {
   comandas: CustomerComandaHistoryItem[];
   creditTransactions: CustomerCreditHistoryItem[];
   onSubmit: (formData: FormData) => Promise<ActionResult>;
+  canManageCredit?: boolean;
 };
 
 export function CustomerDetailTabs({
@@ -37,6 +38,7 @@ export function CustomerDetailTabs({
   comandas,
   creditTransactions,
   onSubmit,
+  canManageCredit = true,
 }: CustomerDetailTabsProps) {
   const completedAppointments = appointments.filter(
     (appointment) => appointment.status === "done"
@@ -82,6 +84,7 @@ export function CustomerDetailTabs({
           creditBalanceCents={creditBalanceCents}
           comandas={comandas}
           creditTransactions={creditTransactions}
+          canManageCredit={canManageCredit}
         />
       </TabsContent>
     </Tabs>

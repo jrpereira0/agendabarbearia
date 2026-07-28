@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Contact, Plus } from "lucide-react";
 import { requireServerClient } from "@/lib/supabase/server";
-import { assertOwnerPage } from "@/lib/require-owner";
+import { assertCustomerManagerPage } from "@/lib/require-owner";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
@@ -57,7 +57,7 @@ function mapCustomer(c: {
 }
 
 export default async function CustomersPage() {
-  await assertOwnerPage();
+  const session = await assertCustomerManagerPage();
 
   const supabase = await requireServerClient();
 
@@ -120,7 +120,10 @@ export default async function CustomersPage() {
             }
           />
         ) : (
-          <CustomersList items={list} />
+          <CustomersList
+            items={list}
+            canDeleteCustomers={session.isOwner}
+          />
         )}
       </div>
     </div>

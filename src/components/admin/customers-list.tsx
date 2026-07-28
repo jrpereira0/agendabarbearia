@@ -29,7 +29,13 @@ import { cn } from "@/lib/utils";
 
 const SUGGESTION_LIMIT = 8;
 
-export function CustomersList({ items }: { items: CustomerListItem[] }) {
+export function CustomersList({
+  items,
+  canDeleteCustomers = true,
+}: {
+  items: CustomerListItem[];
+  canDeleteCustomers?: boolean;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<CatalogFilter>("all");
@@ -207,6 +213,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
                   key={customer.id}
                   customer={customer}
                   tone="dark"
+                  canDeleteCustomers={canDeleteCustomers}
                 />
               ))}
             </CatalogTableBody>
@@ -220,6 +227,7 @@ export function CustomersList({ items }: { items: CustomerListItem[] }) {
                     customer={customer}
                     tone="dark"
                     embedded
+                    canDeleteCustomers={canDeleteCustomers}
                   />
                 </li>
               ))}

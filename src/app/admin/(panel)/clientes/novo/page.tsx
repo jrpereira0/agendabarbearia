@@ -1,4 +1,4 @@
-import { assertOwnerPage } from "@/lib/require-owner";
+import { assertCustomerManagerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { CustomerForm } from "@/components/admin/customer-form";
@@ -9,7 +9,7 @@ import { createCustomer } from "../actions";
 export const metadata = { title: "Novo cliente" };
 
 export default async function NewCustomerPage() {
-  await assertOwnerPage();
+  await assertCustomerManagerPage();
 
   return (
     <div

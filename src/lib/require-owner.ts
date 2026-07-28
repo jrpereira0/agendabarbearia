@@ -2,6 +2,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { LOGIN_PATH, loginUrl } from "@/lib/login-path";
+import {
+  canManageCustomers,
+  getAdminSession,
+  type AdminSession,
+} from "@/lib/require-admin";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -42,6 +47,13 @@ export async function requireOwner(): Promise<ActionResult | null> {
 export async function assertOwnerPage(): Promise<void> {
   const denied = await requireOwner();
   if (denied) redirect("/admin");
+}
+
+/** Dono ou recepção — cadastro de clientes (sem crédito manual). */
+export async function assertCustomerManagerPage(): Promise<AdminSession> {
+  const session = await getAdminSession();
+  if (!session || !canManageCustomers(session)) redirect("/admin");
+  return session;
 }
 
 // Configurações da barbearia: dono entra; barbeiro vai para Minha conta.

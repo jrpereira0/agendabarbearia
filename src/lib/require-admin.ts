@@ -23,6 +23,11 @@ export function canViewAllAgendas(session: AdminSession): boolean {
   return session.isOwner || session.isReception;
 }
 
+/** Dono e recepção cadastram/editam clientes (crédito manual só o dono). */
+export function canManageCustomers(session: AdminSession): boolean {
+  return session.isOwner || session.isReception;
+}
+
 export async function getAdminSession(): Promise<AdminSession | null> {
   if (!isSupabaseConfigured()) return null;
 
@@ -68,7 +73,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
       isOwner: false,
       isReception: true,
       professionalId: null,
-      // Dia a dia completo na agenda/comanda; financeiro e cadastros ficam no isOwner.
+      // Agenda/comanda/clientes no dia a dia; financeiro e cadastros do dono ficam no isOwner.
       permissions: OWNER_PERMISSIONS,
     };
   }

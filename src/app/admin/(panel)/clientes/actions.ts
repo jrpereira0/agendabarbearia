@@ -6,6 +6,11 @@ import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 import {
+  canManageCustomers,
+  requireAdmin,
+  type AdminSession,
+} from "@/lib/require-admin";
+import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
   whatsappSchema,
@@ -13,6 +18,17 @@ import {
 import { addCustomerCredit, deductCustomerCredit } from "@/lib/customer-credit-service";
 import { formatPriceBRL } from "@/lib/format";
 import { capitalizePersonName } from "@/lib/text";
+
+async function requireCustomerManager(): Promise<
+  ActionResult | AdminSession
+> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+  if (!canManageCustomers(session)) {
+    return { ok: false, error: "Você não pode gerenciar clientes." };
+  }
+  return session;
+}
 
 const customerSchema = z.object({
   firstName: z.string().trim().min(1, "Informe o nome."),
@@ -28,8 +44,8 @@ function parsedCustomerNames(data: { firstName: string; lastName: string }) {
 }
 
 export async function createCustomer(formData: FormData): Promise<ActionResult> {
-  const auth = await requireOwner();
-  if (auth) return auth;
+  const session = await requireCustomerManager();
+  if (!("userId" in session)) return session;
 
   const whatsapp = normalizeWhatsapp(String(formData.get("whatsapp") ?? ""));
   if (!whatsapp) {
@@ -75,8 +91,8 @@ export async function updateCustomer(
   customerId: string,
   formData: FormData
 ): Promise<ActionResult> {
-  const auth = await requireOwner();
-  if (auth) return auth;
+  const session = await requireCustomerManager();
+  if (!("userId" in session)) return session;
 
   const whatsapp = normalizeWhatsapp(String(formData.get("whatsapp") ?? ""));
   if (!whatsapp) {

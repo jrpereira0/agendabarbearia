@@ -47,6 +47,7 @@ type CustomerFinancePanelProps = {
   creditBalanceCents: number;
   comandas: CustomerComandaHistoryItem[];
   creditTransactions: CustomerCreditHistoryItem[];
+  canManageCredit?: boolean;
 };
 
 function formatCreditType(
@@ -76,6 +77,7 @@ export function CustomerFinancePanel({
   creditBalanceCents,
   comandas,
   creditTransactions,
+  canManageCredit = true,
 }: CustomerFinancePanelProps) {
   const router = useRouter();
   const [amountInput, setAmountInput] = useState("");
@@ -134,7 +136,11 @@ export function CustomerFinancePanel({
         tone="dark"
         icon={Wallet}
         title="Crédito do cliente"
-        description="Saldo disponível para usar em comandas futuras."
+        description={
+          canManageCredit
+            ? "Saldo disponível para usar em comandas futuras."
+            : "Saldo disponível. Só o dono pode adicionar ou remover crédito."
+        }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
@@ -146,62 +152,72 @@ export function CustomerFinancePanel({
             {formatPriceBRL(creditBalanceCents)}
           </p>
         </div>
-        <Badge
-          variant="secondary"
-          className="border-white/10 bg-white/[0.06] font-normal text-[#b4b6bb]"
-        >
-          Ajuste manual não entra no caixa
-        </Badge>
+        {canManageCredit ? (
+          <Badge
+            variant="secondary"
+            className="border-white/10 bg-white/[0.06] font-normal text-[#b4b6bb]"
+          >
+            Ajuste manual não entra no caixa
+          </Badge>
+        ) : null}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr] sm:items-end">
-        <div className="space-y-1.5">
-          <DarkLabel htmlFor="credit-amount">Valor</DarkLabel>
-          <Input
-            id="credit-amount"
-            className={cn("tabular-nums", ADMIN_SURFACE.input)}
-            placeholder="R$ 0,00"
-            value={amountInput}
-            onChange={(e) =>
-              setAmountInput(formatPriceBRL(parsePriceBRLInput(e.target.value)))
-            }
-            autoComplete="off"
-          />
-        </div>
-        <div className="space-y-1.5">
-          <DarkLabel htmlFor="credit-description">Descrição (opcional)</DarkLabel>
-          <Input
-            id="credit-description"
-            placeholder="Ex.: antecipou próximos cortes"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className={ADMIN_SURFACE.input}
-            autoComplete="off"
-          />
-        </div>
-      </div>
+      {canManageCredit ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr] sm:items-end">
+            <div className="space-y-1.5">
+              <DarkLabel htmlFor="credit-amount">Valor</DarkLabel>
+              <Input
+                id="credit-amount"
+                className={cn("tabular-nums", ADMIN_SURFACE.input)}
+                placeholder="R$ 0,00"
+                value={amountInput}
+                onChange={(e) =>
+                  setAmountInput(
+                    formatPriceBRL(parsePriceBRLInput(e.target.value))
+                  )
+                }
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <DarkLabel htmlFor="credit-description">
+                Descrição (opcional)
+              </DarkLabel>
+              <Input
+                id="credit-description"
+                placeholder="Ex.: antecipou próximos cortes"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className={ADMIN_SURFACE.input}
+                autoComplete="off"
+              />
+            </div>
+          </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          onClick={() => void handleCreditChange("add")}
-          disabled={saving}
-          className={ADMIN_SURFACE.btnPrimary}
-        >
-          <Plus className="size-4" />
-          {saving ? "Salvando..." : "Adicionar"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void handleCreditChange("remove")}
-          disabled={saving || creditBalanceCents <= 0}
-          className={ADMIN_SURFACE.btnGhost}
-        >
-          <Minus className="size-4" />
-          Remover
-        </Button>
-      </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleCreditChange("add")}
+              disabled={saving}
+              className={ADMIN_SURFACE.btnPrimary}
+            >
+              <Plus className="size-4" />
+              {saving ? "Salvando..." : "Adicionar"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void handleCreditChange("remove")}
+              disabled={saving || creditBalanceCents <= 0}
+              className={ADMIN_SURFACE.btnGhost}
+            >
+              <Minus className="size-4" />
+              Remover
+            </Button>
+          </div>
+        </>
+      ) : null}
 
       <Separator className="bg-white/10" />
 

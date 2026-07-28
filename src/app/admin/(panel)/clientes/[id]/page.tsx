@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireServerClient } from "@/lib/supabase/server";
-import { assertOwnerPage } from "@/lib/require-owner";
+import { assertCustomerManagerPage } from "@/lib/require-owner";
 import { PageHeader } from "@/components/admin/page-header";
 import { AdminFormPage } from "@/components/admin/admin-form-layout";
 import { type CustomerAppointment } from "@/components/admin/customer-form";
@@ -23,7 +23,7 @@ export default async function CustomerDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await assertOwnerPage();
+  const session = await assertCustomerManagerPage();
 
   const { id } = await params;
   const supabase = await requireServerClient();
@@ -191,6 +191,7 @@ export default async function CustomerDetailPage({
           comandas={comandaHistory}
           creditTransactions={creditHistory}
           onSubmit={updateWithId}
+          canManageCredit={session.isOwner}
         />
       </AdminFormPage>
     </div>

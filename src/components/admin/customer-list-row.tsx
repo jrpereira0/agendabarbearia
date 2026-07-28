@@ -167,10 +167,12 @@ function CustomerActionsMenu({
   customer,
   onDelete,
   tone = "default",
+  canDeleteCustomers = true,
 }: {
   customer: CustomerListItem;
   onDelete: () => void;
   tone?: Tone;
+  canDeleteCustomers?: boolean;
 }) {
   const router = useRouter();
   const dark = tone === "dark";
@@ -199,7 +201,7 @@ function CustomerActionsMenu({
           <Pencil />
           Ver e editar
         </DropdownMenuItem>
-        {customer.canDelete ? (
+        {canDeleteCustomers && customer.canDelete ? (
           <>
             <DropdownMenuSeparator className={cn(dark && "bg-white/10")} />
             <DropdownMenuItem variant="destructive" onSelect={onDelete}>
@@ -268,9 +270,11 @@ function DeleteCustomerDialog({
 export function CustomerListRow({
   customer,
   tone = "default",
+  canDeleteCustomers = true,
 }: {
   customer: CustomerListItem;
   tone?: Tone;
+  canDeleteCustomers?: boolean;
 }) {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -346,6 +350,7 @@ export function CustomerListRow({
             customer={customer}
             onDelete={() => setConfirmDelete(true)}
             tone={tone}
+            canDeleteCustomers={canDeleteCustomers}
           />
         </td>
       </tr>
@@ -366,10 +371,12 @@ export function CustomerMobileCard({
   customer,
   tone = "default",
   embedded = false,
+  canDeleteCustomers = true,
 }: {
   customer: CustomerListItem;
   tone?: Tone;
   embedded?: boolean;
+  canDeleteCustomers?: boolean;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -448,6 +455,7 @@ export function CustomerMobileCard({
             customer={customer}
             onDelete={() => setConfirmDelete(true)}
             tone={tone}
+            canDeleteCustomers={canDeleteCustomers}
           />
         </div>
       </div>
