@@ -451,13 +451,14 @@ export function NewAppointmentDialog({
     [selectedServices]
   );
 
-  // Reinicia o assistente inteiro sempre que o diálogo abre de novo.
+  // Reinicia o assistente só ao abrir ou mudar a intenção do agendamento
+  // (modo, horário/barbeiro da grade). Não inclui `professionals`: a busca do
+  // cliente dispara soft-refresh da agenda e um array novo reiniciava o passo.
   const [syncedFor, setSyncedFor] = useState({
     open,
     defaultProfessionalId,
     defaultStartTime,
     isOwner,
-    professionals,
     mode,
     isEncaixe,
     presetFromGrid,
@@ -467,7 +468,6 @@ export function NewAppointmentDialog({
     defaultProfessionalId !== syncedFor.defaultProfessionalId ||
     defaultStartTime !== syncedFor.defaultStartTime ||
     isOwner !== syncedFor.isOwner ||
-    professionals !== syncedFor.professionals ||
     mode !== syncedFor.mode ||
     isEncaixe !== syncedFor.isEncaixe ||
     presetFromGrid !== syncedFor.presetFromGrid;
@@ -478,7 +478,6 @@ export function NewAppointmentDialog({
       defaultProfessionalId,
       defaultStartTime,
       isOwner,
-      professionals,
       mode,
       isEncaixe,
       presetFromGrid,
