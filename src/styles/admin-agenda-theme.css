@@ -193,6 +193,55 @@
   outline: none;
 }
 
+/* Arrastar card: pega no card, fantasma no lugar antigo, alvo destacado */
+/* Arraste é de mouse/caneta: no toque o gesto é rolar a agenda */
+@media (pointer: fine) {
+  .admin-agenda .agenda-apt-draggable {
+    cursor: grab;
+  }
+}
+
+.admin-agenda .agenda-apt-dragging,
+.admin-agenda .agenda-apt-dragging:hover {
+  transform: none;
+  filter: none;
+  opacity: 0.35;
+  box-shadow: none;
+}
+
+/* Sem hover/tooltip enquanto arrasta — o alvo é o que importa */
+.admin-agenda .agenda-grid-dragging .agenda-apt-card {
+  pointer-events: none;
+}
+
+body.agenda-card-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.agenda-card-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Tooltip aberto antes do arraste não deve tapar a grade */
+body.agenda-card-dragging .agenda-apt-tooltip {
+  display: none;
+}
+
+.admin-agenda .agenda-drop-preview {
+  border: 1px dashed rgb(236 241 94 / 85%);
+  border-radius: 3px;
+  background: rgb(236 241 94 / 18%);
+  color: #f5f5f5;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 40%);
+}
+
+.admin-agenda .agenda-drop-preview-invalid {
+  border-color: rgb(248 113 113 / 85%);
+  background: rgb(248 113 113 / 20%);
+}
+
 .admin-agenda .agenda-apt-tooltip {
   border: 1px solid rgb(255 255 255 / 12%);
   background: #151618;

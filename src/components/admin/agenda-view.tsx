@@ -25,6 +25,7 @@ import {
   type ProfessionalOption,
   type ServiceOption,
 } from "@/components/admin/new-appointment-dialog";
+import { moveAppointment } from "@/app/admin/(panel)/agenda/actions";
 import { formatAgendaHeaderParts } from "@/lib/agenda-grid-utils";
 import { minutesToTime, timeToMinutes } from "@/lib/availability";
 import { shiftDate } from "@/lib/date-range";
@@ -298,6 +299,9 @@ function AgendaMainContent({
   canBookClients,
   onSlotClick,
   onAppointmentClick,
+  onAppointmentMove,
+  canEditAppointments,
+  sessionProfessionalId,
   mobileLayout = false,
   focusProfessionalId = null,
   date,
@@ -309,6 +313,13 @@ function AgendaMainContent({
   canBookClients: boolean;
   onSlotClick: (proId: string, startTime: string) => void;
   onAppointmentClick: (apt: AppointmentItem, serviceIndex?: number) => void;
+  onAppointmentMove: (
+    apt: AppointmentItem,
+    professionalId: string,
+    startTime: string
+  ) => void;
+  canEditAppointments: boolean;
+  sessionProfessionalId: string | null;
   mobileLayout?: boolean;
   focusProfessionalId?: string | null;
   date: string;
@@ -337,8 +348,11 @@ function AgendaMainContent({
         appointments={appointments}
         isOwner={isOwner}
         canBookClients={canBookClients}
+        canEditAppointments={canEditAppointments}
+        sessionProfessionalId={sessionProfessionalId}
         onSlotClick={onSlotClick}
         onAppointmentClick={onAppointmentClick}
+        onAppointmentMove={onAppointmentMove}
         mobileLayout={mobileLayout}
       />
     </div>
@@ -532,6 +546,76 @@ export function AgendaView({
     );
   }
 
+  /** Arraste na grade: card muda de lugar na hora e o servidor confirma depois. */
+  async function handleAppointmentMove(
+    apt: AppointmentItem,
+    nextProfessionalId: string,
+    nextStartTime: string
+  ) {
+    const durationMinutes =
+      timeToMinutes(apt.endTime) - timeToMinutes(apt.startTime);
+    const nextEndTime = minutesToTime(
+      timeToMinutes(nextStartTime) + durationMinutes
+    );
+    const nextNickname =
+      professionals.find((pro) => pro.id === nextProfessionalId)?.nickname ??
+      apt.professionalNickname;
+    const changedProfessional = nextProfessionalId !== apt.professionalId;
+
+    setLocalAppointments((prev) =>
+      prev.map((row) =>
+        row.id === apt.id
+          ? {
+              ...row,
+              professionalId: nextProfessionalId,
+              professionalNickname: nextNickname,
+              startTime: nextStartTime,
+              endTime: nextEndTime,
+            }
+          : row
+      )
+    );
+
+    function rollback() {
+      setLocalAppointments((prev) =>
+        prev.map((row) =>
+          row.id === apt.id
+            ? {
+                ...row,
+                professionalId: apt.professionalId,
+                professionalNickname: apt.professionalNickname,
+                startTime: apt.startTime,
+                endTime: apt.endTime,
+              }
+            : row
+        )
+      );
+    }
+
+    try {
+      const result = await moveAppointment({
+        appointmentId: apt.id,
+        professionalId: nextProfessionalId,
+        startTime: nextStartTime,
+      });
+
+      if (!result.ok) {
+        rollback();
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(
+        changedProfessional
+          ? `Movido para ${nextStartTime} com ${nextNickname}.`
+          : `Movido para ${nextStartTime}.`
+      );
+    } catch {
+      rollback();
+      toast.error("Não foi possível mover o agendamento.");
+    }
+  }
+
   // A transição do `router.refresh()` terminou → desliga o indicador de "atualizando".
   if (!isPending && isRefreshing) {
     setIsRefreshing(false);
@@ -658,8 +742,15 @@ export function AgendaView({
     appointments: localAppointments,
     isOwner,
     canBookClients: permissions.canBookClients,
+    canEditAppointments: permissions.canEditAppointments,
+    sessionProfessionalId: professionalId,
     onSlotClick: handleSlotClick,
     onAppointmentClick: handleAppointmentClick,
+    onAppointmentMove: (
+      apt: AppointmentItem,
+      nextProfessionalId: string,
+      nextStartTime: string
+    ) => void handleAppointmentMove(apt, nextProfessionalId, nextStartTime),
     date: displayDate,
     today,
   };

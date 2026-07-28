@@ -275,7 +275,7 @@ async function insertAppointment(
 }
 
 async function validateCreateInput(
-  input: z.infer<typeof createSchema>,
+  input: { professionalId: string; date: string; serviceIds: string[] },
   session: AdminSession
 ): Promise<ActionResult | { durationMinutes: number }> {
   if (
@@ -668,6 +668,179 @@ export async function updateAppointment(input: {
   }
 
   revalidatePath("/admin");
+  return { ok: true };
+}
+
+const moveSchema = z.object({
+  appointmentId: z.uuid(),
+  professionalId: z.uuid(),
+  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+
+/**
+ * Arraste do card na grade: troca barbeiro e/ou horário mantendo cliente,
+ * serviços e duração. Mais leve que `updateAppointment` porque não mexe
+ * nos vínculos de serviço nem no cadastro do cliente.
+ */
+export async function moveAppointment(input: {
+  appointmentId: string;
+  professionalId: string;
+  startTime: string;
+}): Promise<ActionResult> {
+  const session = await requireAdmin();
+  if (!("userId" in session)) return session;
+
+  const denied = assertPermission(session, "canEditAppointments");
+  if (denied) return denied;
+
+  const parsed = moveSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0].message };
+  }
+
+  const check = await assertCanManageAppointment(
+    parsed.data.appointmentId,
+    session
+  );
+  if (!("professionalId" in check)) return check;
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return admin;
+
+  const { data: existing } = await admin
+    .from("appointments")
+    .select(
+      `
+      date,
+      start_time,
+      professional_id,
+      is_squeeze_in,
+      is_comanda_extra,
+      appointment_services ( service_id, quantity )
+      `
+    )
+    .eq("id", parsed.data.appointmentId)
+    .maybeSingle();
+
+  if (!existing) {
+    return { ok: false, error: "Agendamento não encontrado." };
+  }
+
+  if (existing.is_comanda_extra) {
+    return {
+      ok: false,
+      error: "Serviço extra da comanda não pode ser movido na grade.",
+    };
+  }
+
+  if (
+    existing.professional_id === parsed.data.professionalId &&
+    formatTime(existing.start_time) === parsed.data.startTime
+  ) {
+    return { ok: true };
+  }
+
+  const serviceIds = expandServiceIdsFromRows(
+    existing.appointment_services ?? []
+  );
+  if (serviceIds.length === 0) {
+    return { ok: false, error: "Este agendamento não tem serviços." };
+  }
+
+  const validated = await validateCreateInput(
+    {
+      professionalId: parsed.data.professionalId,
+      date: existing.date,
+      serviceIds,
+    },
+    session
+  );
+  if (!("durationMinutes" in validated)) return validated;
+
+  const pastError = rejectPastBookingForBarber(
+    session,
+    existing.date,
+    parsed.data.startTime
+  );
+  if (pastError) return pastError;
+
+  if (!existing.is_squeeze_in) {
+    const slotCheck = await validateAdminAppointmentSlot(
+      parsed.data.professionalId,
+      existing.date,
+      parsed.data.startTime,
+      validated.durationMinutes,
+      parsed.data.appointmentId,
+      { skipScheduleBlocks: session.isOwner }
+    );
+
+    if (!slotCheck.ok) {
+      return {
+        ok: false,
+        error: session.isOwner ? OCCUPIED_SLOT_MESSAGE : slotCheck.error,
+      };
+    }
+  }
+
+  const endMinutes =
+    timeToMinutes(parsed.data.startTime) + validated.durationMinutes;
+  if (endMinutes > 24 * 60) {
+    return {
+      ok: false,
+      error:
+        "O horário de término passa da meia-noite. Escolha um início mais cedo.",
+    };
+  }
+
+  const previousSnapshot = await captureAppointmentUpdateSnapshot(
+    admin,
+    parsed.data.appointmentId
+  );
+
+  const { error } = await admin
+    .from("appointments")
+    .update({
+      professional_id: parsed.data.professionalId,
+      start_time: parsed.data.startTime,
+      end_time: minutesToTime(endMinutes),
+    })
+    .eq("id", parsed.data.appointmentId);
+
+  if (error) {
+    if (error.code === "23P01") {
+      return { ok: false, error: "Esse horário já está ocupado." };
+    }
+    return { ok: false, error: "Não foi possível mover o agendamento." };
+  }
+
+  try {
+    await syncOpenComandaAfterAppointmentEdit(
+      admin,
+      parsed.data.appointmentId
+    );
+  } catch (syncError) {
+    console.error("[comanda-sync] erro ao alinhar comanda após mover card:", {
+      appointmentId: parsed.data.appointmentId,
+      error: syncError,
+    });
+  }
+
+  if (previousSnapshot) {
+    try {
+      await notifyAppointmentUpdated(
+        parsed.data.appointmentId,
+        existing.is_squeeze_in ? "admin_squeeze_update" : "admin_update",
+        previousSnapshot
+      );
+    } catch (webhookError) {
+      console.error("[moveAppointment] erro ao notificar cliente:", {
+        appointmentId: parsed.data.appointmentId,
+        error: webhookError,
+      });
+    }
+  }
+
+  revalidateAdminAndPublicAgendaSoon();
   return { ok: true };
 }
 

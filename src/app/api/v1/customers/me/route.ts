@@ -155,7 +155,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         let photoUrl: string | undefined;
-        let photoPosition = parsed.photoPosition;
+        const photoPosition = parsed.photoPosition;
 
         if (parsed.photo) {
           const admin = createAdminClient();

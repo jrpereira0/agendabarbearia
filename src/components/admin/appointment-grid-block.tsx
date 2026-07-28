@@ -43,6 +43,11 @@ type AppointmentGridBlockProps = {
   segmentEndTime?: string;
   serviceIndex?: number;
   serviceCount?: number;
+  /** Card pode ser arrastado pra outro horário/barbeiro. */
+  draggable?: boolean;
+  /** Este agendamento é o que está sendo arrastado agora. */
+  isDragging?: boolean;
+  onDragPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void;
   /** Informa o horário sob o mouse enquanto passa pelo bloco. */
   onHoverTime?: (clientY: number, top: number, height: number) => void;
 };
@@ -175,6 +180,9 @@ export function AppointmentGridBlock({
   segmentEndTime,
   serviceIndex = 0,
   serviceCount = 1,
+  draggable = false,
+  isDragging = false,
+  onDragPointerDown,
   onHoverTime,
 }: AppointmentGridBlockProps) {
   const isMobile = useIsMobile();
@@ -222,6 +230,8 @@ export function AppointmentGridBlock({
         "agenda-apt-card relative z-20 my-0.5 flex min-h-0 min-w-0 self-stretch overflow-hidden rounded-sm text-left",
         sideBySide ? "mx-0.5" : "mx-1",
         density === "single" ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
+        draggable && "agenda-apt-draggable",
+        isDragging && "agenda-apt-dragging",
         agendaAppointmentClass(apt)
       )}
       style={{
@@ -237,6 +247,8 @@ export function AppointmentGridBlock({
           : {}),
       }}
       onClick={onClick}
+      onPointerDown={onDragPointerDown}
+      onDragStart={(event) => event.preventDefault()}
       onMouseMove={
         onHoverTime
           ? (event) => {

@@ -1,25 +1,40 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getLastCompletedAppointmentByWhatsapp } from "@/lib/manage-public-appointment";
 
-const mockMaybeSingle = vi.fn();
+type QueryResult = { data: unknown; error: unknown };
+
+const mockMaybeSingle = vi.fn<() => Promise<QueryResult>>();
+
+/**
+ * Query encadeável do Supabase: qualquer filtro devolve a própria query, que
+ * resolve como Promise (`await query`) ou por `maybeSingle()`.
+ */
+function createQuery(result: () => QueryResult) {
+  const query = {
+    select: () => query,
+    in: () => query,
+    eq: () => query,
+    order: () => query,
+    limit: () => query,
+    maybeSingle: () => mockMaybeSingle(),
+    then: (
+      resolve: (value: QueryResult) => unknown,
+      reject?: (reason: unknown) => unknown
+    ) => Promise.resolve(result()).then(resolve, reject),
+  };
+  return query;
+}
+
+const weekdayPriceRows = [{ service_id: "svc-1", price_cents: 6500 }];
 
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({
-    from: () => ({
-      select: () => ({
-        in: () => ({
-          eq: () => ({
-            order: () => ({
-              order: () => ({
-                limit: () => ({
-                  maybeSingle: mockMaybeSingle,
-                }),
-              }),
-            }),
-          }),
-        }),
-      }),
-    }),
+    from: (table: string) =>
+      createQuery(() =>
+        table === "service_weekday_prices"
+          ? { data: weekdayPriceRows, error: null }
+          : { data: null, error: null }
+      ),
   }),
 }));
 

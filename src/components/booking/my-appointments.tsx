@@ -94,7 +94,6 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
 
   const [step, setStep] = useState<Step>("phone");
   const stepRef = useRef<Step>("phone");
-  stepRef.current = step;
 
   const [listTab, setListTab] = useState<ListTab>("upcoming");
   const [whatsappDigits, setWhatsappDigits] = useState("");
@@ -110,12 +109,17 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   const [editDate, setEditDate] = useState(minDate);
   const [editStartTime, setEditStartTime] = useState<string | null>(null);
   const editStartTimeRef = useRef<string | null>(null);
-  editStartTimeRef.current = editStartTime;
   const [editServiceIds, setEditServiceIds] = useState<string[]>([]);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Espelhos pra respostas de fetch lerem o valor atual sem virar dependência.
+  useEffect(() => {
+    stepRef.current = step;
+    editStartTimeRef.current = editStartTime;
+  });
 
   const professionals = catalog.professionals.filter(
     (p) => p.serviceIds.length > 0
@@ -209,17 +213,9 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   };
 
   useEffect(() => {
-    if (step !== "edit" || !editing || editServiceIds.length === 0) {
-      setAvailableSlots([]);
-      setSlotsError(null);
-      setLoadingSlots(false);
-      return;
-    }
+    if (step !== "edit" || !editing || editServiceIds.length === 0) return;
 
-    let cancelled = false;
-    setLoadingSlots(true);
-    setSlotsError(null);
-
+    const controller = new AbortController();
     const params = new URLSearchParams({
       professionalId: editing.professionalId,
       date: editDate,
@@ -227,38 +223,45 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
       excludeAppointmentId: editing.id,
     });
 
-    fetch(`/api/v1/appointments/availability?${params}`)
-      .then(async (res) => {
+    async function loadSlots() {
+      setLoadingSlots(true);
+      setSlotsError(null);
+
+      try {
+        const res = await fetch(
+          `/api/v1/appointments/availability?${params}`,
+          { signal: controller.signal }
+        );
         const body = await res.json();
-        if (cancelled) return;
+
         if (!res.ok) {
           setAvailableSlots([]);
           setSlotsError(body.error ?? "Não foi possível carregar os horários.");
           return;
         }
+
         const loaded: string[] = body.slots ?? [];
         setAvailableSlots(loaded);
         if (loaded.length === 0) {
           setSlotsError("Nenhum horário livre neste dia para esses serviços.");
         }
+
         const current = editStartTimeRef.current;
         if (current && !loaded.includes(current)) {
           setEditStartTime(null);
         }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailableSlots([]);
-          setSlotsError("Não foi possível carregar os horários.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSlots(false);
-      });
+      } catch {
+        if (controller.signal.aborted) return;
+        setAvailableSlots([]);
+        setSlotsError("Não foi possível carregar os horários.");
+      } finally {
+        if (!controller.signal.aborted) setLoadingSlots(false);
+      }
+    }
 
-    return () => {
-      cancelled = true;
-    };
+    void loadSlots();
+
+    return () => controller.abort();
   }, [step, editing, editDate, editServiceIds]);
 
   function startEdit(appointment: PublicAppointmentItem) {
@@ -279,10 +282,18 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
   }
 
   function toggleEditService(id: string, checked: boolean) {
-    setEditServiceIds((prev) =>
-      checked ? [...prev, id] : prev.filter((v) => v !== id)
-    );
+    const next = checked
+      ? [...editServiceIds, id]
+      : editServiceIds.filter((v) => v !== id);
+
+    setEditServiceIds(next);
     setEditStartTime(null);
+
+    // Sem serviço marcado não há o que buscar: limpa a lista de horários.
+    if (next.length === 0) {
+      setAvailableSlots([]);
+      setSlotsError(null);
+    }
   }
 
   async function handleCancelConfirm() {

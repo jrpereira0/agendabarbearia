@@ -2,7 +2,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import {
   listDueAppointmentReminders,
   markAppointmentReminderSent,
-  REMINDER_TYPE_ONE_HOUR,
   REMINDER_TYPE_THIRTY_MINUTES,
   type AppointmentReminderPayload,
 } from "@/lib/appointment-reminders";

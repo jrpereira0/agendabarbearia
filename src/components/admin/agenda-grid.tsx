@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   buildTimeSlots,
@@ -14,7 +15,17 @@ import {
   timeLabel,
 } from "@/lib/agenda-grid-utils";
 import {
+  canDragAppointment,
+  validateAgendaMove,
+  type AgendaColumnBounds,
+} from "@/lib/agenda-drag";
+import {
+  useAgendaCardDrag,
+  type AgendaDragCard,
+} from "@/components/admin/use-agenda-card-drag";
+import {
   minuteRangeOverlaps,
+  minutesToTime,
   nowMinutesInTimezone,
   timeToMinutes,
 } from "@/lib/availability";
@@ -41,8 +52,16 @@ type AgendaGridProps = {
   appointments: AppointmentItem[];
   isOwner: boolean;
   canBookClients: boolean;
+  canEditAppointments: boolean;
+  sessionProfessionalId: string | null;
   onSlotClick: (professionalId: string, startTime: string) => void;
   onAppointmentClick: (appointment: AppointmentItem, serviceIndex?: number) => void;
+  /** Arraste do card: novo barbeiro e/ou novo horário. */
+  onAppointmentMove: (
+    appointment: AppointmentItem,
+    professionalId: string,
+    startTime: string
+  ) => void;
   /** Colunas mais largas e linhas mais altas (uso no celular). */
   mobileLayout?: boolean;
   className?: string;
@@ -69,13 +88,17 @@ export function AgendaGrid({
   appointments,
   isOwner,
   canBookClients,
+  canEditAppointments,
+  sessionProfessionalId,
   onSlotClick,
   onAppointmentClick,
+  onAppointmentMove,
   mobileLayout = false,
   className,
 }: AgendaGridProps) {
   const [hoverMinute, setHoverMinute] = useState<number | null>(null);
   const [nowMinutes, setNowMinutes] = useState<number | null>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
 
   const rowHeight = mobileLayout
     ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
@@ -161,6 +184,100 @@ export function AgendaGrid({
     return map;
   }, [professionals]);
 
+  const appointmentById = useMemo(() => {
+    const map = new Map<string, AppointmentItem>();
+    for (const apt of appointments) map.set(apt.id, apt);
+    return map;
+  }, [appointments]);
+
+  const professionalById = useMemo(() => {
+    const map = new Map<string, AgendaProfessionalColumn>();
+    for (const pro of professionals) map.set(pro.id, pro);
+    return map;
+  }, [professionals]);
+
+  const measureColumns = useCallback((): AgendaColumnBounds[] => {
+    const root = shellRef.current;
+    if (!root) return [];
+
+    const offsetX = window.scrollX;
+    const bounds: AgendaColumnBounds[] = [];
+
+    for (const pro of professionals) {
+      const cell = root.querySelector<HTMLElement>(
+        `[data-agenda-column="${pro.id}"]`
+      );
+      if (!cell) continue;
+      const rect = cell.getBoundingClientRect();
+      bounds.push({
+        professionalId: pro.id,
+        left: rect.left + offsetX,
+        right: rect.right + offsetX,
+      });
+    }
+
+    return bounds;
+  }, [professionals]);
+
+  const evaluateDrop = useCallback(
+    (card: AgendaDragCard, professionalId: string, startMinutes: number) => {
+      const apt = appointmentById.get(card.appointmentId);
+      const target = professionalById.get(professionalId);
+      if (!apt || !target) {
+        return { valid: false, error: "Coluna inválida." };
+      }
+
+      const result = validateAgendaMove({
+        appointmentId: apt.id,
+        isSqueezeIn: Boolean(apt.isSqueezeIn),
+        serviceIds: apt.services.map((service) => service.id),
+        durationMinutes: card.durationMinutes,
+        targetStartMinutes: startMinutes,
+        target: {
+          professionalId: target.id,
+          nickname: target.nickname,
+          serviceIds: target.serviceIds,
+          availableRanges: target.availableRanges,
+          blockRanges: target.blockRanges,
+        },
+        busy: (appointmentsByPro.get(professionalId) ?? []).map((other) => ({
+          appointmentId: other.id,
+          start: timeToMinutes(other.startTime),
+          end: timeToMinutes(other.endTime),
+        })),
+        isOwner,
+        sessionProfessionalId,
+      });
+
+      return result.ok
+        ? { valid: true, error: null }
+        : { valid: false, error: result.error };
+    },
+    [
+      appointmentById,
+      appointmentsByPro,
+      isOwner,
+      professionalById,
+      sessionProfessionalId,
+    ]
+  );
+
+  const drag = useAgendaCardDrag({
+    enabled: canEditAppointments,
+    rowHeight,
+    slotStepMinutes,
+    gridStart,
+    gridEnd,
+    measureColumns,
+    evaluate: evaluateDrop,
+    onDrop: (card, professionalId, startMinutes) => {
+      const apt = appointmentById.get(card.appointmentId);
+      if (!apt) return;
+      onAppointmentMove(apt, professionalId, minutesToTime(startMinutes));
+    },
+    onRejected: (error) => toast.error(error),
+  });
+
   if (professionals.length === 0) {
     return (
       <div className="flex min-h-48 items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
@@ -172,6 +289,38 @@ export function AgendaGrid({
   const footerRow = timeSlots.length + 2;
   const compactProHeader = mobileLayout && professionals.length === 1;
 
+  const dropPreview = (() => {
+    const target = drag.target;
+    if (!target) return null;
+
+    const column = proColumnIndex.get(target.professionalId);
+    if (!column) return null;
+
+    const startTime = minutesToTime(target.startMinutes);
+    const endTime = minutesToTime(
+      target.startMinutes + target.card.durationMinutes
+    );
+    const rows = appointmentGridRows(
+      startTime,
+      endTime,
+      gridStart,
+      gridEnd,
+      slotStepMinutes
+    );
+    if (!rows) return null;
+
+    return {
+      column,
+      rows,
+      startTime,
+      endTime,
+      valid: target.valid,
+      error: target.error,
+      movedColumn: target.professionalId !== target.card.professionalId,
+      nickname: professionalById.get(target.professionalId)?.nickname ?? "",
+    };
+  })();
+
   // Colunas encolhem pra caber na largura — sem scroll horizontal.
   const gridStyle = {
     gridTemplateColumns: compactProHeader
@@ -182,8 +331,10 @@ export function AgendaGrid({
 
   return (
     <div
+      ref={shellRef}
       className={cn(
         "agenda-grid-shell min-w-0 overflow-hidden rounded-2xl border",
+        drag.target && "agenda-grid-dragging",
         gridLineOuter,
         className
       )}
@@ -201,6 +352,7 @@ export function AgendaGrid({
         {professionals.map((pro, i) => (
           <div
             key={pro.id}
+            data-agenda-column={pro.id}
             className={cn(
               "agenda-grid-header agenda-grid-pro-header min-w-0 border-b border-l",
               !compactProHeader && "sticky top-0 z-30",
@@ -337,6 +489,11 @@ export function AgendaGrid({
           );
           const cardStart = timeToMinutes(card.startTime);
           const cardEnd = timeToMinutes(card.endTime);
+          const draggable = canDragAppointment(apt, {
+            canEditAppointments,
+            isOwner,
+            sessionProfessionalId,
+          });
 
           return (
             <AppointmentGridBlock
@@ -353,7 +510,25 @@ export function AgendaGrid({
               segmentEndTime={card.endTime}
               serviceIndex={card.serviceIndex}
               serviceCount={card.serviceCount}
-              onClick={() => onAppointmentClick(apt)}
+              draggable={draggable}
+              isDragging={drag.target?.card.appointmentId === apt.id}
+              onDragPointerDown={
+                draggable
+                  ? (event) =>
+                      drag.startDrag(event, {
+                        appointmentId: apt.id,
+                        professionalId: apt.professionalId,
+                        startMinutes: timeToMinutes(apt.startTime),
+                        durationMinutes:
+                          timeToMinutes(apt.endTime) -
+                          timeToMinutes(apt.startTime),
+                      })
+                  : undefined
+              }
+              onClick={() => {
+                if (drag.shouldIgnoreClick()) return;
+                onAppointmentClick(apt);
+              }}
               onHoverTime={(clientY, top, height) => {
                 if (height <= 0) {
                   setHoverMinute(
@@ -377,6 +552,29 @@ export function AgendaGrid({
             />
           );
         })}
+
+        {dropPreview ? (
+          <div
+            className={cn(
+              "agenda-drop-preview pointer-events-none my-0.5 mx-1 flex min-h-0 items-center justify-center overflow-hidden rounded-sm px-1 text-center",
+              !dropPreview.valid && "agenda-drop-preview-invalid"
+            )}
+            style={{
+              gridColumn: dropPreview.column,
+              gridRow: `${dropPreview.rows.rowStart} / ${dropPreview.rows.rowEnd}`,
+              zIndex: 60,
+            }}
+            title={dropPreview.error ?? undefined}
+            aria-hidden
+          >
+            <span className="truncate text-[10px] font-semibold leading-tight tabular-nums">
+              {dropPreview.startTime} – {dropPreview.endTime}
+              {dropPreview.movedColumn && dropPreview.nickname
+                ? ` · ${dropPreview.nickname}`
+                : ""}
+            </span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
