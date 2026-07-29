@@ -2518,6 +2518,12 @@ export function ComandaDialog({
                 </Button>
               ) : null}
 
+              {canEdit && !canFinalize && !isClosed ? (
+                <p className="text-xs text-muted-foreground sm:order-first sm:flex-1">
+                  Só o dono pode finalizar a comanda.
+                </p>
+              ) : null}
+
               {(canFinalize ||
                 (loading &&
                   !isClosed &&

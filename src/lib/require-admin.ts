@@ -4,6 +4,7 @@ import type { ActionResult } from "@/lib/require-owner";
 import {
   mapProfessionalPermissionsRow,
   OWNER_PERMISSIONS,
+  RECEPTION_PERMISSIONS,
   type ProfessionalPermissions,
 } from "@/lib/professional-permissions";
 
@@ -73,8 +74,8 @@ export async function getAdminSession(): Promise<AdminSession | null> {
       isOwner: false,
       isReception: true,
       professionalId: null,
-      // Agenda/comanda/clientes no dia a dia; financeiro e cadastros do dono ficam no isOwner.
-      permissions: OWNER_PERMISSIONS,
+      // Agenda/comanda/clientes no dia a dia; sem fechar comanda nem financeiro/cadastros do dono.
+      permissions: RECEPTION_PERMISSIONS,
     };
   }
 

@@ -34,6 +34,12 @@ export const OWNER_PERMISSIONS: ProfessionalPermissions = {
   canManageScheduleBlocks: true,
 };
 
+/** Recepção: dia a dia na agenda/comanda, sem fechar comanda (só o dono). */
+export const RECEPTION_PERMISSIONS: ProfessionalPermissions = {
+  ...OWNER_PERMISSIONS,
+  canCloseComanda: false,
+};
+
 export const DEFAULT_BARBER_PERMISSIONS: ProfessionalPermissions = {
   canBookClients: true,
   canCreateSqueezeIn: true,

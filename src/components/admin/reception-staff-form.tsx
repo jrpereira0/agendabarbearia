@@ -104,7 +104,7 @@ export function ReceptionStaffForm({ initialStaff }: ReceptionStaffFormProps) {
           tone="dark"
           icon={UserRound}
           title="Novo acesso de recepção"
-          description="Vê a agenda de todos, marca e edita horários, cadastra e edita clientes. Não acessa comissões, financeiro, produtos, profissionais nem configurações — e não mexe em crédito."
+          description="Vê a agenda de todos, marca e edita horários, cadastra clientes e prepara comandas (sem finalizar). Não acessa comissões, financeiro, produtos, profissionais nem configurações — e não mexe em crédito."
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
