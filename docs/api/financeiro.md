@@ -17,8 +17,9 @@ Guia da API de agenda/lembretes: [guia-n8n.md](./guia-n8n.md).
 | Produtos na comanda | Item com produto; barbeiro é **opcional**. Sem barbeiro: **sem comissão** (100% barbearia). Com barbeiro: % do produto |
 | Comissão | % sobre o valor **cobrado** de cada **serviço** (configurável por barbeiro). Produto: % do cadastro **só se** houver barbeiro |
 | Gorjeta | Opcional ao fechar; o barbeiro escolhido recebe **100%** (entra no total e no caixa) |
-| Crédito do cliente | Saldo por cliente; pode pagar comanda com crédito da loja; troco ou depósito vira crédito e **entra no caixa** pelo método de origem (Pix, dinheiro etc.) |
+| Crédito do cliente | Saldo por cliente; pode pagar comanda com crédito da loja; valor pago a mais que vira crédito **entra no caixa** pelo método de origem (Pix, dinheiro etc.), mas **não** entra no faturamento de serviços |
 | Uso de crédito | Pagamento com crédito da loja **não** entra no caixa (dinheiro já entrou antes), mas **gera comissão** normalmente |
+| Crédito manual | Adicionar/remover crédito no cadastro do cliente **não** entra no caixa nem no faturamento |
 | Quem fecha | **Dono** no painel; barbeiro se tiver permissão |
 | Taxa de cartão | **Não** entra no cálculo da comissão |
 | Pagamento misto | Várias formas na mesma comanda (ex.: R$ 50 Pix + R$ 50 dinheiro) |
@@ -33,9 +34,9 @@ Guia da API de agenda/lembretes: [guia-n8n.md](./guia-n8n.md).
 
 Formas de pagamento aceitas: Pix, dinheiro, débito, crédito e crédito da loja.
 
-**Crédito do cliente:** depósitos (troco ou valor extra ao fechar comanda) entram no caixa do dia pelo método informado. Pagamentos com crédito da loja não somam nas entradas do caixa.
+**Crédito do cliente:** depósitos (valor pago a mais ao fechar comanda, com “guardar crédito”) entram no **caixa** do dia pelo método informado; **não** somam no faturamento de serviços. Pagamentos com crédito da loja não somam nas entradas do caixa, mas a comissão do barbeiro segue pelo serviço feito naquele dia. Crédito lançado manualmente no cadastro do cliente não entra no caixa nem no faturamento.
 
-No painel **Financeiro**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento em serviços** é só o valor dos atendimentos (base das comissões).
+No painel **Financeiro**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento** é só o valor dos atendimentos/serviços (base das comissões).
 
 O painel **Financeiro** (`/admin/financeiro`, só dono) abre em **visão geral enxuta** (período + faturamento, comissões, serviços, ticket médio + evolução das entradas) e permite **abrir o detalhe de cada métrica** (`?metric=faturamento|caixa|ticket|servicos|comissoes`): dia a dia, dia da semana, ranking e por barbeiro conforme a métrica.
 

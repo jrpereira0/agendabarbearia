@@ -3746,6 +3746,35 @@ export async function closeComanda(
     };
   }
 
+  // Depósito de crédito ANTES de fechar: se falhar, desfaz pagamentos e a
+  // comanda continua aberta. Assim o valor pago a mais não some do caixa.
+  let depositedCredit = false;
+  if (creditDeposits.length > 0 && customerId) {
+    for (const deposit of creditDeposits) {
+      const addResult = await addCustomerCredit(admin, {
+        customerId,
+        amountCents: deposit.amountCents,
+        paymentMethod: deposit.paymentMethod,
+        comandaId,
+        cashRegisterSessionId: cashCheck.sessionId,
+        createdBy: closedBy,
+      });
+      if (!addResult.ok) {
+        await restoreProductStockForComanda(admin, comandaId, closedByUserId);
+        await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
+        await reverseComandaCreditTransactions(admin, comandaId);
+        return {
+          ok: false,
+          error:
+            addResult.error ||
+            "Não foi possível guardar o crédito. A comanda não foi fechada.",
+          status: 500,
+        };
+      }
+      depositedCredit = true;
+    }
+  }
+
   const { error: comandaError } = await admin
     .from("comandas")
     .update({
@@ -3763,7 +3792,7 @@ export async function closeComanda(
   if (comandaError) {
     await restoreProductStockForComanda(admin, comandaId, closedByUserId);
     await admin.from("comanda_payments").delete().eq("comanda_id", comandaId);
-    if (deductedStoreCredit) {
+    if (deductedStoreCredit || depositedCredit) {
       await reverseComandaCreditTransactions(admin, comandaId);
     }
     return {
@@ -3800,29 +3829,6 @@ export async function closeComanda(
   }
   if (appointmentUpdates.length > 0) {
     await Promise.all(appointmentUpdates);
-  }
-
-  // A comanda já está fechada neste ponto (não há mais como desfazer o
-  // fechamento). Falha ao registrar o depósito de crédito não deve fazer
-  // a função retornar erro — isso faria a tela achar que o fechamento
-  // falhou, quando na verdade a comanda já foi fechada normalmente.
-  if (creditDeposits.length > 0 && customerId) {
-    for (const deposit of creditDeposits) {
-      const addResult = await addCustomerCredit(admin, {
-        customerId,
-        amountCents: deposit.amountCents,
-        paymentMethod: deposit.paymentMethod,
-        comandaId,
-        cashRegisterSessionId: cashCheck.sessionId,
-        createdBy: closedBy,
-      });
-      if (!addResult.ok) {
-        console.error(
-          `Falha ao registrar depósito de crédito da comanda ${comandaId}:`,
-          addResult.error
-        );
-      }
-    }
   }
 
   if (options.returnDetail === false) {

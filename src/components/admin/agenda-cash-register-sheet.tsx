@@ -325,6 +325,12 @@ export function AgendaCashRegisterSheet({
               <p className="mt-1 text-[1.75rem] font-semibold tracking-tight tabular-nums text-[#f5f5f5]">
                 {formatPriceBRL(balanceCents)}
               </p>
+              {cash.creditDepositsCents > 0 ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Inclui {formatPriceBRL(cash.creditDepositsCents)} guardados
+                  como crédito de cliente
+                </p>
+              ) : null}
 
               {activePaymentMethods.length > 0 ? (
                 <dl className="mt-4 space-y-2 border-t border-white/8 pt-4 text-sm">
@@ -504,13 +510,16 @@ export function AgendaCashRegisterSheet({
                                 {comanda.customerName}
                               </p>
                               <p className="shrink-0 text-sm font-semibold tabular-nums text-[#f5f5f5]">
-                                {formatPriceBRL(comanda.totalCents)}
+                                {formatPriceBRL(comanda.paidCents)}
                               </p>
                             </div>
                             <p className="mt-0.5 truncate text-xs text-muted-foreground">
                               {comanda.professionalNickname}
                               {closedTime ? ` · ${closedTime}` : ""}
                               {paymentLabel ? ` · ${paymentLabel}` : ""}
+                              {comanda.creditDepositCents > 0
+                                ? ` · ${formatPriceBRL(comanda.creditDepositCents)} em crédito`
+                                : ""}
                             </p>
                           </div>
                           {clickable ? (

@@ -3021,15 +3021,16 @@ export function ComandaDialog({
           )}
           <DialogHeader>
             <DialogTitle className="booking-display text-[#f5f5f5]">
-              Guardar o troco como crédito?
+              Guardar o valor a mais como crédito?
             </DialogTitle>
             <DialogDescription>
               O cliente pagou{" "}
               <strong className="text-[#f5f5f5]">
                 {formatPriceBRL(paymentOverpayCents)}
               </strong>{" "}
-              a mais que o total ({formatPriceBRL(totals.totalCents)}). Deseja
-              guardar esse valor como crédito?
+              a mais que o total dos serviços ({formatPriceBRL(totals.totalCents)}
+              ). Esse valor a mais entra no caixa do dia. Deseja guardar como
+              crédito do cliente?
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -3040,7 +3041,7 @@ export function ComandaDialog({
               disabled={busy}
               onClick={() => void finalizeComanda(false)}
             >
-              {closing ? "Finalizando…" : "Não, foi troco"}
+              {closing ? "Finalizando…" : "Não, devolver (troco)"}
             </Button>
             <Button
               type="button"

@@ -46,6 +46,10 @@ export type CashRegisterSummary = {
     professionalNickname: string;
     customerName: string;
     totalCents: number;
+    /** Depósito de crédito gerado no fechamento (entra no caixa). */
+    creditDepositCents: number;
+    /** Dinheiro que entrou: pagamentos reais da comanda + depósito de crédito. */
+    paidCents: number;
     commissionCents: number;
     payments: { method: PaymentMethod; amountCents: number }[];
   }[];
@@ -87,12 +91,20 @@ function applyCreditDepositRow(
   },
   creditDepositsByMethod: Record<CashInflowPaymentMethod, number>,
   creditDepositsByDay: Map<string, number>,
+  creditDepositsByComanda: Map<string, number>,
   comandaDateById: Map<string, string>
 ): void {
   const method = row.payment_method as CashInflowPaymentMethod | null;
   if (!method || !(method in creditDepositsByMethod)) return;
 
   creditDepositsByMethod[method] += row.amount_cents;
+
+  if (row.comanda_id) {
+    creditDepositsByComanda.set(
+      row.comanda_id,
+      (creditDepositsByComanda.get(row.comanda_id) ?? 0) + row.amount_cents
+    );
+  }
 
   if (!row.comanda_id) return;
   const serviceDate = comandaDateById.get(row.comanda_id);
@@ -115,9 +127,11 @@ async function loadCreditDepositsForPeriod(
 ): Promise<{
   byMethod: Record<CashInflowPaymentMethod, number>;
   byDay: Map<string, number>;
+  byComanda: Map<string, number>;
 }> {
   const byMethod = emptyCashInflowMap();
   const byDay = new Map<string, number>();
+  const byComanda = new Map<string, number>();
 
   if (params.cashRegisterSessionId) {
     const { data } = await admin
@@ -135,10 +149,16 @@ async function loadCreditDepositsForPeriod(
       if (row.comanda_id && comanda?.service_date) {
         params.comandaDateById.set(row.comanda_id, comanda.service_date);
       }
-      applyCreditDepositRow(row, byMethod, byDay, params.comandaDateById);
+      applyCreditDepositRow(
+        row,
+        byMethod,
+        byDay,
+        byComanda,
+        params.comandaDateById
+      );
     }
 
-    return { byMethod, byDay };
+    return { byMethod, byDay, byComanda };
   }
 
   const { data } = await admin
@@ -158,10 +178,16 @@ async function loadCreditDepositsForPeriod(
     if (row.comanda_id && comanda?.service_date) {
       params.comandaDateById.set(row.comanda_id, comanda.service_date);
     }
-    applyCreditDepositRow(row, byMethod, byDay, params.comandaDateById);
+    applyCreditDepositRow(
+      row,
+      byMethod,
+      byDay,
+      byComanda,
+      params.comandaDateById
+    );
   }
 
-  return { byMethod, byDay };
+  return { byMethod, byDay, byComanda };
 }
 
 export async function getFinancePeriodSummary(
@@ -248,13 +274,16 @@ export async function getFinancePeriodSummary(
   const comandaDateById = new Map(
     comandas.map((comanda) => [comanda.id, comanda.serviceDate])
   );
-  const { byMethod: creditDepositsByMethod, byDay: creditDepositsByDay } =
-    await loadCreditDepositsForPeriod(admin, {
-      from,
-      to,
-      cashRegisterSessionId: options.cashRegisterSessionId,
-      comandaDateById,
-    });
+  const {
+    byMethod: creditDepositsByMethod,
+    byDay: creditDepositsByDay,
+    byComanda: creditDepositsByComanda,
+  } = await loadCreditDepositsForPeriod(admin, {
+    from,
+    to,
+    cashRegisterSessionId: options.cashRegisterSessionId,
+    comandaDateById,
+  });
 
   const creditDepositsCents = CASH_INFLOW_PAYMENT_METHODS.reduce(
     (sum, method) => sum + creditDepositsByMethod[method],
@@ -265,6 +294,22 @@ export async function getFinancePeriodSummary(
       (sum, method) => sum + byPaymentMethod[method],
       0
     ) + creditDepositsCents;
+
+  const comandasWithCredit = comandas.map((comanda) => {
+    const creditDepositCents = creditDepositsByComanda.get(comanda.id) ?? 0;
+    const cashPaymentsCents = comanda.payments
+      .filter((payment) =>
+        (CASH_INFLOW_PAYMENT_METHODS as readonly string[]).includes(
+          payment.method
+        )
+      )
+      .reduce((sum, payment) => sum + payment.amountCents, 0);
+    return {
+      ...comanda,
+      creditDepositCents,
+      paidCents: cashPaymentsCents + creditDepositCents,
+    };
+  });
 
   return {
     from,
@@ -277,8 +322,8 @@ export async function getFinancePeriodSummary(
     creditDepositsByDay: Object.fromEntries(creditDepositsByDay),
     creditDepositsCents,
     cashInflowCents,
-    comandaCount: comandas.length,
-    comandas,
+    comandaCount: comandasWithCredit.length,
+    comandas: comandasWithCredit,
     openComandas: [],
   };
 }

@@ -565,6 +565,9 @@ export function CashRegisterDetailView({
                     comanda.professionalNickname,
                     closedTime || null,
                     paymentSummary,
+                    comanda.creditDepositCents > 0
+                      ? `${formatPriceBRL(comanda.creditDepositCents)} em crédito`
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(" · ");
@@ -600,7 +603,7 @@ export function CashRegisterDetailView({
                             ADMIN_SURFACE.accent
                           )}
                         >
-                          {formatPriceBRL(comanda.totalCents)}
+                          {formatPriceBRL(comanda.paidCents)}
                         </p>
                         <ChevronRight
                           className={cn("size-4 shrink-0", ADMIN_SURFACE.muted)}
