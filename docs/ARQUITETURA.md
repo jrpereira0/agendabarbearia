@@ -20,7 +20,7 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `src/app/admin/(panel)/profissionais` | Lista, cadastro e edição de profissionais (inclui permissões no painel por barbeiro) |
 | `src/app/admin/(panel)/servicos` | Lista, cadastro e edição de serviços (preço por dia da semana, duração, foto) |
 | `src/app/admin/(panel)/clientes` | Lista e edição de clientes, com histórico de agendamentos |
-| `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas e comissões (somente dono) |
+| `src/app/admin/(panel)/financeiro` | Painel financeiro (métricas por período), histórico de caixas, comissões e despesas/DRE (somente dono) |
 | `src/app/admin/(panel)/comandas` | Server actions da comanda (sem página própria — a UI é o `ComandaDialog`, aberto a partir da agenda) |
 | `src/app/admin/(panel)/produtos` | Cadastro de produtos, estoque, comissão por item e categorias |
 | `src/app/admin/(panel)/configuracoes` | Perfil público da barbearia, horários, chaves de API (Integrações) |
@@ -80,6 +80,8 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `cash_register_sessions` | Sessões de caixa por dia (`service_date`): abertura/fechamento, responsável, saldo inicial e totais |
 | `commission_payouts` | Repasse de comissão pago a um profissional num período (`period_from`/`period_to`, valor, quem pagou) |
 | `commission_payout_items` | Itens da comanda incluídos em cada repasse (evita pagar a mesma comissão duas vezes) |
+| `expenses` | Despesa da barbearia (saída): descrição, valor, forma de pagamento, data; se veio de uma despesa fixa, guarda `recurring_expense_id` |
+| `recurring_expenses` | Despesa fixa (aluguel, internet, salário etc.): descrição, valor, forma de pagamento, dia do mês, início/fim opcional e `skip_months` (meses excluídos manualmente) |
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
 | `appointment_reminders` | Lembretes para clientes (1h e 30min antes); o n8n consulta os vencidos via API e marca envio/confirmação |
 | `api_keys` | Chaves de API para integrações (n8n): nome, prefixo, hash do segredo, scopes, validade — geradas em Configurações > Integrações |
@@ -150,9 +152,10 @@ Somente o **dono** edita horários; o barbeiro vê a própria grade em modo leit
 - **Reabrir comanda**: pagamento com crédito do cliente **sempre volta** ao saldo; se a comanda tinha gerado crédito e esse valor já foi gasto em outro atendimento, o dono confirma e o valor gasto não volta (só estorna o que ainda sobrar)
 - Comissão: % configurável por barbeiro nos **serviços** (valor cobrado); nos **produtos**, % do cadastro do produto **somente se houver barbeiro** vinculado (taxa de cartão não entra no cálculo)
 - **Caixa lateral na agenda** (aba **CAIXA** à direita): painel com **saldo do dia em destaque**, métricas (entradas, comissões, barbearia), barras por forma de pagamento, lista de comandas fechadas (busca) e ações no rodapé (abrir/encerrar caixa, ver métricas do dia)
-- **Financeiro** (`/admin/financeiro`): painel de **análise** por período (`from` / `to`) — faturamento, comissões, evolução diária, formas de pagamento e ranking por barbeiro; não é onde se abre/fecha caixa
+- **Financeiro** (`/admin/financeiro`): painel de **análise** por período (`from` / `to`) — visão geral em dois blocos (**Resultado**: faturamento, saídas, lucro líquido; **Operação**: atendimentos, ticket, comissões, produtos), evolução diária e métricas detalhadas (incluindo **Saídas** só com dados de despesas); não é onde se abre/fecha caixa
 - **Caixas** (`/admin/financeiro/caixas`): histórico de sessões de caixa no período — abrir, fechar, reabrir, KPIs e atalhos para agenda/comissões do dia
 - **Comissões** (`/admin/financeiro/comissoes`): relatório por barbeiro filtrado por `service_date` (dia do atendimento/caixa), com detalhamento individual. Produtos **sem profissional** não entram no repasse do barbeiro. O dono vê todos; o barbeiro vê só as próprias (**Minhas comissões** no menu)
+- **Despesas** (`/admin/financeiro/despesas`): saídas da barbearia por período — data, descrição, forma de pagamento e valor; cada uma pode ser editada ou excluída. **Despesas fixas** (`/admin/financeiro/despesas/recorrentes`) cadastram contas que se repetem todo mês (dia do mês definido pela data inicial, com fim opcional); a cada carga da página, as ocorrências vencidas até hoje são lançadas automaticamente em Despesas (`generateDueRecurringExpenses`). Excluir uma ocorrência de despesa fixa só remove aquele mês (fica em `skip_months` na despesa fixa); excluir a despesa fixa em si mantém o histórico já lançado e só para de gerar novos meses
 - Lógica da grade em `src/lib/get-agenda-day.ts` e `src/components/admin/agenda-grid.tsx`
 
 ## Motor de horários livres

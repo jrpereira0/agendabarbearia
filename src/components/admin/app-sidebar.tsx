@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   Percent,
+  Receipt,
   Scissors,
   Settings,
   UserRound,
@@ -49,6 +50,12 @@ const dayToDayItems = [
     title: "Caixas",
     url: "/admin/financeiro/caixas",
     icon: History,
+    roles: ["owner"] as AdminRole[],
+  },
+  {
+    title: "Despesas",
+    url: "/admin/financeiro/despesas",
+    icon: Receipt,
     roles: ["owner"] as AdminRole[],
   },
   {

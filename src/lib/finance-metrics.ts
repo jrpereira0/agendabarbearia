@@ -1,4 +1,5 @@
 import type { FinanceMetricsReport } from "@/lib/finance-reports";
+import type { ExpensesReport } from "@/lib/expense-service";
 import { formatPriceBRL } from "@/lib/format";
 
 export const FINANCE_METRIC_IDS = [
@@ -8,6 +9,7 @@ export const FINANCE_METRIC_IDS = [
   "ticket",
   "servicos",
   "produtos",
+  "saidas",
   "comissoes",
   "pagamentos",
   "barbeiros",
@@ -27,6 +29,7 @@ export const FINANCE_METRIC_OPTIONS: {
   { id: "ticket", label: "Ticket médio" },
   { id: "servicos", label: "Serviços realizados" },
   { id: "produtos", label: "Produtos vendidos" },
+  { id: "saidas", label: "Saídas" },
   { id: "comissoes", label: "Comissões" },
   { id: "pagamentos", label: "Formas de pagamento" },
   { id: "barbeiros", label: "Por barbeiro" },
@@ -79,7 +82,8 @@ export function buildFinanceQuery(input: {
 
 export function financeHeroValue(
   report: FinanceMetricsReport,
-  metric: Exclude<FinanceMetricId, "geral">
+  metric: Exclude<FinanceMetricId, "geral">,
+  expensesReport?: ExpensesReport
 ): string {
   const { totals, averageServiceCents } = report;
   switch (metric) {
@@ -93,6 +97,8 @@ export function financeHeroValue(
       return String(totals.serviceItemCount);
     case "produtos":
       return formatPriceBRL(report.productSales.totalRevenueCents);
+    case "saidas":
+      return formatPriceBRL(expensesReport?.totalCents ?? 0);
     case "comissoes":
       return formatPriceBRL(totals.commissionCents);
     case "pagamentos":

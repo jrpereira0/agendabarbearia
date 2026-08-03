@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowRight, Percent } from "lucide-react";
+import { ArrowRight, Percent, Receipt, Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -20,6 +20,11 @@ import {
   ticketAverageCents,
   type FinanceMetricId,
 } from "@/lib/finance-metrics";
+import {
+  EXPENSE_PAYMENT_METHODS,
+  EXPENSE_PAYMENT_METHOD_LABELS,
+  type ExpensesReport,
+} from "@/lib/expense-service";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
 import { formatDateBR, formatPriceBRL } from "@/lib/format";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
@@ -32,6 +37,7 @@ type FinanceMetricDetailProps = {
   report: FinanceMetricsReport;
   from: string;
   to: string;
+  expensesReport?: ExpensesReport;
 };
 
 function Section({
@@ -72,6 +78,7 @@ export function FinanceMetricDetail({
   report,
   from,
   to,
+  expensesReport,
 }: FinanceMetricDetailProps) {
   const daysWithActivity = useMemo(
     () =>
@@ -194,7 +201,27 @@ export function FinanceMetricDetail({
     [daysWithActivity]
   );
 
-  const hero = financeHeroValue(report, metric);
+  const expensePaymentItems = useMemo(
+    () =>
+      EXPENSE_PAYMENT_METHODS.filter(
+        (method) => (expensesReport?.byPaymentMethod[method] ?? 0) > 0
+      ).map((method) => ({
+        label: EXPENSE_PAYMENT_METHOD_LABELS[method],
+        value: expensesReport?.byPaymentMethod[method] ?? 0,
+      })),
+    [expensesReport]
+  );
+
+  const expenseDayChart = useMemo(
+    () =>
+      (expensesReport?.byDay ?? []).map((day) => ({
+        label: shortDate(day.date),
+        value: day.totalCents,
+      })),
+    [expensesReport]
+  );
+
+  const hero = financeHeroValue(report, metric, expensesReport);
   const heroHint =
     metric === "servicos"
       ? `${report.activeDays} dia${report.activeDays === 1 ? "" : "s"} com atendimento`
@@ -214,7 +241,9 @@ export function FinanceMetricDetail({
                     ? "Serviços cadastrados com movimento"
                     : metric === "produtos"
                       ? `${report.productSales.totalQuantity} un. · ${report.productSales.byProduct.length} produto${report.productSales.byProduct.length === 1 ? "" : "s"}`
-                      : undefined;
+                      : metric === "saidas" && expensesReport
+                        ? `${expensesReport.count} lançamento${expensesReport.count === 1 ? "" : "s"} no período`
+                        : undefined;
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
@@ -857,6 +886,114 @@ export function FinanceMetricDetail({
               <EmptyBlock />
             )}
           </Section>
+        </>
+      )}
+
+      {metric === "saidas" && expensesReport && (
+        <>
+          <Section title="Resumo" description="Só saídas lançadas em Despesas">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <MiniStat
+                label="Total"
+                value={formatPriceBRL(expensesReport.totalCents)}
+              />
+              <MiniStat
+                label="Lançamentos"
+                value={String(expensesReport.count)}
+              />
+              <MiniStat
+                label="Fixas"
+                value={String(expensesReport.recurringCount)}
+              />
+              <MiniStat
+                label="Avulsas"
+                value={String(expensesReport.oneOffCount)}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Por forma de pagamento"
+            description="Como as saídas foram pagas"
+          >
+            {expensePaymentItems.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <HorizontalBarChart items={expensePaymentItems} />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Saídas por dia">
+            {expenseDayChart.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart items={expenseDayChart} height={148} />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Lançamentos" description="Do mais recente ao mais antigo">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              {expensesReport.expenses.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {expensesReport.expenses.map((expense) => (
+                    <li
+                      key={expense.id}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                            {expense.description}
+                          </p>
+                          {expense.recurringExpenseId ? (
+                            <Repeat
+                              className={cn("size-3.5 shrink-0", ADMIN_SURFACE.muted)}
+                              aria-label="Despesa fixa"
+                            />
+                          ) : null}
+                        </div>
+                        <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                          {formatDateBR(expense.expenseDate)} ·{" "}
+                          {EXPENSE_PAYMENT_METHOD_LABELS[expense.paymentMethod]}
+                        </p>
+                      </div>
+                      <p
+                        className={cn(
+                          "shrink-0 text-sm font-semibold tabular-nums",
+                          ADMIN_SURFACE.accent
+                        )}
+                      >
+                        {formatPriceBRL(expense.amountCents)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </Section>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn("h-10 w-full sm:h-8 sm:w-fit", ADMIN_SURFACE.btnGhost)}
+            asChild
+          >
+            <Link href={`/admin/financeiro/despesas?from=${from}&to=${to}`}>
+              <Receipt className="size-4" />
+              Abrir página de despesas
+              <ArrowRight className="size-4" />
+            </Link>
+          </Button>
         </>
       )}
     </div>

@@ -6,6 +6,10 @@ import { todayInTimezone } from "@/lib/availability";
 import { getFinanceMetricsReport } from "@/lib/finance-reports";
 import { parseFinanceMetric } from "@/lib/finance-metrics";
 import { shiftDate } from "@/lib/date-range";
+import {
+  generateDueRecurringExpenses,
+  getExpensesReport,
+} from "@/lib/expense-service";
 import { FinanceView } from "@/components/admin/finance-view";
 import { EmptyState } from "@/components/admin/empty-state";
 
@@ -75,11 +79,14 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
     );
   }
 
-  const [report, last7Report] = await Promise.all([
+  await generateDueRecurringExpenses(admin, today);
+
+  const [report, last7Report, expensesReport] = await Promise.all([
     getFinanceMetricsReport(admin, from, to),
     coversLast7
       ? Promise.resolve(null)
       : getFinanceMetricsReport(admin, last7From, today),
+    getExpensesReport(admin, from, to),
   ]);
 
   const last7Days = coversLast7
@@ -96,6 +103,7 @@ export default async function FinanceiroPage({ searchParams }: PageProps) {
       metric={metric}
       report={report}
       last7Days={last7Days}
+      expensesReport={expensesReport}
     />
   );
 }

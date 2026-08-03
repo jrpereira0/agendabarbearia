@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BarChart3, Wallet } from "lucide-react";
+import { BarChart3, Receipt, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,6 +23,7 @@ import type {
   FinanceDayMetric,
   FinanceMetricsReport,
 } from "@/lib/finance-reports";
+import type { ExpensesReport } from "@/lib/expense-service";
 import {
   buildFinanceQuery,
   FINANCE_METRIC_OPTIONS,
@@ -41,6 +42,8 @@ type FinanceViewProps = {
   report: FinanceMetricsReport;
   /** Dias do gráfico “últimos 7 dias” (hoje e 6 anteriores). */
   last7Days: FinanceDayMetric[];
+  /** Relatório de saídas (despesas) do período. */
+  expensesReport: ExpensesReport;
 };
 
 function weekdayShort(isoDate: string): string {
@@ -60,6 +63,7 @@ export function FinanceView({
   metric,
   report,
   last7Days,
+  expensesReport,
 }: FinanceViewProps) {
   const router = useRouter();
   const [fromDate, setFromDate] = useState(from);
@@ -75,21 +79,26 @@ export function FinanceView({
     setSelectedMetric(metric);
   }
 
+  const expensesCents = expensesReport.totalCents;
   const hasData =
     report.totals.comandaCount > 0 ||
     report.totals.serviceItemCount > 0 ||
-    report.productSales.saleLineCount > 0;
+    report.productSales.saleLineCount > 0 ||
+    expensesReport.count > 0;
   const isDetail = metric !== "geral";
   const hasMetricData =
     metric === "produtos"
       ? report.productSales.saleLineCount > 0
-      : hasData;
+      : metric === "saidas"
+        ? expensesReport.count > 0
+        : hasData;
 
   const attendanceCount = report.totals.comandaCount;
   const ticketAverageCents =
     attendanceCount > 0
       ? Math.round(report.totals.servicesGrossCents / attendanceCount)
       : 0;
+  const netProfitCents = report.totals.shopCents - expensesCents;
 
   const last7Chart = useMemo(
     () =>
@@ -141,6 +150,14 @@ export function FinanceView({
           tone="dark"
           title="Financeiro"
           description={formatPeriodLabel(from, to)}
+          action={
+            <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
+              <Link href="/admin/financeiro/despesas">
+                <Receipt />
+                Despesas
+              </Link>
+            </Button>
+          }
         />
 
         <FinancePeriodFilter
@@ -180,7 +197,7 @@ export function FinanceView({
             icon={BarChart3}
             className="border-white/10 text-[#f5f5f5]"
             title="Nada neste período"
-            description="Não há atendimentos finalizados neste intervalo. Ajuste as datas ou feche comandas na agenda."
+            description="Não há atendimentos finalizados nem despesas neste intervalo. Ajuste as datas ou feche comandas na agenda."
             action={
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -212,6 +229,7 @@ export function FinanceView({
               report={report}
               from={from}
               to={to}
+              expensesReport={expensesReport}
             />
           ) : (
             <EmptyState
@@ -221,58 +239,100 @@ export function FinanceView({
               description={
                 metric === "produtos"
                   ? "Não há venda de produto fechada neste período."
-                  : "Não há atendimento finalizado neste período. Tente outra faixa de datas."
+                  : metric === "saidas"
+                    ? "Não há saída lançada neste período. Cadastre em Despesas."
+                    : "Não há atendimento finalizado neste período. Tente outra faixa de datas."
+              }
+              action={
+                metric === "saidas" ? (
+                  <Button asChild className={ADMIN_SURFACE.btnPrimary} size="sm">
+                    <Link href="/admin/financeiro/despesas">
+                      <Receipt />
+                      Ir para despesas
+                    </Link>
+                  </Button>
+                ) : undefined
               }
             />
           )
         ) : (
-          <div className="flex flex-col gap-4 sm:gap-6">
-            <section className="grid grid-cols-2 gap-2.5 sm:gap-3 xl:grid-cols-5">
-              <FinanceMetricCard
-                tone="dark"
-                label="Faturamento"
-                value={formatPriceBRL(report.totals.servicesGrossCents)}
-                hint="Serviços do período"
-                tooltip="Soma do valor dos serviços realizados no período selecionado."
-              />
-              <FinanceMetricCard
-                tone="dark"
-                label="Atendimentos"
-                value={String(attendanceCount)}
-                hint={
-                  attendanceCount === 1
-                    ? "1 comanda"
-                    : `${attendanceCount} comandas`
-                }
-                tooltip="Quantidade de comandas finalizadas no período."
-              />
-              <FinanceMetricCard
-                tone="dark"
-                label="Ticket médio"
-                value={formatPriceBRL(ticketAverageCents)}
-                hint="Por atendimento"
-                tooltip="Faturamento dividido pelo número de atendimentos (comandas)."
-              />
-              <FinanceMetricCard
-                tone="dark"
-                label="Comissões"
-                value={formatPriceBRL(report.totals.commissionCents)}
-                hint={`${report.commissionRatePercent}% do faturamento`}
-                tooltip="Quanto do faturamento vai para os barbeiros em comissão."
-              />
-              <FinanceMetricCard
-                tone="dark"
-                label="Produtos"
-                value={formatPriceBRL(report.productSales.totalRevenueCents)}
-                hint={
-                  report.productSales.totalQuantity > 0
-                    ? `${report.productSales.totalQuantity} un. · toque`
-                    : "Toque para detalhar"
-                }
-                tooltip="Faturamento só de produtos. Abre a métrica Produtos vendidos."
-                className="col-span-2 xl:col-span-1"
-                onSelect={() => navigate(from, to, "produtos")}
-              />
+          <div className="flex flex-col gap-5 sm:gap-6">
+            <section className="flex flex-col gap-2.5">
+              <p className={cn(ADMIN_SURFACE.sectionLabel)}>Resultado</p>
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Faturamento"
+                  value={formatPriceBRL(report.totals.servicesGrossCents)}
+                  hint="Serviços do período"
+                  tooltip="Soma do valor dos serviços realizados no período selecionado."
+                  onSelect={() => navigate(from, to, "faturamento")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Saídas"
+                  value={formatPriceBRL(expensesCents)}
+                  hint={
+                    expensesReport.count > 0
+                      ? `${expensesReport.count} lançamento${expensesReport.count === 1 ? "" : "s"} · toque`
+                      : "Toque para detalhar"
+                  }
+                  tooltip="Aluguel, contas e outras despesas do período. Abre a métrica Saídas."
+                  onSelect={() => navigate(from, to, "saidas")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Lucro líquido"
+                  value={formatPriceBRL(netProfitCents)}
+                  hint="Após comissões e saídas"
+                  tooltip="Faturamento menos comissões dos barbeiros e menos despesas do período."
+                />
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-2.5">
+              <p className={cn(ADMIN_SURFACE.sectionLabel)}>Operação</p>
+              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Atendimentos"
+                  value={String(attendanceCount)}
+                  hint={
+                    attendanceCount === 1
+                      ? "1 comanda"
+                      : `${attendanceCount} comandas`
+                  }
+                  tooltip="Quantidade de comandas finalizadas no período."
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Ticket médio"
+                  value={formatPriceBRL(ticketAverageCents)}
+                  hint="Por atendimento"
+                  tooltip="Faturamento dividido pelo número de atendimentos (comandas)."
+                  onSelect={() => navigate(from, to, "ticket")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Comissões"
+                  value={formatPriceBRL(report.totals.commissionCents)}
+                  hint={`${report.commissionRatePercent}% do faturamento`}
+                  tooltip="Quanto do faturamento vai para os barbeiros em comissão."
+                  onSelect={() => navigate(from, to, "comissoes")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Produtos"
+                  value={formatPriceBRL(report.productSales.totalRevenueCents)}
+                  hint={
+                    report.productSales.totalQuantity > 0
+                      ? `${report.productSales.totalQuantity} un. · toque`
+                      : "Toque para detalhar"
+                  }
+                  tooltip="Faturamento só de produtos. Abre a métrica Produtos vendidos."
+                  onSelect={() => navigate(from, to, "produtos")}
+                />
+              </div>
             </section>
 
             <section className="flex flex-col gap-3">

@@ -1,3 +1,22 @@
+/** Telas do painel com fundo escuro (pra SidebarInset / content não piscarem branco). */
+export function isAdminDarkSurface(pathname: string): boolean {
+  return (
+    pathname === "/admin" ||
+    pathname === "/admin/financeiro" ||
+    pathname.startsWith("/admin/financeiro/") ||
+    pathname === "/admin/profissionais" ||
+    pathname.startsWith("/admin/profissionais/") ||
+    pathname === "/admin/servicos" ||
+    pathname.startsWith("/admin/servicos/") ||
+    pathname === "/admin/clientes" ||
+    pathname.startsWith("/admin/clientes/") ||
+    pathname === "/admin/produtos" ||
+    pathname.startsWith("/admin/produtos/") ||
+    pathname === "/admin/configuracoes" ||
+    pathname.startsWith("/admin/configuracoes/")
+  );
+}
+
 /** Classes Tailwind da superfície escura do painel (login/agenda). */
 export const ADMIN_SURFACE = {
   page: "bg-[#0e0f11] text-[#f5f5f5]",
