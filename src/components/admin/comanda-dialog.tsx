@@ -183,14 +183,14 @@ function appointmentToLinked(
 /** Chave estável para saber se os itens mudaram desde o load do servidor. */
 function comandaItemsKey(
   items: EditableItem[],
-  tipCents: number,
-  tipProfessionalId: string
+  tips: TipEntry[]
 ): string {
   return JSON.stringify({
-    tip:
-      tipCents > 0
-        ? { tipCents, tipProfessionalId }
-        : null,
+    tips: tips.map((tip) => ({
+      id: tip.id,
+      cents: tip.cents,
+      professionalId: tip.professionalId,
+    })),
     items: items.map((item) => ({
       id: item.id ?? null,
       serviceId: item.serviceId ?? null,
@@ -209,20 +209,28 @@ function isProductItem(item: EditableItem): boolean {
   return Boolean(item.productId);
 }
 
+type TipEntry = {
+  id: string;
+  cents: number;
+  professionalId: string;
+};
+
 function buildPersistItems(
   serviceItems: EditableItem[],
-  tipCents: number,
-  tipProfessionalId: string
+  tips: TipEntry[]
 ): ComandaItemInput[] {
   const payload = serviceItems.map(stripEditableItem);
-  if (tipCents > 0 && tipProfessionalId) {
-    payload.push({
-      serviceName: "Gorjeta",
-      catalogPriceCents: tipCents,
-      chargedPriceCents: tipCents,
-      professionalId: tipProfessionalId,
-      isTip: true,
-    });
+  for (const tip of tips) {
+    if (tip.cents > 0 && tip.professionalId) {
+      payload.push({
+        id: tip.id,
+        serviceName: "Gorjeta",
+        catalogPriceCents: tip.cents,
+        chargedPriceCents: tip.cents,
+        professionalId: tip.professionalId,
+        isTip: true,
+      });
+    }
   }
   return payload;
 }
@@ -434,8 +442,7 @@ export function ComandaDialog({
   const [pendingProduct, setPendingProduct] = useState<ProductOption | null>(null);
   const [productQuantity, setProductQuantity] = useState("1");
   const [productProfessionalId, setProductProfessionalId] = useState("");
-  const [tipCents, setTipCents] = useState(0);
-  const [tipProfessionalId, setTipProfessionalId] = useState("");
+  const [tips, setTips] = useState<TipEntry[]>([]);
   const [customerCreditBalanceCents, setCustomerCreditBalanceCents] = useState(0);
   const [confirmOverpayCredit, setConfirmOverpayCredit] = useState(false);
   const [confirmDeleteWalkIn, setConfirmDeleteWalkIn] = useState(false);
@@ -443,8 +450,7 @@ export function ComandaDialog({
     number | null
   >(null);
   const [tipDialogOpen, setTipDialogOpen] = useState(false);
-  const [tipDraftCents, setTipDraftCents] = useState(0);
-  const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
+  const [tipDraftList, setTipDraftList] = useState<TipEntry[]>([]);
 
   const load = useCallback(async () => {
     if (!appointment && !initialComandaId) return;
@@ -470,20 +476,18 @@ export function ComandaDialog({
       setCashRegisterOpen(result.cashRegisterOpen);
       setOpenCashRegisterDate(result.openCashRegisterDate);
       setCustomerCreditBalanceCents(result.customerCreditBalanceCents);
-      const tipItem = result.comanda.items.find((item) => item.isTip);
+      
+      const tipItems = result.comanda.items.filter((item) => item.isTip);
+      const nextTips: TipEntry[] = tipItems.map((item) => ({
+        id: item.id,
+        cents: item.chargedPriceCents,
+        professionalId: item.professionalId ?? "",
+      }));
+      
       const editable = mapComandaItemsToEditable(result.comanda.items);
-      const nextTipCents = tipItem?.chargedPriceCents ?? 0;
-      const nextTipProfessionalId =
-        tipItem?.professionalId ??
-        appointment?.professionalId ??
-        sessionProfessionalId ??
-        "";
       setItems(editable);
-      setLoadedItemsKey(
-        comandaItemsKey(editable, nextTipCents, nextTipProfessionalId)
-      );
-      setTipCents(nextTipCents);
-      setTipProfessionalId(nextTipProfessionalId);
+      setLoadedItemsKey(comandaItemsKey(editable, nextTips));
+      setTips(nextTips);
       if (result.comanda.status === "closed") {
         setPayments(
           result.comanda.payments.map((p) => ({
@@ -599,10 +603,7 @@ export function ComandaDialog({
       setCanManageAllAgendas(canManageAllAgendasHint);
       setCashRegisterOpen(initialCashRegisterOpen);
       setOpenCashRegisterDate(initialOpenCashRegisterDate);
-      setTipCents(0);
-      setTipProfessionalId(
-        appointment.professionalId || sessionProfessionalId || ""
-      );
+      setTips([]);
       setCustomerCreditBalanceCents(0);
     } else if (open && initialComandaId) {
       setFocusAppointmentId(null);
@@ -616,8 +617,7 @@ export function ComandaDialog({
       setCanManageAllAgendas(canManageAllAgendasHint);
       setCashRegisterOpen(initialCashRegisterOpen);
       setOpenCashRegisterDate(initialOpenCashRegisterDate);
-      setTipCents(0);
-      setTipProfessionalId(sessionProfessionalId || "");
+      setTips([]);
       setCustomerCreditBalanceCents(0);
     } else if (!open) {
       setComanda(null);
@@ -641,8 +641,7 @@ export function ComandaDialog({
       setProductQuantity("1");
       setProductSearch("");
       setProductPickerOpen(false);
-      setTipCents(0);
-      setTipProfessionalId("");
+      setTips([]);
       setCustomerCreditBalanceCents(0);
       setTipDialogOpen(false);
       setLoadedItemsKey(null);
@@ -674,19 +673,15 @@ export function ComandaDialog({
           productId: item.productId ?? null,
           commissionPercentSnapshot: item.commissionPercent ?? null,
         })),
-        ...(tipCents > 0 && tipProfessionalId
-          ? [
-              {
-                chargedPriceCents: tipCents,
-                professionalId: tipProfessionalId,
-                isTip: true as const,
-              },
-            ]
-          : []),
+        ...tips.map((tip) => ({
+          chargedPriceCents: tip.cents,
+          professionalId: tip.professionalId,
+          isTip: true as const,
+        })),
       ],
       commissionByProfessional
     );
-  }, [items, comanda, commissionByProfessional, tipCents, tipProfessionalId]);
+  }, [items, comanda, commissionByProfessional, tips]);
 
   const paymentsSum = useMemo(
     () => payments.reduce((s, p) => s + p.amountCents, 0),
@@ -1013,67 +1008,68 @@ export function ComandaDialog({
   }
 
   function openTipDialog() {
-    setTipDraftCents(tipCents);
-    setTipDraftProfessionalId(
-      tipProfessionalId || tipEligibleProfessionals[0]?.id || ""
-    );
+    setTipDraftList(tips.length > 0 ? [...tips] : []);
     setTipDialogOpen(true);
   }
 
   async function confirmTipDialog() {
     if (!canEdit || busy) return;
-    if (tipDraftCents > 0 && !tipDraftProfessionalId) {
-      toast.error("Escolha o barbeiro da gorjeta.");
-      return;
+    
+    // Validar todas as gorjetas
+    for (const tip of tipDraftList) {
+      if (tip.cents > 0 && !tip.professionalId) {
+        toast.error("Escolha o barbeiro para cada gorjeta.");
+        return;
+      }
     }
 
-    const previousTipCents = tipCents;
-    const previousTipProfessionalId = tipProfessionalId;
-    const nextTipCents = tipDraftCents;
-    const nextTipProfessionalId = tipDraftProfessionalId;
+    const previousTips = tips;
+    const nextTips = tipDraftList.filter((tip) => tip.cents > 0 && tip.professionalId);
 
-    setTipCents(nextTipCents);
-    setTipProfessionalId(nextTipProfessionalId);
-    syncSinglePaymentToTotal(itemsSubtotalCents + nextTipCents);
+    setTips(nextTips);
+    const tipsTotal = nextTips.reduce((sum, tip) => sum + tip.cents, 0);
+    syncSinglePaymentToTotal(itemsSubtotalCents + tipsTotal);
     setTipDialogOpen(false);
 
-    const ok = await persistItems(items, nextTipCents, nextTipProfessionalId);
+    const ok = await persistItems(items, nextTips);
     if (!ok) {
-      setTipCents(previousTipCents);
-      setTipProfessionalId(previousTipProfessionalId);
-      syncSinglePaymentToTotal(itemsSubtotalCents + previousTipCents);
+      setTips(previousTips);
+      const prevTipsTotal = previousTips.reduce((sum, tip) => sum + tip.cents, 0);
+      syncSinglePaymentToTotal(itemsSubtotalCents + prevTipsTotal);
       return;
     }
-    toast.success("Gorjeta salva.");
+    toast.success(
+      nextTips.length === 0 
+        ? "Gorjetas removidas." 
+        : nextTips.length === 1 
+          ? "Gorjeta salva." 
+          : "Gorjetas salvas."
+    );
   }
 
-  async function removeTip() {
+  async function removeAllTips() {
     if (!canEdit || busy) return;
 
-    const previousTipCents = tipCents;
-    const previousTipProfessionalId = tipProfessionalId;
+    const previousTips = tips;
 
-    setTipCents(0);
-    setTipProfessionalId("");
-    setTipDraftCents(0);
-    setTipDraftProfessionalId("");
+    setTips([]);
+    setTipDraftList([]);
     syncSinglePaymentToTotal(itemsSubtotalCents);
     setTipDialogOpen(false);
 
-    const ok = await persistItems(items, 0, "");
+    const ok = await persistItems(items, []);
     if (!ok) {
-      setTipCents(previousTipCents);
-      setTipProfessionalId(previousTipProfessionalId);
-      syncSinglePaymentToTotal(itemsSubtotalCents + previousTipCents);
+      setTips(previousTips);
+      const prevTipsTotal = previousTips.reduce((sum, tip) => sum + tip.cents, 0);
+      syncSinglePaymentToTotal(itemsSubtotalCents + prevTipsTotal);
       return;
     }
-    toast.success("Gorjeta removida.");
+    toast.success("Gorjetas removidas.");
   }
 
   const persistItems = async (
     nextItems: EditableItem[],
-    nextTipCents = tipCents,
-    nextTipProfessionalId = tipProfessionalId
+    nextTips = tips
   ): Promise<boolean> => {
     if (!comanda || !canEdit) return false;
 
@@ -1086,16 +1082,18 @@ export function ComandaDialog({
       }
     }
 
-    if (nextTipCents > 0 && !nextTipProfessionalId) {
-      toast.error("Escolha o barbeiro que recebe a gorjeta.");
-      return false;
+    for (const tip of nextTips) {
+      if (tip.cents > 0 && !tip.professionalId) {
+        toast.error("Escolha o barbeiro que recebe a gorjeta.");
+        return false;
+      }
     }
 
     setBusy(true);
     try {
       const result = await saveComandaItems(
         comanda.id,
-        buildPersistItems(nextItems, nextTipCents, nextTipProfessionalId)
+        buildPersistItems(nextItems, nextTips)
       );
       if (!result.ok) {
         toast.error(result.error);
@@ -1103,17 +1101,16 @@ export function ComandaDialog({
       }
 
       setComanda(result.comanda);
-      const savedTip = result.comanda.items.find((item) => item.isTip);
+      const savedTipItems = result.comanda.items.filter((item) => item.isTip);
+      const savedTips: TipEntry[] = savedTipItems.map((item) => ({
+        id: item.id,
+        cents: item.chargedPriceCents,
+        professionalId: item.professionalId ?? "",
+      }));
       const editable = mapComandaItemsToEditable(result.comanda.items);
-      const savedTipCents = savedTip?.chargedPriceCents ?? 0;
-      const savedTipProId =
-        savedTip?.professionalId ?? nextTipProfessionalId;
       setItems(editable);
-      setTipCents(savedTipCents);
-      setTipProfessionalId(savedTipProId);
-      setLoadedItemsKey(
-        comandaItemsKey(editable, savedTipCents, savedTipProId)
-      );
+      setTips(savedTips);
+      setLoadedItemsKey(comandaItemsKey(editable, savedTips));
       setPayments((prev) =>
         prev.length === 1
           ? [{ ...prev[0], amountCents: result.comanda.totalCents }]
@@ -1367,15 +1364,11 @@ export function ComandaDialog({
       return;
     }
 
-    const persistItemsPayload = buildPersistItems(
-      items,
-      tipCents,
-      tipProfessionalId
-    );
+    const persistItemsPayload = buildPersistItems(items, tips);
     const comandaId = comanda.id;
     const itemsChanged =
       loadedItemsKey == null ||
-      loadedItemsKey !== comandaItemsKey(items, tipCents, tipProfessionalId);
+      loadedItemsKey !== comandaItemsKey(items, tips);
 
     // Fecha na hora — o salvamento segue em segundo plano.
     setConfirmOverpayCredit(false);
@@ -1418,9 +1411,11 @@ export function ComandaDialog({
       toast.error("Saldo de crédito insuficiente.");
       return;
     }
-    if (tipCents > 0 && !tipProfessionalId) {
-      toast.error("Escolha o barbeiro da gorjeta.");
-      return;
+    for (const tip of tips) {
+      if (tip.cents > 0 && !tip.professionalId) {
+        toast.error("Escolha o barbeiro da gorjeta.");
+        return;
+      }
     }
 
     if (paymentOverpayCents > 0) {
@@ -1439,7 +1434,7 @@ export function ComandaDialog({
     const walkIn =
       Boolean(comanda?.isWalkIn) || Boolean(!appointment && initialComandaId);
     const empty =
-      items.length === 0 && tipCents <= 0 && (comanda?.status ?? "open") === "open";
+      items.length === 0 && tips.length === 0 && (comanda?.status ?? "open") === "open";
 
     if (id && walkIn && empty) {
       void discardEmptyWalkInComandaAction(id);
@@ -1845,7 +1840,7 @@ export function ComandaDialog({
                 </div>
 
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-                  {items.length === 0 && tipCents <= 0 ? (
+                  {items.length === 0 && tips.length === 0 ? (
                     <p className="booking-notice m-3 flex min-h-0 flex-1 items-center justify-center rounded-xl px-4 py-6 text-center text-sm">
                       Nenhum item ainda. Adicione um serviço ou produto.
                     </p>
@@ -1950,8 +1945,8 @@ export function ComandaDialog({
                           </li>
                         );
                       })}
-                      {tipCents > 0 && (
-                        <li className="flex items-center gap-3 bg-transparent px-3 py-2.5 sm:px-4">
+                      {tips.map((tip) => (
+                        <li key={tip.id} className="flex items-center gap-3 bg-transparent px-3 py-2.5 sm:px-4">
                           <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] text-[var(--booking-accent,#ecf15e)]">
                             <Coins className="size-4" />
                           </div>
@@ -1961,12 +1956,12 @@ export function ComandaDialog({
                             </p>
                             <p className="truncate text-xs text-muted-foreground">
                               {tipEligibleProfessionals.find(
-                                (pro) => pro.id === tipProfessionalId
+                                (pro) => pro.id === tip.professionalId
                               )?.nickname ?? "barbeiro"}
                             </p>
                           </div>
                           <span className="shrink-0 font-semibold tabular-nums text-[#f5f5f5]">
-                            {formatPriceBRL(tipCents)}
+                            {formatPriceBRL(tip.cents)}
                           </span>
                           {canEdit && (
                             <Button
@@ -1974,15 +1969,15 @@ export function ComandaDialog({
                               variant="ghost"
                               size="icon"
                               className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
-                              onClick={removeTip}
+                              onClick={openTipDialog}
                               disabled={busy}
-                              title="Remover gorjeta"
+                              title="Editar gorjetas"
                             >
-                              <Trash2 className="size-4" />
+                              <Pencil className="size-4" />
                             </Button>
                           )}
                         </li>
-                      )}
+                      ))}
                     </ul>
                   )}
 
@@ -2003,11 +1998,11 @@ export function ComandaDialog({
                         </span>
                       </div>
                     )}
-                    {tipCents > 0 && (
+                    {tips.length > 0 && (
                       <div className="flex items-center justify-between text-muted-foreground">
-                        <span>Gorjeta</span>
+                        <span>{tips.length === 1 ? "Gorjeta" : "Gorjetas"}</span>
                         <span className="tabular-nums">
-                          {formatPriceBRL(tipCents)}
+                          {formatPriceBRL(tips.reduce((sum, tip) => sum + tip.cents, 0))}
                         </span>
                       </div>
                     )}
@@ -2837,7 +2832,7 @@ export function ComandaDialog({
               </div>
               <div className="min-w-0 space-y-1">
                 <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
-                  Gorjeta
+                  {tipDraftList.length === 0 ? "Adicionar gorjeta" : "Gorjetas"}
                 </DialogTitle>
                 <DialogDescription>
                   O barbeiro recebe 100% do valor. Entra no total da comanda.
@@ -2845,85 +2840,91 @@ export function ComandaDialog({
               </div>
             </div>
           </DialogHeader>
-          <div className="space-y-4 px-4 py-4 sm:px-5">
-            <div className="space-y-2.5">
-              <Label htmlFor="tip-draft-amount">Valor</Label>
-              <div className="flex flex-wrap gap-2">
-                {TIP_QUICK_CENTS.map((cents) => {
-                  const selected = tipDraftCents === cents;
-                  return (
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+            {tipDraftList.length > 0 && (
+              <div className="space-y-2">
+                <Label>Gorjetas cadastradas</Label>
+                <ul className="space-y-2">
+                  {tipDraftList.map((tip, index) => (
+                    <li
+                      key={tip.id}
+                      className="flex items-center gap-3 rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] px-3 py-2.5"
+                    >
+                      <Coins className="size-4 shrink-0 text-[var(--booking-accent,#ecf15e)]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-[#f5f5f5]">
+                          {formatPriceBRL(tip.cents)}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {tipEligibleProfessionals.find(
+                            (pro) => pro.id === tip.professionalId
+                          )?.nickname ?? "barbeiro"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
+                        onClick={() => {
+                          setTipDraftList((prev) =>
+                            prev.filter((_, i) => i !== index)
+                          );
+                        }}
+                        disabled={busy}
+                        title="Remover gorjeta"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            <div className="space-y-4 rounded-xl border border-dashed border-[var(--booking-border)] p-4">
+              <p className="text-sm font-medium text-[#f5f5f5]">
+                {tipDraftList.length > 0 ? "Adicionar outra gorjeta" : "Nova gorjeta"}
+              </p>
+              <div className="space-y-2.5">
+                <Label htmlFor="tip-new-amount">Valor</Label>
+                <div className="flex flex-wrap gap-2">
+                  {TIP_QUICK_CENTS.map((cents) => (
                     <button
                       key={cents}
                       type="button"
                       disabled={busy}
-                      onClick={() => setTipDraftCents(cents)}
+                      onClick={() => {
+                        const firstPro = tipEligibleProfessionals[0]?.id ?? "";
+                        if (firstPro) {
+                          setTipDraftList((prev) => [
+                            ...prev,
+                            { id: crypto.randomUUID(), cents, professionalId: firstPro },
+                          ]);
+                        }
+                      }}
                       className={cn(
-                        "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors",
-                        selected ? "booking-pick-active" : "booking-pick",
+                        "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors booking-pick",
                         busy && "opacity-50"
                       )}
                     >
-                      {formatPriceBRL(cents)}
+                      + {formatPriceBRL(cents)}
                     </button>
-                  );
-                })}
-              </div>
-              <Input
-                id="tip-draft-amount"
-                className="h-11 tabular-nums"
-                value={
-                  tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
-                }
-                onChange={(e) =>
-                  setTipDraftCents(parsePriceInput(e.target.value))
-                }
-                placeholder="Ou digite outro valor"
-                disabled={busy}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tip-draft-professional">Quem recebe</Label>
-              <Select
-                value={tipDraftProfessionalId}
-                onValueChange={setTipDraftProfessionalId}
-                disabled={busy || tipEligibleProfessionals.length === 0}
-              >
-                <SelectTrigger id="tip-draft-professional" className="h-11">
-                  <SelectValue placeholder="Escolha o barbeiro" />
-                </SelectTrigger>
-                <SelectContent className={ADMIN_SURFACE.popover}>
-                  {tipEligibleProfessionals.map((pro) => (
-                    <SelectItem key={pro.id} value={pro.id}>
-                      {pro.nickname}
-                    </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {tipDraftCents > 0 && tipDraftProfessionalId ? (
-              <div className="booking-context rounded-xl px-3.5 py-3 text-sm">
-                <p className="font-medium text-[#f5f5f5]">
-                  {formatPriceBRL(tipDraftCents)}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Para{" "}
-                  {tipEligibleProfessionals.find(
-                    (pro) => pro.id === tipDraftProfessionalId
-                  )?.nickname ?? "barbeiro"}
-                </p>
+                </div>
               </div>
-            ) : null}
+            </div>
           </div>
           <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
-            {tipCents > 0 ? (
+            {tips.length > 0 && tipDraftList.length === 0 ? (
               <Button
                 type="button"
                 variant="ghost"
                 className="booking-btn-danger"
                 disabled={busy}
-                onClick={removeTip}
+                onClick={removeAllTips}
               >
-                Remover gorjeta
+                Remover todas
               </Button>
             ) : (
               <span />
@@ -2941,10 +2942,14 @@ export function ComandaDialog({
               <Button
                 type="button"
                 className="booking-btn-primary"
-                disabled={busy || tipDraftCents <= 0 || !tipDraftProfessionalId}
+                disabled={busy || tipDraftList.some((t) => t.cents <= 0 || !t.professionalId)}
                 onClick={confirmTipDialog}
               >
-                Confirmar gorjeta
+                {tipDraftList.length === 0
+                  ? "Remover gorjetas"
+                  : tipDraftList.length === 1
+                    ? "Salvar gorjeta"
+                    : `Salvar ${tipDraftList.length} gorjetas`}
               </Button>
             </div>
           </div>
