@@ -9,6 +9,7 @@ import {
   ChevronRight,
   CreditCard,
   Lock,
+  Printer,
   QrCode,
   RotateCcw,
   Trash2,
@@ -44,6 +45,7 @@ import {
 import type { CashRegisterSession } from "@/lib/cash-register-service";
 import {
   CASH_INFLOW_PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
   type PaymentMethod,
 } from "@/lib/comanda-types";
@@ -54,6 +56,11 @@ import { formatDateBR, formatPriceBRL, formatTime } from "@/lib/format";
 import { matchesSearch } from "@/lib/text";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
+import type { ExpensesReport } from "@/lib/expense-service";
+import {
+  EXPENSE_PAYMENT_METHOD_LABELS,
+  type ExpensePaymentMethod,
+} from "@/lib/expense-service";
 
 type ComandaProfessionalOption = {
   id: string;
@@ -75,6 +82,7 @@ type CashRegisterDetailViewProps = {
   servicesCatalog: ServiceOption[];
   productsCatalog: ProductOption[];
   professionals: ComandaProfessionalOption[];
+  expenses: ExpensesReport;
   isOwner?: boolean;
   initialCashRegisterOpen?: boolean;
   initialOpenCashRegisterDate?: string | null;
@@ -119,6 +127,7 @@ export function CashRegisterDetailView({
   servicesCatalog,
   productsCatalog,
   professionals,
+  expenses,
   isOwner = true,
   initialCashRegisterOpen = false,
   initialOpenCashRegisterDate = null,
@@ -265,55 +274,310 @@ export function CashRegisterDetailView({
           backHref={backHref}
           backLabel="Voltar aos caixas"
           action={
-            isCashOpen ? (
-              <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              {cashSession && cashSession.status === "closed" && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className={ADMIN_SURFACE.btnGhost}
-                  disabled={pending || cash.openComandas.length > 0}
-                  onClick={() => setConfirmClose(true)}
+                  onClick={() => window.print()}
                 >
-                  <Lock className="size-4" />
-                  Fechar caixa
+                  <Printer className="size-4" />
+                  Imprimir
                 </Button>
-                {cash.openComandas.length > 0 ? (
-                  <p className={cn("max-w-[16rem] text-right text-[11px]", ADMIN_SURFACE.accent)}>
-                    Finalize as comandas em aberto antes de encerrar.
-                  </p>
-                ) : null}
-              </div>
-            ) : cashSession ? (
-              <Button
-                type="button"
-                size="sm"
-                className={ADMIN_SURFACE.btnPrimary}
-                disabled={pending || Boolean(otherDayOpen)}
-                onClick={() => {
-                  setOpenMode("reopen");
-                  setOpenDialog(true);
-                }}
-              >
-                <RotateCcw className="size-4" />
-                Reabrir
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                className={ADMIN_SURFACE.btnPrimary}
-                disabled={pending || Boolean(otherDayOpen)}
-                onClick={() => {
-                  setOpenMode("open");
-                  setOpenDialog(true);
-                }}
-              >
-                Abrir caixa
-              </Button>
-            )
+              )}
+              {isCashOpen ? (
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={ADMIN_SURFACE.btnGhost}
+                    disabled={pending || cash.openComandas.length > 0}
+                    onClick={() => setConfirmClose(true)}
+                  >
+                    <Lock className="size-4" />
+                    Fechar caixa
+                  </Button>
+                  {cash.openComandas.length > 0 ? (
+                    <p className={cn("max-w-[16rem] text-right text-[11px]", ADMIN_SURFACE.accent)}>
+                      Finalize as comandas em aberto antes de encerrar.
+                    </p>
+                  ) : null}
+                </div>
+              ) : cashSession ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnPrimary}
+                  disabled={pending || Boolean(otherDayOpen)}
+                  onClick={() => {
+                    setOpenMode("reopen");
+                    setOpenDialog(true);
+                  }}
+                >
+                  <RotateCcw className="size-4" />
+                  Reabrir
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  className={ADMIN_SURFACE.btnPrimary}
+                  disabled={pending || Boolean(otherDayOpen)}
+                  onClick={() => {
+                    setOpenMode("open");
+                    setOpenDialog(true);
+                  }}
+                >
+                  Abrir caixa
+                </Button>
+              )}
+            </div>
           }
         />
+
+        {/* Resumo visual para fechamento - apenas quando caixa fechado */}
+        {cashSession && cashSession.status === "closed" && (
+          <div className="space-y-4">
+            {/* Cards principais - compactos */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <p className={cn("text-xs font-semibold uppercase tracking-wider", ADMIN_SURFACE.muted, "print:text-black/60")}>
+                  Total Entradas
+                </p>
+                <p className={cn("mt-2 text-2xl font-bold tabular-nums text-white print:text-black")}>
+                  {formatPriceBRL(cash.cashInflowCents)}
+                </p>
+                <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted, "print:text-black/50")}>
+                  {cash.comandaCount} comanda{cash.comandaCount === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <p className={cn("text-xs font-semibold uppercase tracking-wider", ADMIN_SURFACE.muted, "print:text-black/60")}>
+                  Total Saídas
+                </p>
+                <p className={cn("mt-2 text-2xl font-bold tabular-nums text-white print:text-black")}>
+                  {formatPriceBRL(expenses.totalCents)}
+                </p>
+                <p className={cn("mt-1 text-xs", ADMIN_SURFACE.muted, "print:text-black/50")}>
+                  {expenses.count} despesa{expenses.count === 1 ? "" : "s"}
+                </p>
+              </div>
+
+              <div className={cn(ADMIN_SURFACE.panel, "border border-[rgb(236_241_94_/_28%)] p-4 print:border-2 print:border-black")}>
+                <p className={cn("text-xs font-semibold uppercase tracking-wider", ADMIN_SURFACE.accent, "print:text-black/80")}>
+                  Saldo Líquido
+                </p>
+                <p className={cn("mt-2 text-2xl font-bold tabular-nums", ADMIN_SURFACE.accent, "print:text-black")}>
+                  {formatPriceBRL(cash.cashInflowCents - expenses.totalCents)}
+                </p>
+                <p className={cn("mt-1 text-xs text-[#ecf15e]/70 print:text-black/50")}>
+                  Em caixa
+                </p>
+              </div>
+            </div>
+
+            {/* Detalhes organizados - mais compactos */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Entradas por pagamento */}
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <h3 className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-white print:text-black")}>
+                  Entradas por Pagamento
+                </h3>
+                <div className="space-y-2">
+                  {(Object.entries(cash.byPaymentMethod) as [PaymentMethod, number][])
+                    .filter(([_, value]) => value > 0)
+                    .map(([method, value]) => {
+                      const percentage = cash.cashInflowCents > 0 ? (value / cash.cashInflowCents) * 100 : 0;
+                      return (
+                        <div key={method} className="space-y-0.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                              {PAYMENT_METHOD_LABELS[method]}
+                            </span>
+                            <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                              {formatPriceBRL(value)}
+                            </span>
+                          </div>
+                          <div className={cn("h-1.5 w-full overflow-hidden rounded-full", ADMIN_SURFACE.progress, "print:bg-black/5")}>
+                            <div 
+                              className={cn("h-full rounded-full", ADMIN_SURFACE.progressBar, "print:bg-black/60")}
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  {cash.creditDepositsCents > 0 && (
+                    <div className="space-y-0.5 border-t border-white/10 pt-2 print:border-black/10">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                          Créditos gerados
+                        </span>
+                        <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                          {formatPriceBRL(cash.creditDepositsCents)}
+                        </span>
+                      </div>
+                      <div className={cn("h-1.5 w-full overflow-hidden rounded-full", ADMIN_SURFACE.progress, "print:bg-black/5")}>
+                        <div 
+                          className="h-full rounded-full bg-[#ecf15e]/50 print:bg-black/40"
+                          style={{ width: `${cash.cashInflowCents > 0 ? (cash.creditDepositsCents / cash.cashInflowCents) * 100 : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-white/20 pt-2 text-sm font-bold print:border-black/20">
+                    <span className="text-white print:text-black">Total</span>
+                    <span className={cn("tabular-nums", ADMIN_SURFACE.accent, "print:text-black")}>
+                      {formatPriceBRL(cash.cashInflowCents)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Saídas por pagamento */}
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <h3 className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-white print:text-black")}>
+                  Saídas por Pagamento
+                </h3>
+                <div className="space-y-2">
+                  {expenses.count === 0 ? (
+                    <p className={cn("text-xs", ADMIN_SURFACE.muted, "print:text-black/50")}>
+                      Nenhuma despesa
+                    </p>
+                  ) : (
+                    <>
+                      {(Object.entries(expenses.byPaymentMethod) as [ExpensePaymentMethod, number][])
+                        .filter(([_, value]) => value > 0)
+                        .map(([method, value]) => {
+                          const percentage = expenses.totalCents > 0 ? (value / expenses.totalCents) * 100 : 0;
+                          return (
+                            <div key={method} className="space-y-0.5">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                                  {EXPENSE_PAYMENT_METHOD_LABELS[method]}
+                                </span>
+                                <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                                  {formatPriceBRL(value)}
+                                </span>
+                              </div>
+                              <div className={cn("h-1.5 w-full overflow-hidden rounded-full", ADMIN_SURFACE.progress, "print:bg-black/5")}>
+                                <div 
+                                  className={cn("h-full rounded-full", ADMIN_SURFACE.progressBar, "print:bg-black/60")}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      <div className="flex items-center justify-between border-t border-white/20 pt-2 text-sm font-bold print:border-black/20">
+                        <span className="text-white print:text-black">Total</span>
+                        <span className={cn("tabular-nums", ADMIN_SURFACE.accent, "print:text-black")}>
+                          {formatPriceBRL(expenses.totalCents)}
+                        </span>
+                      </div>
+                      {expenses.expenses.length > 0 && (
+                        <div className="border-t border-white/10 pt-2 print:border-black/10">
+                          <p className={cn("mb-1.5 text-[10px] font-medium uppercase tracking-wide", ADMIN_SURFACE.muted, "print:text-black/50")}>
+                            Despesas
+                          </p>
+                          <div className="space-y-1">
+                            {expenses.expenses.map((expense) => (
+                              <div key={expense.id} className="flex items-center justify-between text-[11px]">
+                                <span className={cn(ADMIN_SURFACE.muted, "truncate print:text-black/60")} title={expense.description}>
+                                  {expense.description}
+                                </span>
+                                <span className={cn("ml-2 font-medium tabular-nums text-white print:text-black")}>
+                                  {formatPriceBRL(expense.amountCents)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Comissões */}
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <h3 className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-white print:text-black")}>
+                  Comissões
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                      Total barbeiros
+                    </span>
+                    <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                      {formatPriceBRL(cash.commissionCents)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs print:border-black/10">
+                    <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                      Lucro barbearia
+                    </span>
+                    <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                      {formatPriceBRL(cash.shopCents)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Atendimentos */}
+              <div className={cn(ADMIN_SURFACE.panel, "border border-white/5 p-4 print:border-2 print:border-black")}>
+                <h3 className={cn("mb-3 text-xs font-semibold uppercase tracking-wide text-white print:text-black")}>
+                  Atendimentos
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                      Total comandas
+                    </span>
+                    <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                      {cash.comandaCount}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs print:border-black/10">
+                    <span className={cn(ADMIN_SURFACE.muted, "print:text-black/70")}>
+                      Ticket médio
+                    </span>
+                    <span className={cn("font-semibold tabular-nums text-white print:text-black")}>
+                      {cash.comandaCount > 0
+                        ? formatPriceBRL(Math.round(cash.totalCents / cash.comandaCount))
+                        : "—"}
+                    </span>
+                  </div>
+                  {cash.serviceBreakdown.filter((s) => !s.isTip).length > 0 && (
+                    <div className="border-t border-white/10 pt-2 print:border-black/10">
+                      <p className={cn("mb-1.5 text-[10px] font-medium uppercase tracking-wide", ADMIN_SURFACE.muted, "print:text-black/50")}>
+                        Serviços executados
+                      </p>
+                      <div className="space-y-1">
+                        {cash.serviceBreakdown
+                          .filter((s) => !s.isTip)
+                          .map((service, idx) => (
+                            <div key={idx} className="flex items-center justify-between text-[11px]">
+                              <span className={cn(ADMIN_SURFACE.muted, "truncate print:text-black/60")}>
+                                {service.serviceName}
+                              </span>
+                              <span className={cn("ml-2 font-medium tabular-nums text-white print:text-black")}>
+                                {service.quantity}x
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {otherDayOpen ? (
           <div
@@ -337,7 +601,9 @@ export function CashRegisterDetailView({
           </div>
         ) : null}
 
-        <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+        {/* Total do dia - só mostra quando caixa aberto */}
+        {cashSession?.status === "open" && (
+          <div className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
           <div className="flex items-center justify-between gap-3 px-4 py-4 sm:px-5">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -409,6 +675,7 @@ export function CashRegisterDetailView({
             </p>
           ) : null}
         </div>
+        )}
 
         {cash.openComandas.length > 0 ? (
           <section className="flex flex-col gap-3">
@@ -478,7 +745,7 @@ export function CashRegisterDetailView({
           </section>
         ) : null}
 
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-3 print:hidden">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-baseline gap-2">
               <p className={ADMIN_SURFACE.sectionLabel}>Comandas fechadas</p>
@@ -732,6 +999,99 @@ export function CashRegisterDetailView({
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Estilos de impressão */}
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 15mm;
+          }
+
+          body {
+            background: white !important;
+          }
+
+          /* Esconde elementos desnecessários */
+          .print\\:hidden {
+            display: none !important;
+          }
+
+          /* Força fundo branco no geral */
+          body, [data-vaul-drawer-wrapper] {
+            background: white !important;
+          }
+
+          /* Cards e painéis em branco com bordas pretas */
+          [class*="bg-\\[\\#"] {
+            background: white !important;
+          }
+
+          /* Texto em preto */
+          * {
+            color: black !important;
+          }
+
+          /* Bordas mais fortes para print */
+          .print\\:border-2 {
+            border: 2px solid #000 !important;
+          }
+
+          .print\\:border-black {
+            border-color: #000 !important;
+          }
+
+          /* Barras de progresso visíveis em cinza escuro */
+          .print\\:bg-black\\/60,
+          [class*="progressBar"] {
+            background: #404040 !important;
+          }
+
+          .print\\:bg-black\\/40 {
+            background: #808080 !important;
+          }
+
+          .print\\:bg-black\\/5 {
+            background: #e0e0e0 !important;
+          }
+
+          /* Separadores visíveis */
+          .print\\:border-black\\/10 {
+            border-color: #d0d0d0 !important;
+          }
+
+          .print\\:border-black\\/20 {
+            border-color: #b0b0b0 !important;
+          }
+
+          /* Textos com opacidade */
+          .print\\:text-black\\/50 {
+            color: #666 !important;
+          }
+
+          .print\\:text-black\\/60 {
+            color: #555 !important;
+          }
+
+          .print\\:text-black\\/70 {
+            color: #444 !important;
+          }
+
+          .print\\:text-black\\/80 {
+            color: #222 !important;
+          }
+
+          /* Evita quebra de página nos cards */
+          .grid > div {
+            break-inside: avoid;
+          }
+
+          /* Logo visível */
+          img {
+            opacity: 1 !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

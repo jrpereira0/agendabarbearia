@@ -9,6 +9,7 @@ import {
   getOpenCashRegisterSession,
 } from "@/lib/cash-register-service";
 import { getCashRegisterSummary } from "@/lib/finance-reports";
+import { getExpensesReport } from "@/lib/expense-service";
 import { loadCashRegisterResponsibleOptions } from "@/lib/cash-register-options";
 import { getAdminSession } from "@/lib/require-admin";
 import { formatDateBR } from "@/lib/format";
@@ -66,6 +67,7 @@ export default async function CaixaDetalhePage({
     productsResult,
     professionalsResult,
     pricingContext,
+    expenses,
   ] = await Promise.all([
     getCashRegisterSession(admin, date),
     getOpenCashRegisterSession(admin),
@@ -92,6 +94,7 @@ export default async function CaixaDetalhePage({
       .eq("active", true)
       .order("nickname"),
     loadServicePricingContext(admin, date),
+    getExpensesReport(admin, date, date),
   ]);
 
   const cash = await getCashRegisterSummary(admin, date, {
@@ -153,6 +156,7 @@ export default async function CaixaDetalhePage({
       servicesCatalog={servicesCatalog}
       productsCatalog={productsCatalog}
       professionals={professionals}
+      expenses={expenses}
       isOwner
       initialCashRegisterOpen={cashSession?.status === "open"}
       initialOpenCashRegisterDate={openCashRegister?.serviceDate ?? null}

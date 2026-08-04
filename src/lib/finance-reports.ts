@@ -55,6 +55,8 @@ export type CashRegisterSummary = {
   }[];
   /** Comandas abertas do dia (venda rápida ou horário), ainda não finalizadas. */
   openComandas: CashRegisterOpenComanda[];
+  /** Quantidade de cada serviço executado no período. */
+  serviceBreakdown: FinanceServiceRow[];
 };
 
 export type CommissionSummaryRow = {
@@ -311,6 +313,11 @@ export async function getFinancePeriodSummary(
     };
   });
 
+  const serviceBreakdown = await loadFinanceServiceBreakdown(
+    admin,
+    comandasWithCredit.map((comanda) => comanda.id)
+  );
+
   return {
     from,
     to,
@@ -325,6 +332,7 @@ export async function getFinancePeriodSummary(
     comandaCount: comandasWithCredit.length,
     comandas: comandasWithCredit,
     openComandas: [],
+    serviceBreakdown,
   };
 }
 
