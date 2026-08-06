@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
+  agendaLayoutStepMinutes,
   buildTimeSlots,
   computeOverlapLayouts,
   expandAppointmentsToServiceCards,
   appointmentGridRows,
   packServiceCardsToGridRows,
   isSlotStartAvailable,
-  rowHeightForStep,
+  rowHeightForLayoutStep,
   shouldShowTimeLabel,
   timeLabel,
 } from "@/lib/agenda-grid-utils";
@@ -100,11 +101,27 @@ export function AgendaGrid({
   const [nowMinutes, setNowMinutes] = useState<number | null>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
 
-  const rowHeight = mobileLayout
-    ? Math.max(14, Math.round(rowHeightForStep(slotStepMinutes) * 1.4))
-    : rowHeightForStep(slotStepMinutes);
+  const layoutStepMinutes = agendaLayoutStepMinutes(slotStepMinutes);
+  const rowsPerBookingSlot = Math.max(
+    1,
+    Math.round(slotStepMinutes / layoutStepMinutes)
+  );
 
-  const timeSlots = useMemo(
+  const rowHeight = mobileLayout
+    ? Math.max(
+        6,
+        Math.round(
+          rowHeightForLayoutStep(layoutStepMinutes, slotStepMinutes) * 1.4
+        )
+      )
+    : rowHeightForLayoutStep(layoutStepMinutes, slotStepMinutes);
+
+  const layoutSlotCount = useMemo(
+    () => buildTimeSlots(gridStart, gridEnd, layoutStepMinutes).length,
+    [gridStart, gridEnd, layoutStepMinutes]
+  );
+
+  const bookingSlots = useMemo(
     () => buildTimeSlots(gridStart, gridEnd, slotStepMinutes),
     [gridStart, gridEnd, slotStepMinutes]
   );
@@ -127,15 +144,21 @@ export function AgendaGrid({
     if (displayNowMinutes == null) return null;
     if (displayNowMinutes < gridStart || displayNowMinutes >= gridEnd) return null;
     const fromStart = displayNowMinutes - gridStart;
-    const slotIndex = Math.floor(fromStart / slotStepMinutes);
+    const layoutIndex = Math.floor(fromStart / layoutStepMinutes);
     const offset =
-      ((fromStart % slotStepMinutes) / slotStepMinutes) * rowHeight;
+      ((fromStart % layoutStepMinutes) / layoutStepMinutes) * rowHeight;
     return {
-      row: slotIndex + 2,
+      row: layoutIndex + 2,
       offset,
       label: timeLabel(displayNowMinutes),
     };
-  }, [displayNowMinutes, gridStart, gridEnd, slotStepMinutes, rowHeight]);
+  }, [
+    displayNowMinutes,
+    gridStart,
+    gridEnd,
+    layoutStepMinutes,
+    rowHeight,
+  ]);
 
   const appointmentsByPro = useMemo(() => {
     const map = new Map<string, AppointmentItem[]>();
@@ -173,9 +196,9 @@ export function AgendaGrid({
         serviceCards,
         gridStart,
         gridEnd,
-        slotStepMinutes
+        layoutStepMinutes
       ),
-    [serviceCards, gridStart, gridEnd, slotStepMinutes]
+    [serviceCards, gridStart, gridEnd, layoutStepMinutes]
   );
 
   const proColumnIndex = useMemo(() => {
@@ -265,6 +288,7 @@ export function AgendaGrid({
   const drag = useAgendaCardDrag({
     enabled: canEditAppointments,
     rowHeight,
+    layoutStepMinutes,
     slotStepMinutes,
     gridStart,
     gridEnd,
@@ -286,7 +310,7 @@ export function AgendaGrid({
     );
   }
 
-  const footerRow = timeSlots.length + 2;
+  const footerRow = layoutSlotCount + 2;
   const compactProHeader = mobileLayout && professionals.length === 1;
 
   const dropPreview = (() => {
@@ -305,7 +329,7 @@ export function AgendaGrid({
       endTime,
       gridStart,
       gridEnd,
-      slotStepMinutes
+      layoutStepMinutes
     );
     if (!rows) return null;
 
@@ -326,7 +350,7 @@ export function AgendaGrid({
     gridTemplateColumns: compactProHeader
       ? `3rem minmax(0, 1fr)`
       : `3rem repeat(${professionals.length}, minmax(0, 1fr))`,
-    gridTemplateRows: `auto repeat(${timeSlots.length}, ${rowHeight}px) auto`,
+    gridTemplateRows: `auto repeat(${layoutSlotCount}, ${rowHeight}px) auto`,
   } as React.CSSProperties;
 
   return (
@@ -389,15 +413,16 @@ export function AgendaGrid({
           </div>
         ))}
 
-        {timeSlots.map((minute, index) => {
-          const row = index + 2;
-          const isLast = index === timeSlots.length - 1;
+        {bookingSlots.map((minute, index) => {
+          const layoutRowStart =
+            Math.floor((minute - gridStart) / layoutStepMinutes) + 2;
+          const isLast = index === bookingSlots.length - 1;
 
           return (
             <TimeSlotCells
               key={minute}
               minute={minute}
-              row={row}
+              gridRow={`${layoutRowStart} / ${layoutRowStart + rowsPerBookingSlot}`}
               isLast={isLast}
               isHovered={hoverMinute === minute}
               stickyTimeColumn={false}
@@ -480,7 +505,7 @@ export function AgendaGrid({
               card.endTime,
               gridStart,
               gridEnd,
-              slotStepMinutes
+              layoutStepMinutes
             );
           if (!rows) return null;
 
@@ -582,7 +607,7 @@ export function AgendaGrid({
 
 type TimeSlotCellsProps = {
   minute: number;
-  row: number;
+  gridRow: string;
   isLast: boolean;
   isHovered: boolean;
   stickyTimeColumn?: boolean;
@@ -597,7 +622,7 @@ type TimeSlotCellsProps = {
 
 function TimeSlotCells({
   minute,
-  row,
+  gridRow,
   isLast,
   isHovered,
   stickyTimeColumn = true,
@@ -619,7 +644,7 @@ function TimeSlotCells({
           isLast && `border-b border-solid ${gridLineHour}`,
           isHovered && "bg-[rgb(236_241_94_/_10%)]"
         )}
-        style={{ gridRow: row, gridColumn: 1 }}
+        style={{ gridRow, gridColumn: 1 }}
         onMouseEnter={() => onHoverMinute(minute)}
       >
         {shouldShowTimeLabel(minute, slotStepMinutes) && (
@@ -677,7 +702,7 @@ function TimeSlotCells({
               isLast && `border-b border-solid ${gridLineHour}`,
               agendaCellClass({ inSchedule, occupied, blocked })
             )}
-            style={{ gridRow: row, gridColumn: i + 2 }}
+            style={{ gridRow, gridColumn: i + 2 }}
             onMouseEnter={() => onHoverMinute(minute)}
             title={timeLabel(minute)}
           >

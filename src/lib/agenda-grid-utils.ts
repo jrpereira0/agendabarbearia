@@ -4,9 +4,33 @@ import {
   type MinuteRange,
 } from "@/lib/availability";
 
-// Altura de cada linha escala com o intervalo (30 min ≈ 27 px).
+/** Resolução visual da grade — cards acompanham a duração real do serviço. */
+export const AGENDA_LAYOUT_STEP_MINUTES = 5;
+
+/** Passo da grade visual (divisor do intervalo de agendamento). */
+export function agendaLayoutStepMinutes(slotStepMinutes: number): number {
+  if (
+    slotStepMinutes > 0 &&
+    slotStepMinutes % AGENDA_LAYOUT_STEP_MINUTES === 0
+  ) {
+    return AGENDA_LAYOUT_STEP_MINUTES;
+  }
+  return Math.max(1, slotStepMinutes);
+}
+
+// Altura de cada linha do intervalo de agendamento (30 min ≈ 27 px).
 export function rowHeightForStep(stepMinutes: number): number {
   return Math.max(10, Math.round((24 / 30) * stepMinutes) + 3);
+}
+
+/** Altura de cada linha da grade visual, mantendo a altura total do dia. */
+export function rowHeightForLayoutStep(
+  layoutStepMinutes: number,
+  slotStepMinutes: number
+): number {
+  const slotHeight = rowHeightForStep(slotStepMinutes);
+  const rowsPerSlot = Math.max(1, slotStepMinutes / layoutStepMinutes);
+  return Math.max(4, Math.round(slotHeight / rowsPerSlot));
 }
 
 export function buildTimeSlots(
@@ -21,7 +45,7 @@ export function buildTimeSlots(
   return slots;
 }
 
-/** Posição na grade; garante ao menos 1 linha (ex.: serviço de 10 min em grade de 15 min). */
+/** Posição na grade conforme início/fim reais (sem arredondar pra um slot inteiro). */
 export function appointmentGridRows(
   startTime: string,
   endTime: string,
@@ -34,10 +58,13 @@ export function appointmentGridRows(
 
   if (end <= gridStart || start >= gridEnd) return null;
 
-  const rowStart = Math.floor((start - gridStart) / stepMinutes) + 2;
+  const clippedStart = Math.max(start, gridStart);
+  const clippedEnd = Math.min(end, gridEnd);
+
+  const rowStart = Math.floor((clippedStart - gridStart) / stepMinutes) + 2;
   const rowEnd = Math.max(
     rowStart + 1,
-    Math.ceil((end - gridStart) / stepMinutes) + 2
+    Math.ceil((clippedEnd - gridStart) / stepMinutes) + 2
   );
 
   return {
@@ -271,28 +298,12 @@ export function packServiceCardsToGridRows<
         timeToMinutes(card.endTime) - timeToMinutes(card.startTime)
       )
     );
-    // Se der, cada card fica com pelo menos 2 linhas pra caber nome + serviço.
-    const minShare = full.rowSpan >= aptCards.length * 2 ? 2 : 1;
-    const targetRows = Math.max(full.rowSpan, aptCards.length * minShare);
-    const shares = distributePositiveIntegers(weights, targetRows).map(
-      (share) => Math.max(minShare, share)
-    );
-
-    // Ajuste fino se o mínimo 2 estourou o total.
-    let allocated = shares.reduce((acc, value) => acc + value, 0);
-    while (allocated > targetRows) {
-      let maxIdx = 0;
-      for (let i = 1; i < shares.length; i++) {
-        if (shares[i]! > shares[maxIdx]!) maxIdx = i;
-      }
-      if (shares[maxIdx]! <= minShare) break;
-      shares[maxIdx]!--;
-      allocated--;
-    }
+    // Reparte só dentro do horário do agendamento (sem esticar e empurrar o próximo).
+    const shares = distributePositiveIntegers(weights, full.rowSpan);
 
     let cursor = full.rowStart;
     aptCards.forEach((card, index) => {
-      const rowSpan = Math.max(minShare, shares[index] ?? minShare);
+      const rowSpan = Math.max(1, shares[index] ?? 1);
       result.set(card.id, {
         rowStart: cursor,
         rowEnd: cursor + rowSpan,

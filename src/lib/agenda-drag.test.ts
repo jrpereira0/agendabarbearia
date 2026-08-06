@@ -72,7 +72,8 @@ describe("canDragAppointment", () => {
 const snapBase = {
   originStartMinutes: 10 * 60,
   durationMinutes: 30,
-  rowHeight: 20,
+  rowHeight: 5,
+  layoutStepMinutes: 5,
   slotStepMinutes: 15,
   gridStart: 8 * 60,
   gridEnd: 20 * 60,
@@ -80,16 +81,16 @@ const snapBase = {
 
 describe("snapStartMinutes", () => {
   it("mantém o horário enquanto o arraste não passa de meia linha", () => {
-    expect(snapStartMinutes({ ...snapBase, deltaY: 9 })).toBe(10 * 60);
+    expect(snapStartMinutes({ ...snapBase, deltaY: 2 })).toBe(10 * 60);
   });
 
-  it("desce uma linha por altura de linha arrastada", () => {
-    expect(snapStartMinutes({ ...snapBase, deltaY: 20 })).toBe(10 * 60 + 15);
-    expect(snapStartMinutes({ ...snapBase, deltaY: 82 })).toBe(11 * 60);
+  it("desce conforme as linhas visuais e alinha ao intervalo de agendamento", () => {
+    expect(snapStartMinutes({ ...snapBase, deltaY: 15 })).toBe(10 * 60 + 15);
+    expect(snapStartMinutes({ ...snapBase, deltaY: 60 })).toBe(11 * 60);
   });
 
   it("sobe ao arrastar pra cima", () => {
-    expect(snapStartMinutes({ ...snapBase, deltaY: -40 })).toBe(9 * 60 + 30);
+    expect(snapStartMinutes({ ...snapBase, deltaY: -30 })).toBe(9 * 60 + 30);
   });
 
   it("não passa do começo nem do fim da grade", () => {

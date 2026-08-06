@@ -69,6 +69,9 @@ export type SnapStartInput = {
   /** Quanto o ponteiro andou na vertical desde o clique. */
   deltaY: number;
   rowHeight: number;
+  /** Minutos representados por cada linha visual da grade. */
+  layoutStepMinutes: number;
+  /** Alinhamento final do horário (intervalo de agendamento). */
   slotStepMinutes: number;
   gridStart: number;
   gridEnd: number;
@@ -80,12 +83,13 @@ export function snapStartMinutes({
   durationMinutes,
   deltaY,
   rowHeight,
+  layoutStepMinutes,
   slotStepMinutes,
   gridStart,
   gridEnd,
 }: SnapStartInput): number {
   const steps = rowHeight > 0 ? Math.round(deltaY / rowHeight) : 0;
-  const raw = originStartMinutes + steps * slotStepMinutes;
+  const raw = originStartMinutes + steps * layoutStepMinutes;
   const aligned =
     gridStart +
     Math.round((raw - gridStart) / slotStepMinutes) * slotStepMinutes;

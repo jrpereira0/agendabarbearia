@@ -81,34 +81,67 @@ function CustomerCreditIcon({
   );
 }
 
-function FirstVisitIcon({ className }: { className?: string }) {
+function FirstVisitBadge({
+  mode = "full",
+}: {
+  mode?: "full" | "compact" | "icon";
+}) {
   const label = "Primeira visita deste cliente";
+
+  if (mode === "icon") {
+    return (
+      <span
+        className="inline-flex size-3.5 shrink-0 items-center justify-center rounded-sm bg-[#0e0f11]/16 text-[#3f4f08] ring-1 ring-[#0e0f11]/12"
+        aria-label={label}
+        title={label}
+      >
+        <UserPlus className="size-2.5" strokeWidth={2.25} />
+      </span>
+    );
+  }
 
   return (
     <span
       className={cn(
-        "inline-flex size-4 shrink-0 items-center justify-center rounded-sm bg-[#0e0f11]/14 ring-1 ring-[#0e0f11]/10",
-        className
+        "inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-[#0e0f11]/16 font-medium text-[#3f4f08] ring-1 ring-[#0e0f11]/12",
+        mode === "compact"
+          ? "px-0.5 py-px text-[8px] leading-none"
+          : "px-1 py-px text-[9px] leading-tight"
       )}
       aria-label={label}
       title={label}
     >
-      <UserPlus className="size-2.5 text-[#3f4f08]" strokeWidth={2.25} />
+      <UserPlus
+        className={mode === "compact" ? "size-2" : "size-2.5"}
+        strokeWidth={2.25}
+      />
+      <span>1ª visita</span>
     </span>
   );
 }
 
-function BookingSourceBadge({ source }: { source: BookingSource }) {
+function BookingSourceBadge({
+  source,
+  compact,
+}: {
+  source: BookingSource;
+  compact?: boolean;
+}) {
   const Icon = BOOKING_SOURCE_ICONS[source];
   const label = BOOKING_SOURCE_LABELS[source];
 
   return (
     <span
-      className="pointer-events-none absolute top-0.5 right-0.5 z-10 inline-flex size-3 shrink-0 items-center justify-center rounded-sm bg-black/15 text-current opacity-80"
+      className={cn(
+        "pointer-events-none absolute z-10 inline-flex shrink-0 items-center justify-center rounded-sm bg-black/25 text-current ring-1 ring-black/10",
+        compact
+          ? "top-px right-px size-3.5"
+          : "top-0.5 right-0.5 size-4"
+      )}
       aria-label={`Agendado: ${label}`}
       title={`Agendado: ${label}`}
     >
-      <Icon className="size-2" strokeWidth={2.25} />
+      <Icon className={compact ? "size-2" : "size-2.5"} strokeWidth={2.25} />
     </span>
   );
 }
@@ -219,6 +252,7 @@ export function AppointmentGridBlock({
   const startTime = formatTime(segmentStartTime ?? apt.startTime);
   const endTime = formatTime(segmentEndTime ?? apt.endTime);
   const timeRange = `${startTime} – ${endTime}`;
+  const timeShort = startTime;
   const sideBySide = columnCount > 1;
   const serviceLabel =
     focusedServiceName ??
@@ -237,24 +271,25 @@ export function AppointmentGridBlock({
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
   const showSourceIcon = Boolean(showBookingSource && apt.bookingSource);
   const showCreditIcon = (apt.customerCreditBalanceCents ?? 0) > 0;
-  const showFirstVisitIcon = Boolean(apt.isFirstVisit);
-  const cornerPadding = showSourceIcon;
+  const showFirstVisit = Boolean(apt.isFirstVisit);
 
-  // Prioridade: nome completo, horário e ícone da origem. Serviço só se couber.
-  const density: "single" | "double" | "full" =
-    rowSpan <= 1 || (sideBySide && rowSpan <= 1)
-      ? "single"
-      : rowSpan === 2 || (sideBySide && rowSpan <= 2)
-        ? "double"
+  // Altura real na grade (linhas de 5 min) — decide o que cabe sem cortar.
+  // ≤3 (~15 min): bem apertado · ≤7 (~35 min): 2 linhas · maior: layout completo
+  const size: "tiny" | "compact" | "full" =
+    rowSpan <= 3 || (sideBySide && rowSpan <= 4)
+      ? "tiny"
+      : rowSpan <= 7 || (sideBySide && rowSpan <= 9)
+        ? "compact"
         : "full";
 
   const blockButton = (
     <button
       type="button"
       className={cn(
-        "agenda-apt-card relative z-20 my-0.5 flex min-h-0 min-w-0 self-stretch overflow-hidden rounded-sm text-left",
+        "agenda-apt-card relative z-20 flex min-h-0 min-w-0 self-stretch overflow-hidden rounded-sm text-left",
+        size === "tiny" ? "my-px" : "my-0.5",
         sideBySide ? "mx-0.5" : "mx-1",
-        density === "single" ? "py-0 pr-0.5 pl-3" : "py-0.5 pr-1 pl-3.5 sm:pr-1.5",
+        size === "full" ? "py-0.5 pr-1.5 pl-3.5" : "py-0 pr-1 pl-3",
         draggable && "agenda-apt-draggable",
         isDragging && "agenda-apt-dragging",
         agendaAppointmentClass(apt)
@@ -289,72 +324,71 @@ export function AppointmentGridBlock({
       }}
     >
       {showSourceIcon && apt.bookingSource ? (
-        <BookingSourceBadge source={apt.bookingSource} />
+        <BookingSourceBadge
+          source={apt.bookingSource}
+          compact={size !== "full"}
+        />
       ) : null}
-      <div className="relative z-[2] flex min-h-0 w-full flex-col justify-center gap-0.5 overflow-hidden">
-        {density === "single" ? (
-          <p
-            className={cn(
-              "flex min-w-0 items-center gap-1 truncate text-[10px] font-medium leading-tight",
-              showSourceIcon && cornerPadding && "pr-3.5"
-            )}
-          >
-            {showFirstVisitIcon ? <FirstVisitIcon /> : null}
-            {showCreditIcon ? (
-              <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
+      <div
+        className={cn(
+          "relative z-[2] flex min-h-0 w-full flex-col overflow-hidden",
+          size === "full" ? "justify-center gap-0.5" : "justify-center gap-px",
+          showSourceIcon && (size === "full" ? "pr-4" : "pr-3.5")
+        )}
+      >
+        <p
+          className={cn(
+            "flex min-w-0 items-center gap-1 font-medium leading-none",
+            size === "full" ? "text-[11px] sm:text-xs" : "text-[10px]"
+          )}
+        >
+          {showCreditIcon ? (
+            <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
+          ) : null}
+          <span className="truncate">{name || "Cliente"}</span>
+          {showFirstVisit ? (
+            <FirstVisitBadge mode={size === "full" ? "full" : "icon"} />
+          ) : null}
+        </p>
+
+        {size === "tiny" ? (
+          <p className="flex min-w-0 items-center gap-1 text-[9px] leading-none">
+            <span className="shrink-0 tabular-nums opacity-90">{timeShort}</span>
+            {serviceLabel ? (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="min-w-0 truncate opacity-75">{serviceLabel}</span>
+              </>
             ) : null}
-            <span className="truncate">
-              {name}
-              <span className="font-normal tabular-nums opacity-85">
-                {" "}
-                · {startTime}
-              </span>
-            </span>
           </p>
         ) : null}
 
-        {density === "double" ? (
-          <>
-            <p
-              className={cn(
-                "flex min-w-0 items-center gap-1 truncate text-[10px] font-medium leading-tight",
-                showSourceIcon && cornerPadding && "pr-3.5"
-              )}
-            >
-              {showFirstVisitIcon ? <FirstVisitIcon /> : null}
-              {showCreditIcon ? (
-                <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
-              ) : null}
-              <span className="truncate">{name}</span>
-            </p>
-            <p className="truncate text-[9px] leading-tight tabular-nums opacity-85">
-              {timeRange}
-            </p>
-          </>
+        {size === "compact" ? (
+          <p className="flex min-w-0 items-center gap-1 text-[9px] leading-none">
+            <span className="shrink-0 tabular-nums opacity-90">{timeRange}</span>
+            {serviceLabel ? (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="min-w-0 truncate opacity-75">{serviceLabel}</span>
+              </>
+            ) : null}
+          </p>
         ) : null}
 
-        {density === "full" ? (
+        {size === "full" ? (
           <>
-            <p
-              className={cn(
-                "flex min-w-0 items-center gap-1 truncate text-[11px] font-medium leading-tight sm:text-xs",
-                showSourceIcon && cornerPadding && "pr-3.5"
-              )}
-            >
-              {showFirstVisitIcon ? <FirstVisitIcon /> : null}
-              {showCreditIcon ? (
-                <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
-              ) : null}
-              <span className="truncate">{name}</span>
-            </p>
-            <p className="truncate text-[10px] leading-tight tabular-nums opacity-85">
+            <p className="truncate text-[10px] leading-tight tabular-nums opacity-90">
               {timeRange}
             </p>
             {serviceLabel ? (
-              <p className="truncate text-[10px] leading-tight opacity-70">
+              <p className="truncate text-[10px] leading-tight opacity-75">
                 {serviceLabel}
               </p>
-            ) : null}
+            ) : (
+              <p className="truncate text-[10px] leading-tight opacity-50">
+                Sem serviço
+              </p>
+            )}
           </>
         ) : null}
       </div>

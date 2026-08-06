@@ -30,6 +30,7 @@ export type AgendaDragTarget = {
 type AgendaDragOptions = {
   enabled: boolean;
   rowHeight: number;
+  layoutStepMinutes: number;
   slotStepMinutes: number;
   gridStart: number;
   gridEnd: number;
@@ -103,6 +104,7 @@ export function useAgendaCardDrag(
 
     const {
       rowHeight,
+      layoutStepMinutes,
       slotStepMinutes,
       gridStart,
       gridEnd,
@@ -116,6 +118,7 @@ export function useAgendaCardDrag(
       durationMinutes: session.card.durationMinutes,
       deltaY: session.lastY - session.startY,
       rowHeight,
+      layoutStepMinutes,
       slotStepMinutes,
       gridStart,
       gridEnd,
