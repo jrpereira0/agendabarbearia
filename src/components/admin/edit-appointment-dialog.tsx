@@ -21,7 +21,9 @@ import {
   type ServiceOption,
 } from "@/components/admin/new-appointment-dialog";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
+import { DatePickerField } from "@/components/admin/date-picker-field";
 import { TimeSlotGrid } from "@/components/admin/time-slot-grid";
+import { Label } from "@/components/ui/label";
 import { SlotGridSkeleton } from "@/components/skeletons/slot-grid-skeleton";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import {
@@ -83,10 +85,10 @@ function getStepMeta(
       description: "Ajuste o que será feito neste atendimento.",
     },
     time: {
-      title: isEncaixe ? "Horário do encaixe" : "Horário",
+      title: isEncaixe ? "Data e horário do encaixe" : "Data e horário",
       description: isEncaixe
-        ? "Pode sobrepor outros agendamentos."
-        : "Mantenha o atual ou escolha outro livre.",
+        ? "Pode mudar o dia e sobrepor outros agendamentos."
+        : "Troque o dia e o horário, se precisar.",
     },
     client: {
       title: "Cliente",
@@ -115,6 +117,7 @@ export function EditAppointmentDialog({
   const [whatsapp, setWhatsapp] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
+  const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -181,17 +184,19 @@ export function EditAppointmentDialog({
 
   const conflictAppointments = useMemo(
     () =>
-      appointments.map((a) => ({
-        id: a.id,
-        customerFirstName: a.customerFirstName,
-        customerLastName: a.customerLastName,
-        startTime: a.startTime,
-        endTime: a.endTime,
-        professionalId: a.professionalId,
-        status: a.status,
-        isSqueezeIn: a.isSqueezeIn,
-      })),
-    [appointments]
+      appointments
+        .filter((a) => !date || a.date === date)
+        .map((a) => ({
+          id: a.id,
+          customerFirstName: a.customerFirstName,
+          customerLastName: a.customerLastName,
+          startTime: a.startTime,
+          endTime: a.endTime,
+          professionalId: a.professionalId,
+          status: a.status,
+          isSqueezeIn: a.isSqueezeIn,
+        })),
+    [appointments, date]
   );
 
   const blockedSlots = useMemo(() => {
@@ -284,6 +289,7 @@ export function EditAppointmentDialog({
       setLastName(appointment.customerLastName);
       setWhatsapp(formatWhatsapp(appointment.customerWhatsapp));
       setServiceIds(appointment.services.map((s) => s.id));
+      setDate(appointment.date);
       setStartTime(appointment.startTime);
       setServiceSearch("");
       setAvailableSlots([]);
@@ -313,7 +319,7 @@ export function EditAppointmentDialog({
   useEffect(() => {
     if (!open || step !== "time" || !appointment) return;
     if (isEncaixe || ownerFreeMode) return;
-    if (serviceIds.length === 0 || !professionalId) return;
+    if (serviceIds.length === 0 || !professionalId || !date) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -323,7 +329,7 @@ export function EditAppointmentDialog({
 
       getEditAvailabilitySlots({
         professionalId,
-        date: appointment.date,
+        date,
         serviceIds,
         excludeAppointmentId: appointment.id,
       })
@@ -335,9 +341,7 @@ export function EditAppointmentDialog({
             return;
           }
           setAvailableSlots(result.slots);
-          if (result.slots.length === 0 && appointment.startTime) {
-            setSlotsError(null);
-          } else if (result.slots.length === 0) {
+          if (result.slots.length === 0) {
             setSlotsError(
               "Nenhum horário livre neste dia para esses serviços."
             );
@@ -366,6 +370,7 @@ export function EditAppointmentDialog({
     ownerFreeMode,
     serviceIds,
     professionalId,
+    date,
   ]);
 
   function setServiceQuantity(id: string, quantity: number) {
@@ -427,6 +432,11 @@ export function EditAppointmentDialog({
       return;
     }
 
+    if (!date) {
+      toast.error("Escolha a data.");
+      return;
+    }
+
     if (!professionalId) {
       toast.error("Escolha o profissional.");
       return;
@@ -436,6 +446,7 @@ export function EditAppointmentDialog({
     const result = await updateAppointment({
       appointmentId: appointment.id,
       professionalId,
+      date,
       startTime,
       serviceIds,
       firstName: firstName.trim(),
@@ -453,6 +464,7 @@ export function EditAppointmentDialog({
         const endMinutes = timeToMinutes(startTime) + totalMinutes;
         onUpdated?.({
           ...appointment,
+          date,
           professionalId,
           professionalNickname: professional.nickname,
           customerFirstName: firstName.trim(),
@@ -525,7 +537,7 @@ export function EditAppointmentDialog({
           {selectedProfessional && step !== "professional" && (
             <BookingContextBar
               professional={selectedProfessional}
-              date={appointment.date}
+              date={date || appointment.date}
               startTime={
                 step === "services"
                   ? appointment.startTime
@@ -636,6 +648,21 @@ export function EditAppointmentDialog({
 
           {step === "time" && selectedProfessional && (
             <div className="flex flex-col gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-appointment-date">Data</Label>
+                <DatePickerField
+                  id="edit-appointment-date"
+                  value={date || appointment.date}
+                  tone="dark"
+                  className="h-11 w-full sm:h-11 sm:w-full"
+                  onChange={(nextDate) => {
+                    setDate(nextDate);
+                    setAvailableSlots([]);
+                    setSlotsError(null);
+                  }}
+                />
+              </div>
+
               {ownerFreeMode && (
                 <p className="booking-notice rounded-xl px-4 py-3 text-sm">
                   Como dono, você pode escolher qualquer horário. Se estiver
@@ -652,36 +679,45 @@ export function EditAppointmentDialog({
 
               {!isEncaixe && !ownerFreeMode && loadingSlots ? (
                 <SlotGridSkeleton />
-              ) : !isEncaixe && !ownerFreeMode && slotsError ? (
-                <p className="booking-notice rounded-xl px-4 py-6 text-center text-sm">
-                  {slotsError}
-                </p>
               ) : (
                 <>
+                  {!isEncaixe &&
+                    !ownerFreeMode &&
+                    slotsError &&
+                    !startTime && (
+                      <p className="booking-notice rounded-xl px-4 py-6 text-center text-sm">
+                        {slotsError}
+                      </p>
+                    )}
                   {!isEncaixe &&
                     !ownerFreeMode &&
                     availableSlots.length === 0 &&
                     startTime && (
                       <p className="booking-notice rounded-xl px-4 py-3 text-sm">
-                        Só o horário atual está disponível — você ainda pode
-                        mantê-lo e salvar.
+                        {slotsError ??
+                          "Só o horário atual está disponível neste dia — você ainda pode mantê-lo e salvar."}
                       </p>
                     )}
-                  <TimeSlotGrid
-                    slots={timeSlots}
-                    value={startTime}
-                    onChange={setStartTime}
-                    buttonSize="sm"
-                    buttonClassName="h-9"
-                    className="booking-slot-grid"
-                    isSlotDisabled={(slot) =>
-                      Boolean(
-                        ownerFreeMode &&
-                          blockedSlots.has(slot) &&
-                          slot !== startTime
-                      )
-                    }
-                  />
+                  {(isEncaixe ||
+                    ownerFreeMode ||
+                    availableSlots.length > 0 ||
+                    Boolean(startTime)) && (
+                    <TimeSlotGrid
+                      slots={timeSlots}
+                      value={startTime}
+                      onChange={setStartTime}
+                      buttonSize="sm"
+                      buttonClassName="h-9"
+                      className="booking-slot-grid"
+                      isSlotDisabled={(slot) =>
+                        Boolean(
+                          ownerFreeMode &&
+                            blockedSlots.has(slot) &&
+                            slot !== startTime
+                        )
+                      }
+                    />
+                  )}
                 </>
               )}
 
@@ -720,7 +756,7 @@ export function EditAppointmentDialog({
             >
               <div className="booking-context space-y-2 rounded-xl px-3.5 py-3 text-sm">
                 <p className="font-medium text-[#f5f5f5]">
-                  {formatDateBR(appointment.date)} · {formatTime(startTime!)}
+                  {formatDateBR(date || appointment.date)} · {formatTime(startTime!)}
                   {isEncaixe ? " · encaixe" : ""}
                 </p>
                 <p className="text-muted-foreground">

@@ -36,6 +36,15 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: getSupabaseImagePatterns(),
   },
+  async redirects() {
+    return [
+      {
+        source: "/admin/financeiro",
+        destination: "/admin/metricas",
+        permanent: true,
+      },
+    ];
+  },
   experimental: {
     serverActions: {
       // Fotos de celular passam facil de 1 MB (limite padrao)

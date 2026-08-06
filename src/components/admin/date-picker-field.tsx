@@ -110,10 +110,11 @@ export function DatePickerField({
         <PopoverPrimitive.Content
           align="start"
           sideOffset={6}
+          data-slot="date-picker-content"
           className={cn(
             "z-50 w-[18rem] rounded-xl border p-3 shadow-xl outline-none",
             dark
-              ? "border-white/10 bg-[#151618] text-[#f5f5f5]"
+              ? "border-white/10 !bg-[#151618] !text-[#f5f5f5]"
               : "border bg-popover text-popover-foreground"
           )}
         >
@@ -175,6 +176,7 @@ export function DatePickerField({
                 <button
                   key={iso}
                   type="button"
+                  data-selected={isSelected ? "true" : undefined}
                   onClick={() => {
                     onChange(iso);
                     setOpen(false);

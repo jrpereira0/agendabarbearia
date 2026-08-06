@@ -36,11 +36,11 @@ Formas de pagamento aceitas: Pix, dinheiro, débito, crédito e crédito da loja
 
 **Crédito do cliente:** depósitos (valor pago a mais ao fechar comanda, com “guardar crédito”) entram no **caixa** do dia pelo método informado; **não** somam no faturamento de serviços. Pagamentos com crédito da loja não somam nas entradas do caixa, mas a comissão do barbeiro segue pelo serviço feito naquele dia. Crédito lançado manualmente no cadastro do cliente não entra no caixa nem no faturamento.
 
-No painel **Financeiro**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento** é só o valor dos atendimentos/serviços (base das comissões).
+No painel **Métricas**, **Entradas no caixa** soma pagamentos reais + depósitos de crédito; **Faturamento** é só o valor dos atendimentos/serviços (base das comissões).
 
-O painel **Financeiro** (`/admin/financeiro`, só dono) abre em **visão geral enxuta** (período + faturamento, comissões, serviços, ticket médio + evolução das entradas) e permite **abrir o detalhe de cada métrica** (`?metric=faturamento|caixa|ticket|servicos|comissoes`): dia a dia, dia da semana, ranking e por barbeiro conforme a métrica.
+O painel **Métricas** (`/admin/metricas`, só dono; o antigo `/admin/financeiro` redireciona para cá) abre em **visão geral enxuta** (período + faturamento, saídas, lucro, atendimentos, ticket, comissões, produtos, clientes novos, ocupação, cancelamentos + gráfico dos últimos 7 dias). Os cards principais mostram a **variação % vs. o período anterior equivalente**. Dá para **abrir o detalhe de cada métrica** (`?metric=faturamento|caixa|ticket|servicos|produtos|saidas|comissoes|pagamentos|barbeiros|semana|ranking|clientes|ocupacao|cancelamentos`): dia a dia, dia da semana, ranking, por barbeiro, lista de novos/recorrentes, ocupação da grade ou cancelamentos conforme a métrica. **Novos vs. recorrentes** usa o WhatsApp (ignorando cancelados): novo = primeira visita no período; recorrente = já tinha vindo antes. **Ocupação** = minutos de agendamento (sem encaixe/cancelado) ÷ minutos disponíveis na grade (loja ∩ barbeiro − bloqueios). Na agenda, o card do horário ganha um ícone de **primeira visita** quando for o caso.
 
-No menu lateral, a ordem é: Agenda → Caixas → Comissões → Financeiro.
+No menu lateral, a ordem é: Agenda → Financeiro (Caixas, Despesas, Comissões) → Métricas.
 
 ---
 
@@ -51,7 +51,7 @@ Somente o **dono** vê as rotas abaixo (menu **Dia a dia** na sidebar). O barbei
 | Rota | Função |
 | --- | --- |
 | `/admin` (aba **CAIXA**) | Operar o caixa do dia na agenda: **saldo em destaque**, entradas/comissões/barbearia, barras por forma de pagamento, lista de comandas fechadas, abrir/encerrar caixa e link para métricas |
-| `/admin/financeiro` | Dashboard de métricas por período: KPIs, evolução diária, pagamentos e barbeiros (comparação com período anterior) |
+| `/admin/metricas` | Dashboard de métricas por período: KPIs, evolução diária, pagamentos e barbeiros (comparação com período anterior). `/admin/financeiro` redireciona para cá |
 | `/admin/financeiro/caixas` | Histórico de sessões de caixa: filtro por período, busca, abrir/fechar/reabrir, links para agenda e comissões |
 | `/admin/financeiro/comissoes` | Comissões por barbeiro no período (dia do atendimento/caixa). Ao **detalhar** um barbeiro: resumo com **faturamento**, **comissão** e **serviços**, **dia a dia**, ranking de serviços, lista de **atendimentos** e formas de pagamento. Produtos sem profissional **não** entram no repasse |
 

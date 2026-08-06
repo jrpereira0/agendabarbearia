@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   CalendarDays,
+  ChevronRight,
   Contact,
   ExternalLink,
   History,
@@ -16,7 +17,19 @@ import {
   Settings,
   UserRound,
   Users,
+  Wallet,
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +41,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -37,30 +53,29 @@ import { BOOKING_PATH } from "@/lib/booking-path";
 import { cn } from "@/lib/utils";
 import type { AdminRole } from "@/lib/require-admin";
 
-const dayToDayItems = [
-  { title: "Agenda", url: "/admin", icon: CalendarDays },
-  {
-    title: "Comissões",
-    url: "/admin/financeiro/comissoes",
-    icon: Percent,
-    barberTitle: "Minhas comissões",
-    roles: ["owner", "barber"] as AdminRole[],
-  },
+const financeItems = [
   {
     title: "Caixas",
     url: "/admin/financeiro/caixas",
     icon: History,
-    roles: ["owner"] as AdminRole[],
   },
   {
     title: "Despesas",
     url: "/admin/financeiro/despesas",
     icon: Receipt,
-    roles: ["owner"] as AdminRole[],
   },
   {
-    title: "Financeiro",
-    url: "/admin/financeiro",
+    title: "Comissões",
+    url: "/admin/financeiro/comissoes",
+    icon: Percent,
+  },
+] as const;
+
+const dayToDayItems = [
+  { title: "Agenda", url: "/admin", icon: CalendarDays },
+  {
+    title: "Métricas",
+    url: "/admin/metricas",
     icon: BarChart3,
     roles: ["owner"] as AdminRole[],
   },
@@ -98,7 +113,6 @@ type NavItem = {
   url: string;
   icon: typeof CalendarDays;
   roles?: AdminRole[];
-  barberTitle?: string;
 };
 
 type AppSidebarProps = {
@@ -109,8 +123,12 @@ type AppSidebarProps = {
 
 function isNavActive(pathname: string, url: string): boolean {
   if (url === "/admin") return pathname === "/admin";
-  if (url === "/admin/financeiro") return pathname === "/admin/financeiro";
+  if (url === "/admin/metricas") return pathname === "/admin/metricas";
   return pathname === url || pathname.startsWith(`${url}/`);
+}
+
+function isFinanceActive(pathname: string): boolean {
+  return financeItems.some((item) => isNavActive(pathname, item.url));
 }
 
 function roleLabel(role: AdminRole): string {
@@ -119,11 +137,89 @@ function roleLabel(role: AdminRole): string {
   return "Barbeiro";
 }
 
+function FinanceiroNav({ onNavigate }: { onNavigate: () => void }) {
+  const pathname = usePathname();
+  const { state, isMobile } = useSidebar();
+  const active = isFinanceActive(pathname);
+  const iconCollapsed = state === "collapsed" && !isMobile;
+
+  if (iconCollapsed) {
+    return (
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              tooltip="Financeiro"
+              isActive={active}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+            >
+              <Wallet />
+              <span>Financeiro</span>
+              <ChevronRight className="ml-auto" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="right"
+            align="start"
+            sideOffset={8}
+            className="min-w-44"
+          >
+            {financeItems.map((item) => (
+              <DropdownMenuItem key={item.url} asChild>
+                <Link href={item.url} onClick={onNavigate}>
+                  <item.icon />
+                  <span>{item.title}</span>
+                </Link>
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    );
+  }
+
+  return (
+    <Collapsible asChild defaultOpen={active} className="group/collapsible">
+      <SidebarMenuItem>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton
+            tooltip="Financeiro"
+            className="data-[state=open]:bg-sidebar-accent/50"
+          >
+            <Wallet />
+            <span>Financeiro</span>
+            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {financeItems.map((item) => (
+              <SidebarMenuSubItem key={item.url}>
+                <SidebarMenuSubButton
+                  asChild
+                  isActive={isNavActive(pathname, item.url)}
+                  onClick={onNavigate}
+                >
+                  <Link href={item.url}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
+  );
+}
+
 export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
   const pathname = usePathname();
   const { setOpenMobile } = useSidebar();
   const isOwner = role === "owner";
   const isReception = role === "reception";
+  const isBarber = role === "barber";
 
   const initials = userName
     .split(" ")
@@ -133,28 +229,28 @@ export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
     .join("")
     .toUpperCase();
 
+  function closeMobile() {
+    setOpenMobile(false);
+  }
+
   function renderItems(items: NavItem[]) {
     return items
       .filter((item) => !item.roles || item.roles.includes(role))
-      .map((item) => {
-        const label =
-          role === "barber" && item.barberTitle ? item.barberTitle : item.title;
-        return (
-          <SidebarMenuItem key={item.url}>
-            <SidebarMenuButton
-              asChild
-              isActive={isNavActive(pathname, item.url)}
-              tooltip={label}
-              onClick={() => setOpenMobile(false)}
-            >
-              <Link href={item.url}>
-                <item.icon />
-                <span>{label}</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        );
-      });
+      .map((item) => (
+        <SidebarMenuItem key={item.url}>
+          <SidebarMenuButton
+            asChild
+            isActive={isNavActive(pathname, item.url)}
+            tooltip={item.title}
+            onClick={closeMobile}
+          >
+            <Link href={item.url}>
+              <item.icon />
+              <span>{item.title}</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      ));
   }
 
   return (
@@ -185,7 +281,33 @@ export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>Dia a dia</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>{renderItems(dayToDayItems)}</SidebarMenu>
+            <SidebarMenu>
+              {renderItems(
+                dayToDayItems.filter((item) => item.url === "/admin")
+              )}
+              {isOwner ? <FinanceiroNav onNavigate={closeMobile} /> : null}
+              {isBarber ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isNavActive(
+                      pathname,
+                      "/admin/financeiro/comissoes"
+                    )}
+                    tooltip="Minhas comissões"
+                    onClick={closeMobile}
+                  >
+                    <Link href="/admin/financeiro/comissoes">
+                      <Percent />
+                      <span>Minhas comissões</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
+              {renderItems(
+                dayToDayItems.filter((item) => item.url !== "/admin")
+              )}
+            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -208,7 +330,7 @@ export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
                     asChild
                     isActive={isNavActive(pathname, "/admin/configuracoes")}
                     tooltip="Configurações"
-                    onClick={() => setOpenMobile(false)}
+                    onClick={closeMobile}
                   >
                     <Link href="/admin/configuracoes">
                       <Settings />
@@ -222,7 +344,7 @@ export function AppSidebar({ role, userName, userEmail }: AppSidebarProps) {
                     asChild
                     isActive={isNavActive(pathname, "/admin/minha-conta")}
                     tooltip="Minha conta"
-                    onClick={() => setOpenMobile(false)}
+                    onClick={closeMobile}
                   >
                     <Link href="/admin/minha-conta">
                       <UserRound />

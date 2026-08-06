@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Wallet } from "lucide-react";
+import { Wallet, UserPlus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   formatDuration,
@@ -81,6 +81,23 @@ function CustomerCreditIcon({
   );
 }
 
+function FirstVisitIcon({ className }: { className?: string }) {
+  const label = "Primeira visita deste cliente";
+
+  return (
+    <span
+      className={cn(
+        "inline-flex size-4 shrink-0 items-center justify-center rounded-sm bg-[#0e0f11]/14 ring-1 ring-[#0e0f11]/10",
+        className
+      )}
+      aria-label={label}
+      title={label}
+    >
+      <UserPlus className="size-2.5 text-[#3f4f08]" strokeWidth={2.25} />
+    </span>
+  );
+}
+
 function BookingSourceBadge({ source }: { source: BookingSource }) {
   const Icon = BOOKING_SOURCE_ICONS[source];
   const label = BOOKING_SOURCE_LABELS[source];
@@ -117,6 +134,13 @@ function AppointmentTooltipContent({
           <span className="tabular-nums">
             {formatPriceBRL(creditCents)} em crédito
           </span>
+        </p>
+      ) : null}
+
+      {apt.isFirstVisit ? (
+        <p className="flex items-center gap-1.5 text-[var(--agenda-accent,#ecf15e)]">
+          <UserPlus className="size-3 shrink-0" strokeWidth={2} />
+          <span>Primeira visita</span>
         </p>
       ) : null}
 
@@ -213,6 +237,7 @@ export function AppointmentGridBlock({
   const barColor = agendaStatusBarColor[agendaStatusBarKey(apt)];
   const showSourceIcon = Boolean(showBookingSource && apt.bookingSource);
   const showCreditIcon = (apt.customerCreditBalanceCents ?? 0) > 0;
+  const showFirstVisitIcon = Boolean(apt.isFirstVisit);
   const cornerPadding = showSourceIcon;
 
   // Prioridade: nome completo, horário e ícone da origem. Serviço só se couber.
@@ -274,6 +299,7 @@ export function AppointmentGridBlock({
               showSourceIcon && cornerPadding && "pr-3.5"
             )}
           >
+            {showFirstVisitIcon ? <FirstVisitIcon /> : null}
             {showCreditIcon ? (
               <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
             ) : null}
@@ -295,6 +321,7 @@ export function AppointmentGridBlock({
                 showSourceIcon && cornerPadding && "pr-3.5"
               )}
             >
+              {showFirstVisitIcon ? <FirstVisitIcon /> : null}
               {showCreditIcon ? (
                 <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
               ) : null}
@@ -314,6 +341,7 @@ export function AppointmentGridBlock({
                 showSourceIcon && cornerPadding && "pr-3.5"
               )}
             >
+              {showFirstVisitIcon ? <FirstVisitIcon /> : null}
               {showCreditIcon ? (
                 <CustomerCreditIcon cents={apt.customerCreditBalanceCents ?? 0} />
               ) : null}

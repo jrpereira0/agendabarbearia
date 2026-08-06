@@ -16,7 +16,7 @@ import { requireOwner } from "@/lib/require-owner";
 
 function revalidateFinance() {
   revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
+  revalidatePath("/admin/metricas");
   revalidatePath("/admin/financeiro/caixas");
   revalidatePath("/admin/financeiro/comissoes");
   revalidatePath("/admin/profissionais", "layout");

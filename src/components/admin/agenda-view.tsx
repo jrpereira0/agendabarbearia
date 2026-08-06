@@ -627,10 +627,21 @@ export function AgendaView({
   }
 
   function handleAppointmentUpdated(appointment: AppointmentItem) {
-    setLocalAppointments((prev) =>
-      prev.map((apt) => (apt.id === appointment.id ? appointment : apt))
+    setLocalAppointments((prev) => {
+      if (appointment.date !== date) {
+        return prev.filter((apt) => apt.id !== appointment.id);
+      }
+      return prev.map((apt) =>
+        apt.id === appointment.id ? appointment : apt
+      );
+    });
+    setSelectedAppointment((prev) =>
+      prev?.id === appointment.id
+        ? appointment.date === date
+          ? appointment
+          : null
+        : prev
     );
-    setSelectedAppointment(appointment);
   }
 
   // A transição do `router.refresh()` terminou → desliga o indicador de "atualizando".

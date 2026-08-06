@@ -15,14 +15,19 @@ export const FINANCE_METRIC_IDS = [
   "barbeiros",
   "semana",
   "ranking",
+  "cancelamentos",
+  "clientes",
+  "ocupacao",
 ] as const;
 
 export type FinanceMetricId = (typeof FINANCE_METRIC_IDS)[number];
 
-export const FINANCE_METRIC_OPTIONS: {
+export type FinanceMetricOption = {
   id: FinanceMetricId;
   label: string;
-}[] = [
+};
+
+export const FINANCE_METRIC_OPTIONS: FinanceMetricOption[] = [
   { id: "geral", label: "Visão geral" },
   { id: "faturamento", label: "Faturamento" },
   { id: "caixa", label: "Entradas no caixa" },
@@ -35,6 +40,49 @@ export const FINANCE_METRIC_OPTIONS: {
   { id: "barbeiros", label: "Por barbeiro" },
   { id: "semana", label: "Dia da semana" },
   { id: "ranking", label: "Ranking de serviços" },
+  { id: "cancelamentos", label: "Cancelamentos" },
+  { id: "clientes", label: "Novos vs. recorrentes" },
+  { id: "ocupacao", label: "Ocupação da agenda" },
+];
+
+/** Grupos do seletor de métricas (ordem de leitura do dono). */
+export const FINANCE_METRIC_GROUPS: {
+  label: string | null;
+  options: FinanceMetricOption[];
+}[] = [
+  {
+    label: null,
+    options: [{ id: "geral", label: "Visão geral" }],
+  },
+  {
+    label: "Dinheiro",
+    options: [
+      { id: "faturamento", label: "Faturamento" },
+      { id: "caixa", label: "Entradas no caixa" },
+      { id: "saidas", label: "Saídas" },
+      { id: "comissoes", label: "Comissões" },
+      { id: "pagamentos", label: "Formas de pagamento" },
+    ],
+  },
+  {
+    label: "Atendimento",
+    options: [
+      { id: "servicos", label: "Serviços realizados" },
+      { id: "ticket", label: "Ticket médio" },
+      { id: "produtos", label: "Produtos vendidos" },
+      { id: "clientes", label: "Novos vs. recorrentes" },
+      { id: "ocupacao", label: "Ocupação da agenda" },
+      { id: "cancelamentos", label: "Cancelamentos" },
+    ],
+  },
+  {
+    label: "Comparativos",
+    options: [
+      { id: "barbeiros", label: "Por barbeiro" },
+      { id: "semana", label: "Dia da semana" },
+      { id: "ranking", label: "Ranking de serviços" },
+    ],
+  },
 ];
 
 export function parseFinanceMetric(
@@ -71,7 +119,7 @@ export function buildFinanceQuery(input: {
   if (input.metric && input.metric !== "geral") {
     params.set("metric", input.metric);
   }
-  return `/admin/financeiro?${params.toString()}`;
+  return `/admin/metricas?${params.toString()}`;
 }
 
 export function financeHeroValue(
@@ -105,5 +153,36 @@ export function financeHeroValue(
       return String(
         report.serviceBreakdown.filter((row) => !row.isTip).length
       );
+    case "cancelamentos":
+      return `${report.cancellation.ratePercent}%`;
+    case "clientes":
+      return String(report.retention.newCount);
+    case "ocupacao":
+      return `${report.occupancy.ratePercent}%`;
   }
+}
+
+export type FinanceTrend = {
+  direction: "up" | "down" | "flat";
+  label: string;
+};
+
+/** Selo de tendência a partir de uma variação percentual (ex.: faturamento, serviços). */
+export function trendFromPercent(percent: number | null): FinanceTrend | undefined {
+  if (percent === null) return undefined;
+  if (percent === 0) return { direction: "flat", label: "0%" };
+  return {
+    direction: percent > 0 ? "up" : "down",
+    label: `${Math.abs(percent)}%`,
+  };
+}
+
+/** Selo de tendência a partir de uma variação em pontos percentuais (ex.: taxa de cancelamento). */
+export function trendFromPoints(points: number | null): FinanceTrend | undefined {
+  if (points === null) return undefined;
+  if (points === 0) return { direction: "flat", label: "0 p.p." };
+  return {
+    direction: points > 0 ? "up" : "down",
+    label: `${Math.abs(points)} p.p.`,
+  };
 }

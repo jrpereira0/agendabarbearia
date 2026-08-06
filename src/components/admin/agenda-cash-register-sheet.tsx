@@ -579,7 +579,7 @@ export function AgendaCashRegisterSheet({
             )}
 
             <Link
-              href={`/admin/financeiro?from=${date}&to=${date}`}
+              href={`/admin/metricas?from=${date}&to=${date}`}
               onClick={() => setOpen(false)}
               className="mt-2.5 flex items-center justify-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-[#f5f5f5]"
             >

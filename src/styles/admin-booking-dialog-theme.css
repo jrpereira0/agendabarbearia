@@ -298,13 +298,38 @@ body:has(.admin-booking-dialog) [data-slot="dialog-overlay"] {
   color: #f87171;
 }
 
-/* Select / menu portais enquanto a comanda (ou outro booking dialog) está aberta */
+/* Select / menu / calendário portais enquanto a comanda (ou outro booking dialog) está aberta */
 body:has(.admin-booking-dialog) [data-slot="select-content"],
-body:has(.admin-booking-dialog) [data-slot="dropdown-menu-content"] {
+body:has(.admin-booking-dialog) [data-slot="dropdown-menu-content"],
+body:has(.admin-booking-dialog) [data-slot="date-picker-content"] {
   border-color: var(--booking-border, rgb(255 255 255 / 10%)) !important;
   background: #151618 !important;
   color: #f5f5f5 !important;
   box-shadow: 0 16px 40px rgb(0 0 0 / 55%) !important;
+}
+
+body:has(.admin-booking-dialog) [data-slot="date-picker-content"] button {
+  color: #f5f5f5;
+}
+
+body:has(.admin-booking-dialog) [data-slot="date-picker-content"] button:hover {
+  background: rgb(255 255 255 / 5%);
+}
+
+body:has(.admin-booking-dialog)
+  [data-slot="date-picker-content"]
+  button[data-selected="true"],
+body:has(.admin-booking-dialog)
+  [data-slot="date-picker-content"]
+  button[data-selected="true"]:hover {
+  background: #ecf15e !important;
+  color: #0e0f11 !important;
+}
+
+body:has(.admin-booking-dialog)
+  [data-slot="date-picker-content"]
+  span {
+  color: #8b8d93;
 }
 
 body:has(.admin-booking-dialog) [data-slot="select-item"],

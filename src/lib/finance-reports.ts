@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { weekdayOf } from "@/lib/availability";
 import { WEEKDAYS } from "@/lib/format";
+import { inclusiveDayCount, shiftDate } from "@/lib/date-range";
 import {
   calculateItemCommissionCents,
   CASH_INFLOW_PAYMENT_METHODS,
@@ -14,6 +15,18 @@ import {
   getProductSalesReport,
   type ProductSalesReport,
 } from "@/lib/product-sales-report";
+import {
+  getCancellationReport,
+  type CancellationReport,
+} from "@/lib/appointment-stats";
+import {
+  getCustomerRetentionReport,
+  type CustomerRetentionReport,
+} from "@/lib/customer-retention";
+import {
+  getAgendaOccupancyReport,
+  type AgendaOccupancyReport,
+} from "@/lib/agenda-occupancy";
 
 export type CashRegisterOpenComanda = {
   id: string;
@@ -564,11 +577,16 @@ export type FinancePeriodComparison = {
   cashInflowCents: number;
   commissionCents: number;
   serviceItemCount: number;
+  servicesGrossCents: number;
+  averageServiceCents: number;
   /** @deprecated use totalChangePercent */
   changePercent: number | null;
   totalChangePercent: number | null;
   cashInflowChangePercent: number | null;
   serviceChangePercent: number | null;
+  servicesGrossChangePercent: number | null;
+  commissionChangePercent: number | null;
+  averageServiceChangePercent: number | null;
 };
 
 export type FinanceServiceRow = {
@@ -616,26 +634,20 @@ export type FinanceMetricsReport = {
   comparison: FinancePeriodComparison | null;
   /** Vendas de produto (comandas fechadas) no período. */
   productSales: ProductSalesReport;
+  /** Cancelamentos de agendamento no período. */
+  cancellation: CancellationReport;
+  /** Clientes novos vs. recorrentes no período. */
+  retention: CustomerRetentionReport;
+  /** Taxa de ocupação da agenda no período. */
+  occupancy: AgendaOccupancyReport;
 };
-
-function shiftIsoDate(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-function inclusiveDayCount(from: string, to: string): number {
-  const start = new Date(`${from}T00:00:00Z`).getTime();
-  const end = new Date(`${to}T00:00:00Z`).getTime();
-  return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
-}
 
 function listDatesInRange(from: string, to: string): string[] {
   const dates: string[] = [];
   let cursor = from;
   while (cursor <= to) {
     dates.push(cursor);
-    cursor = shiftIsoDate(cursor, 1);
+    cursor = shiftDate(cursor, 1);
   }
   return dates;
 }
@@ -817,12 +829,16 @@ export async function getFinanceMetricsReport(
   from: string,
   to: string
 ): Promise<FinanceMetricsReport> {
-  const [summary, commissions, serviceVolume, productSales] = await Promise.all([
-    getFinancePeriodSummary(admin, from, to),
-    getCommissionSummary(admin, from, to, undefined, { excludePaid: false }),
-    loadFinanceServiceVolume(admin, from, to),
-    getProductSalesReport(admin, from, to),
-  ]);
+  const [summary, commissions, serviceVolume, productSales, cancellation, retention, occupancy] =
+    await Promise.all([
+      getFinancePeriodSummary(admin, from, to),
+      getCommissionSummary(admin, from, to, undefined, { excludePaid: false }),
+      loadFinanceServiceVolume(admin, from, to),
+      getProductSalesReport(admin, from, to),
+      getCancellationReport(admin, from, to),
+      getCustomerRetentionReport(admin, from, to),
+      getAgendaOccupancyReport(admin, from, to),
+    ]);
 
   const serviceBreakdown = await loadFinanceServiceBreakdown(
     admin,
@@ -861,14 +877,22 @@ export async function getFinanceMetricsReport(
     summary.totalCents > 0 ? 100 - commissionRatePercent : 0;
 
   let comparison: FinancePeriodComparison | null = null;
-  const previousTo = shiftIsoDate(from, -1);
-  const previousFrom = shiftIsoDate(previousTo, -(periodDayCount - 1));
+  const previousTo = shiftDate(from, -1);
+  const previousFrom = shiftDate(previousTo, -(periodDayCount - 1));
 
   if (previousFrom <= previousTo) {
     const [previous, previousServiceVolume] = await Promise.all([
       getFinancePeriodSummary(admin, previousFrom, previousTo),
       loadFinanceServiceVolume(admin, previousFrom, previousTo),
     ]);
+    const previousServiceItemCount = previousServiceVolume.totalServiceItemCount;
+    const previousServicesGrossCents = sumServicesGrossCents(
+      previous.serviceBreakdown
+    );
+    const previousAverageServiceCents =
+      previousServiceItemCount > 0
+        ? Math.round(previousServicesGrossCents / previousServiceItemCount)
+        : 0;
     const totalChangePercent = percentChange(summary.totalCents, previous.totalCents);
     comparison = {
       previousFrom,
@@ -876,7 +900,9 @@ export async function getFinanceMetricsReport(
       totalCents: previous.totalCents,
       cashInflowCents: previous.cashInflowCents,
       commissionCents: previous.commissionCents,
-      serviceItemCount: previousServiceVolume.totalServiceItemCount,
+      serviceItemCount: previousServiceItemCount,
+      servicesGrossCents: previousServicesGrossCents,
+      averageServiceCents: previousAverageServiceCents,
       changePercent: totalChangePercent,
       totalChangePercent,
       cashInflowChangePercent: percentChange(
@@ -885,7 +911,19 @@ export async function getFinanceMetricsReport(
       ),
       serviceChangePercent: percentChange(
         serviceItemCount,
-        previousServiceVolume.totalServiceItemCount
+        previousServiceItemCount
+      ),
+      servicesGrossChangePercent: percentChange(
+        servicesGrossCents,
+        previousServicesGrossCents
+      ),
+      commissionChangePercent: percentChange(
+        summary.commissionCents,
+        previous.commissionCents
+      ),
+      averageServiceChangePercent: percentChange(
+        averageServiceCents,
+        previousAverageServiceCents
       ),
     };
   }
@@ -920,6 +958,9 @@ export async function getFinanceMetricsReport(
     weekdayBreakdown,
     comparison,
     productSales,
+    cancellation,
+    retention,
+    occupancy,
   };
 }
 

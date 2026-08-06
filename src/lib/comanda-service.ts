@@ -320,11 +320,51 @@ async function findExplicitComandaIdForAppointment(
   );
 }
 
+/**
+ * Remove o horário de qualquer comanda aberta (itens + vínculo).
+ * Usado ao mudar a data do agendamento ou ao cancelar.
+ */
+export async function detachAppointmentFromOpenComandas(
+  admin: SupabaseClient,
+  appointmentId: string
+): Promise<void> {
+  const comandaId = await findExplicitComandaIdForAppointment(
+    admin,
+    appointmentId
+  );
+
+  await admin.from("comanda_items").delete().eq("appointment_id", appointmentId);
+  await admin
+    .from("comanda_appointments")
+    .delete()
+    .eq("appointment_id", appointmentId);
+
+  if (comandaId) {
+    const { data: comanda } = await admin
+      .from("comandas")
+      .select("id, status, appointment_id")
+      .eq("id", comandaId)
+      .maybeSingle();
+
+    if (comanda?.status === "open") {
+      if (comanda.appointment_id === appointmentId) {
+        await admin
+          .from("comandas")
+          .update({ appointment_id: null })
+          .eq("id", comandaId);
+      }
+      await finalizeOpenComandaAfterAppointmentRemoved(admin, comandaId);
+    }
+  }
+}
+
 async function findOpenComandaIdForCustomerDay(
   admin: SupabaseClient,
-  customerWhatsapp: string,
+  customerWhatsapp: string | null,
   serviceDate: string
 ): Promise<string | null> {
+  if (!customerWhatsapp) return null;
+
   const { data } = await admin
     .from("comandas")
     .select("id")
@@ -1455,9 +1495,11 @@ async function refreshLinkedAppointmentItemPrices(
 
 async function mergeDuplicateOpenComandas(
   admin: SupabaseClient,
-  customerWhatsapp: string,
+  customerWhatsapp: string | null,
   serviceDate: string
 ): Promise<string | null> {
+  if (!customerWhatsapp) return null;
+
   const { data: openComandas } = await admin
     .from("comandas")
     .select("id, created_at")
@@ -1503,7 +1545,7 @@ type AppointmentTriggerRow = {
   id: string;
   professional_id: string;
   status: string;
-  customer_whatsapp: string;
+  customer_whatsapp: string | null;
   date: string;
   customer_first_name: string;
   customer_last_name: string;
@@ -1717,6 +1759,64 @@ export async function getOrCreateComandaForAppointment(
       error: "Agendamento cancelado não possui comanda.",
       status: 400,
     };
+  }
+
+  // Sem WhatsApp (cliente sem cadastro): comanda isolada só deste horário.
+  if (!trigger.customer_whatsapp) {
+    let guestComandaId = await findExplicitComandaIdForAppointment(
+      admin,
+      appointmentId
+    );
+
+    if (!guestComandaId) {
+      const { data: byAppointment } = await admin
+        .from("comandas")
+        .select("id")
+        .eq("appointment_id", appointmentId)
+        .eq("service_date", trigger.date)
+        .eq("status", "open")
+        .maybeSingle();
+      guestComandaId = byAppointment?.id ?? null;
+    }
+
+    if (!guestComandaId) {
+      const { data: created, error } = await admin
+        .from("comandas")
+        .insert({
+          appointment_id: appointmentId,
+          professional_id: trigger.professional_id,
+          customer_whatsapp: null,
+          service_date: trigger.date,
+          status: "open",
+        })
+        .select("id")
+        .single();
+
+      if (error || !created) {
+        return {
+          ok: false,
+          error: "Não foi possível abrir a comanda.",
+          status: 500,
+        };
+      }
+      guestComandaId = created.id;
+      await seedItemsFromAppointment(admin, created.id, appointmentId);
+    }
+
+    if (!guestComandaId) {
+      return {
+        ok: false,
+        error: "Não foi possível abrir a comanda.",
+        status: 500,
+      };
+    }
+
+    await admin.from("comanda_appointments").upsert(
+      { comanda_id: guestComandaId, appointment_id: appointmentId },
+      { onConflict: "appointment_id" }
+    );
+
+    return getComandaById(admin, guestComandaId, { sync: false });
   }
 
   const { data: dayAppointments } = await admin

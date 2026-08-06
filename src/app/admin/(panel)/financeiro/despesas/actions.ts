@@ -30,7 +30,7 @@ function parseExpenseForm(formData: FormData) {
 
 function revalidateDespesas() {
   revalidatePath("/admin/financeiro/despesas");
-  revalidatePath("/admin/financeiro");
+  revalidatePath("/admin/metricas");
 }
 
 export async function createExpense(formData: FormData): Promise<ActionResult> {
@@ -155,7 +155,7 @@ function parseRecurringExpenseForm(formData: FormData) {
 function revalidateRecorrentes() {
   revalidatePath("/admin/financeiro/despesas/recorrentes");
   revalidatePath("/admin/financeiro/despesas");
-  revalidatePath("/admin/financeiro");
+  revalidatePath("/admin/metricas");
 }
 
 export async function createRecurringExpense(

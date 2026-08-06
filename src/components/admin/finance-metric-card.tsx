@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import { CircleHelp } from "lucide-react";
+import { ArrowDown, ArrowUp, CircleHelp, Minus } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { FinanceTrend } from "@/lib/finance-metrics";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
@@ -13,12 +14,18 @@ type FinanceMetricCardProps = {
   value: string;
   hint?: string;
   tooltip?: ReactNode;
+  /** Mini-gráfico ou marca visual ao lado do número. */
+  visual?: ReactNode;
   className?: string;
   /** "dark" = identidade agenda/login; default = tema claro do financeiro. */
   tone?: "default" | "dark";
   /** Torna o card clicável (sem envolver em <button> externo). */
   onSelect?: () => void;
+  /** Variação vs. o período anterior equivalente. */
+  trend?: FinanceTrend;
 };
+
+const TREND_ICONS = { up: ArrowUp, down: ArrowDown, flat: Minus } as const;
 
 /** Card de métrica padrão das telas de financeiro, caixa e comissões. */
 export function FinanceMetricCard({
@@ -26,12 +33,15 @@ export function FinanceMetricCard({
   value,
   hint,
   tooltip,
+  visual,
   className,
   tone = "default",
   onSelect,
+  trend,
 }: FinanceMetricCardProps) {
   const dark = tone === "dark";
   const clickable = Boolean(onSelect);
+  const TrendIcon = trend ? TREND_ICONS[trend.direction] : null;
 
   return (
     <div
@@ -60,12 +70,23 @@ export function FinanceMetricCard({
       <div className="flex items-center gap-1.5">
         <p
           className={cn(
-            "text-xs sm:text-sm",
+            "min-w-0 flex-1 truncate text-xs sm:text-sm",
             dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
           )}
         >
           {label}
         </p>
+        {TrendIcon ? (
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center gap-0.5 text-[10px] font-medium tabular-nums sm:text-xs",
+              dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+            )}
+          >
+            <TrendIcon className="size-3" />
+            {trend?.label}
+          </span>
+        ) : null}
         {tooltip ? (
           <Tooltip delayDuration={150}>
             <TooltipTrigger asChild>
@@ -89,25 +110,36 @@ export function FinanceMetricCard({
           </Tooltip>
         ) : null}
       </div>
-      <p
-        data-slot="finance-metric-value"
+
+      <div
         className={cn(
-          "mt-1 text-xl font-semibold tabular-nums tracking-tight sm:text-3xl",
-          dark && "text-[#f5f5f5]"
+          "mt-1 flex items-end gap-3",
+          visual ? "justify-between" : null
         )}
       >
-        {value}
-      </p>
-      {hint ? (
-        <p
-          className={cn(
-            "mt-1 text-[11px] leading-snug sm:text-xs",
-            dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
-          )}
-        >
-          {hint}
-        </p>
-      ) : null}
+        <div className="min-w-0 flex-1">
+          <p
+            data-slot="finance-metric-value"
+            className={cn(
+              "text-xl font-semibold tabular-nums tracking-tight sm:text-3xl",
+              dark && "text-[#f5f5f5]"
+            )}
+          >
+            {value}
+          </p>
+          {hint ? (
+            <p
+              className={cn(
+                "mt-1 text-[11px] leading-snug sm:text-xs",
+                dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
+              )}
+            >
+              {hint}
+            </p>
+          ) : null}
+        </div>
+        {visual ? <div className="shrink-0 pb-0.5">{visual}</div> : null}
+      </div>
     </div>
   );
 }

@@ -9,7 +9,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -18,7 +21,12 @@ import { EmptyState } from "@/components/admin/empty-state";
 import { FinancePeriodFilter } from "@/components/admin/finance-period-filter";
 import { FinanceMetricCard } from "@/components/admin/finance-metric-card";
 import { FinanceMetricDetail } from "@/components/admin/finance-metric-detail";
-import { VerticalBarChart } from "@/components/admin/finance-charts";
+import {
+  MiniDonut,
+  MiniRing,
+  VerticalBarChart,
+} from "@/components/admin/finance-charts";
+import { formatOccupancyHours } from "@/lib/agenda-occupancy";
 import type {
   FinanceDayMetric,
   FinanceMetricsReport,
@@ -26,7 +34,9 @@ import type {
 import type { ExpensesReport } from "@/lib/expense-service";
 import {
   buildFinanceQuery,
-  FINANCE_METRIC_OPTIONS,
+  FINANCE_METRIC_GROUPS,
+  trendFromPercent,
+  trendFromPoints,
   type FinanceMetricId,
 } from "@/lib/finance-metrics";
 import { formatPeriodLabel, shiftDate } from "@/lib/date-range";
@@ -84,14 +94,23 @@ export function FinanceView({
     report.totals.comandaCount > 0 ||
     report.totals.serviceItemCount > 0 ||
     report.productSales.saleLineCount > 0 ||
-    expensesReport.count > 0;
+    expensesReport.count > 0 ||
+    report.cancellation.totalCount > 0 ||
+    report.retention.totalCustomers > 0 ||
+    report.occupancy.availableMinutes > 0;
   const isDetail = metric !== "geral";
   const hasMetricData =
     metric === "produtos"
       ? report.productSales.saleLineCount > 0
       : metric === "saidas"
         ? expensesReport.count > 0
-        : hasData;
+        : metric === "cancelamentos"
+          ? report.cancellation.totalCount > 0
+          : metric === "clientes"
+            ? report.retention.totalCustomers > 0
+            : metric === "ocupacao"
+              ? report.occupancy.availableMinutes > 0
+            : hasData;
 
   const attendanceCount = report.totals.comandaCount;
   const ticketAverageCents =
@@ -99,6 +118,24 @@ export function FinanceView({
       ? Math.round(report.totals.servicesGrossCents / attendanceCount)
       : 0;
   const netProfitCents = report.totals.shopCents - expensesCents;
+
+  const faturamentoTrend = trendFromPercent(
+    report.comparison?.servicesGrossChangePercent ?? null
+  );
+  const atendimentosTrend = trendFromPercent(
+    report.comparison?.serviceChangePercent ?? null
+  );
+  const ticketTrend = trendFromPercent(
+    report.comparison?.averageServiceChangePercent ?? null
+  );
+  const comissoesTrend = trendFromPercent(
+    report.comparison?.commissionChangePercent ?? null
+  );
+  const cancelamentosTrend = trendFromPoints(
+    report.cancellation.ratePointsChange
+  );
+  const clientesTrend = trendFromPoints(report.retention.newPointsChange);
+  const ocupacaoTrend = trendFromPoints(report.occupancy.ratePointsChange);
 
   const last7Chart = useMemo(
     () =>
@@ -148,7 +185,7 @@ export function FinanceView({
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
         <PageHeader
           tone="dark"
-          title="Financeiro"
+          title="Métricas"
           description={formatPeriodLabel(from, to)}
           action={
             <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
@@ -175,17 +212,29 @@ export function FinanceView({
               <SelectTrigger
                 aria-label="Analisar métrica"
                 className={cn(
-                  "h-10 w-full sm:h-8 sm:w-[13.5rem]",
+                  "h-10 w-full sm:h-8 sm:w-[15rem]",
                   ADMIN_SURFACE.selectTrigger
                 )}
               >
                 <SelectValue placeholder="Visão geral" />
               </SelectTrigger>
-              <SelectContent className={ADMIN_SURFACE.popover}>
-                {FINANCE_METRIC_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
+              <SelectContent className={cn(ADMIN_SURFACE.popover, "min-w-[16rem]")}>
+                {FINANCE_METRIC_GROUPS.map((group, groupIndex) => (
+                  <SelectGroup key={group.label ?? "geral"}>
+                    {groupIndex > 0 ? (
+                      <SelectSeparator className="my-1.5 bg-white/10" />
+                    ) : null}
+                    {group.label ? (
+                      <SelectLabel className="px-2.5 py-1.5 text-[10px] font-medium tracking-[0.14em] text-[#ecf15e] uppercase">
+                        {group.label}
+                      </SelectLabel>
+                    ) : null}
+                    {group.options.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
@@ -241,7 +290,13 @@ export function FinanceView({
                   ? "Não há venda de produto fechada neste período."
                   : metric === "saidas"
                     ? "Não há saída lançada neste período. Cadastre em Despesas."
-                    : "Não há atendimento finalizado neste período. Tente outra faixa de datas."
+                    : metric === "cancelamentos"
+                      ? "Não há agendamento cadastrado neste período."
+                      : metric === "clientes"
+                        ? "Não há cliente com WhatsApp agendado neste período."
+                        : metric === "ocupacao"
+                          ? "Não há horário de trabalho cadastrado neste período."
+                      : "Não há atendimento finalizado neste período. Tente outra faixa de datas."
               }
               action={
                 metric === "saidas" ? (
@@ -266,6 +321,7 @@ export function FinanceView({
                   value={formatPriceBRL(report.totals.servicesGrossCents)}
                   hint="Serviços do período"
                   tooltip="Soma do valor dos serviços realizados no período selecionado."
+                  trend={faturamentoTrend}
                   onSelect={() => navigate(from, to, "faturamento")}
                 />
                 <FinanceMetricCard
@@ -292,17 +348,18 @@ export function FinanceView({
 
             <section className="flex flex-col gap-2.5">
               <p className={cn(ADMIN_SURFACE.sectionLabel)}>Operação</p>
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
                 <FinanceMetricCard
                   tone="dark"
                   label="Atendimentos"
                   value={String(attendanceCount)}
                   hint={
                     attendanceCount === 1
-                      ? "1 comanda"
-                      : `${attendanceCount} comandas`
+                      ? "1 comanda finalizada"
+                      : `${attendanceCount} comandas finalizadas`
                   }
                   tooltip="Quantidade de comandas finalizadas no período."
+                  trend={atendimentosTrend}
                 />
                 <FinanceMetricCard
                   tone="dark"
@@ -310,6 +367,7 @@ export function FinanceView({
                   value={formatPriceBRL(ticketAverageCents)}
                   hint="Por atendimento"
                   tooltip="Faturamento dividido pelo número de atendimentos (comandas)."
+                  trend={ticketTrend}
                   onSelect={() => navigate(from, to, "ticket")}
                 />
                 <FinanceMetricCard
@@ -318,6 +376,8 @@ export function FinanceView({
                   value={formatPriceBRL(report.totals.commissionCents)}
                   hint={`${report.commissionRatePercent}% do faturamento`}
                   tooltip="Quanto do faturamento vai para os barbeiros em comissão."
+                  trend={comissoesTrend}
+                  visual={<MiniRing percent={report.commissionRatePercent} />}
                   onSelect={() => navigate(from, to, "comissoes")}
                 />
                 <FinanceMetricCard
@@ -326,11 +386,70 @@ export function FinanceView({
                   value={formatPriceBRL(report.productSales.totalRevenueCents)}
                   hint={
                     report.productSales.totalQuantity > 0
-                      ? `${report.productSales.totalQuantity} un. · toque`
+                      ? `${report.productSales.totalQuantity} un. vendidas · toque`
                       : "Toque para detalhar"
                   }
                   tooltip="Faturamento só de produtos. Abre a métrica Produtos vendidos."
                   onSelect={() => navigate(from, to, "produtos")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Clientes novos"
+                  value={String(report.retention.newCount)}
+                  hint={
+                    report.retention.totalCustomers > 0
+                      ? `${report.retention.newPercent}% novos · ${report.retention.recurringCount} recorrente${report.retention.recurringCount === 1 ? "" : "s"}`
+                      : "Toque para detalhar"
+                  }
+                  tooltip="Clientes cuja primeira visita (com WhatsApp) caiu neste período."
+                  trend={clientesTrend}
+                  visual={
+                    <MiniDonut
+                      slices={[
+                        {
+                          label: "Novos",
+                          value: report.retention.newCount,
+                          className: "text-[#ecf15e]",
+                        },
+                        {
+                          label: "Recorrentes",
+                          value: report.retention.recurringCount,
+                          className: "text-white/35",
+                        },
+                      ]}
+                    />
+                  }
+                  onSelect={() => navigate(from, to, "clientes")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Ocupação"
+                  value={`${report.occupancy.ratePercent}%`}
+                  hint={
+                    report.occupancy.availableMinutes > 0
+                      ? `${formatOccupancyHours(report.occupancy.occupiedMinutes)} de ${formatOccupancyHours(report.occupancy.availableMinutes)} · toque`
+                      : "Toque para detalhar"
+                  }
+                  tooltip="Quanto da grade dos barbeiros estava preenchida no período (sem contar encaixes nem cancelados)."
+                  trend={ocupacaoTrend}
+                  visual={<MiniRing percent={report.occupancy.ratePercent} />}
+                  onSelect={() => navigate(from, to, "ocupacao")}
+                />
+                <FinanceMetricCard
+                  tone="dark"
+                  label="Cancelamentos"
+                  value={`${report.cancellation.ratePercent}%`}
+                  hint={
+                    report.cancellation.totalCount > 0
+                      ? `${report.cancellation.cancelledCount} de ${report.cancellation.totalCount} agendamentos`
+                      : "Toque para detalhar"
+                  }
+                  tooltip="Percentual de agendamentos cancelados de verdade (cliente desmarcou ou não compareceu). Erro de agendamento e remarcação não entram."
+                  trend={cancelamentosTrend}
+                  visual={
+                    <MiniRing percent={report.cancellation.ratePercent} />
+                  }
+                  onSelect={() => navigate(from, to, "cancelamentos")}
                 />
               </div>
             </section>

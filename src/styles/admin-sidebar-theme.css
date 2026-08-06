@@ -63,6 +63,42 @@
   color: #ecf15e;
 }
 
+.admin-sidebar [data-sidebar="menu-sub-button"] {
+  color: rgb(245 245 245 / 72%);
+  transition: background-color 160ms ease, color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"] svg {
+  color: rgb(245 245 245 / 50%);
+  transition: color 160ms ease;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"]:hover {
+  background: rgb(255 255 255 / 5%);
+  color: #f5f5f5;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"]:hover svg {
+  color: #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"][data-active="true"] {
+  background: rgb(236 241 94 / 14%);
+  color: #ecf15e;
+  font-weight: 500;
+  box-shadow: inset 2px 0 0 #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"][data-active="true"] svg {
+  color: #ecf15e;
+}
+
+.admin-sidebar [data-sidebar="menu-sub-button"][data-active="true"]:hover {
+  background: rgb(236 241 94 / 18%);
+  color: #ecf15e;
+}
+
 .admin-sidebar [data-sidebar="header"],
 .admin-sidebar [data-sidebar="footer"] {
   border-color: rgb(255 255 255 / 8%);

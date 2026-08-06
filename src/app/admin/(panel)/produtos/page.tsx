@@ -46,7 +46,7 @@ export default async function ProductsPage() {
             list.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
-                  <Link href="/admin/financeiro?metric=produtos">Vendas</Link>
+                  <Link href="/admin/metricas?metric=produtos">Vendas</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>
                   <Link href="/admin/produtos/categorias">Categorias</Link>

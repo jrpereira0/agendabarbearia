@@ -30,6 +30,48 @@ export function intersectRanges(
   return start < end ? { start, end } : null;
 }
 
+/** Remove faixas de `subtract` de `ranges` (ex.: bloqueios da agenda). */
+export function subtractRanges(
+  ranges: MinuteRange[],
+  subtract: MinuteRange[]
+): MinuteRange[] {
+  let result = ranges.map((range) => ({ ...range }));
+  for (const block of subtract) {
+    const next: MinuteRange[] = [];
+    for (const range of result) {
+      if (block.end <= range.start || block.start >= range.end) {
+        next.push(range);
+        continue;
+      }
+      if (block.start > range.start) {
+        next.push({ start: range.start, end: block.start });
+      }
+      if (block.end < range.end) {
+        next.push({ start: block.end, end: range.end });
+      }
+    }
+    result = next;
+  }
+  return result;
+}
+
+export function sumRangeMinutes(ranges: MinuteRange[]): number {
+  return ranges.reduce((sum, range) => sum + (range.end - range.start), 0);
+}
+
+/** Minutos de `range` que caem dentro de `capacity` (união das interseções). */
+export function clippedMinutesInRanges(
+  range: MinuteRange,
+  capacity: MinuteRange[]
+): number {
+  let minutes = 0;
+  for (const cap of capacity) {
+    const clipped = intersectRanges(range, cap);
+    if (clipped) minutes += clipped.end - clipped.start;
+  }
+  return minutes;
+}
+
 export function minuteRangeOverlaps(
   start: number,
   end: number,

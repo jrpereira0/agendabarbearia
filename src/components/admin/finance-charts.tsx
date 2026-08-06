@@ -124,6 +124,7 @@ export function DonutChart({
   strokeWidth = 18,
   centerLabel,
   centerValue,
+  formatValue = formatPriceBRL,
   className,
 }: {
   slices: DonutSlice[];
@@ -131,6 +132,7 @@ export function DonutChart({
   strokeWidth?: number;
   centerLabel?: string;
   centerValue?: string;
+  formatValue?: (value: number) => string;
   className?: string;
 }) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
@@ -212,12 +214,128 @@ export function DonutChart({
                 <span className="truncate text-[#f5f5f5]">{slice.label}</span>
               </div>
               <span className="shrink-0 tabular-nums text-[#b4b6bb]">
-                {formatPriceBRL(slice.value)} · {pct}%
+                {formatValue(slice.value)} · {pct}%
               </span>
             </div>
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** Anel compacto pra taxa % em cards (ex.: cancelamentos). */
+export function MiniRing({
+  percent,
+  size = 52,
+  strokeWidth = 6,
+  className,
+  trackClassName = "text-white/15",
+  fillClassName = "text-[#ecf15e]",
+}: {
+  percent: number;
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+  trackClassName?: string;
+  fillClassName?: string;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, percent));
+  const dash = (clamped / 100) * circumference;
+  const center = size / 2;
+
+  return (
+    <div
+      className={cn("relative shrink-0", className)}
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className={trackClassName}
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+          strokeLinecap="butt"
+          className={fillClassName}
+        />
+      </svg>
+    </div>
+  );
+}
+
+/** Donut compacto sem legenda (ex.: novos vs. recorrentes no card). */
+export function MiniDonut({
+  slices,
+  size = 52,
+  strokeWidth = 8,
+  className,
+}: {
+  slices: DonutSlice[];
+  size?: number;
+  strokeWidth?: number;
+  className?: string;
+}) {
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
+  let offset = 0;
+
+  return (
+    <div
+      className={cn("relative shrink-0", className)}
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      <svg width={size} height={size} className="-rotate-90">
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-white/15"
+        />
+        {total > 0 &&
+          slices.map((slice, index) => {
+            const pct = slice.value / total;
+            const dash = pct * circumference;
+            const gap = circumference - dash;
+            const currentOffset = offset;
+            offset += dash;
+            return (
+              <circle
+                key={`${slice.label}-${index}`}
+                cx={center}
+                cy={center}
+                r={radius}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${dash} ${gap}`}
+                strokeDashoffset={-currentOffset}
+                strokeLinecap="butt"
+                className={slice.className ?? "text-[#ecf15e]"}
+              />
+            );
+          })}
+      </svg>
     </div>
   );
 }

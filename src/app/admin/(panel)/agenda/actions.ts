@@ -30,6 +30,7 @@ import {
   type AppointmentWorkflowStatus,
 } from "@/lib/update-appointment-status";
 import {
+  detachAppointmentFromOpenComandas,
   detachEncaixeFromOpenComandas,
   finalizeOpenComandaAfterAppointmentRemoved,
   syncOpenComandaAfterAppointmentEdit,
@@ -46,6 +47,7 @@ import {
   sumDurationForServiceIds,
   uniqueServiceIds,
 } from "@/lib/appointment-service-quantities";
+import { loadFirstVisitAppointmentIds } from "@/lib/customer-retention";
 
 /** Revalida a agenda depois de responder ao navegador (mais rápido na Vercel). */
 function revalidateAdminAgendaSoon() {
@@ -61,15 +63,40 @@ function revalidateAdminAndPublicAgendaSoon() {
   });
 }
 
-const createSchema = z.object({
-  professionalId: z.uuid(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-  serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
-  firstName: z.string().trim().min(1, "Informe o nome."),
-  lastName: z.string().trim().optional().default(""),
-  whatsapp: whatsappSchema,
-});
+const createSchema = z
+  .object({
+    professionalId: z.uuid(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+    serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
+    firstName: z.string().trim().min(1, "Informe o nome."),
+    lastName: z.string().trim().optional().default(""),
+    /** Vazio quando for agendamento sem cadastro e sem telefone. */
+    whatsapp: z.string().optional().default(""),
+    /** Não cria ficha em clientes; WhatsApp fica opcional. */
+    withoutRegistration: z.boolean().optional().default(false),
+  })
+  .superRefine((data, ctx) => {
+    const digits = data.whatsapp.replace(/\D/g, "");
+    if (data.withoutRegistration) {
+      if (!digits) return;
+      if (!normalizeWhatsapp(digits)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["whatsapp"],
+          message: WHATSAPP_INVALID_MESSAGE,
+        });
+      }
+      return;
+    }
+    if (!normalizeWhatsapp(digits)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["whatsapp"],
+        message: WHATSAPP_INVALID_MESSAGE,
+      });
+    }
+  });
 
 const OCCUPIED_SLOT_MESSAGE =
   "Esse horário já está ocupado. Use encaixe ou serviço extra na comanda.";
@@ -144,7 +171,7 @@ async function assertCanManageAppointment(
 
 type InsertAppointmentResult =
   | ActionResult
-  | { ok: true; appointmentId: string };
+  | { ok: true; appointmentId: string; isFirstVisit: boolean };
 
 async function insertAppointment(
   data: z.infer<typeof createSchema>,
@@ -169,24 +196,43 @@ async function insertAppointment(
 
   const endTime = minutesToTime(endMinutes);
 
-  const customer = await upsertCustomer({
-    firstName: data.firstName,
-    lastName: data.lastName,
-    whatsapp: data.whatsapp,
-  });
+  const withoutRegistration = data.withoutRegistration === true;
+  const normalizedWhatsapp = normalizeWhatsapp(data.whatsapp);
+  let customerId: string | null = null;
+  let firstName = data.firstName.trim();
+  let lastName = (data.lastName ?? "").trim();
+  let customerWhatsapp: string | null = null;
 
-  if (!customer.ok) {
-    return { ok: false, error: customer.error };
+  if (withoutRegistration) {
+    customerWhatsapp = normalizedWhatsapp;
+  } else {
+    if (!normalizedWhatsapp) {
+      return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
+    }
+    const customer = await upsertCustomer({
+      firstName,
+      lastName,
+      whatsapp: normalizedWhatsapp,
+    });
+
+    if (!customer.ok) {
+      return { ok: false, error: customer.error };
+    }
+
+    customerId = customer.customerId;
+    firstName = customer.firstName;
+    lastName = customer.lastName;
+    customerWhatsapp = normalizedWhatsapp;
   }
 
   const { data: appointment, error } = await admin
     .from("appointments")
     .insert({
       professional_id: data.professionalId,
-      customer_id: customer.customerId,
-      customer_first_name: customer.firstName,
-      customer_last_name: customer.lastName,
-      customer_whatsapp: data.whatsapp,
+      customer_id: customerId,
+      customer_first_name: firstName,
+      customer_last_name: lastName,
+      customer_whatsapp: customerWhatsapp,
       date: data.date,
       start_time: data.startTime,
       end_time: endTime,
@@ -221,10 +267,23 @@ async function insertAppointment(
   const source = isSqueezeIn ? "admin_squeeze_in" : "admin_agenda";
   const createdId = appointment.id;
 
+  let isFirstVisit = false;
+  if (customerWhatsapp) {
+    const firstVisitIds = await loadFirstVisitAppointmentIds(admin, [
+      {
+        id: createdId,
+        date: data.date,
+        startTime: data.startTime,
+        customerWhatsapp,
+      },
+    ]);
+    isFirstVisit = firstVisitIds.has(createdId);
+  }
+
   // Site/app confirmam na hora; WhatsApp barbeiro + push vão em segundo plano.
   scheduleAppointmentCreatedNotify(createdId, source);
   revalidateAdminAgendaSoon();
-  return { ok: true, appointmentId: appointment.id };
+  return { ok: true, appointmentId: appointment.id, isFirstVisit };
 }
 
 async function validateCreateInput(
@@ -314,6 +373,7 @@ export async function createNormalAppointment(input: {
   firstName: string;
   lastName: string;
   whatsapp: string;
+  withoutRegistration?: boolean;
 }): Promise<InsertAppointmentResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
@@ -321,14 +381,16 @@ export async function createNormalAppointment(input: {
   const denied = assertPermission(session, "canBookClients");
   if (denied) return denied;
 
-  const whatsapp = normalizeWhatsapp(input.whatsapp);
-  if (!whatsapp) {
+  const withoutRegistration = input.withoutRegistration === true;
+  const whatsapp = normalizeWhatsapp(input.whatsapp) ?? "";
+  if (!withoutRegistration && !whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
   }
 
   const parsed = createSchema.safeParse({
     ...input,
     whatsapp,
+    withoutRegistration,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -391,6 +453,7 @@ export async function createSqueezeInAppointment(input: {
   firstName: string;
   lastName: string;
   whatsapp: string;
+  withoutRegistration?: boolean;
 }): Promise<InsertAppointmentResult> {
   const session = await requireAdmin();
   if (!("userId" in session)) return session;
@@ -398,14 +461,16 @@ export async function createSqueezeInAppointment(input: {
   const denied = assertPermission(session, "canCreateSqueezeIn");
   if (denied) return denied;
 
-  const whatsapp = normalizeWhatsapp(input.whatsapp);
-  if (!whatsapp) {
+  const withoutRegistration = input.withoutRegistration === true;
+  const whatsapp = normalizeWhatsapp(input.whatsapp) ?? "";
+  if (!withoutRegistration && !whatsapp) {
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
   }
 
   const parsed = createSchema.safeParse({
     ...input,
     whatsapp,
+    withoutRegistration,
   });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0].message };
@@ -427,6 +492,7 @@ export async function createSqueezeInAppointment(input: {
 const updateSchema = z.object({
   appointmentId: z.uuid(),
   professionalId: z.uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   startTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   serviceIds: z.array(z.uuid()).min(1, "Escolha pelo menos um serviço."),
   firstName: z.string().trim().min(1, "Informe o nome."),
@@ -437,6 +503,7 @@ const updateSchema = z.object({
 export async function updateAppointment(input: {
   appointmentId: string;
   professionalId: string;
+  date: string;
   startTime: string;
   serviceIds: string[];
   firstName: string;
@@ -473,7 +540,7 @@ export async function updateAppointment(input: {
   if (isActionResult(admin)) return admin;
   const { data: existing } = await admin
     .from("appointments")
-    .select("date, is_squeeze_in")
+    .select("date, is_squeeze_in, customer_whatsapp")
     .eq("id", parsed.data.appointmentId)
     .maybeSingle();
 
@@ -483,7 +550,7 @@ export async function updateAppointment(input: {
 
   const createInput = {
     professionalId: parsed.data.professionalId,
-    date: existing.date,
+    date: parsed.data.date,
     startTime: parsed.data.startTime,
     serviceIds: parsed.data.serviceIds,
     firstName: parsed.data.firstName,
@@ -496,7 +563,7 @@ export async function updateAppointment(input: {
 
   const pastError = rejectPastBookingForBarber(
     session,
-    existing.date,
+    parsed.data.date,
     parsed.data.startTime
   );
   if (pastError) return pastError;
@@ -504,7 +571,7 @@ export async function updateAppointment(input: {
   if (!existing.is_squeeze_in) {
     const slotCheck = await validateAdminAppointmentSlot(
       parsed.data.professionalId,
-      existing.date,
+      parsed.data.date,
       parsed.data.startTime,
       validated.durationMinutes,
       parsed.data.appointmentId,
@@ -548,6 +615,13 @@ export async function updateAppointment(input: {
     parsed.data.appointmentId
   );
 
+  const dateChanged = existing.date !== parsed.data.date;
+
+  // Se mudou o dia, tira o horário da comanda aberta do dia antigo antes de gravar.
+  if (dateChanged) {
+    await detachAppointmentFromOpenComandas(admin, parsed.data.appointmentId);
+  }
+
   const { error } = await admin
     .from("appointments")
     .update({
@@ -556,6 +630,7 @@ export async function updateAppointment(input: {
       customer_first_name: customer.firstName,
       customer_last_name: customer.lastName,
       customer_whatsapp: parsed.data.whatsapp,
+      date: parsed.data.date,
       start_time: parsed.data.startTime,
       end_time: endTime,
     })

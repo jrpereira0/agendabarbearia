@@ -65,7 +65,7 @@ export default async function DespesasPage({ searchParams }: PageProps) {
           tone="dark"
           title="Despesas"
           description={`Saídas da barbearia · ${formatPeriodLabel(from, to)}`}
-          backHref="/admin/financeiro"
+          backHref="/admin/metricas"
           backLabel="Financeiro"
           action={
             <Button asChild variant="outline" size="sm" className={ADMIN_SURFACE.btnGhost}>

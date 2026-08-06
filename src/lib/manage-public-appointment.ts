@@ -25,6 +25,7 @@ import {
   captureAppointmentUpdateSnapshot,
   notifyAppointmentUpdated,
 } from "@/lib/notifications/appointment-updated-webhook";
+import { CLIENT_SELF_CANCEL_REASON } from "@/lib/cancellation-reasons";
 
 const updateSchema = z.object({
   whatsapp: whatsappSchema,
@@ -429,7 +430,11 @@ export async function cancelPublicAppointment(
 
   const { error } = await admin
     .from("appointments")
-    .update({ status: "cancelled" })
+    .update({
+      status: "cancelled",
+      cancellation_reason: CLIENT_SELF_CANCEL_REASON,
+      cancelled_at: new Date().toISOString(),
+    })
     .eq("id", appointmentId);
 
   if (error) {

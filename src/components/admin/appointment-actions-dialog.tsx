@@ -159,14 +159,15 @@ export function AppointmentActionsDialog({
     if (open && appointment) {
       setCustomerId(appointment.customerId ?? null);
       setCreditBalanceCents(0);
-      setCustomerSummaryLoading(true);
+      // Sem WhatsApp não há ficha pra buscar — já libera o loading.
+      setCustomerSummaryLoading(Boolean(appointment.customerWhatsapp));
     } else {
       setCustomerSummaryLoading(false);
     }
   }
 
   useEffect(() => {
-    if (!open || !appointment) return;
+    if (!open || !appointment?.customerWhatsapp) return;
 
     let cancelled = false;
 
@@ -332,6 +333,7 @@ export function AppointmentActionsDialog({
     const result = await updateAppointment({
       appointmentId: appointment!.id,
       professionalId: appointment!.professionalId,
+      date: appointment!.date,
       startTime: appointment!.startTime,
       serviceIds: appointment!.services.map((service) => service.id),
       firstName: firstName.trim(),
@@ -388,7 +390,9 @@ export function AppointmentActionsDialog({
                   <p className="text-xs text-muted-foreground">Cliente</p>
                   <p className="truncate text-base font-medium">{customerName}</p>
                   <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
-                    {formatWhatsapp(appointment.customerWhatsapp)}
+                    {appointment.customerWhatsapp
+                      ? formatWhatsapp(appointment.customerWhatsapp)
+                      : "Sem cadastro"}
                   </p>
                 </div>
                 <Badge
@@ -421,7 +425,7 @@ export function AppointmentActionsDialog({
               ) : null}
 
               <div className="flex flex-wrap gap-2">
-                {confirmationWhatsappEnabled ? (
+                {confirmationWhatsappEnabled && appointment.customerWhatsapp ? (
                   <Button
                     variant="outline"
                     size="sm"

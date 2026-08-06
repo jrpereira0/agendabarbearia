@@ -12,6 +12,8 @@ export type AppointmentItem = {
   customerFirstName: string;
   customerLastName: string;
   customerWhatsapp: string;
+  /** Primeira visita deste cliente (por WhatsApp). */
+  isFirstVisit?: boolean;
   startTime: string;
   endTime: string;
   status:

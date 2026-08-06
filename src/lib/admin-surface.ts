@@ -2,6 +2,7 @@
 export function isAdminDarkSurface(pathname: string): boolean {
   return (
     pathname === "/admin" ||
+    pathname === "/admin/metricas" ||
     pathname === "/admin/financeiro" ||
     pathname.startsWith("/admin/financeiro/") ||
     pathname === "/admin/profissionais" ||

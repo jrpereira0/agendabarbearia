@@ -4,7 +4,7 @@ type PageProps = {
   searchParams: Promise<{ from?: string; to?: string }>;
 };
 
-/** Mantém o link antigo; a métrica vive no Financeiro. */
+/** Mantém o link antigo; a métrica vive em Métricas. */
 export default async function FinanceProductsRedirectPage({
   searchParams,
 }: PageProps) {
@@ -12,5 +12,5 @@ export default async function FinanceProductsRedirectPage({
   const params = new URLSearchParams({ metric: "produtos" });
   if (from) params.set("from", from);
   if (to) params.set("to", to);
-  redirect(`/admin/financeiro?${params.toString()}`);
+  redirect(`/admin/metricas?${params.toString()}`);
 }

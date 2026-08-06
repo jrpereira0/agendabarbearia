@@ -26,7 +26,11 @@ function isListPath(pathname: string): boolean {
 }
 
 function isMetricsPath(pathname: string): boolean {
-  return pathname.startsWith("/admin/financeiro");
+  return (
+    pathname === "/admin/metricas" ||
+    pathname.startsWith("/admin/metricas/") ||
+    pathname.startsWith("/admin/financeiro")
+  );
 }
 
 export function AdminPanelLoading() {

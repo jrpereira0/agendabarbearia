@@ -77,7 +77,7 @@ async function buildPayload(
     customer: {
       firstName: appointment.customer_first_name,
       lastName: appointment.customer_last_name,
-      whatsapp: appointment.customer_whatsapp,
+      whatsapp: appointment.customer_whatsapp ?? "",
     },
     professional: {
       id: professional.id,

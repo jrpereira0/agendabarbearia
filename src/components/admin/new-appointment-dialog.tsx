@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Check, Minus, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AdminCustomerFields } from "@/components/admin/admin-customer-fields";
 import { ProfessionalAvatar } from "@/components/admin/professional-avatar";
 import { SearchInput } from "@/components/admin/search-input";
@@ -23,6 +26,7 @@ import {
   formatDuration,
   formatPriceBRL,
   formatTime,
+  formatWhatsapp,
 } from "@/lib/format";
 import type { MinuteRange } from "@/lib/availability";
 import {
@@ -34,7 +38,7 @@ import {
   findAppointmentConflicts,
   isOutsideProfessionalSchedule,
 } from "@/lib/encaixe";
-import { matchesSearch } from "@/lib/text";
+import { matchesSearch, capitalizePersonName } from "@/lib/text";
 import { groupServicesForBooking } from "@/lib/booking-service-groups";
 import { countServiceQuantities } from "@/lib/appointment-service-quantities";
 import { cn } from "@/lib/utils";
@@ -133,7 +137,8 @@ function getStepMeta(
     },
     client: {
       title: "Dados do cliente",
-      description: "Confira o resumo e preencha nome e WhatsApp.",
+      description:
+        "Busque o cadastro ou marque cliente sem cadastro (só o nome).",
     },
   };
   return meta[step];
@@ -401,6 +406,7 @@ export function NewAppointmentDialog({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [withoutRegistration, setWithoutRegistration] = useState(false);
   const [saving, setSaving] = useState(false);
   const [pendingStartTime, setPendingStartTime] = useState<string | null>(null);
   const [availableSlots, setAvailableSlots] = useState<string[]>([]);
@@ -497,6 +503,7 @@ export function NewAppointmentDialog({
       setFirstName("");
       setLastName("");
       setWhatsapp("");
+      setWithoutRegistration(false);
       setAvailableSlots([]);
       setSlotsError(null);
     }
@@ -764,8 +771,12 @@ export function NewAppointmentDialog({
   }
 
   async function submitAppointment() {
-    if (!firstName.trim() || !whatsapp.replace(/\D/g, "")) {
-      toast.error("Preencha os dados do cliente.");
+    if (!firstName.trim()) {
+      toast.error("Informe o nome do cliente.");
+      return;
+    }
+    if (!withoutRegistration && !whatsapp.replace(/\D/g, "")) {
+      toast.error("Preencha o WhatsApp ou marque cliente sem cadastro.");
       return;
     }
 
@@ -778,6 +789,7 @@ export function NewAppointmentDialog({
       firstName: firstName.trim(),
       lastName: lastName.trim(),
       whatsapp: whatsapp.replace(/\D/g, ""),
+      withoutRegistration,
     };
     const result = isEncaixe
       ? await createSqueezeInAppointment(payload)
@@ -798,9 +810,12 @@ export function NewAppointmentDialog({
           date,
           professionalId,
           professionalNickname: professional.nickname,
+          customerId: withoutRegistration ? null : undefined,
           customerFirstName: firstName.trim(),
           customerLastName: lastName.trim(),
           customerWhatsapp: whatsapp.replace(/\D/g, ""),
+          isFirstVisit:
+            "isFirstVisit" in result ? Boolean(result.isFirstVisit) : false,
           startTime,
           endTime: minutesToTime(endMinutes),
           status: "scheduled",
@@ -1063,16 +1078,94 @@ export function NewAppointmentDialog({
                   </p>
                 )}
 
-              <AdminCustomerFields
-                firstName={firstName}
-                lastName={lastName}
-                whatsapp={whatsapp}
-                onFirstNameChange={setFirstName}
-                onLastNameChange={setLastName}
-                onWhatsappChange={setWhatsapp}
-                enabled={open && step === "client"}
-                idPrefix="newCustomer"
-              />
+              <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-foreground/10 bg-muted/30 px-3 py-3">
+                <Checkbox
+                  checked={withoutRegistration}
+                  onCheckedChange={(checked) => {
+                    setWithoutRegistration(checked === true);
+                  }}
+                  className="mt-0.5"
+                  aria-label="Cliente sem cadastro"
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">
+                    Cliente sem cadastro
+                  </span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    Só o nome na agenda — não cria ficha em Clientes. WhatsApp
+                    fica opcional.
+                  </span>
+                </span>
+              </label>
+
+              {withoutRegistration ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="guestFirstName">Nome</Label>
+                      <Input
+                        id="guestFirstName"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        onBlur={() =>
+                          setFirstName(capitalizePersonName(firstName))
+                        }
+                        placeholder="Como chamar na agenda"
+                        className="h-11"
+                        autoComplete="given-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="guestLastName">
+                        Sobrenome{" "}
+                        <span className="font-normal text-muted-foreground">
+                          (opcional)
+                        </span>
+                      </Label>
+                      <Input
+                        id="guestLastName"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        onBlur={() =>
+                          setLastName(capitalizePersonName(lastName))
+                        }
+                        className="h-11"
+                        autoComplete="family-name"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="guestWhatsapp">
+                      WhatsApp{" "}
+                      <span className="font-normal text-muted-foreground">
+                        (opcional)
+                      </span>
+                    </Label>
+                    <Input
+                      id="guestWhatsapp"
+                      inputMode="numeric"
+                      placeholder="(11) 99999-9999"
+                      value={whatsapp}
+                      onChange={(e) =>
+                        setWhatsapp(formatWhatsapp(e.target.value))
+                      }
+                      className="h-11"
+                      autoComplete="tel"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <AdminCustomerFields
+                  firstName={firstName}
+                  lastName={lastName}
+                  whatsapp={whatsapp}
+                  onFirstNameChange={setFirstName}
+                  onLastNameChange={setLastName}
+                  onWhatsappChange={setWhatsapp}
+                  enabled={open && step === "client"}
+                  idPrefix="newCustomer"
+                />
+              )}
             </form>
           )}
         </div>

@@ -439,7 +439,7 @@ export async function deleteOpenWalkInComandaAction(
   if (!result.ok) return result;
 
   revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
+  revalidatePath("/admin/metricas");
   return { ok: true };
 }
 
@@ -580,7 +580,7 @@ export async function closeComandaWithItemsAction(
 
     after(() => {
       revalidatePath("/admin");
-      revalidatePath("/admin/financeiro");
+      revalidatePath("/admin/metricas");
     });
     return { ok: true };
   } catch {
@@ -628,7 +628,7 @@ export async function reopenComandaAction(
     }
 
     revalidatePath("/admin");
-    revalidatePath("/admin/financeiro");
+    revalidatePath("/admin/metricas");
     revalidatePath("/admin/clientes");
     return { ok: true, comanda: result.comanda };
   } catch {

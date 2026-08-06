@@ -21,6 +21,7 @@ import { capitalizePersonName } from "@/lib/text";
 import { normalizeWhatsapp, whatsappLookupKeys } from "@/lib/whatsapp";
 import { getAdminSession, canViewAllAgendas } from "@/lib/require-admin";
 import { loadServiceBookingCounts } from "@/lib/service-booking-stats";
+import { loadFirstVisitAppointmentIds } from "@/lib/customer-retention";
 import { AgendaView } from "@/components/admin/agenda-view";
 import type { AppointmentItem } from "@/components/admin/appointment-item";
 import type { ProductOption } from "@/lib/product-types";
@@ -181,11 +182,27 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     }
   }
 
+  let firstVisitIds = new Set<string>();
+  if ((rawAppointments ?? []).length > 0) {
+    const retentionAdmin = requireAdminClient();
+    if (!isActionResult(retentionAdmin)) {
+      firstVisitIds = await loadFirstVisitAppointmentIds(
+        retentionAdmin,
+        (rawAppointments ?? []).map((a) => ({
+          id: a.id,
+          date: a.date,
+          startTime: a.start_time,
+          customerWhatsapp: a.customer_whatsapp ?? "",
+        }))
+      );
+    }
+  }
+
   const appointments: AppointmentItem[] = (rawAppointments ?? []).map((a) => {
     const rawCustomer = a.customers as
       | { credit_balance_cents?: number | null }
       | null;
-    const customerWhatsapp = normalizeWhatsapp(a.customer_whatsapp);
+    const customerWhatsapp = normalizeWhatsapp(a.customer_whatsapp ?? "");
     const customerCreditBalanceCents =
       typeof rawCustomer?.credit_balance_cents === "number"
         ? rawCustomer.credit_balance_cents
@@ -210,7 +227,8 @@ export default async function AdminDashboardPage({ searchParams }: PageProps) {
     customerCreditBalanceCents,
     customerFirstName: capitalizePersonName(a.customer_first_name),
     customerLastName: capitalizePersonName(a.customer_last_name),
-    customerWhatsapp: a.customer_whatsapp,
+    customerWhatsapp: a.customer_whatsapp ?? "",
+    isFirstVisit: firstVisitIds.has(a.id),
     startTime: formatTime(a.start_time),
     endTime: formatTime(a.end_time),
     status: a.status as AppointmentItem["status"],

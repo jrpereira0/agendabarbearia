@@ -11,7 +11,7 @@ export type RawAppointmentRow = {
   status: string;
   customer_first_name: string;
   customer_last_name: string;
-  customer_whatsapp: string;
+  customer_whatsapp: string | null;
   professionals:
     | { id: string; nickname: string; whatsapp: string }
     | { id: string; nickname: string; whatsapp: string }[]

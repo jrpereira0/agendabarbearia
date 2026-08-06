@@ -33,7 +33,7 @@ type FinancePeriodFilterProps = {
   mobilePresetsFirst?: boolean;
 };
 
-type PresetId = "today" | "7days" | "month";
+type PresetId = "today" | "7days" | "15days" | "month";
 
 /**
  * Barra de período organizada: atalhos | datas | extras + filtrar.
@@ -59,9 +59,11 @@ export function FinancePeriodFilter({
       ? "today"
       : fromDate === shiftDate(today, -6) && toDate === today
         ? "7days"
-        : fromDate === monthStart(today) && toDate === today
-          ? "month"
-          : null;
+        : fromDate === shiftDate(today, -14) && toDate === today
+          ? "15days"
+          : fromDate === monthStart(today) && toDate === today
+            ? "month"
+            : null;
 
   const presets: { id: PresetId; label: string; from: string; to: string }[] = [
     { id: "today", label: "Hoje", from: today, to: today },
@@ -69,6 +71,12 @@ export function FinancePeriodFilter({
       id: "7days",
       label: "7 dias",
       from: shiftDate(today, -6),
+      to: today,
+    },
+    {
+      id: "15days",
+      label: "15 dias",
+      from: shiftDate(today, -14),
       to: today,
     },
     { id: "month", label: "Mês", from: monthStart(today), to: today },

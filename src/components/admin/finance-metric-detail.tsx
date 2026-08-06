@@ -26,7 +26,8 @@ import {
   type ExpensesReport,
 } from "@/lib/expense-service";
 import { PAYMENT_METHODS } from "@/lib/comanda-types";
-import { formatDateBR, formatPriceBRL } from "@/lib/format";
+import { formatDateBR, formatPriceBRL, formatTime } from "@/lib/format";
+import { formatOccupancyHours } from "@/lib/agenda-occupancy";
 import { ADMIN_SURFACE } from "@/lib/admin-surface";
 import { cn } from "@/lib/utils";
 
@@ -221,6 +222,33 @@ export function FinanceMetricDetail({
     [expensesReport]
   );
 
+  const cancellationDayChart = useMemo(
+    () =>
+      report.cancellation.byDay.map((day) => ({
+        label: shortDate(day.date),
+        value: day.cancelledCount,
+      })),
+    [report.cancellation.byDay]
+  );
+
+  const occupancyDayChart = useMemo(
+    () =>
+      report.occupancy.byDay.map((day) => ({
+        label: shortDate(day.date),
+        value: day.ratePercent,
+      })),
+    [report.occupancy.byDay]
+  );
+
+  const occupancyProChart = useMemo(
+    () =>
+      report.occupancy.byProfessional.map((row) => ({
+        label: row.professionalNickname,
+        value: row.ratePercent,
+      })),
+    [report.occupancy.byProfessional]
+  );
+
   const hero = financeHeroValue(report, metric, expensesReport);
   const heroHint =
     metric === "servicos"
@@ -241,8 +269,14 @@ export function FinanceMetricDetail({
                     ? "Serviços cadastrados com movimento"
                     : metric === "produtos"
                       ? `${report.productSales.totalQuantity} un. · ${report.productSales.byProduct.length} produto${report.productSales.byProduct.length === 1 ? "" : "s"}`
-                      : metric === "saidas" && expensesReport
-                        ? `${expensesReport.count} lançamento${expensesReport.count === 1 ? "" : "s"} no período`
+                    : metric === "saidas" && expensesReport
+                      ? `${expensesReport.count} lançamento${expensesReport.count === 1 ? "" : "s"} no período`
+                      : metric === "cancelamentos"
+                        ? `${report.cancellation.cancelledCount} de ${report.cancellation.totalCount} agendamento${report.cancellation.totalCount === 1 ? "" : "s"} · só cancelamentos reais`
+                        : metric === "clientes"
+                          ? `${report.retention.newPercent}% novos · ${report.retention.recurringCount} recorrente${report.retention.recurringCount === 1 ? "" : "s"}`
+                          : metric === "ocupacao"
+                            ? `${formatOccupancyHours(report.occupancy.occupiedMinutes)} ocupadas de ${formatOccupancyHours(report.occupancy.availableMinutes)} disponíveis`
                         : undefined;
 
   return (
@@ -994,6 +1028,318 @@ export function FinanceMetricDetail({
               <ArrowRight className="size-4" />
             </Link>
           </Button>
+        </>
+      )}
+
+      {metric === "cancelamentos" && (
+        <>
+          <Section
+            title="Cancelamentos por dia"
+            description="Só cancelamentos reais — erro de agendamento e remarcação ficam de fora"
+          >
+            {cancellationDayChart.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart
+                    items={cancellationDayChart}
+                    height={148}
+                    formatValue={formatCount}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          {report.cancellation.byProfessional.length > 0 && (
+            <Section
+              title="Por barbeiro"
+              description="Taxa de cancelamento sobre os agendamentos de cada um"
+            >
+              <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+                <MetricRowList
+                  rows={report.cancellation.byProfessional.map((pro) => ({
+                    id: pro.professionalId,
+                    title: pro.professionalNickname,
+                    subtitle: `${pro.cancelledCount} de ${pro.totalCount} agendamento${pro.totalCount === 1 ? "" : "s"}`,
+                    value: `${pro.ratePercent}%`,
+                  }))}
+                />
+              </Card>
+            </Section>
+          )}
+
+          <Section title="Cancelamentos" description="Do mais recente ao mais antigo">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              {report.cancellation.cancellations.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {report.cancellation.cancellations.map((row) => (
+                    <li
+                      key={row.appointmentId}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                          {row.customerName || "Cliente"}
+                        </p>
+                        <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                          {formatDateBR(row.date)} {formatTime(row.startTime)} ·{" "}
+                          {row.professionalNickname}
+                          {row.reason ? ` · ${row.reason}` : ""}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </Section>
+        </>
+      )}
+
+      {metric === "clientes" && (
+        <>
+          <Section title="Resumo" description="Por WhatsApp, ignorando cancelados">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <MiniStat
+                label="Clientes"
+                value={String(report.retention.totalCustomers)}
+              />
+              <MiniStat
+                label="Novos"
+                value={String(report.retention.newCount)}
+              />
+              <MiniStat
+                label="Recorrentes"
+                value={String(report.retention.recurringCount)}
+              />
+              <MiniStat
+                label="% novos"
+                value={`${report.retention.newPercent}%`}
+              />
+            </div>
+          </Section>
+
+          <Section title="Divisão">
+            <Card className={ADMIN_SURFACE.panel}>
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                <DonutChart
+                  slices={[
+                    {
+                      label: "Novos",
+                      value: report.retention.newCount,
+                      className: "text-[#ecf15e] bg-[#ecf15e]",
+                    },
+                    {
+                      label: "Recorrentes",
+                      value: report.retention.recurringCount,
+                      className: "text-white/35 bg-white/35",
+                    },
+                  ]}
+                  centerLabel="Novos"
+                  centerValue={`${report.retention.newPercent}%`}
+                  formatValue={formatCount}
+                />
+              </CardContent>
+            </Card>
+          </Section>
+
+          <Section
+            title="Clientes novos"
+            description="Primeira visita neste período"
+          >
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              {report.retention.newCustomers.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {report.retention.newCustomers.map((row) => (
+                    <li
+                      key={row.key}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                          {row.customerName || "Cliente"}
+                        </p>
+                        <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                          1ª visita {formatDateBR(row.firstVisitDate)}
+                          {row.visitCountInPeriod > 1
+                            ? ` · ${row.visitCountInPeriod} horários no período`
+                            : ""}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </Section>
+
+          <Section
+            title="Recorrentes"
+            description="Já tinham vindo antes deste período"
+          >
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              {report.retention.recurringCustomers.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {report.retention.recurringCustomers.map((row) => (
+                    <li
+                      key={row.key}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                          {row.customerName || "Cliente"}
+                        </p>
+                        <p className={cn("mt-0.5 truncate text-xs", ADMIN_SURFACE.muted)}>
+                          Cliente desde {formatDateBR(row.firstVisitDate)}
+                          {row.visitCountInPeriod > 1
+                            ? ` · ${row.visitCountInPeriod} horários no período`
+                            : ""}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </Section>
+        </>
+      )}
+
+      {metric === "ocupacao" && (
+        <>
+          <Section
+            title="Resumo"
+            description="Grade dos barbeiros ativos, sem encaixes nem cancelados"
+          >
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <MiniStat
+                label="Ocupação"
+                value={`${report.occupancy.ratePercent}%`}
+              />
+              <MiniStat
+                label="Ocupadas"
+                value={formatOccupancyHours(report.occupancy.occupiedMinutes)}
+              />
+              <MiniStat
+                label="Disponíveis"
+                value={formatOccupancyHours(report.occupancy.availableMinutes)}
+              />
+              <MiniStat
+                label="Livres"
+                value={formatOccupancyHours(
+                  Math.max(
+                    0,
+                    report.occupancy.availableMinutes -
+                      report.occupancy.occupiedMinutes
+                  )
+                )}
+              />
+            </div>
+          </Section>
+
+          <Section title="Divisão">
+            <Card className={ADMIN_SURFACE.panel}>
+              <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                <DonutChart
+                  slices={[
+                    {
+                      label: "Ocupadas",
+                      value: report.occupancy.occupiedMinutes,
+                      className: "text-[#ecf15e] bg-[#ecf15e]",
+                    },
+                    {
+                      label: "Livres",
+                      value: Math.max(
+                        0,
+                        report.occupancy.availableMinutes -
+                          report.occupancy.occupiedMinutes
+                      ),
+                      className: "text-white/35 bg-white/35",
+                    },
+                  ]}
+                  centerLabel="Ocupação"
+                  centerValue={`${report.occupancy.ratePercent}%`}
+                  formatValue={(minutes) => formatOccupancyHours(minutes)}
+                />
+              </CardContent>
+            </Card>
+          </Section>
+
+          <Section title="Evolução no período" description="Taxa por dia">
+            {occupancyDayChart.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <VerticalBarChart
+                    items={occupancyDayChart}
+                    height={148}
+                    maxValue={100}
+                    formatValue={(value) => `${value}%`}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Por barbeiro" description="Quem mais encheu a grade">
+            {occupancyProChart.length > 0 ? (
+              <Card className={ADMIN_SURFACE.panel}>
+                <CardContent className="px-3 pt-4 sm:px-6 sm:pt-5">
+                  <HorizontalBarChart
+                    items={occupancyProChart}
+                    maxValue={100}
+                    formatValue={(value) => `${value}%`}
+                  />
+                </CardContent>
+              </Card>
+            ) : (
+              <EmptyBlock />
+            )}
+          </Section>
+
+          <Section title="Detalhe por barbeiro">
+            <Card className={cn(ADMIN_SURFACE.panel, "overflow-hidden")}>
+              {report.occupancy.byProfessional.length === 0 ? (
+                <EmptyBlock />
+              ) : (
+                <ul className="divide-y divide-white/10">
+                  {report.occupancy.byProfessional.map((row) => (
+                    <li
+                      key={row.professionalId}
+                      className="flex items-center gap-3 px-4 py-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-[#f5f5f5]">
+                          {row.professionalNickname}
+                        </p>
+                        <p
+                          className={cn(
+                            "mt-0.5 truncate text-xs",
+                            ADMIN_SURFACE.muted
+                          )}
+                        >
+                          {formatOccupancyHours(row.occupiedMinutes)} de{" "}
+                          {formatOccupancyHours(row.availableMinutes)}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-sm font-semibold tabular-nums text-[#f5f5f5]">
+                        {row.ratePercent}%
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </Section>
         </>
       )}
     </div>

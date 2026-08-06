@@ -12,15 +12,11 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogSection } from "@/components/admin/dialog-section";
+import { QUICK_CANCELLATION_REASONS } from "@/lib/cancellation-reasons";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const QUICK_REASONS = [
-  "Cliente desmarcou",
-  "Não compareceu",
-  "Remarcou horário",
-  "Erro no agendamento",
-] as const;
+const QUICK_REASONS = QUICK_CANCELLATION_REASONS;
 
 const MIN_REASON_LENGTH = 3;
 

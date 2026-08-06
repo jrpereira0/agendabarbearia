@@ -153,7 +153,7 @@ export async function captureAppointmentUpdateSnapshot(
     customer: {
       firstName: appointment.customer_first_name,
       lastName: appointment.customer_last_name,
-      whatsapp: appointment.customer_whatsapp,
+      whatsapp: appointment.customer_whatsapp ?? "",
     },
     services,
     totalPriceCents: services.reduce((sum, s) => sum + s.priceCents, 0),
