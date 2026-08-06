@@ -1,4 +1,3 @@
-import { createAdminClient } from "@/lib/supabase/admin";
 import {
   listDueAppointmentReminders,
   markAppointmentReminderSent,
@@ -143,11 +142,4 @@ export async function sendClientAppointmentPush(input: {
       },
     }
   );
-}
-
-/** Remove tokens órfãos (service role). */
-export async function purgePushToken(token: string): Promise<void> {
-  const admin = createAdminClient();
-  if (!admin) return;
-  await admin.from("customer_push_tokens").delete().eq("expo_push_token", token);
 }

@@ -62,12 +62,6 @@ export function ticketAverageCents(
   return Math.round(grossCents / serviceItemCount);
 }
 
-export function formatSignedPercent(changePercent: number | null): string {
-  if (changePercent === null) return "—";
-  if (changePercent > 0) return `+${changePercent}%`;
-  return `${changePercent}%`;
-}
-
 export function buildFinanceQuery(input: {
   from: string;
   to: string;

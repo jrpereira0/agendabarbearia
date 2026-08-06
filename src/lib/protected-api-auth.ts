@@ -14,6 +14,7 @@ import {
   readClientSessionFromRequest,
   verifyClientSessionToken,
 } from "@/lib/client-api-session";
+import { resolveValidClientSession } from "@/lib/client-session-version";
 import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export type AdminApiAuthContext = {
@@ -132,7 +133,9 @@ export async function resolveProtectedApiAuth(
 
     // Token de sessão do cliente (app mobile)
     const bearer = extractBearerToken(request);
-    const bearerSession = verifyClientSessionToken(bearer);
+    const bearerSession = await resolveValidClientSession(
+      verifyClientSessionToken(bearer)
+    );
     if (bearerSession) {
       const clientAuth = buildClientAuth(
         bearerSession.whatsapp,
@@ -148,7 +151,9 @@ export async function resolveProtectedApiAuth(
     return { ok: false, response: apiUnauthorizedResponse() };
   }
 
-  const clientSession = readClientSessionFromRequest(request);
+  const clientSession = await resolveValidClientSession(
+    readClientSessionFromRequest(request)
+  );
   const clientAuth = clientSession
     ? buildClientAuth(
         clientSession.whatsapp,

@@ -10,7 +10,7 @@ import {
 // POST /api/agenda/otp/send — gera código e dispara webhook n8n → WhatsApp
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
-    const limitedIp = enforcePublicApiRateLimit(request, "clientOtpSendIp");
+    const limitedIp = await enforcePublicApiRateLimit(request, "clientOtpSendIp");
     if (limitedIp) return limitedIp;
 
     let json: unknown;
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const limitedWhatsapp = enforcePublicApiRateLimit(
+    const limitedWhatsapp = await enforcePublicApiRateLimit(
       request,
       "clientOtpSendWhatsapp",
       whatsapp

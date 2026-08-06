@@ -31,19 +31,21 @@ export async function GET(request: NextRequest) {
 
         if (!result.ok) {
           return NextResponse.json(
-            { error: result.error },
+            { ok: false, error: result.error },
             { status: result.status }
           );
         }
 
         if (!result.data) {
           return NextResponse.json({
+            ok: true,
             found: false,
             lastAppointment: null,
           });
         }
 
         return NextResponse.json({
+          ok: true,
           found: true,
           lastAppointment: result.data,
         });

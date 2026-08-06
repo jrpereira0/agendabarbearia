@@ -12,10 +12,21 @@ info:
     - Ver **serviços** e **profissionais**
     - Consultar **horários livres**, **criar**, **listar**, **remarcar** e **cancelar**
     - Buscar **cliente** pelo WhatsApp
-    - No **app**: ver e **editar o próprio cadastro** (`GET` / `PATCH /customers/me`)
+    - No **app**: ver e **editar o próprio cadastro** (`GET` / `PATCH /customers/me`),
+      registrar push (`/customers/me/push-token`), ver notificações (`/customers/me/notifications`)
+      e **sair de todos os aparelhos** (`DELETE /customers/me/sessions`)
     - Disparar e confirmar **lembretes** (~1h antes)
+    - No **n8n**: ativar/pausar a **IA** por conversa (`/ai-status`)
 
     Comandas, caixa e comissões ficam **só no painel** — não entram nesta API.
+
+    ## Repetir sem duplicar (Idempotency-Key)
+
+    Em `POST /appointments`, `PATCH /appointments/{id}` e `DELETE /appointments/{id}`,
+    envie um header `Idempotency-Key` (qualquer string única por tentativa,
+    ex.: um UUID). Se a chamada for repetida com a mesma chave — por exemplo,
+    um retry automático depois de um timeout — o servidor devolve a mesma
+    resposta da primeira vez em vez de repetir a ação.
 
     ## Autenticação
 
@@ -64,7 +75,7 @@ info:
 
     ## Erros
 
-    JSON: `{ "error": "mensagem" }` ou `{ "ok": false, "error": "..." }`.
+    Formato padrão em toda a API: `{ "ok": false, "error": "mensagem" }`.
   contact:
     name: Agenda Barbearia
 servers:
@@ -87,6 +98,10 @@ tags:
       (`/customers/me` — nome e sobrenome; WhatsApp imutável).
   - name: Lembretes
     description: Lembretes automáticos ~1h antes do horário (disparo e confirmação no WhatsApp)
+  - name: Notificações
+    description: Push (Expo) e inbox de notificações do app do cliente
+  - name: IA
+    description: Ativar/pausar o atendimento por IA numa conversa de WhatsApp (n8n)
 security:
   - BearerAuth: []
 paths:
@@ -108,8 +123,10 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [shop, businessHours]
+                required: [ok, shop, businessHours]
                 properties:
+                  ok:
+                    type: boolean
                   shop:
                     type: object
                     properties:
@@ -391,6 +408,41 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  /customers/me/sessions:
+    delete:
+      tags: [Clientes]
+      operationId: logoutAllMyCustomerSessions
+      summary: Sair de todos os aparelhos (app)
+      description: |
+        Invalida o cookie de sessão do site e todo `accessToken` do app já
+        emitido pra esse WhatsApp — inclusive o usado nesta própria chamada.
+        Útil se o cliente perdeu o celular ou acha que alguém mais tem acesso.
+
+        Depois disso, cada aparelho precisa refazer o login por OTP
+        (`POST /agenda/otp/send` + `/agenda/otp/verify`) pra continuar usando.
+
+        Scope da sessão: `customers:update`.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Sessões encerradas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
   /customers:
     get:
       tags: [Clientes]
@@ -576,8 +628,13 @@ paths:
 
         **Acesso:** privada. Scope `appointments:create`
         (chave de API, cookie OTP ou `Bearer` com `accessToken` do OTP).
+
+        Recomendado enviar `Idempotency-Key` (ver parâmetro) pra evitar
+        marcar o mesmo horário duas vezes num retry.
       security:
         - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/idempotencyKeyHeader"
       requestBody:
         required: true
         content:
@@ -706,6 +763,8 @@ paths:
               schema:
                 type: object
                 properties:
+                  ok:
+                    type: boolean
                   found:
                     type: boolean
                   lastAppointment:
@@ -790,8 +849,13 @@ paths:
         **Acesso:** privada. Scope `appointments:update`
         (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
         WhatsApp do body deve ser o da sessão do cliente.
+
+        Recomendado enviar `Idempotency-Key` (ver parâmetro) pra evitar
+        remarcar em duplicidade num retry.
       security:
         - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/idempotencyKeyHeader"
       requestBody:
         required: true
         content:
@@ -851,10 +915,14 @@ paths:
         **Acesso:** privada. Scope `appointments:cancel`
         (chave de API, dono, cookie OTP ou `Bearer` com `accessToken`).
         WhatsApp da query deve ser o da sessão do cliente.
+
+        Recomendado enviar `Idempotency-Key` (ver parâmetro) pra evitar
+        cancelar em duplicidade num retry.
       security:
         - BearerAuth: []
       parameters:
         - $ref: "#/components/parameters/whatsappQuery"
+        - $ref: "#/components/parameters/idempotencyKeyHeader"
       responses:
         "200":
           description: Cancelado
@@ -1041,6 +1109,297 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /customers/me/push-token:
+    post:
+      tags: [Notificações]
+      operationId: registerPushToken
+      summary: Registrar token de push (app)
+      description: |
+        Guarda o Expo Push Token do aparelho do cliente logado, pra receber
+        avisos (ex.: lembrete de horário) mesmo com o app fechado.
+
+        **Acesso:** privada, só sessão OTP do app. Scope `customers:update`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [expoPushToken]
+              properties:
+                expoPushToken:
+                  type: string
+                  example: "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+                platform:
+                  type: string
+                  example: ios
+      responses:
+        "200":
+          description: Token salvo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [Notificações]
+      operationId: deletePushToken
+      summary: Remover token de push (app)
+      description: |
+        Remove o token do aparelho (logout ou permissão de notificação
+        revogada). Sem `expoPushToken` no corpo, remove todos os tokens
+        salvos daquele cliente.
+
+        **Acesso:** privada, só sessão OTP do app. Scope `customers:update`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expoPushToken:
+                  type: string
+      responses:
+        "200":
+          description: Token removido
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /customers/me/notifications:
+    get:
+      tags: [Notificações]
+      operationId: listMyNotifications
+      summary: Listar notificações (inbox do app)
+      description: |
+        Lista as notificações in-app do cliente logado (mais recentes
+        primeiro), com a contagem de não lidas.
+
+        **Acesso:** privada, só sessão OTP do app. Scope `customers:read`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Lista de notificações
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  unreadCount:
+                    type: integer
+                  notifications:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/CustomerNotification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      tags: [Notificações]
+      operationId: markAllNotificationsRead
+      summary: Marcar todas as notificações como lidas
+      description: |
+        Marca todas as notificações não lidas do cliente logado como lidas.
+
+        **Acesso:** privada, só sessão OTP do app. Scope `customers:update`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markAllRead]
+              properties:
+                markAllRead:
+                  type: boolean
+                  enum: [true]
+            example:
+              markAllRead: true
+      responses:
+        "200":
+          description: Quantidade marcada como lida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  updated:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /customers/me/notifications/{id}/read:
+    patch:
+      tags: [Notificações]
+      operationId: markNotificationRead
+      summary: Marcar uma notificação como lida
+      description: |
+        **Acesso:** privada, só sessão OTP do app. Scope `customers:update`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Marcada como lida
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /ai-status:
+    get:
+      tags: [IA]
+      operationId: getAiStatus
+      summary: Consultar se a IA está ativa numa conversa
+      description: |
+        Devolve se o atendimento por IA está ativo ou pausado naquele
+        WhatsApp. Sem registro salvo, a IA é considerada ativa (`true`).
+
+        Pensada pra substituir o acesso direto do n8n ao banco (Postgres)
+        por uma chave de API com escopo próprio.
+
+        **Acesso:** privada. Scope `ai_status:read`.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/whatsappQuery"
+      responses:
+        "200":
+          description: Status da IA na conversa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  whatsapp:
+                    type: string
+                  iaAtiva:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      tags: [IA]
+      operationId: setAiStatus
+      summary: Ativar ou pausar a IA numa conversa
+      description: |
+        Liga ou pausa o atendimento por IA num WhatsApp — por exemplo,
+        quando um humano assume a conversa e a IA deve parar de responder.
+
+        **Acesso:** privada. Scope `ai_status:write`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [whatsapp, iaAtiva]
+              properties:
+                whatsapp:
+                  type: string
+                iaAtiva:
+                  type: boolean
+            example:
+              whatsapp: "11999999999"
+              iaAtiva: false
+      responses:
+        "200":
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  whatsapp:
+                    type: string
+                  iaAtiva:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1072,13 +1431,32 @@ components:
       schema:
         type: string
         format: uuid
+    idempotencyKeyHeader:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: |
+        Chave opcional escolhida por quem chama (ex.: um UUID gerado antes
+        de enviar). Se a mesma chamada for repetida com a mesma chave — por
+        exemplo, um retry por timeout de rede do app ou do n8n — o servidor
+        devolve a resposta salva da primeira vez, em vez de repetir a ação
+        (evita agendamento duplicado). Reusar a chave com dados diferentes
+        dá **409**.
+      schema:
+        type: string
+        maxLength: 200
 
   schemas:
     Error:
       type: object
+      description: |
+        Formato de erro padrão de toda a API: `ok` sempre `false` e `error`
+        com uma mensagem em português pronta pra mostrar pro usuário.
+      required: [ok, error]
       properties:
         ok:
           type: boolean
+          enum: [false]
         error:
           type: string
     Professional:
@@ -1182,6 +1560,29 @@ components:
           type: integer
           description: Saldo de crédito na loja, em centavos
           example: 5000
+    CustomerNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        body:
+          type: string
+        type:
+          type: string
+          example: appointment_reminder
+        data:
+          type: object
+          additionalProperties: true
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
     PublicAppointment:
       type: object
       properties:

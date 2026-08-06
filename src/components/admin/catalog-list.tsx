@@ -231,10 +231,6 @@ export function CatalogTableBody({
   );
 }
 
-export function CatalogMobileList({ children }: { children: ReactNode }) {
-  return <div className="flex flex-col gap-2 md:hidden">{children}</div>;
-}
-
 export function CatalogStatusDot({ active }: { active: boolean }) {
   return (
     <span

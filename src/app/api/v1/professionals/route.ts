@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       async () => {
         if (!isSupabaseConfigured()) {
           return NextResponse.json(
-            { error: "Sistema indisponível no momento." },
+            { ok: false, error: "Sistema indisponível no momento." },
             { status: 503 }
           );
         }
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         });
         if (!parsed.success) {
           return NextResponse.json(
-            { error: "serviceId inválido." },
+            { ok: false, error: "serviceId inválido." },
             { status: 400 }
           );
         }
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
           const serviceExists = catalog.services.some((s) => s.id === serviceId);
           if (!serviceExists) {
             return NextResponse.json(
-              { error: "Serviço não encontrado." },
+              { ok: false, error: "Serviço não encontrado." },
               { status: 404 }
             );
           }

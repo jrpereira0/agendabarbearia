@@ -85,7 +85,9 @@ Atualizado conforme o sistema evolui (última revisão: jul/2026).
 | `appointment_notifications` | Controle de idempotência dos webhooks `appointment.created` e `appointment.cancelled` (evita avisar o barbeiro duas vezes pelo mesmo evento); guarda `source`. O evento `appointment.updated` não usa bloqueio — cada edição relevante gera um novo aviso |
 | `appointment_reminders` | Lembretes para clientes (1h e 30min antes); o n8n consulta os vencidos via API e marca envio/confirmação |
 | `api_keys` | Chaves de API para integrações (n8n): nome, prefixo, hash do segredo, scopes, validade — geradas em Configurações > Integrações |
-| `dinho_ai_status` | Por conversa de WhatsApp (`session_id` = telefone): se o atendimento por IA está ativo ou pausado (`ia_ativa`). Só service role / n8n |
+| `dinho_ai_status` | Por conversa de WhatsApp (`session_id` = telefone): se o atendimento por IA está ativo ou pausado (`ia_ativa`). Sem acesso via RLS a `anon`/`authenticated`; lida/gravada pela API (`GET`/`PATCH /api/v1/ai-status`, chave com escopo `ai_status:*`) — o n8n não precisa mais de credencial direta do Postgres |
+| `api_idempotency_keys` | Resposta de mutações da API (`appointments` criar/remarcar/cancelar) guardada por até 7 dias quando o chamador envia `Idempotency-Key`, pra não repetir a ação num retry. Só service role |
+| `client_session_versions` | Versão da sessão do cliente por WhatsApp (login OTP). Sem registro = versão `0`. `DELETE /api/v1/customers/me/sessions` sobe a versão pra invalidar todo cookie/token já emitido ("sair de todos os aparelhos"). Só service role |
 
 Regras importantes no banco:
 
@@ -215,6 +217,12 @@ Rotas de agendamento + lembretes. Comandas, caixa e comissões ficam **só no pa
 | GET | `/api/v1/appointment-reminders/pending-response` | **Privada** | Listar lembretes enviados sem confirmação do cliente |
 | POST | `/api/v1/appointment-reminders/:id/mark-sent` | **Privada** | Marcar lembrete como enviado |
 | POST | `/api/v1/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
+| GET | `/api/v1/ai-status` | **Privada** | Ver se a IA está ativa numa conversa (`?whatsapp=`) — scope `ai_status:read` |
+| PATCH | `/api/v1/ai-status` | **Privada** | Ativar/pausar a IA numa conversa — scope `ai_status:write` |
+| POST/DELETE | `/api/v1/customers/me/push-token` | **Privada** (só OTP) | Registrar/remover o Expo Push Token do app |
+| GET/PATCH | `/api/v1/customers/me/notifications` | **Privada** (só OTP) | Inbox de notificações do app; marcar todas como lidas |
+| PATCH | `/api/v1/customers/me/notifications/:id/read` | **Privada** (só OTP) | Marcar uma notificação como lida |
+| DELETE | `/api/v1/customers/me/sessions` | **Privada** (só OTP) | Sair de todos os aparelhos: invalida cookie do site e todo `accessToken` já emitido pra aquele WhatsApp |
 
 WhatsApp em todas as rotas que usam número: aceita DDD + número (10 ou 11 dígitos), com ou sem `55`, máscara ou `+55`; grava normalizado com `55`.
 
@@ -231,9 +239,27 @@ Limite de uso por IP (resposta **429** se exceder; lógica em `src/lib/rate-limi
 | `POST /appointments` | 5 por IP / hora e 3 por WhatsApp / hora |
 | `PATCH` / `DELETE /appointments/:id` | 10 a cada 15 min |
 
+**Evitar duplicidade em retry:** `POST /appointments`, `PATCH /appointments/:id`
+e `DELETE /appointments/:id` aceitam um header opcional `Idempotency-Key`
+(`src/lib/api/idempotency.ts`, tabela `api_idempotency_keys`). Reenviar a
+mesma chamada com a mesma chave devolve a resposta salva da primeira vez em
+vez de repetir a ação; reusar a chave com dados diferentes dá 409. Sem o
+header, o comportamento não muda (é opt-in).
+
+**Formato de erro:** padronizado em toda a API — sempre
+`{ "ok": false, "error": "mensagem" }`, nunca só `{ "error": ... }`.
+
+**Sair de todos os aparelhos:** a sessão do cliente (cookie do site ou
+`accessToken` do app, ambos criados em `POST /api/agenda/otp/verify`) carrega
+uma versão (`v`) checada contra a tabela `client_session_versions` a cada
+requisição (`src/lib/client-session-version.ts`). `DELETE
+/api/v1/customers/me/sessions` sobe essa versão, invalidando de uma vez todo
+cookie/token já emitido pra aquele WhatsApp — inclusive o usado na própria
+chamada. Sem registro na tabela, a versão vale `0` (nenhuma revogação ainda).
+
 ## Aviso automático ao barbeiro (webhook n8n)
 
-Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarcado** — pelo site `/agenda`, pela IA (n8n) ou pelo painel admin — o sistema dispara um webhook para um workflow do n8n avisar o(s) barbeiro(s) no WhatsApp. Não dispara em exclusão definitiva (só o dono, via `deleteAppointment`) nem em reatribuição interna de serviço já existente na comanda.
+Sempre que um agendamento novo é **criado**, **cancelado** ou **alterado/remarcado** — pelo site `/agenda`, pela IA (n8n) ou pelo painel admin — o sistema dispara um webhook para um workflow do n8n avisar o(s) barbeiro(s) no WhatsApp. Não dispara em reatribuição interna de serviço já existente na comanda.
 
 - Configuração e comportamento completo: criação em [api/guia-n8n.md, seção 6b](./api/guia-n8n.md#6b-webhook-aviso-automático-ao-barbeiro-appointmentcreated), cancelamento em [seção 6c](./api/guia-n8n.md#6c-webhook-aviso-automático-ao-barbeiro-appointmentcancelled), alteração em [seção 6d](./api/guia-n8n.md#6d-webhook-aviso-automático-ao-barbeiro-appointmentupdated)
 - Funções centrais: `notifyAppointmentCreated`, `notifyAppointmentCancelled` e `notifyAppointmentUpdated` em `src/lib/notifications/`

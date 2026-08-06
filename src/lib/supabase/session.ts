@@ -36,7 +36,12 @@ export async function updateSession(request: NextRequest) {
           );
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
+            // httpOnly: só o servidor (createServerClient) lê esses
+            // cookies — sem client-side Supabase no painel.
+            supabaseResponse.cookies.set(name, value, {
+              ...options,
+              httpOnly: true,
+            })
           );
         },
       },

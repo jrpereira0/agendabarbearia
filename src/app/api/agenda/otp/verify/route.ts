@@ -7,6 +7,7 @@ import {
   verifyClientSessionToken,
 } from "@/lib/client-api-session";
 import { verifyClientWhatsappOtp } from "@/lib/client-whatsapp-otp";
+import { getClientSessionVersion } from "@/lib/client-session-version";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
@@ -16,7 +17,7 @@ import {
 // POST /api/agenda/otp/verify — valida código, cookie (site) + accessToken (app)
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
-    const limitedIp = enforcePublicApiRateLimit(request, "clientOtpVerifyIp");
+    const limitedIp = await enforcePublicApiRateLimit(request, "clientOtpVerifyIp");
     if (limitedIp) return limitedIp;
 
     let json: unknown;
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = createClientSessionToken(result.whatsapp);
+    const sessionVersion = await getClientSessionVersion(result.whatsapp);
+    const token = createClientSessionToken(result.whatsapp, sessionVersion);
     if (!token) {
       return NextResponse.json(
         { ok: false, error: "Não foi possível iniciar a sessão." },

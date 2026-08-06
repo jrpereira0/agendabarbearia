@@ -4,7 +4,6 @@ import { after } from "next/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
-  calculateComandaTotals,
   CASH_INFLOW_PAYMENT_METHODS,
   PAYMENT_METHODS,
   type ComandaDetail,
@@ -28,6 +27,7 @@ import {
   getOpenCashRegisterSessionBasic,
 } from "@/lib/cash-register-service";
 import { getCustomerCreditBalanceByWhatsapp } from "@/lib/customer-credit-service";
+import { normalizeWhatsapp } from "@/lib/whatsapp";
 import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireAdmin, canViewAllAgendas } from "@/lib/require-admin";
@@ -92,7 +92,9 @@ const creditDepositSchema = z.object({
 
 async function assertBarberComandaAccess(
   comandaId: string,
-  session: Awaited<ReturnType<typeof requireAdmin>>
+  session: Awaited<ReturnType<typeof requireAdmin>>,
+  /** Quando informado, valida que o barbeiro só mexe nos próprios itens. */
+  items?: z.infer<typeof itemSchema>[]
 ): Promise<ActionResult | null> {
   if (!("userId" in session) || canViewAllAgendas(session)) return null;
 
@@ -110,7 +112,7 @@ async function assertBarberComandaAccess(
       `
       id,
       professional_id,
-      comanda_items ( professional_id ),
+      comanda_items ( id, professional_id, service_id, product_id, charged_price_cents, quantity, is_tip ),
       comanda_appointments (
         appointments ( professional_id )
       )
@@ -124,8 +126,14 @@ async function assertBarberComandaAccess(
   }
 
   const proId = session.professionalId;
-  const itemPros = (data.comanda_items ?? []) as {
+  const dbItems = (data.comanda_items ?? []) as {
+    id: string;
     professional_id: string | null;
+    service_id: string | null;
+    product_id: string | null;
+    charged_price_cents: number;
+    quantity: number | null;
+    is_tip: boolean;
   }[];
   const linkPros = (data.comanda_appointments ?? []) as {
     appointments:
@@ -136,7 +144,7 @@ async function assertBarberComandaAccess(
 
   const hasAccess =
     data.professional_id === proId ||
-    itemPros.some((item) => item.professional_id === proId) ||
+    dbItems.some((item) => item.professional_id === proId) ||
     linkPros.some((link) => {
       const apt = Array.isArray(link.appointments)
         ? link.appointments[0]
@@ -146,6 +154,49 @@ async function assertBarberComandaAccess(
 
   if (!hasAccess) {
     return { ok: false, error: "Você não pode alterar esta comanda." };
+  }
+
+  // Comanda compartilhada: barbeiro não pode mexer em item de colega
+  // (repreçar, remover ou puxar comissão pra si). Itens de outros
+  // profissionais precisam chegar idênticos ao que já está gravado.
+  if (items) {
+    const othersItems = dbItems.filter(
+      (item) => item.professional_id && item.professional_id !== proId
+    );
+
+    if (othersItems.length > 0) {
+      const byId = new Map(
+        items.filter((item) => item.id).map((item) => [item.id, item])
+      );
+      for (const dbItem of othersItems) {
+        const incoming = byId.get(dbItem.id);
+        const unchanged =
+          incoming &&
+          (incoming.professionalId ?? null) === dbItem.professional_id &&
+          (incoming.serviceId ?? null) === dbItem.service_id &&
+          (incoming.productId ?? null) === dbItem.product_id &&
+          incoming.chargedPriceCents === dbItem.charged_price_cents &&
+          (incoming.quantity ?? 1) === (dbItem.quantity ?? 1) &&
+          Boolean(incoming.isTip) === Boolean(dbItem.is_tip);
+        if (!unchanged) {
+          return {
+            ok: false,
+            error: "Você não pode alterar itens de outro profissional nesta comanda.",
+          };
+        }
+      }
+    }
+
+    const addingItemForSomeoneElse = items.some(
+      (item) =>
+        !item.id && item.professionalId && item.professionalId !== proId
+    );
+    if (addingItemForSomeoneElse) {
+      return {
+        ok: false,
+        error: "Você só pode adicionar itens para o seu próprio atendimento.",
+      };
+    }
   }
 
   return null;
@@ -198,14 +249,20 @@ export async function loadComandaForAppointment(
     }
   }
 
-  const customerCreditBalanceCents = creditPromise
-    ? await creditPromise
-    : result.comanda.customerWhatsapp
-      ? await getCustomerCreditBalanceByWhatsapp(
-          admin,
-          result.comanda.customerWhatsapp
-        )
-      : 0;
+  // Só usa o hint se realmente for o cliente desta comanda — senão dá pra
+  // espiar o saldo de crédito de qualquer cliente pelo WhatsApp.
+  const actualWhatsapp = result.comanda.customerWhatsapp
+    ? normalizeWhatsapp(result.comanda.customerWhatsapp)
+    : null;
+  const hintMatches =
+    actualWhatsapp && normalizeWhatsapp(customerWhatsappHint ?? "") === actualWhatsapp;
+
+  const customerCreditBalanceCents =
+    hintMatches && creditPromise
+      ? await creditPromise
+      : actualWhatsapp
+        ? await getCustomerCreditBalanceByWhatsapp(admin, actualWhatsapp)
+        : 0;
 
   return {
     ok: true,
@@ -368,8 +425,10 @@ export async function deleteOpenWalkInComandaAction(
     return { ok: false, error: "error" in session ? session.error : "Erro." };
   }
 
-  const denied = assertPermission(session, "canOpenComanda");
-  if (denied && !denied.ok) return { ok: false, error: denied.error };
+  // Venda rápida é exclusiva de dono/recepção (mesma regra de abrir).
+  if (!canViewAllAgendas(session)) {
+    return { ok: false, error: "Só o dono ou a recepção podem excluir venda rápida." };
+  }
 
   const admin = requireAdminClient();
   if (isActionResult(admin)) {
@@ -408,7 +467,11 @@ export async function saveComandaItems(
     return { ok: false, error: admin.error };
   }
 
-  const accessDenied = await assertBarberComandaAccess(comandaId, session);
+  const accessDenied = await assertBarberComandaAccess(
+    comandaId,
+    session,
+    parsed.data
+  );
   if (accessDenied && !accessDenied.ok) {
     return { ok: false, error: accessDenied.error };
   }
@@ -470,15 +533,27 @@ export async function closeComandaWithItemsAction(
     return { ok: false, error: admin.error };
   }
 
-  const accessDenied = await assertBarberComandaAccess(comandaId, session);
+  const accessDenied = await assertBarberComandaAccess(
+    comandaId,
+    session,
+    parsedItems.data
+  );
   if (accessDenied && !accessDenied.ok) {
     return { ok: false, error: accessDenied.error };
   }
 
+  // Quem só pode fechar (sem editar) não pode regravar itens no fechamento —
+  // fecha com o que já está gravado, ignorando o payload de itens.
+  const canEditItems =
+    canViewAllAgendas(session) || session.permissions.canEditComanda;
+  const skipItemsUpdate = canEditItems
+    ? Boolean(options?.skipItemsUpdate)
+    : true;
+
   try {
     let prefetched: ComandaDetail | undefined;
 
-    if (!options?.skipItemsUpdate) {
+    if (!skipItemsUpdate) {
       const itemsResult = await updateComandaItems(
         admin,
         comandaId,
@@ -515,49 +590,6 @@ export async function closeComandaWithItemsAction(
         "Não foi possível finalizar a comanda. Verifique a internet e tente de novo.",
     };
   }
-}
-
-export async function closeComandaAction(
-  comandaId: string,
-  payments: ComandaPaymentInput[]
-): Promise<
-  { ok: true; comanda: ComandaDetail } | { ok: false; error: string }
-> {
-  const session = await requireAdmin();
-  if (!("userId" in session)) {
-    return { ok: false, error: "error" in session ? session.error : "Erro." };
-  }
-  if (!session.isOwner) {
-    const denied = assertPermission(session, "canCloseComanda");
-    if (denied && !denied.ok) return { ok: false, error: denied.error };
-  }
-
-  const parsed = z.array(paymentSchema).min(1).safeParse(payments);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0].message };
-  }
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) {
-    return { ok: false, error: admin.error };
-  }
-
-  const accessDenied = await assertBarberComandaAccess(comandaId, session);
-  if (accessDenied && !accessDenied.ok) {
-    return { ok: false, error: accessDenied.error };
-  }
-
-  const result = await closeComanda(
-    admin,
-    comandaId,
-    parsed.data,
-    session.userId
-  );
-  if (!result.ok) return { ok: false, error: result.error };
-
-  revalidatePath("/admin");
-  revalidatePath("/admin/financeiro");
-  return { ok: true, comanda: result.comanda };
 }
 
 export async function reopenComandaAction(
@@ -606,29 +638,6 @@ export async function reopenComandaAction(
         "Não foi possível reabrir a comanda. Verifique a internet e tente de novo.",
     };
   }
-}
-
-export async function previewComandaTotals(
-  professionalId: string,
-  items: Pick<ComandaItemInput, "chargedPriceCents">[]
-): Promise<{ totalCents: number; commissionCents: number } | null> {
-  const session = await requireAdmin();
-  if (!("userId" in session)) return null;
-
-  if (!canViewAllAgendas(session) && session.professionalId !== professionalId) {
-    return null;
-  }
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) return null;
-
-  const { data } = await admin
-    .from("professionals")
-    .select("commission_percent")
-    .eq("id", professionalId)
-    .maybeSingle();
-
-  return calculateComandaTotals(items, data?.commission_percent ?? 50);
 }
 
 /** Carrega o agendamento no formato da agenda para abrir a comanda fora dela. */

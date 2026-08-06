@@ -68,16 +68,6 @@ export function shouldShowTimeLabel(minute: number, stepMinutes: number): boolea
   return minute % 30 === 0;
 }
 
-export function formatAgendaHeaderDate(isoDate: string): string {
-  const formatted = new Date(`${isoDate}T00:00:00`).toLocaleDateString("pt-BR", {
-    weekday: "long",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-}
-
 /** Partes tipográficas do cabeçalho da agenda. */
 export function formatAgendaHeaderParts(isoDate: string): {
   weekday: string;

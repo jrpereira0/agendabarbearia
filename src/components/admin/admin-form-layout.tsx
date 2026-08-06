@@ -26,63 +26,6 @@ export function AdminFormPage({
   );
 }
 
-type AdminFormSectionCardProps = {
-  title: string;
-  description?: string;
-  children: ReactNode;
-  className?: string;
-  tone?: AdminFormTone;
-};
-
-export function AdminFormSectionCard({
-  title,
-  description,
-  children,
-  className,
-  tone = "default",
-}: AdminFormSectionCardProps) {
-  const dark = tone === "dark";
-
-  return (
-    <section
-      className={cn(
-        "overflow-hidden rounded-lg border",
-        dark
-          ? cn(ADMIN_SURFACE.panel, "rounded-2xl shadow-none")
-          : "bg-card shadow-sm",
-        className
-      )}
-    >
-      <div
-        className={cn(
-          "border-b px-5 py-4",
-          dark ? "border-white/10 bg-white/[0.03]" : "bg-muted/20"
-        )}
-      >
-        <h2
-          className={cn(
-            "text-sm font-semibold",
-            dark ? "text-[#f5f5f5]" : "text-foreground"
-          )}
-        >
-          {title}
-        </h2>
-        {description ? (
-          <p
-            className={cn(
-              "mt-1 text-sm",
-              dark ? ADMIN_SURFACE.muted : "text-muted-foreground"
-            )}
-          >
-            {description}
-          </p>
-        ) : null}
-      </div>
-      <div className="p-5">{children}</div>
-    </section>
-  );
-}
-
 export function AdminFormFields({
   children,
   columns = 1,

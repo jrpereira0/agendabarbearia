@@ -4,8 +4,6 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import {
   closeCashRegister,
-  getCashRegisterSession,
-  listCashRegisterSessions,
   openCashRegister,
   reopenCashRegister,
   type CashRegisterSession,
@@ -35,32 +33,6 @@ const openCashRegisterSchema = z.object({
     .int()
     .min(0, "O valor em dinheiro não pode ser negativo."),
 });
-
-export async function loadCashRegisterHistory(
-  from: string,
-  to: string
-): Promise<
-  { ok: true; sessions: CashRegisterSession[] } | { ok: false; error: string }
-> {
-  const denied = await requireOwner();
-  if (denied !== null) {
-    return denied.ok === false
-      ? { ok: false, error: denied.error }
-      : { ok: false, error: "Sem permissão." };
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
-    return { ok: false, error: "Período inválido." };
-  }
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) {
-    return { ok: false, error: admin.error };
-  }
-
-  const sessions = await listCashRegisterSessions(admin, from, to);
-  return { ok: true, sessions };
-}
 
 function parseServiceDate(
   serviceDate: string
@@ -188,30 +160,6 @@ export async function reopenCashRegisterAction(
 
   revalidateFinance();
   return { ok: true, session: result.session };
-}
-
-export async function loadCashRegisterForDate(
-  serviceDate: string
-): Promise<
-  { ok: true; session: CashRegisterSession | null } | { ok: false; error: string }
-> {
-  const denied = await requireOwner();
-  if (denied !== null) {
-    return denied.ok === false
-      ? { ok: false, error: denied.error }
-      : { ok: false, error: "Sem permissão." };
-  }
-
-  const dateParsed = parseServiceDate(serviceDate);
-  if (!dateParsed.ok) return { ok: false, error: dateParsed.error };
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) {
-    return { ok: false, error: admin.error };
-  }
-
-  const session = await getCashRegisterSession(admin, serviceDate);
-  return { ok: true, session };
 }
 
 const commissionPeriodSchema = z.object({

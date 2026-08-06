@@ -1,6 +1,7 @@
 # Fontes da marca
 
-Arquivos em `public/fonts/`. Enquanto não estiverem aí, o site usa Outfit como reserva.
+Arquivos em `public/fonts/`. O CSS em `src/styles/brand-fonts.css` aponta para esses `.woff`.
+Se faltar algum arquivo, o site usa Outfit como reserva.
 
 ## Aeonik (corpo / formulários)
 

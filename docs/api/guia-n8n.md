@@ -15,7 +15,7 @@ Documento para colar no ChatGPT (ou outra IA) e pedir ajuda para montar workflow
   - **Públicas** (`/shop`, catálogo, disponibilidade): sem chave OK
   - **Privadas** (lookup de cliente, criar/listar/remarcar/cancelar, lembretes): chave de API no n8n, **ou** sessão OTP do cliente (cookie / `accessToken`)
   - Header da chave: `Authorization: Bearer dbc_live_<keyId>_<secret>` (Configurações > Integrações > Chaves de API)
-- **Formato:** JSON em todas as respostas. Erros vêm como `{ "error": "mensagem" }` (ou `{ "ok": false, "error": "..." }` em `/customers`).
+- **Formato:** JSON em todas as respostas. Erros sempre no mesmo formato: `{ "ok": false, "error": "mensagem" }`.
 
 O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e profissionais, horários livres, buscar cliente, criar/cancelar/remarcar agendamentos — as mesmas regras do site `/agenda`.
 
@@ -42,8 +42,12 @@ O bot no WhatsApp (via n8n) deve **chamar essa API** para consultar serviços e 
 | 8c | `POST` | `/appointment-reminders/:id/mark-sent` | **Privada** | Marcar lembrete como enviado |
 | 8d | `GET` | `/appointment-reminders/pending-response?whatsapp=` | **Privada** | Buscar lembrete enviado aguardando confirmação do cliente |
 | 8e | `POST` | `/appointment-reminders/:id/confirm` | **Privada** | Marcar lembrete como confirmado pelo cliente |
+| 9 | `GET` | `/ai-status` | **Privada** | Ver se a IA está ativa numa conversa (`?whatsapp=`) |
+| 9b | `PATCH` | `/ai-status` | **Privada** | Ativar/pausar a IA numa conversa |
 
-**Resumo:** públicas (0–2: loja, serviços, profissionais, disponibilidade) + privadas (3–3c, 5–8: cliente e agenda) + **4 rotas de lembretes** (8b–8e). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel.
+**Resumo:** públicas (0–2: loja, serviços, profissionais, disponibilidade) + privadas (3–3c, 5–8: cliente e agenda) + **4 rotas de lembretes** (8b–8e) + **status da IA** (9–9b). Comandas, caixa e comissões ficam **só no painel** — ver regras em [financeiro.md](./financeiro.md). Encaixe e cadastros também só pelo painel.
+
+**Importante — pare de acessar o banco direto:** se o seu workflow tem um nó **Postgres** lendo/escrevendo a tabela `dinho_ai_status` com a senha do banco, troque por `GET`/`PATCH /ai-status` (nós HTTP com a chave de API, escopos `ai_status:read` / `ai_status:write` — ver seção 9). A senha direta do banco dá acesso a **todo** o sistema, não só a essa tabela; a chave de API só faz o que o escopo permite.
 
 **App do cliente:** [app-mobile.md](./app-mobile.md) · OTP: [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md)
 
@@ -99,6 +103,8 @@ Authorization: Bearer <sua-chave-do-painel>
 | `appointments:cancel` | `DELETE /appointments/:id` |
 | `appointment_reminders:read` | `GET /appointment-reminders/due`, `GET /appointment-reminders/pending-response` |
 | `appointment_reminders:write` | `POST /appointment-reminders/:id/mark-sent`, `POST /appointment-reminders/:id/confirm` |
+| `ai_status:read` | `GET /ai-status` |
+| `ai_status:write` | `PATCH /ai-status` |
 
 Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personalizada**.
 
@@ -130,6 +136,8 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 | `GET /appointment-reminders/pending-response` | Sim |
 | `POST /appointment-reminders/:id/mark-sent` | Sim |
 | `POST /appointment-reminders/:id/confirm` | Sim |
+| `GET /ai-status` | Sim |
+| `PATCH /ai-status` | Sim |
 
 - Se você **enviar** `Authorization: Bearer ...` na requisição, a chave será validada e o scope exigido
 - Chaves com rate limit próprio: **120 req / 15 min** por chave (além dos limites por IP/WhatsApp onde aplicável)
@@ -146,6 +154,7 @@ Presets no painel: **Agenda completa** (todos), **Somente leitura**, **Personali
 8. **Encaixe manual** e alteração de status pelo painel **não existem na API** — só agendamento normal de cliente.
 9. **Cancelar pela API** marca status `cancelled` (não apaga o registro). Exclusão definitiva é só no painel admin.
 10. **Cliente já cadastrado:** ao criar agendamento, se o WhatsApp existir com outro nome, a API recusa (mesma regra do site).
+11. **Evitar duplicidade em retry:** em `POST/PATCH/DELETE /appointments/:id?`, envie um header `Idempotency-Key` (qualquer string única por tentativa, ex.: `{{$json.messageId}}` do WhatsApp). Se o n8n reenviar a mesma chamada (timeout, retry automático), o servidor devolve a resposta salva da primeira vez em vez de marcar/cancelar duas vezes. Reusar a chave com dados diferentes dá **409**.
 
 ---
 
@@ -169,6 +178,7 @@ Se exceder, a API responde **429** com:
 
 ```json
 {
+  "ok": false,
   "error": "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo."
 }
 ```
@@ -669,6 +679,7 @@ curl -G "https://agendabarbearia-seven.vercel.app/api/v1/appointments/last-compl
 
 ```json
 {
+  "ok": true,
   "found": true,
   "lastAppointment": {
     "appointmentId": "uuid",
@@ -686,6 +697,7 @@ curl -G "https://agendabarbearia-seven.vercel.app/api/v1/appointments/last-compl
 
 ```json
 {
+  "ok": true,
   "found": false,
   "lastAppointment": null
 }
@@ -878,7 +890,7 @@ Mesma ideia da seção anterior, mas disparado quando um agendamento é **cancel
 
 Quando um agendamento normal é cancelado e ele tinha **encaixes vinculados** (mesmo cliente/dia), esses encaixes também são cancelados automaticamente — e cada um dispara seu próprio aviso com `source: "admin_squeeze_cancel"`.
 
-**Não dispara** ao **excluir** um agendamento (`deleteAppointment`, exclusão definitiva feita só pelo dono) nem ao **reatribuir um serviço da comanda para outro barbeiro** (troca de barbeiro internamente cancela e recria o registro, mas não é um cancelamento visível pro cliente).
+**Não dispara** ao **reatribuir um serviço da comanda para outro barbeiro** (troca de barbeiro internamente cancela e recria o registro, mas não é um cancelamento visível pro cliente).
 
 **Variáveis de ambiente:** as mesmas do `appointment.created` — `N8N_APPOINTMENT_WEBHOOK_URL` e `N8N_APPOINTMENT_WEBHOOK_SECRET` (ver seção 6b). Se a URL não estiver configurada, nenhum webhook é enviado e o cancelamento continua funcionando normalmente.
 
@@ -1346,6 +1358,62 @@ Cancela (status `cancelled`); libera o horário na agenda. Não apaga o registro
 
 ---
 
+### 9. Status da IA na conversa
+
+| | |
+| --- | --- |
+| **Método** | `GET` / `PATCH` |
+| **Rota** | `/ai-status` |
+| **Auth** | **Obrigatória** — chave com `ai_status:read` (GET) ou `ai_status:write` (PATCH) |
+| **Rate limit** | 60 / 15 min por chave |
+
+Substitui o nó **Postgres** que lia/escrevia direto a tabela `dinho_ai_status`
+com a senha do banco. Use estes dois nós HTTP com a mesma credencial das
+outras chamadas.
+
+**Consultar (`GET`):**
+
+```
+GET {{baseUrl}}/ai-status?whatsapp=11981008852
+Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
+```
+
+```json
+{
+  "ok": true,
+  "whatsapp": "5511981008852",
+  "iaAtiva": true
+}
+```
+
+Sem registro salvo pra aquele WhatsApp, `iaAtiva` vem `true` (padrão: IA ativa).
+
+**Atualizar (`PATCH`):** por exemplo, quando um humano assume a conversa e
+a IA deve parar de responder.
+
+```
+PATCH {{baseUrl}}/ai-status
+Authorization: Bearer dbc_live_SEU_KEYID_SEU_SECRET
+Content-Type: application/json
+
+{
+  "whatsapp": "11981008852",
+  "iaAtiva": false
+}
+```
+
+```json
+{
+  "ok": true,
+  "whatsapp": "5511981008852",
+  "iaAtiva": false
+}
+```
+
+**Erros comuns:** 400 (`whatsapp` inválido), 401 (sem auth), 403 (chave sem o scope).
+
+---
+
 ## Fluxo de conversa sugerido para o n8n
 
 Estado da conversa deve ser guardado por número de WhatsApp (variáveis do workflow, Redis, Data Store, etc.).
@@ -1420,8 +1488,14 @@ Todos os nós devem usar a credencial **Header Auth** (`Authorization: Bearer db
 | Marcar lembrete enviado | POST | `{{baseUrl}}/appointment-reminders/{{id}}/mark-sent` | **Privada** |
 | Lembrete aguardando resposta | GET | `{{baseUrl}}/appointment-reminders/pending-response?whatsapp=...` | **Privada** |
 | Confirmar lembrete | POST | `{{baseUrl}}/appointment-reminders/{{id}}/confirm` | **Privada** |
+| Ver status da IA | GET | `{{baseUrl}}/ai-status?whatsapp=...` | **Privada** |
+| Ativar/pausar IA | PATCH | `{{baseUrl}}/ai-status` + JSON body | **Privada** |
 
 `baseUrl` = `https://agendabarbearia-seven.vercel.app/api/v1`
+
+Nos nós de **Criar**, **Remarcar** e **Cancelar** agendamento, adicione o
+header `Idempotency-Key` (ver regra 11 acima) pra não duplicar a ação se o
+n8n reenviar a chamada.
 
 **Login do cliente (site/app, não n8n):** `POST /api/agenda/otp/send` + `POST /api/agenda/otp/verify` — ver [cliente-otp-whatsapp.md](./cliente-otp-whatsapp.md) e [app-mobile.md](./app-mobile.md).
 

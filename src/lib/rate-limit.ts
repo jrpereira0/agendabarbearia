@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type RateLimitConfig = {
   limit: number;
@@ -31,7 +32,12 @@ export type RateLimitResult =
   | { ok: true }
   | { ok: false; retryAfterSeconds: number };
 
-export function checkRateLimit(
+/**
+ * Fallback em memória: só usado se o banco não estiver configurado (dev
+ * sem Supabase) ou se a chamada falhar. Nunca deixa a rota sem limite,
+ * mas nesse caso o contador não é compartilhado entre instâncias.
+ */
+function checkRateLimitInMemory(
   key: string,
   config: RateLimitConfig
 ): RateLimitResult {
@@ -55,6 +61,34 @@ export function checkRateLimit(
   return { ok: true };
 }
 
+/**
+ * Contador compartilhado no banco (função `check_rate_limit`) — funciona
+ * igual entre todas as instâncias serverless, diferente do Map em memória.
+ */
+export async function checkRateLimit(
+  key: string,
+  config: RateLimitConfig
+): Promise<RateLimitResult> {
+  const admin = createAdminClient();
+  if (!admin) return checkRateLimitInMemory(key, config);
+
+  const { data, error } = await admin.rpc("check_rate_limit", {
+    p_key: key,
+    p_window_ms: config.windowMs,
+    p_limit: config.limit,
+  });
+
+  const row = Array.isArray(data) ? data[0] : null;
+  if (error || !row) {
+    console.error("[rate-limit] falha ao consultar banco, usando fallback em memória", error);
+    return checkRateLimitInMemory(key, config);
+  }
+
+  return row.allowed
+    ? { ok: true }
+    : { ok: false, retryAfterSeconds: row.retry_after_seconds };
+}
+
 export const PUBLIC_API_RATE_LIMITS = {
   catalog: { limit: 60, windowMs: 15 * 60 * 1000 },
   availability: { limit: 60, windowMs: 15 * 60 * 1000 },
@@ -76,6 +110,7 @@ export type PublicApiRateLimitBucket = keyof typeof PUBLIC_API_RATE_LIMITS;
 function tooManyRequests(retryAfterSeconds: number) {
   return NextResponse.json(
     {
+      ok: false,
       error:
         "Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.",
     },
@@ -86,17 +121,17 @@ function tooManyRequests(retryAfterSeconds: number) {
   );
 }
 
-export function enforcePublicApiRateLimit(
+export async function enforcePublicApiRateLimit(
   request: Request,
   bucket: PublicApiRateLimitBucket,
   keySuffix?: string
-): NextResponse | null {
+): Promise<NextResponse | null> {
   const ip = getClientIp(request);
   const key = keySuffix
     ? `${bucket}:${keySuffix}`
     : `${bucket}:ip:${ip}`;
 
-  const result = checkRateLimit(key, PUBLIC_API_RATE_LIMITS[bucket]);
+  const result = await checkRateLimit(key, PUBLIC_API_RATE_LIMITS[bucket]);
   if (!result.ok) {
     return tooManyRequests(result.retryAfterSeconds);
   }

@@ -5,11 +5,14 @@ import {
   getClientSessionCookieOptions,
   readClientSessionFromRequest,
 } from "@/lib/client-api-session";
+import { resolveValidClientSession } from "@/lib/client-session-version";
 
 // GET /api/agenda/session — sessão atual do cliente (após OTP)
 export async function GET(request: NextRequest) {
   return safeApiRoute(async () => {
-    const session = readClientSessionFromRequest(request);
+    const session = await resolveValidClientSession(
+      readClientSessionFromRequest(request)
+    );
     if (!session) {
       return NextResponse.json({ ok: true, authenticated: false });
     }

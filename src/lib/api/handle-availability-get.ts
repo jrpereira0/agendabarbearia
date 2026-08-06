@@ -41,7 +41,7 @@ export async function handleAvailabilityGet(request: NextRequest) {
 
       if (!parsed.success) {
         return NextResponse.json(
-          { error: parsed.error.issues[0].message },
+          { ok: false, error: parsed.error.issues[0].message },
           { status: 400 }
         );
       }
@@ -69,7 +69,7 @@ export async function handleAvailabilityGet(request: NextRequest) {
 
       if (!result.ok) {
         return NextResponse.json(
-          { error: result.error },
+          { ok: false, error: result.error },
           { status: result.status }
         );
       }

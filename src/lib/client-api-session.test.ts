@@ -15,6 +15,16 @@ describe("client-api-session", () => {
 
     const payload = verifyClientSessionToken(token);
     expect(payload?.whatsapp).toBe("5511981008852");
+    expect(payload?.v).toBe(0);
+  });
+
+  it("guarda a versão da sessão no token", () => {
+    process.env.CLIENT_SESSION_SECRET =
+      "test-secret-with-at-least-32-characters!!";
+
+    const token = createClientSessionToken("11981008852", 3);
+    const payload = verifyClientSessionToken(token);
+    expect(payload?.v).toBe(3);
   });
 
   it("rejeita token adulterado", () => {

@@ -160,15 +160,6 @@ export async function getExpensesForPeriod(
   }));
 }
 
-export async function getExpensesTotalCents(
-  admin: SupabaseClient,
-  from: string,
-  to: string
-): Promise<number> {
-  const report = await getExpensesReport(admin, from, to);
-  return report.totalCents;
-}
-
 export type ExpensesDayMetric = {
   date: string;
   totalCents: number;

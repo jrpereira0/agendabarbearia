@@ -19,10 +19,12 @@ Auth do cliente (fora do `/v1`): `/api/agenda/...`
 6. POST /api/agenda/otp/verify  { whatsapp, code }
       → guardar accessToken no aparelho (~14 dias)
 7. GET  /api/v1/customers/me     (Bearer — preenche nome se já for cliente)
-8. POST /api/v1/appointments    (Bearer accessToken)
+8. POST /api/v1/appointments    (Bearer accessToken, header Idempotency-Key)
 9. GET  /api/v1/appointments?whatsapp=…&mode=upcoming
-10. PATCH / DELETE quando precisar remarcar / cancelar
+10. PATCH / DELETE quando precisar remarcar / cancelar (mesmo header Idempotency-Key)
 11. PATCH /api/v1/customers/me  (Minha conta — editar nome/sobrenome)
+12. POST /api/v1/customers/me/push-token  (registrar o aparelho pra receber avisos)
+13. GET  /api/v1/customers/me/notifications  (inbox de notificações do app)
 ```
 
 ---
@@ -34,7 +36,8 @@ Auth do cliente (fora do `/v1`): `/api/agenda/...`
 | Pedir código | `POST /api/agenda/otp/send` | `{ ok: true }` |
 | Validar | `POST /api/agenda/otp/verify` | `accessToken`, `expiresAt`, `whatsapp` |
 | Ver sessão | `GET /api/agenda/session` | cookie **ou** `Authorization: Bearer` |
-| Sair | apague o token no app (+ `DELETE /api/agenda/session` limpa cookie do site) |
+| Sair (este aparelho) | apague o token no app (+ `DELETE /api/agenda/session` limpa cookie do site) |
+| Sair de **todos** os aparelhos | `DELETE /api/v1/customers/me/sessions` (Bearer) — ver seção abaixo |
 
 Exemplo de verify:
 
@@ -70,6 +73,7 @@ Só com sessão OTP do **próprio** cliente (Bearer `accessToken`).
 | --- | --- | --- | --- |
 | GET | `/customers/me` | `customers:read` | Ler cadastro (`id`, `firstName`, `lastName`, `whatsapp`) |
 | PATCH | `/customers/me` | `customers:update` | Atualizar **nome** e **sobrenome** |
+| DELETE | `/customers/me/sessions` | `customers:update` | Sair de **todos** os aparelhos (ver abaixo) |
 
 ### GET — exemplo
 
@@ -140,6 +144,22 @@ Content-Type: application/json
 
 Para o n8n buscar **outro** número, continue com `GET /customers?whatsapp=` + chave de API (`customers:read`).
 
+### Sair de todos os aparelhos
+
+```http
+DELETE /api/v1/customers/me/sessions
+Authorization: Bearer <accessToken>
+```
+
+```json
+{ "ok": true }
+```
+
+Invalida o cookie do site **e** todo `accessToken` já emitido pra esse
+WhatsApp — inclusive o usado nesta própria chamada. Use quando o cliente
+perder o celular ou achar que outra pessoa tem acesso à conta. Depois disso,
+cada aparelho (o próprio incluído) precisa refazer o login por OTP.
+
 ---
 
 ## Bootstrap da loja
@@ -164,5 +184,51 @@ Para o n8n buscar **outro** número, continue com `GET /customers?whatsapp=` + c
 | DELETE | `/appointments/:id?whatsapp=` | cancel |
 
 Catálogo e slots continuam **públicos** (`/services`, `/professionals`, `/appointments/availability`).
+
+### Evitar duplicar (Idempotency-Key)
+
+Em `POST /appointments`, `PATCH /appointments/:id` e `DELETE /appointments/:id`,
+envie um header `Idempotency-Key` com um valor único por tentativa (ex.: um
+UUID gerado no app antes de enviar). Se o app reenviar a mesma chamada — por
+exemplo, depois de um timeout de rede sem saber se o primeiro pedido chegou —
+o servidor devolve a mesma resposta da primeira vez em vez de marcar/cancelar
+duas vezes. Reusar a chave com dados diferentes dá **409**.
+
+```http
+POST /api/v1/appointments
+Authorization: Bearer <accessToken>
+Idempotency-Key: 6f1a9e2e-2f3f-4b8b-9c9a-2e6b8a7b6b1a
+Content-Type: application/json
+```
+
+## Push e notificações (app)
+
+Só com sessão OTP do **próprio** cliente (Bearer `accessToken`).
+
+| Método | Rota | Scope | Função |
+| --- | --- | --- | --- |
+| POST | `/customers/me/push-token` | `customers:update` | Registrar o Expo Push Token do aparelho |
+| DELETE | `/customers/me/push-token` | `customers:update` | Remover o token (logout) |
+| GET | `/customers/me/notifications` | `customers:read` | Listar notificações in-app (+ `unreadCount`) |
+| PATCH | `/customers/me/notifications` | `customers:update` | Marcar todas como lidas (`{ "markAllRead": true }`) |
+| PATCH | `/customers/me/notifications/:id/read` | `customers:update` | Marcar uma notificação como lida |
+
+### Registrar o token — exemplo
+
+```http
+POST /api/v1/customers/me/push-token
+Authorization: Bearer <accessToken>
+Content-Type: application/json
+
+{
+  "expoPushToken": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+  "platform": "ios"
+}
+```
+
+Chame essa rota sempre que o app receber/renovar o Expo Push Token (ex.: no
+login e a cada abertura, se o token mudar). Ao deslogar, chame `DELETE` com
+o mesmo `expoPushToken` no corpo (ou sem corpo, pra remover todos os tokens
+daquele cliente).
 
 OpenAPI completo: [../openapi/v1.yaml](../openapi/v1.yaml).

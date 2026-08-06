@@ -3,10 +3,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
 import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withIdempotency } from "@/lib/api/idempotency";
 import {
   cancelPublicAppointment,
   updatePublicAppointment,
 } from "@/lib/manage-public-appointment";
+import { protectedAuthRateLimitKey } from "@/lib/protected-api-auth";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -60,7 +62,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     const parsed = updateBodySchema.safeParse({ ...raw, whatsapp });
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.issues[0].message },
+        { ok: false, error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
@@ -72,20 +74,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         rateLimit: "appointmentMutate",
         whatsapp,
       },
-      async () => {
-        const result = await updatePublicAppointment(id, parsed.data);
+      async ({ auth }) =>
+        withIdempotency(
+          request,
+          {
+            route: "appointments.update",
+            authIdentifier: protectedAuthRateLimitKey(auth) ?? "anonymous",
+            resourceId: id,
+            requestPayload: parsed.data,
+          },
+          async () => {
+            const result = await updatePublicAppointment(id, parsed.data);
 
-        if (!result.ok) {
-          return NextResponse.json(
-            { error: result.error },
-            { status: result.status }
-          );
-        }
+            if (!result.ok) {
+              return NextResponse.json(
+                { ok: false, error: result.error },
+                { status: result.status }
+              );
+            }
 
-        revalidatePath("/admin");
-        revalidatePath("/agenda");
-        return NextResponse.json({ ok: true, appointmentId: result.data.id });
-      }
+            revalidatePath("/admin");
+            revalidatePath("/agenda");
+            return NextResponse.json({
+              ok: true,
+              appointmentId: result.data.id,
+            });
+          }
+        )
     );
   });
 }
@@ -110,20 +125,33 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         rateLimit: "appointmentMutate",
         whatsapp,
       },
-      async () => {
-        const result = await cancelPublicAppointment(id, whatsapp);
+      async ({ auth }) =>
+        withIdempotency(
+          request,
+          {
+            route: "appointments.cancel",
+            authIdentifier: protectedAuthRateLimitKey(auth) ?? "anonymous",
+            resourceId: id,
+            requestPayload: { whatsapp },
+          },
+          async () => {
+            const result = await cancelPublicAppointment(id, whatsapp);
 
-        if (!result.ok) {
-          return NextResponse.json(
-            { error: result.error },
-            { status: result.status }
-          );
-        }
+            if (!result.ok) {
+              return NextResponse.json(
+                { ok: false, error: result.error },
+                { status: result.status }
+              );
+            }
 
-        revalidatePath("/admin");
-        revalidatePath("/agenda");
-        return NextResponse.json({ ok: true, appointmentId: result.data.id });
-      }
+            revalidatePath("/admin");
+            revalidatePath("/agenda");
+            return NextResponse.json({
+              ok: true,
+              appointmentId: result.data.id,
+            });
+          }
+        )
     );
   });
 }

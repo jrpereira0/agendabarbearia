@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
       async () => {
         if (!isSupabaseConfigured()) {
           return NextResponse.json(
-            { error: "Sistema indisponível no momento." },
+            { ok: false, error: "Sistema indisponível no momento." },
             { status: 503 }
           );
         }
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
         const catalog = await getShopCatalog();
 
         return NextResponse.json({
+          ok: true,
           shop: {
             name: catalog.shop.name,
             bio: catalog.shop.bio || null,

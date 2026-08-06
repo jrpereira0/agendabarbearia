@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       async () => {
         if (!isSupabaseConfigured()) {
           return NextResponse.json(
-            { error: "Sistema indisponível no momento." },
+            { ok: false, error: "Sistema indisponível no momento." },
             { status: 503 }
           );
         }
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
         if (!parsed.success) {
           return NextResponse.json(
             {
+              ok: false,
               error:
                 "Parâmetros inválidos. Use professionalId (UUID) e/ou date (AAAA-MM-DD).",
             },
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
           const pro = catalog.professionals.find((p) => p.id === professionalId);
           if (!pro) {
             return NextResponse.json(
-              { error: "Profissional não encontrado." },
+              { ok: false, error: "Profissional não encontrado." },
               { status: 404 }
             );
           }

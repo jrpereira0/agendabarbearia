@@ -8,6 +8,8 @@ export const CLIENT_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export type ClientSessionPayload = {
   whatsapp: string;
   exp: number;
+  /** Versão da sessão no momento em que o token foi emitido (logout em todos os aparelhos). */
+  v: number;
 };
 
 function getSessionSecret(): string | null {
@@ -24,13 +26,17 @@ function signPayload(payload: string): string {
   return createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-export function createClientSessionToken(whatsapp: string): string | null {
+export function createClientSessionToken(
+  whatsapp: string,
+  version = 0
+): string | null {
   const normalized = normalizeWhatsapp(whatsapp);
   if (!normalized) return null;
 
   const payload: ClientSessionPayload = {
     whatsapp: normalized,
     exp: Date.now() + CLIENT_SESSION_TTL_MS,
+    v: version,
   };
 
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -64,7 +70,7 @@ export function verifyClientSessionToken(
   try {
     const payload = JSON.parse(
       Buffer.from(encoded, "base64url").toString("utf8")
-    ) as ClientSessionPayload;
+    ) as Partial<ClientSessionPayload>;
 
     if (
       typeof payload.whatsapp !== "string" ||
@@ -79,6 +85,8 @@ export function verifyClientSessionToken(
     return {
       whatsapp: normalizeWhatsapp(payload.whatsapp)!,
       exp: payload.exp,
+      // Tokens emitidos antes do controle de versão valem como versão 0.
+      v: typeof payload.v === "number" ? payload.v : 0,
     };
   } catch {
     return null;

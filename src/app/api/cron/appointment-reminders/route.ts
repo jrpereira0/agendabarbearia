@@ -5,7 +5,8 @@ import { processDueAppointmentReminderPushes } from "@/lib/push-reminders";
 /**
  * GET/POST /api/cron/appointment-reminders
  * Dispara lembretes 1h e 30min via Expo Push (sem n8n).
- * Protegido por CRON_SECRET (Authorization: Bearer … ou ?secret=).
+ * Protegido por CRON_SECRET (Authorization: Bearer …) — a Vercel Cron injeta
+ * esse header automaticamente quando CRON_SECRET está configurado.
  */
 async function handleCron(request: NextRequest) {
   return safeApiRoute(async () => {
@@ -21,9 +22,8 @@ async function handleCron(request: NextRequest) {
     const bearer = auth.toLowerCase().startsWith("bearer ")
       ? auth.slice(7).trim()
       : "";
-    const querySecret = request.nextUrl.searchParams.get("secret")?.trim() ?? "";
 
-    if (bearer !== expected && querySecret !== expected) {
+    if (bearer !== expected) {
       return NextResponse.json({ ok: false, error: "Não autorizado." }, { status: 401 });
     }
 

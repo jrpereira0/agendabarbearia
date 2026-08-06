@@ -3425,8 +3425,10 @@ export async function updateComandaItems(
       item.chargedPriceCents > 0 ? item.chargedPriceCents : unitPrice * qty;
     const preferredId = item.id ?? crypto.randomUUID();
     // Sem barbeiro: sem comissão — valor fica integralmente com a barbearia.
+    // Comissão sempre vem do cadastro do produto (nunca do payload do
+    // cliente) — senão dá pra forçar % maior e inflar a própria comissão.
     const commissionPercent = item.professionalId
-      ? (item.commissionPercent ?? product.commission_percent)
+      ? product.commission_percent
       : 0;
     return {
       id: protectedIds.has(preferredId) ? crypto.randomUUID() : preferredId,

@@ -23,7 +23,8 @@ Guia do app: [app-mobile.md](./app-mobile.md).
 | Pedir código | `POST /api/agenda/otp/send` body `{ "whatsapp": "11999999999" }` |
 | Validar código + login | `POST /api/agenda/otp/verify` body `{ "whatsapp": "...", "code": "123456" }` |
 | Ver se já está logado | `GET /api/agenda/session` (cookie ou Bearer) |
-| Sair (site) | `DELETE /api/agenda/session` |
+| Sair (este aparelho) | `DELETE /api/agenda/session` (limpa o cookie do site) |
+| Sair de **todos** os aparelhos | `DELETE /api/v1/customers/me/sessions` (Bearer) — invalida cookie + todo `accessToken` já emitido pra esse WhatsApp |
 
 Resposta do **verify** (site + app):
 

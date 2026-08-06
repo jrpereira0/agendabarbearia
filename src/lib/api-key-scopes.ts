@@ -9,6 +9,8 @@ export const API_SCOPES = [
   "appointments:cancel",
   "appointment_reminders:read",
   "appointment_reminders:write",
+  "ai_status:read",
+  "ai_status:write",
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -24,6 +26,8 @@ export const API_SCOPE_LABELS: Record<ApiScope, string> = {
   "appointments:cancel": "Cancelar agendamentos",
   "appointment_reminders:read": "Consultar lembretes de agendamento",
   "appointment_reminders:write": "Enviar e confirmar lembretes",
+  "ai_status:read": "Consultar se a IA está ativa numa conversa",
+  "ai_status:write": "Ativar ou pausar a IA numa conversa",
 };
 
 export const ALL_API_SCOPES: ApiScope[] = [...API_SCOPES];
@@ -33,6 +37,7 @@ export const READONLY_API_SCOPES: ApiScope[] = [
   "availability:read",
   "customers:read",
   "appointments:read",
+  "ai_status:read",
 ];
 
 export type ApiKeyPermissionPreset = "full" | "readonly" | "custom";

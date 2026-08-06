@@ -221,33 +221,3 @@ export function DonutChart({
     </div>
   );
 }
-
-export function SparklineBars({
-  values,
-  height = 48,
-  className,
-}: {
-  values: number[];
-  height?: number;
-  className?: string;
-}) {
-  const max = Math.max(...values, 1);
-
-  return (
-    <div
-      className={cn("flex items-end gap-0.5", className)}
-      style={{ height }}
-    >
-      {values.map((value, index) => {
-        const pct = value > 0 ? Math.max((value / max) * 100, 8) : 0;
-        return (
-          <div
-            key={index}
-            className="min-w-[3px] flex-1 rounded-sm bg-[#ecf15e]"
-            style={{ height: `${pct}%` }}
-          />
-        );
-      })}
-    </div>
-  );
-}

@@ -46,6 +46,7 @@ import {
   API_KEY_PRESET_LABELS,
   API_SCOPE_LABELS,
   formatScopesSummary,
+  READONLY_API_SCOPES,
   type ApiKeyPermissionPreset,
   type ApiScope,
 } from "@/lib/api-key-scopes";
@@ -318,7 +319,8 @@ export function ApiKeysPanel({ initialKeys }: ApiKeysPanelProps) {
               setPreset(
                 key.scopes.length === ALL_API_SCOPES.length
                   ? "full"
-                  : key.scopes.length === 4
+                  : key.scopes.length === READONLY_API_SCOPES.length &&
+                      READONLY_API_SCOPES.every((s) => key.scopes.includes(s))
                     ? "readonly"
                     : "custom"
               );

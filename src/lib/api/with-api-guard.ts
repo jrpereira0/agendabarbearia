@@ -49,7 +49,7 @@ export async function withPublicApiRouteGuard(
       ? authResult.auth.keyUuid
       : options.rateLimitKeySuffix?.(authResult.auth);
 
-  const limited = enforcePublicApiRateLimit(request, bucket, keySuffix);
+  const limited = await enforcePublicApiRateLimit(request, bucket, keySuffix);
   if (limited) return limited;
 
   return handler({ auth: authResult.auth });
@@ -70,7 +70,7 @@ export async function withProtectedApiRouteGuard(
   const bucket =
     authResult.auth.type === "api_key" ? "apiKey" : options.rateLimit;
 
-  const limited = enforcePublicApiRateLimit(
+  const limited = await enforcePublicApiRateLimit(
     request,
     bucket,
     protectedAuthRateLimitKey(authResult.auth)

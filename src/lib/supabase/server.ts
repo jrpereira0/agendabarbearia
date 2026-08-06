@@ -18,7 +18,10 @@ export async function createClient(): Promise<SupabaseClient | null> {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
+            // httpOnly: nenhum código do navegador lê esses cookies (só o
+            // client-side Supabase faria isso, e o painel não usa — só
+            // createServerClient). Reduz o risco de um XSS roubar a sessão.
+            cookieStore.set(name, value, { ...options, httpOnly: true })
           );
         } catch {
           // Chamado a partir de um Server Component: o proxy

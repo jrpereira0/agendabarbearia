@@ -3,12 +3,14 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { safeApiRoute } from "@/lib/api/safe-route";
 import { withProtectedApiRouteGuard } from "@/lib/api/with-api-guard";
+import { withIdempotency } from "@/lib/api/idempotency";
 import { createPublicAppointment } from "@/lib/create-public-appointment";
 import {
   LIST_APPOINTMENTS_MODES,
   listPublicAppointmentsByWhatsapp,
   type ListAppointmentsMode,
 } from "@/lib/manage-public-appointment";
+import { protectedAuthRateLimitKey } from "@/lib/protected-api-auth";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -84,7 +86,7 @@ export async function GET(request: NextRequest) {
 
         if (!result.ok) {
           return NextResponse.json(
-            { error: result.error },
+            { ok: false, error: result.error },
             { status: result.status }
           );
         }
@@ -107,14 +109,14 @@ export async function POST(request: NextRequest) {
       json = await request.json();
     } catch {
       return NextResponse.json(
-        { error: "Corpo da requisição inválido." },
+        { ok: false, error: "Corpo da requisição inválido." },
         { status: 400 }
       );
     }
 
     if (typeof json !== "object" || json === null) {
       return NextResponse.json(
-        { error: "Corpo da requisição inválido." },
+        { ok: false, error: "Corpo da requisição inválido." },
         { status: 400 }
       );
     }
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
         : null;
     if (!whatsapp) {
       return NextResponse.json(
-        { error: WHATSAPP_INVALID_MESSAGE },
+        { ok: false, error: WHATSAPP_INVALID_MESSAGE },
         { status: 400 }
       );
     }
@@ -134,7 +136,7 @@ export async function POST(request: NextRequest) {
     const parsed = bodySchema.safeParse({ ...raw, whatsapp });
     if (!parsed.success) {
       return NextResponse.json(
-        { error: parsed.error.issues[0].message },
+        { ok: false, error: parsed.error.issues[0].message },
         { status: 400 }
       );
     }
@@ -146,29 +148,38 @@ export async function POST(request: NextRequest) {
         rateLimit: "appointmentCreateIp",
         whatsapp: parsed.data.whatsapp,
       },
-      async ({ auth }) => {
-        const result = await createPublicAppointment(parsed.data, {
-          bookingSource: auth.type === "api_key" ? "ai" : "site",
-        });
+      async ({ auth }) =>
+        withIdempotency(
+          request,
+          {
+            route: "appointments.create",
+            authIdentifier: protectedAuthRateLimitKey(auth) ?? "anonymous",
+            requestPayload: parsed.data,
+          },
+          async () => {
+            const result = await createPublicAppointment(parsed.data, {
+              bookingSource: auth.type === "api_key" ? "ai" : "site",
+            });
 
-        if (!result.ok) {
-          return NextResponse.json(
-            { error: result.error },
-            { status: result.status }
-          );
-        }
+            if (!result.ok) {
+              return NextResponse.json(
+                { ok: false, error: result.error },
+                { status: result.status }
+              );
+            }
 
-        after(() => {
-          revalidatePath("/admin");
-          revalidatePath("/agenda");
-        });
-        return NextResponse.json({
-          ok: true,
-          appointmentId: result.appointmentId,
-          professionalId: result.professionalId,
-          professionalNickname: result.professionalNickname,
-        });
-      }
+            after(() => {
+              revalidatePath("/admin");
+              revalidatePath("/agenda");
+            });
+            return NextResponse.json({
+              ok: true,
+              appointmentId: result.appointmentId,
+              professionalId: result.professionalId,
+              professionalNickname: result.professionalNickname,
+            });
+          }
+        )
     );
   });
 }

@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 const UNAVAILABLE = NextResponse.json(
-  { error: "Sistema indisponível no momento. Tente de novo em instantes." },
+  {
+    ok: false,
+    error: "Sistema indisponível no momento. Tente de novo em instantes.",
+  },
   { status: 503 }
 );
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { createAdminClient, requireAdminClient } from "@/lib/supabase/admin";
+import { requireAdminClient } from "@/lib/supabase/admin";
 import { isActionResult } from "@/lib/is-action-result";
 import { requireOwner, type ActionResult } from "@/lib/require-owner";
 
@@ -19,38 +19,6 @@ export type ReceptionStaffItem = {
   fullName: string;
   email: string | null;
 };
-
-export async function listReceptionStaff(): Promise<
-  { ok: true; staff: ReceptionStaffItem[] } | ActionResult
-> {
-  const denied = await requireOwner();
-  if (denied) return denied;
-
-  const admin = requireAdminClient();
-  if (isActionResult(admin)) return admin;
-
-  const { data: profiles, error } = await admin
-    .from("profiles")
-    .select("id, full_name")
-    .eq("role", "reception")
-    .order("full_name");
-
-  if (error) {
-    return { ok: false, error: "Não foi possível carregar a equipe." };
-  }
-
-  const staff: ReceptionStaffItem[] = [];
-  for (const profile of profiles ?? []) {
-    const { data: userData } = await admin.auth.admin.getUserById(profile.id);
-    staff.push({
-      id: profile.id,
-      fullName: profile.full_name || "Recepção",
-      email: userData.user?.email ?? null,
-    });
-  }
-
-  return { ok: true, staff };
-}
 
 export async function createReceptionStaff(input: {
   fullName: string;
@@ -177,12 +145,15 @@ export async function resetReceptionPassword(input: {
   return { ok: true };
 }
 
-/** Usado na page de configurações (server). */
+/** Usado na page de configurações (server). Só o dono pode listar. */
 export async function loadReceptionStaffForSettings(): Promise<
   ReceptionStaffItem[]
 > {
-  const admin = createAdminClient();
-  if (!admin) return [];
+  const denied = await requireOwner();
+  if (denied) return [];
+
+  const admin = requireAdminClient();
+  if (isActionResult(admin)) return [];
 
   const { data: profiles } = await admin
     .from("profiles")
