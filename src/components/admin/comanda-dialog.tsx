@@ -451,6 +451,8 @@ export function ComandaDialog({
   >(null);
   const [tipDialogOpen, setTipDialogOpen] = useState(false);
   const [tipDraftList, setTipDraftList] = useState<TipEntry[]>([]);
+  const [tipDraftCents, setTipDraftCents] = useState(0);
+  const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
 
   const load = useCallback(async () => {
     if (!appointment && !initialComandaId) return;
@@ -839,15 +841,9 @@ export function ComandaDialog({
   }, [pendingExtraService, professionals]);
 
   const tipEligibleProfessionals = useMemo(() => {
-    const linkedProIds = new Set(
-      linkedAppointmentsForMemo.map((apt) => apt.professionalId)
-    );
-    if (linkedProIds.size === 0) {
-      // Venda rápida / sem horário: qualquer barbeiro pode receber gorjeta.
-      return professionals;
-    }
-    return professionals.filter((pro) => linkedProIds.has(pro.id));
-  }, [linkedAppointmentsForMemo, professionals]);
+    // Gorjeta pode ir para qualquer barbeiro ativo (inclusive mais de um na mesma comanda).
+    return professionals;
+  }, [professionals]);
 
   if (!appointment && !initialComandaId) return null;
 
@@ -1009,7 +1005,50 @@ export function ComandaDialog({
 
   function openTipDialog() {
     setTipDraftList(tips.length > 0 ? [...tips] : []);
+    setTipDraftCents(0);
+    setTipDraftProfessionalId(
+      tipEligibleProfessionals.length === 1
+        ? tipEligibleProfessionals[0].id
+        : ""
+    );
     setTipDialogOpen(true);
+  }
+
+  function addTipDraft() {
+    if (tipDraftCents <= 0) {
+      toast.error("Informe o valor da gorjeta.");
+      return;
+    }
+    if (!tipDraftProfessionalId) {
+      toast.error("Escolha o barbeiro que recebe a gorjeta.");
+      return;
+    }
+
+    setTipDraftList((prev) => {
+      const existingIndex = prev.findIndex(
+        (tip) => tip.professionalId === tipDraftProfessionalId
+      );
+      if (existingIndex >= 0) {
+        // Mesmo barbeiro: soma no valor já cadastrado.
+        return prev.map((tip, index) =>
+          index === existingIndex
+            ? { ...tip, cents: tip.cents + tipDraftCents }
+            : tip
+        );
+      }
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          cents: tipDraftCents,
+          professionalId: tipDraftProfessionalId,
+        },
+      ];
+    });
+    setTipDraftCents(0);
+    if (tipEligibleProfessionals.length !== 1) {
+      setTipDraftProfessionalId("");
+    }
   }
 
   async function confirmTipDialog() {
@@ -2835,7 +2874,8 @@ export function ComandaDialog({
                   {tipDraftList.length === 0 ? "Adicionar gorjeta" : "Gorjetas"}
                 </DialogTitle>
                 <DialogDescription>
-                  O barbeiro recebe 100% do valor. Entra no total da comanda.
+                  Escolha o valor e o barbeiro. Pode ter mais de uma na mesma
+                  comanda.
                 </DialogDescription>
               </div>
             </div>
@@ -2843,7 +2883,7 @@ export function ComandaDialog({
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
             {tipDraftList.length > 0 && (
               <div className="space-y-2">
-                <Label>Gorjetas cadastradas</Label>
+                <Label>Gorjetas desta comanda</Label>
                 <ul className="space-y-2">
                   {tipDraftList.map((tip, index) => (
                     <li
@@ -2881,38 +2921,87 @@ export function ComandaDialog({
                 </ul>
               </div>
             )}
-            
+
             <div className="space-y-4 rounded-xl border border-dashed border-[var(--booking-border)] p-4">
               <p className="text-sm font-medium text-[#f5f5f5]">
                 {tipDraftList.length > 0 ? "Adicionar outra gorjeta" : "Nova gorjeta"}
               </p>
+
               <div className="space-y-2.5">
-                <Label htmlFor="tip-new-amount">Valor</Label>
+                <Label htmlFor="tip-amount">Valor</Label>
+                <Input
+                  id="tip-amount"
+                  className="h-11 tabular-nums"
+                  inputMode="numeric"
+                  placeholder="R$ 0,00"
+                  disabled={busy}
+                  value={
+                    tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
+                  }
+                  onChange={(e) => {
+                    setTipDraftCents(parsePriceInput(e.target.value));
+                  }}
+                />
                 <div className="flex flex-wrap gap-2">
                   {TIP_QUICK_CENTS.map((cents) => (
                     <button
                       key={cents}
                       type="button"
                       disabled={busy}
-                      onClick={() => {
-                        const firstPro = tipEligibleProfessionals[0]?.id ?? "";
-                        if (firstPro) {
-                          setTipDraftList((prev) => [
-                            ...prev,
-                            { id: crypto.randomUUID(), cents, professionalId: firstPro },
-                          ]);
-                        }
-                      }}
+                      onClick={() => setTipDraftCents(cents)}
                       className={cn(
                         "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors booking-pick",
+                        tipDraftCents === cents && "booking-pick-active",
                         busy && "opacity-50"
                       )}
                     >
-                      + {formatPriceBRL(cents)}
+                      {formatPriceBRL(cents)}
                     </button>
                   ))}
                 </div>
               </div>
+
+              <div className="space-y-2.5">
+                <Label htmlFor="tip-professional">Barbeiro</Label>
+                {tipEligibleProfessionals.length === 0 ? (
+                  <p className="booking-notice rounded-xl px-3 py-3 text-center text-sm">
+                    Nenhum barbeiro disponível.
+                  </p>
+                ) : (
+                  <Select
+                    value={tipDraftProfessionalId}
+                    onValueChange={setTipDraftProfessionalId}
+                    disabled={busy}
+                  >
+                    <SelectTrigger id="tip-professional" className="h-11 w-full">
+                      <SelectValue placeholder="Quem recebe a gorjeta?" />
+                    </SelectTrigger>
+                    <SelectContent className={ADMIN_SURFACE.popover}>
+                      {tipEligibleProfessionals.map((pro) => (
+                        <SelectItem key={pro.id} value={pro.id}>
+                          {pro.nickname}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="booking-btn-ghost w-full"
+                disabled={
+                  busy ||
+                  tipDraftCents <= 0 ||
+                  !tipDraftProfessionalId ||
+                  tipEligibleProfessionals.length === 0
+                }
+                onClick={addTipDraft}
+              >
+                <Plus className="size-4" />
+                Adicionar gorjeta
+              </Button>
             </div>
           </div>
           <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
@@ -2942,7 +3031,11 @@ export function ComandaDialog({
               <Button
                 type="button"
                 className="booking-btn-primary"
-                disabled={busy || tipDraftList.some((t) => t.cents <= 0 || !t.professionalId)}
+                disabled={
+                  busy ||
+                  tipDraftList.some((t) => t.cents <= 0 || !t.professionalId) ||
+                  (tipDraftList.length === 0 && tips.length === 0)
+                }
                 onClick={confirmTipDialog}
               >
                 {tipDraftList.length === 0
