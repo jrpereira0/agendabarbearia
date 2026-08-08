@@ -450,9 +450,9 @@ export function ComandaDialog({
     number | null
   >(null);
   const [tipDialogOpen, setTipDialogOpen] = useState(false);
-  const [tipDraftList, setTipDraftList] = useState<TipEntry[]>([]);
   const [tipDraftCents, setTipDraftCents] = useState(0);
   const [tipDraftProfessionalId, setTipDraftProfessionalId] = useState("");
+  const [tipEditingId, setTipEditingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!appointment && !initialComandaId) return;
@@ -1003,18 +1003,26 @@ export function ComandaDialog({
     );
   }
 
-  function openTipDialog() {
-    setTipDraftList(tips.length > 0 ? [...tips] : []);
-    setTipDraftCents(0);
-    setTipDraftProfessionalId(
-      tipEligibleProfessionals.length === 1
-        ? tipEligibleProfessionals[0].id
-        : ""
-    );
+  function openTipDialog(tipToEdit?: TipEntry) {
+    if (tipToEdit) {
+      setTipEditingId(tipToEdit.id);
+      setTipDraftCents(tipToEdit.cents);
+      setTipDraftProfessionalId(tipToEdit.professionalId);
+    } else {
+      setTipEditingId(null);
+      setTipDraftCents(0);
+      setTipDraftProfessionalId(
+        tipEligibleProfessionals.length === 1
+          ? tipEligibleProfessionals[0].id
+          : ""
+      );
+    }
     setTipDialogOpen(true);
   }
 
-  function addTipDraft() {
+  async function confirmTipDialog() {
+    if (!canEdit || busy) return;
+
     if (tipDraftCents <= 0) {
       toast.error("Informe o valor da gorjeta.");
       return;
@@ -1024,46 +1032,40 @@ export function ComandaDialog({
       return;
     }
 
-    setTipDraftList((prev) => {
-      const existingIndex = prev.findIndex(
+    const previousTips = tips;
+    let nextTips: TipEntry[];
+
+    if (tipEditingId) {
+      nextTips = tips.map((tip) =>
+        tip.id === tipEditingId
+          ? {
+              ...tip,
+              cents: tipDraftCents,
+              professionalId: tipDraftProfessionalId,
+            }
+          : tip
+      );
+    } else {
+      const existingIndex = tips.findIndex(
         (tip) => tip.professionalId === tipDraftProfessionalId
       );
       if (existingIndex >= 0) {
-        // Mesmo barbeiro: soma no valor já cadastrado.
-        return prev.map((tip, index) =>
+        nextTips = tips.map((tip, index) =>
           index === existingIndex
             ? { ...tip, cents: tip.cents + tipDraftCents }
             : tip
         );
-      }
-      return [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          cents: tipDraftCents,
-          professionalId: tipDraftProfessionalId,
-        },
-      ];
-    });
-    setTipDraftCents(0);
-    if (tipEligibleProfessionals.length !== 1) {
-      setTipDraftProfessionalId("");
-    }
-  }
-
-  async function confirmTipDialog() {
-    if (!canEdit || busy) return;
-    
-    // Validar todas as gorjetas
-    for (const tip of tipDraftList) {
-      if (tip.cents > 0 && !tip.professionalId) {
-        toast.error("Escolha o barbeiro para cada gorjeta.");
-        return;
+      } else {
+        nextTips = [
+          ...tips,
+          {
+            id: crypto.randomUUID(),
+            cents: tipDraftCents,
+            professionalId: tipDraftProfessionalId,
+          },
+        ];
       }
     }
-
-    const previousTips = tips;
-    const nextTips = tipDraftList.filter((tip) => tip.cents > 0 && tip.professionalId);
 
     setTips(nextTips);
     const tipsTotal = nextTips.reduce((sum, tip) => sum + tip.cents, 0);
@@ -1077,33 +1079,27 @@ export function ComandaDialog({
       syncSinglePaymentToTotal(itemsSubtotalCents + prevTipsTotal);
       return;
     }
-    toast.success(
-      nextTips.length === 0 
-        ? "Gorjetas removidas." 
-        : nextTips.length === 1 
-          ? "Gorjeta salva." 
-          : "Gorjetas salvas."
-    );
+    toast.success(tipEditingId ? "Gorjeta atualizada." : "Gorjeta salva.");
   }
 
-  async function removeAllTips() {
+  async function removeTip(tipId: string) {
     if (!canEdit || busy) return;
 
     const previousTips = tips;
+    const nextTips = tips.filter((tip) => tip.id !== tipId);
 
-    setTips([]);
-    setTipDraftList([]);
-    syncSinglePaymentToTotal(itemsSubtotalCents);
-    setTipDialogOpen(false);
+    setTips(nextTips);
+    const tipsTotal = nextTips.reduce((sum, tip) => sum + tip.cents, 0);
+    syncSinglePaymentToTotal(itemsSubtotalCents + tipsTotal);
 
-    const ok = await persistItems(items, []);
+    const ok = await persistItems(items, nextTips);
     if (!ok) {
       setTips(previousTips);
       const prevTipsTotal = previousTips.reduce((sum, tip) => sum + tip.cents, 0);
       syncSinglePaymentToTotal(itemsSubtotalCents + prevTipsTotal);
       return;
     }
-    toast.success("Gorjetas removidas.");
+    toast.success("Gorjeta removida.");
   }
 
   const persistItems = async (
@@ -1836,7 +1832,7 @@ export function ComandaDialog({
                           size="sm"
                           className="booking-btn-ghost h-8"
                           disabled={busy}
-                          onClick={openTipDialog}
+                          onClick={() => openTipDialog()}
                         >
                           <Coins className="size-4" />
                           Gorjeta
@@ -2003,17 +1999,30 @@ export function ComandaDialog({
                             {formatPriceBRL(tip.cents)}
                           </span>
                           {canEdit && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
-                              onClick={openTipDialog}
-                              disabled={busy}
-                              title="Editar gorjetas"
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
+                            <>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0 text-[#b4b6bb] hover:bg-white/5 hover:text-[#ecf15e]"
+                                onClick={() => openTipDialog(tip)}
+                                disabled={busy}
+                                title="Editar gorjeta"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
+                                onClick={() => void removeTip(tip.id)}
+                                disabled={busy}
+                                title="Remover gorjeta"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </>
                           )}
                         </li>
                       ))}
@@ -2871,180 +2880,98 @@ export function ComandaDialog({
               </div>
               <div className="min-w-0 space-y-1">
                 <DialogTitle className="booking-display text-lg tracking-tight text-[#f5f5f5]">
-                  {tipDraftList.length === 0 ? "Adicionar gorjeta" : "Gorjetas"}
+                  {tipEditingId ? "Editar gorjeta" : "Adicionar gorjeta"}
                 </DialogTitle>
                 <DialogDescription>
-                  Escolha o valor e o barbeiro. Pode ter mais de uma na mesma
-                  comanda.
+                  Escolha o valor e o barbeiro. O barbeiro recebe 100% do valor.
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
-            {tipDraftList.length > 0 && (
-              <div className="space-y-2">
-                <Label>Gorjetas desta comanda</Label>
-                <ul className="space-y-2">
-                  {tipDraftList.map((tip, index) => (
-                    <li
-                      key={tip.id}
-                      className="flex items-center gap-3 rounded-lg border border-[var(--booking-border)] bg-[var(--booking-input)] px-3 py-2.5"
-                    >
-                      <Coins className="size-4 shrink-0 text-[var(--booking-accent,#ecf15e)]" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-[#f5f5f5]">
-                          {formatPriceBRL(tip.cents)}
-                        </p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {tipEligibleProfessionals.find(
-                            (pro) => pro.id === tip.professionalId
-                          )?.nickname ?? "barbeiro"}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 text-[#f87171] hover:bg-[rgb(248_113_113_/_12%)] hover:text-[#fca5a5]"
-                        onClick={() => {
-                          setTipDraftList((prev) =>
-                            prev.filter((_, i) => i !== index)
-                          );
-                        }}
-                        disabled={busy}
-                        title="Remover gorjeta"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <div className="space-y-4 rounded-xl border border-dashed border-[var(--booking-border)] p-4">
-              <p className="text-sm font-medium text-[#f5f5f5]">
-                {tipDraftList.length > 0 ? "Adicionar outra gorjeta" : "Nova gorjeta"}
-              </p>
-
-              <div className="space-y-2.5">
-                <Label htmlFor="tip-amount">Valor</Label>
-                <Input
-                  id="tip-amount"
-                  className="h-11 tabular-nums"
-                  inputMode="numeric"
-                  placeholder="R$ 0,00"
-                  disabled={busy}
-                  value={
-                    tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
-                  }
-                  onChange={(e) => {
-                    setTipDraftCents(parsePriceInput(e.target.value));
-                  }}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {TIP_QUICK_CENTS.map((cents) => (
-                    <button
-                      key={cents}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setTipDraftCents(cents)}
-                      className={cn(
-                        "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors booking-pick",
-                        tipDraftCents === cents && "booking-pick-active",
-                        busy && "opacity-50"
-                      )}
-                    >
-                      {formatPriceBRL(cents)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <Label htmlFor="tip-professional">Barbeiro</Label>
-                {tipEligibleProfessionals.length === 0 ? (
-                  <p className="booking-notice rounded-xl px-3 py-3 text-center text-sm">
-                    Nenhum barbeiro disponível.
-                  </p>
-                ) : (
-                  <Select
-                    value={tipDraftProfessionalId}
-                    onValueChange={setTipDraftProfessionalId}
-                    disabled={busy}
-                  >
-                    <SelectTrigger id="tip-professional" className="h-11 w-full">
-                      <SelectValue placeholder="Quem recebe a gorjeta?" />
-                    </SelectTrigger>
-                    <SelectContent className={ADMIN_SURFACE.popover}>
-                      {tipEligibleProfessionals.map((pro) => (
-                        <SelectItem key={pro.id} value={pro.id}>
-                          {pro.nickname}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                className="booking-btn-ghost w-full"
-                disabled={
-                  busy ||
-                  tipDraftCents <= 0 ||
-                  !tipDraftProfessionalId ||
-                  tipEligibleProfessionals.length === 0
+            <div className="space-y-2.5">
+              <Label htmlFor="tip-amount">Valor</Label>
+              <Input
+                id="tip-amount"
+                className="h-11 tabular-nums"
+                inputMode="numeric"
+                placeholder="R$ 0,00"
+                disabled={busy}
+                value={
+                  tipDraftCents > 0 ? formatPriceBRL(tipDraftCents) : ""
                 }
-                onClick={addTipDraft}
-              >
-                <Plus className="size-4" />
-                Adicionar gorjeta
-              </Button>
+                onChange={(e) => {
+                  setTipDraftCents(parsePriceInput(e.target.value));
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                {TIP_QUICK_CENTS.map((cents) => (
+                  <button
+                    key={cents}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setTipDraftCents(cents)}
+                    className={cn(
+                      "h-9 rounded-lg border px-3 text-sm tabular-nums transition-colors booking-pick",
+                      tipDraftCents === cents && "booking-pick-active",
+                      busy && "opacity-50"
+                    )}
+                  >
+                    {formatPriceBRL(cents)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <Label htmlFor="tip-professional">Barbeiro</Label>
+              {tipEligibleProfessionals.length === 0 ? (
+                <p className="booking-notice rounded-xl px-3 py-3 text-center text-sm">
+                  Nenhum barbeiro disponível.
+                </p>
+              ) : (
+                <Select
+                  value={tipDraftProfessionalId}
+                  onValueChange={setTipDraftProfessionalId}
+                  disabled={busy}
+                >
+                  <SelectTrigger id="tip-professional" className="h-11 w-full">
+                    <SelectValue placeholder="Quem recebe a gorjeta?" />
+                  </SelectTrigger>
+                  <SelectContent className={ADMIN_SURFACE.popover}>
+                    {tipEligibleProfessionals.map((pro) => (
+                      <SelectItem key={pro.id} value={pro.id}>
+                        {pro.nickname}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
-          <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-between sm:px-5">
-            {tips.length > 0 && tipDraftList.length === 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                className="booking-btn-danger"
-                disabled={busy}
-                onClick={removeAllTips}
-              >
-                Remover todas
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex flex-col-reverse gap-2 sm:flex-row">
-              <Button
-                type="button"
-                variant="outline"
-                className="booking-btn-ghost"
-                disabled={busy}
-                onClick={() => setTipDialogOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                className="booking-btn-primary"
-                disabled={
-                  busy ||
-                  tipDraftList.some((t) => t.cents <= 0 || !t.professionalId) ||
-                  (tipDraftList.length === 0 && tips.length === 0)
-                }
-                onClick={confirmTipDialog}
-              >
-                {tipDraftList.length === 0
-                  ? "Remover gorjetas"
-                  : tipDraftList.length === 1
-                    ? "Salvar gorjeta"
-                    : `Salvar ${tipDraftList.length} gorjetas`}
-              </Button>
-            </div>
+          <div className="booking-footer flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end sm:px-5">
+            <Button
+              type="button"
+              variant="outline"
+              className="booking-btn-ghost"
+              disabled={busy}
+              onClick={() => setTipDialogOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              className="booking-btn-primary"
+              disabled={
+                busy ||
+                tipDraftCents <= 0 ||
+                !tipDraftProfessionalId ||
+                tipEligibleProfessionals.length === 0
+              }
+              onClick={() => void confirmTipDialog()}
+            >
+              {tipEditingId ? "Salvar alteração" : "Salvar gorjeta"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
