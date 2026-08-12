@@ -847,7 +847,13 @@ export function ComandaDialog({
 
   if (!appointment && !initialComandaId) return null;
 
-  const isWalkIn = Boolean(comanda?.isWalkIn || (!appointment && initialComandaId));
+  // Com appointment da agenda: nunca trate como venda rápida só porque o
+  // WhatsApp veio vazio (cliente sem cadastro). Venda rápida = só comanda avulsa.
+  const isWalkIn = Boolean(
+    appointment
+      ? Boolean(comanda?.isWalkIn)
+      : comanda?.isWalkIn || Boolean(initialComandaId)
+  );
   const linkedAppointments = linkedAppointmentsForMemo;
 
   const customerName = comanda
@@ -1466,8 +1472,9 @@ export function ComandaDialog({
     if (closing) return;
 
     const id = comanda?.id ?? initialComandaId ?? null;
-    const walkIn =
-      Boolean(comanda?.isWalkIn) || Boolean(!appointment && initialComandaId);
+    const walkIn = appointment
+      ? Boolean(comanda?.isWalkIn)
+      : Boolean(comanda?.isWalkIn || initialComandaId);
     const empty =
       items.length === 0 && tips.length === 0 && (comanda?.status ?? "open") === "open";
 

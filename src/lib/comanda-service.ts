@@ -160,7 +160,11 @@ function mapComandaRow(
   const primary = linkedAppointments.find((linked) => !linked.isSqueezeIn);
   const validSqueezeAppointmentIds =
     customerFromAppointment.validSqueezeAppointmentIds ?? new Set<string>();
-  const isWalkIn = !row.customer_whatsapp;
+  // Venda rápida = sem cliente e sem horário. Cliente sem cadastro (WhatsApp
+  // nulo) com agendamento NÃO é venda rápida — precisa de serviço/gorjeta.
+  const hasLinkedSchedule = linkedAppointments.some((linked) => !linked.isSqueezeIn);
+  const isWalkIn =
+    !row.customer_whatsapp && !row.appointment_id && !hasLinkedSchedule;
   const customerFirstName = isWalkIn
     ? "Venda"
     : (apt?.customer_first_name ?? customerFromAppointment.customerFirstName);
