@@ -3,7 +3,14 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lookupCustomerByWhatsapp } from "@/lib/lookup-customer";
 import { requireAdmin } from "@/lib/require-admin";
-import { matchesCustomerSearch, capitalizePersonName } from "@/lib/text";
+import {
+  matchesCustomerSearch,
+  capitalizePersonName,
+  parseCustomerSearchQuery,
+  rankCustomerSearch,
+  canRunCustomerSearch,
+  nameSearchSqlPrefixes,
+} from "@/lib/text";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
@@ -99,8 +106,8 @@ export async function lookupCustomerForAdmin(
 }
 
 /**
- * Busca clientes por nome ou pedaço do WhatsApp (ex.: últimos 4 dígitos).
- * Usado no modal de agendamento para escolher entre opções.
+ * Busca clientes por nome (2+ letras, sem precisar de acento) ou
+ * pedaço do WhatsApp (3+ dígitos em qualquer posição).
  */
 export async function searchCustomersForAdmin(
   rawQuery: string
@@ -114,7 +121,7 @@ export async function searchCustomersForAdmin(
   }
 
   const q = rawQuery.trim();
-  if (q.length < 2) {
+  if (!canRunCustomerSearch(q)) {
     return { ok: true, customers: [] };
   }
 
@@ -123,9 +130,7 @@ export async function searchCustomersForAdmin(
     return { ok: false, error: "Sistema indisponível no momento." };
   }
 
-  const digits = q.replace(/\D/g, "");
-  const hasLetters = /[a-zA-ZÀ-ÿ]/.test(q);
-  const safeTerm = q.replace(/[%_,]/g, "").slice(0, 40);
+  const { tokens, digits, isPhoneHeavy } = parseCustomerSearchQuery(q);
 
   let rows: {
     id: string;
@@ -134,33 +139,53 @@ export async function searchCustomersForAdmin(
     whatsapp: string;
   }[] = [];
 
-  if (!hasLetters && digits.length >= 2) {
+  if (isPhoneHeavy || (digits.length >= 3 && tokens.length === 0)) {
     const { data, error } = await admin
       .from("customers")
       .select("id, first_name, last_name, whatsapp")
-      .like("whatsapp", `%${digits}`)
+      .like("whatsapp", `%${digits}%`)
       .order("first_name")
-      .limit(30);
+      .limit(80);
 
     if (error) {
       return { ok: false, error: "Não foi possível buscar clientes." };
     }
     rows = data ?? [];
   } else {
-    const filters = [
-      `first_name.ilike.%${safeTerm}%`,
-      `last_name.ilike.%${safeTerm}%`,
-    ];
-    if (digits.length >= 2) {
-      filters.push(`whatsapp.like.%${digits}%`);
+    const filters = new Set<string>();
+
+    for (const token of tokens) {
+      const safe = token.replace(/[%_,]/g, "").slice(0, 40);
+      if (safe.length < 1) continue;
+
+      // 1ª letra (+ variantes com acento): traz candidatos; o filtro
+      // fino ignora acento em matchesCustomerSearch ("jose" → "José").
+      for (const prefix of nameSearchSqlPrefixes(safe)) {
+        filters.add(`first_name.ilike.${prefix}`);
+        filters.add(`last_name.ilike.${prefix}`);
+      }
+
+      // Também tenta o pedaço digitado (quando o cadastro está sem acento).
+      if (safe.length >= 2) {
+        filters.add(`first_name.ilike.%${safe}%`);
+        filters.add(`last_name.ilike.%${safe}%`);
+      }
+    }
+
+    if (digits.length >= 3) {
+      filters.add(`whatsapp.like.%${digits}%`);
+    }
+
+    if (filters.size === 0) {
+      return { ok: true, customers: [] };
     }
 
     const { data, error } = await admin
       .from("customers")
       .select("id, first_name, last_name, whatsapp")
-      .or(filters.join(","))
+      .or([...filters].join(","))
       .order("first_name")
-      .limit(40);
+      .limit(120);
 
     if (error) {
       return { ok: false, error: "Não foi possível buscar clientes." };
@@ -176,6 +201,13 @@ export async function searchCustomersForAdmin(
       whatsapp: row.whatsapp,
     }))
     .filter((customer) => matchesCustomerSearch(customer, q))
+    .sort((a, b) => {
+      const rankDiff = rankCustomerSearch(a, q) - rankCustomerSearch(b, q);
+      if (rankDiff !== 0) return rankDiff;
+      const nameA = `${a.firstName} ${a.lastName}`;
+      const nameB = `${b.firstName} ${b.lastName}`;
+      return nameA.localeCompare(nameB, "pt-BR");
+    })
     .slice(0, 8);
 
   return { ok: true, customers };

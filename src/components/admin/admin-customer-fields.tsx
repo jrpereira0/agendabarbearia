@@ -21,7 +21,7 @@ import {
   type AdminCustomerMatch,
 } from "@/app/admin/(panel)/agenda/lookup-customer-action";
 import { formatWhatsapp } from "@/lib/format";
-import { capitalizePersonName } from "@/lib/text";
+import { capitalizePersonName, canRunCustomerSearch, normalizeText } from "@/lib/text";
 import {
   normalizeWhatsapp,
   whatsappLookupDelayMs,
@@ -85,6 +85,116 @@ function CustomerAvatar({
   );
 }
 
+/** Destaca no texto os pedaços que batem com a busca (ignora acento). */
+function HighlightMatch({
+  text,
+  query,
+  className,
+}: {
+  text: string;
+  query: string;
+  className?: string;
+}) {
+  const tokens = normalizeText(query)
+    .split(/\s+/)
+    .map((t) => t.replace(/\d/g, ""))
+    .filter((t) => t.length >= 2);
+
+  if (tokens.length === 0 || !text) {
+    return <span className={className}>{text}</span>;
+  }
+
+  const lower = normalizeText(text);
+  let firstIdx = -1;
+  let firstLen = 0;
+  for (const token of tokens) {
+    const idx = lower.indexOf(token);
+    if (idx >= 0 && (firstIdx < 0 || idx < firstIdx)) {
+      firstIdx = idx;
+      firstLen = token.length;
+    }
+  }
+
+  if (firstIdx < 0) {
+    return <span className={className}>{text}</span>;
+  }
+
+  const before = text.slice(0, firstIdx);
+  const match = text.slice(firstIdx, firstIdx + firstLen);
+  const after = text.slice(firstIdx + firstLen);
+
+  return (
+    <span className={className}>
+      {before}
+      <mark className="rounded-sm bg-[var(--booking-accent,#ecf15e)]/25 px-0.5 text-inherit">
+        {match}
+      </mark>
+      {after}
+    </span>
+  );
+}
+
+function HighlightPhone({
+  whatsapp,
+  query,
+}: {
+  whatsapp: string;
+  query: string;
+}) {
+  const formatted = formatWhatsapp(whatsapp);
+  const digits = query.replace(/\D/g, "");
+  if (digits.length < 3) {
+    return (
+      <span className="truncate text-xs tabular-nums text-muted-foreground">
+        {formatted}
+      </span>
+    );
+  }
+
+  const phoneDigits = whatsapp.replace(/\D/g, "");
+  const digitIdx = phoneDigits.indexOf(digits);
+  if (digitIdx < 0) {
+    return (
+      <span className="truncate text-xs tabular-nums text-muted-foreground">
+        {formatted}
+      </span>
+    );
+  }
+
+  // Mapeia índice nos dígitos → posição no texto formatado.
+  let digitCount = 0;
+  let start = -1;
+  let end = -1;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i]!)) {
+      if (digitCount === digitIdx) start = i;
+      if (digitCount === digitIdx + digits.length - 1) {
+        end = i + 1;
+        break;
+      }
+      digitCount += 1;
+    }
+  }
+
+  if (start < 0 || end < 0) {
+    return (
+      <span className="truncate text-xs tabular-nums text-muted-foreground">
+        {formatted}
+      </span>
+    );
+  }
+
+  return (
+    <span className="truncate text-xs tabular-nums text-muted-foreground">
+      {formatted.slice(0, start)}
+      <mark className="rounded-sm bg-[var(--booking-accent,#ecf15e)]/25 px-0.5 text-inherit">
+        {formatted.slice(start, end)}
+      </mark>
+      {formatted.slice(end)}
+    </span>
+  );
+}
+
 export function AdminCustomerFields({
   firstName,
   lastName,
@@ -103,6 +213,7 @@ export function AdminCustomerFields({
   const [suggestions, setSuggestions] = useState<AdminCustomerMatch[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [customerFound, setCustomerFound] = useState<boolean | null>(() =>
     hasCustomerData(firstName, lastName, whatsapp) ? true : null
   );
@@ -111,6 +222,9 @@ export function AdminCustomerFields({
   const mountedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [wasEnabled, setWasEnabled] = useState(enabled);
+
+  const trimmedQuery = searchQuery.trim();
+  const showSearchResults = mode === "search" && canRunCustomerSearch(trimmedQuery);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -123,7 +237,7 @@ export function AdminCustomerFields({
     if (!enabled) {
       lastLookupDigitsRef.current = "";
       lastSearchRef.current = "";
-    } else if (searchQuery.trim().length < 2) {
+    } else if (!canRunCustomerSearch(searchQuery)) {
       lastSearchRef.current = "";
     }
   }, [enabled, searchQuery]);
@@ -136,6 +250,7 @@ export function AdminCustomerFields({
       setCustomerFound(null);
       setLookupLoading(false);
       setSearchLoading(false);
+      setActiveIndex(-1);
       setMode("search");
     } else if (hasCustomerData(firstName, lastName, whatsapp)) {
       setMode("selected");
@@ -158,6 +273,7 @@ export function AdminCustomerFields({
     setSearchQuery("");
     setSuggestions([]);
     setSearchLoading(false);
+    setActiveIndex(-1);
     lastSearchRef.current = "";
     setMode("search");
     if (options?.focus !== false) {
@@ -182,6 +298,7 @@ export function AdminCustomerFields({
     }
     setSearchQuery("");
     setSuggestions([]);
+    setActiveIndex(-1);
     setMode("form");
   }
 
@@ -193,6 +310,7 @@ export function AdminCustomerFields({
     lastSearchRef.current = "";
     setSearchQuery("");
     setSuggestions([]);
+    setActiveIndex(-1);
     setCustomerFound(true);
     setMode("selected");
   }
@@ -209,17 +327,58 @@ export function AdminCustomerFields({
     }
   }
 
-  const searchQueryTooShort = enabled && searchQuery.trim().length < 2;
-  if (searchQueryTooShort) {
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showSearchResults || suggestions.length === 0) {
+      if (e.key === "Escape") {
+        setSearchQuery("");
+        setSuggestions([]);
+        setActiveIndex(-1);
+      }
+      return;
+    }
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((prev) =>
+        prev < suggestions.length - 1 ? prev + 1 : 0
+      );
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((prev) =>
+        prev <= 0 ? suggestions.length - 1 : prev - 1
+      );
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const pick =
+        activeIndex >= 0 ? suggestions[activeIndex] : suggestions[0];
+      if (pick) selectCustomer(pick);
+      return;
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setSearchQuery("");
+      setSuggestions([]);
+      setActiveIndex(-1);
+    }
+  }
+
+  const searchQueryTooShort =
+    enabled && trimmedQuery.length > 0 && !canRunCustomerSearch(trimmedQuery);
+  if (searchQueryTooShort || (enabled && trimmedQuery.length === 0)) {
     if (suggestions.length > 0) setSuggestions([]);
     if (searchLoading) setSearchLoading(false);
+    if (activeIndex !== -1) setActiveIndex(-1);
   }
 
   useEffect(() => {
     if (!enabled || mode !== "search") return;
 
     const q = searchQuery.trim();
-    if (q.length < 2) return;
+    if (!canRunCustomerSearch(q)) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -234,9 +393,11 @@ export function AdminCustomerFields({
           if (!result.ok) {
             toast.error(result.error);
             setSuggestions([]);
+            setActiveIndex(-1);
             return;
           }
           setSuggestions(result.customers);
+          setActiveIndex(result.customers.length > 0 ? 0 : -1);
         })
         .catch(() => {
           if (!cancelled && mountedRef.current) {
@@ -246,7 +407,7 @@ export function AdminCustomerFields({
         .finally(() => {
           if (!cancelled && mountedRef.current) setSearchLoading(false);
         });
-    }, 280);
+    }, 180);
 
     return () => {
       cancelled = true;
@@ -318,9 +479,6 @@ export function AdminCustomerFields({
     onLastNameChange,
   ]);
 
-  const trimmedQuery = searchQuery.trim();
-  const showSearchResults = mode === "search" && trimmedQuery.length >= 2;
-
   return (
     <div className="space-y-4">
       {hint ? (
@@ -378,18 +536,38 @@ export function AdminCustomerFields({
               ref={searchInputRef}
               type="search"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Nome ou WhatsApp do cliente..."
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setActiveIndex(-1);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Nome, sobrenome ou WhatsApp…"
               autoComplete="off"
-              className="h-11 pl-10 pr-3 [&::-webkit-search-cancel-button]:hidden"
+              aria-autocomplete="list"
+              aria-controls={
+                showSearchResults ? `${idPrefix}-search-list` : undefined
+              }
+              aria-activedescendant={
+                activeIndex >= 0
+                  ? `${idPrefix}-search-option-${activeIndex}`
+                  : undefined
+              }
+              className="h-11 pl-10 pr-10 [&::-webkit-search-cancel-button]:hidden"
             />
+            {searchLoading && (
+              <Loader2 className="absolute right-3.5 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
           </div>
 
           {!showSearchResults && (
             <div className="booking-notice rounded-xl px-4 py-5 text-center">
               <UserRoundSearch className="mx-auto size-5 opacity-80" />
               <p className="mt-2 text-sm">
-                Digite pelo menos 2 letras ou os últimos dígitos do WhatsApp.
+                Digite 2 letras do nome (sem acento) ou 3 dígitos do
+                WhatsApp.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Ex.: Jo, Silva ou 998
               </p>
             </div>
           )}
@@ -402,31 +580,62 @@ export function AdminCustomerFields({
                   Buscando...
                 </div>
               ) : suggestions.length > 0 ? (
-                <ul className="max-h-52 divide-y overflow-y-auto">
-                  {suggestions.map((customer) => (
-                    <li key={customer.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectCustomer(customer)}
-                        className="booking-pick flex w-full items-center gap-3 px-3.5 py-3 text-left"
-                      >
-                        <CustomerAvatar
-                          firstName={customer.firstName}
-                          lastName={customer.lastName}
-                          className="size-9 text-[11px]"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">
-                            {customer.firstName} {customer.lastName}
-                          </p>
-                          <p className="truncate text-xs tabular-nums text-muted-foreground">
-                            {formatWhatsapp(customer.whatsapp)}
-                          </p>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <div className="flex items-center justify-between gap-2 border-b px-3.5 py-2 text-xs text-muted-foreground">
+                    <span>
+                      {suggestions.length}{" "}
+                      {suggestions.length === 1
+                        ? "cliente encontrado"
+                        : "clientes encontrados"}
+                    </span>
+                    <span className="hidden sm:inline">↑↓ Enter</span>
+                  </div>
+                  <ul
+                    id={`${idPrefix}-search-list`}
+                    role="listbox"
+                    className="max-h-56 divide-y overflow-y-auto"
+                  >
+                    {suggestions.map((customer, index) => {
+                      const selected = index === activeIndex;
+                      return (
+                        <li
+                          key={customer.id}
+                          role="option"
+                          aria-selected={selected}
+                        >
+                          <button
+                            type="button"
+                            id={`${idPrefix}-search-option-${index}`}
+                            onClick={() => selectCustomer(customer)}
+                            onMouseEnter={() => setActiveIndex(index)}
+                            className={cn(
+                              "booking-pick flex w-full items-center gap-3 px-3.5 py-3 text-left",
+                              selected && "booking-pick-active"
+                            )}
+                          >
+                            <CustomerAvatar
+                              firstName={customer.firstName}
+                              lastName={customer.lastName}
+                              className="size-9 text-[11px]"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium">
+                                <HighlightMatch
+                                  text={`${customer.firstName} ${customer.lastName}`.trim()}
+                                  query={trimmedQuery}
+                                />
+                              </p>
+                              <HighlightPhone
+                                whatsapp={customer.whatsapp}
+                                query={trimmedQuery}
+                              />
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
               ) : (
                 <div className="booking-notice rounded-none border-0 px-4 py-4 text-center">
                   <p className="text-sm">
@@ -434,6 +643,9 @@ export function AdminCustomerFields({
                     <span className="font-medium">
                       &ldquo;{trimmedQuery}&rdquo;
                     </span>
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Tente outras letras, 3 dígitos do zap ou cadastre novo.
                   </p>
                 </div>
               )}
@@ -475,7 +687,8 @@ export function AdminCustomerFields({
 
           {customerFound === false && (
             <div className="booking-notice rounded-xl px-3 py-2.5 text-xs">
-              WhatsApp novo — preencha o nome para cadastrar. Sobrenome é opcional.
+              WhatsApp novo — preencha o nome para cadastrar. Sobrenome é
+              opcional.
             </div>
           )}
 

@@ -86,33 +86,45 @@ type NewAppointmentDialogProps = {
   onCreated?: (appointment: AppointmentItem) => void;
 };
 
+function stepOrder(needsProfessionalStep: boolean, presetFromGrid: boolean): Step[] {
+  if (presetFromGrid) return ["client", "services"];
+  if (needsProfessionalStep) {
+    return ["professional", "client", "services", "time"];
+  }
+  return ["client", "services", "time"];
+}
+
 function initialStep(
-  isOwner: boolean,
-  defaultProfessionalId: string | null,
+  needsProfessionalStep: boolean,
   presetFromGrid: boolean
 ): Step {
-  if (presetFromGrid) return "services";
-  if (isOwner && !defaultProfessionalId) return "professional";
-  return "services";
+  if (presetFromGrid) return "client";
+  if (needsProfessionalStep) return "professional";
+  return "client";
 }
 
 function stepNumber(
   step: Step,
-  isOwner: boolean,
+  needsProfessionalStep: boolean,
   presetFromGrid: boolean
 ): number {
-  if (presetFromGrid) {
-    return step === "client" ? 2 : 1;
-  }
-  const order: Step[] = isOwner
-    ? ["professional", "services", "time", "client"]
-    : ["services", "time", "client"];
-  return order.indexOf(step) + 1;
+  return stepOrder(needsProfessionalStep, presetFromGrid).indexOf(step) + 1;
 }
 
-function totalSteps(isOwner: boolean, presetFromGrid: boolean): number {
-  if (presetFromGrid) return 2;
-  return isOwner ? 4 : 3;
+function totalSteps(
+  needsProfessionalStep: boolean,
+  presetFromGrid: boolean
+): number {
+  return stepOrder(needsProfessionalStep, presetFromGrid).length;
+}
+
+function isLastBookingStep(
+  step: Step,
+  needsProfessionalStep: boolean,
+  presetFromGrid: boolean
+): boolean {
+  const order = stepOrder(needsProfessionalStep, presetFromGrid);
+  return order[order.length - 1] === step;
 }
 
 function getStepMeta(
@@ -149,11 +161,13 @@ export function BookingContextBar({
   date,
   startTime,
   services = [],
+  customerName,
 }: {
   professional: ProfessionalOption;
   date: string;
   startTime?: string | null;
   services?: ServiceOption[];
+  customerName?: string | null;
 }) {
   const whenParts = [
     formatDateBR(date),
@@ -170,6 +184,12 @@ export function BookingContextBar({
         : `${services.length} serviços`;
   }
 
+  const detailParts = [
+    customerName?.trim() || null,
+    whenParts.join(" · ") || null,
+    serviceLabel,
+  ].filter(Boolean);
+
   return (
     <div className="booking-context flex items-center gap-2.5 rounded-xl px-2.5 py-2">
       <ProfessionalAvatar
@@ -181,8 +201,7 @@ export function BookingContextBar({
       <div className="min-w-0 flex-1 leading-snug">
         <p className="truncate text-sm font-medium">{professional.nickname}</p>
         <p className="truncate text-xs text-muted-foreground">
-          {whenParts.join(" · ")}
-          {serviceLabel ? ` · ${serviceLabel}` : ""}
+          {detailParts.join(" · ")}
         </p>
       </div>
     </div>
@@ -398,7 +417,8 @@ export function NewAppointmentDialog({
   const presetFromGrid = Boolean(
     !isEncaixe && defaultProfessionalId && defaultStartTime
   );
-  const [step, setStep] = useState<Step>("services");
+  const needsProfessionalStep = isOwner && !defaultProfessionalId && !presetFromGrid;
+  const [step, setStep] = useState<Step>("client");
   const [professionalId, setProfessionalId] = useState("");
   const [serviceIds, setServiceIds] = useState<string[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
@@ -414,8 +434,13 @@ export function NewAppointmentDialog({
   const [slotsError, setSlotsError] = useState<string | null>(null);
 
   const selectedProfessional = professionals.find((p) => p.id === professionalId);
-  const stepsTotal = totalSteps(isOwner, presetFromGrid);
-  const currentStep = stepNumber(step, isOwner, presetFromGrid);
+  const stepsTotal = totalSteps(needsProfessionalStep, presetFromGrid);
+  const currentStep = stepNumber(step, needsProfessionalStep, presetFromGrid);
+  const lastStep = isLastBookingStep(
+    step,
+    needsProfessionalStep,
+    presetFromGrid
+  );
 
   const availableServices = useMemo(() => {
     const allowed = new Set(selectedProfessional?.serviceIds ?? []);
@@ -494,7 +519,7 @@ export function NewAppointmentDialog({
       const proId =
         defaultProfessionalId ??
         (isOwner ? "" : professionals[0]?.id ?? "");
-      setStep(initialStep(isOwner, defaultProfessionalId, presetFromGrid));
+      setStep(initialStep(needsProfessionalStep, presetFromGrid));
       setProfessionalId(proId);
       setServiceIds([]);
       setServiceSearch("");
@@ -720,13 +745,28 @@ export function NewAppointmentDialog({
     }
   }
 
+  function validateClientStep(): boolean {
+    if (!firstName.trim()) {
+      toast.error("Informe o nome do cliente.");
+      return false;
+    }
+    if (!withoutRegistration && !whatsapp.replace(/\D/g, "")) {
+      toast.error("Preencha o WhatsApp ou marque cliente sem cadastro.");
+      return false;
+    }
+    return true;
+  }
+
   function goBack() {
-    if (step === "client") {
-      setStep(presetFromGrid ? "services" : "time");
+    if (step === "time") {
+      setStep("services");
       return;
     }
-    if (step === "time") setStep("services");
-    else if (step === "services" && isOwner && !presetFromGrid) {
+    if (step === "services") {
+      setStep("client");
+      return;
+    }
+    if (step === "client" && needsProfessionalStep) {
       setStep("professional");
     }
   }
@@ -737,6 +777,12 @@ export function NewAppointmentDialog({
         toast.error("Escolha o barbeiro.");
         return;
       }
+      setStep("client");
+      return;
+    }
+
+    if (step === "client") {
+      if (!validateClientStep()) return;
       setStep("services");
       return;
     }
@@ -748,7 +794,7 @@ export function NewAppointmentDialog({
       }
       if (presetFromGrid && startTime) {
         if (!validatePresetTimeForServices()) return;
-        setStep("client");
+        void submitAppointment();
         return;
       }
       setStep("time");
@@ -766,17 +812,18 @@ export function NewAppointmentDialog({
         );
         return;
       }
-      setStep("client");
+      void submitAppointment();
     }
   }
 
   async function submitAppointment() {
-    if (!firstName.trim()) {
-      toast.error("Informe o nome do cliente.");
+    if (!validateClientStep()) return;
+    if (serviceIds.length === 0) {
+      toast.error("Escolha pelo menos um serviço.");
       return;
     }
-    if (!withoutRegistration && !whatsapp.replace(/\D/g, "")) {
-      toast.error("Preencha o WhatsApp ou marque cliente sem cadastro.");
+    if (!startTime) {
+      toast.error("Escolha um horário.");
       return;
     }
 
@@ -835,9 +882,9 @@ export function NewAppointmentDialog({
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleClientContinue(e: React.FormEvent) {
     e.preventDefault();
-    await submitAppointment();
+    goNext();
   }
 
   const stepMeta = getStepMeta(step, presetFromGrid, isEncaixe);
@@ -853,8 +900,12 @@ export function NewAppointmentDialog({
 
   const showBack =
     step === "time" ||
-    step === "client" ||
-    (step === "services" && isOwner && !presetFromGrid);
+    step === "services" ||
+    (step === "client" && needsProfessionalStep);
+
+  const confirmLabel = isEncaixe
+    ? "Confirmar encaixe"
+    : "Confirmar agendamento";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -891,13 +942,20 @@ export function NewAppointmentDialog({
               professional={selectedProfessional}
               date={date}
               startTime={
-                step === "services"
-                  ? presetFromGrid
-                    ? startTime
-                    : null
+                step === "client" || (step === "services" && !presetFromGrid)
+                  ? null
                   : startTime
               }
-              services={step === "services" ? [] : selectedServices}
+              services={
+                step === "client" || step === "services"
+                  ? []
+                  : selectedServices
+              }
+              customerName={
+                step !== "client" && firstName.trim()
+                  ? [firstName.trim(), lastName.trim()].filter(Boolean).join(" ")
+                  : null
+              }
             />
           )}
         </DialogHeader>
@@ -1063,7 +1121,7 @@ export function NewAppointmentDialog({
           {step === "client" && selectedProfessional && (
             <form
               id="new-appointment-form"
-              onSubmit={handleSubmit}
+              onSubmit={handleClientContinue}
               className="flex flex-col gap-5"
             >
               {isEncaixe &&
@@ -1171,27 +1229,15 @@ export function NewAppointmentDialog({
         </div>
 
         <div className="booking-footer min-w-0 shrink-0 overflow-hidden rounded-b-2xl border-t px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
-          {step === "client" ? (
-            <ModalActions
-              showBack
-              onBack={goBack}
-              onCancel={() => onOpenChange(false)}
-              primaryLabel={isEncaixe ? "Confirmar encaixe" : "Confirmar agendamento"}
-              onPrimary={() => {
-                void submitAppointment();
-              }}
-              loading={saving}
-            />
-          ) : (
-            <ModalActions
-              showBack={showBack}
-              onBack={goBack}
-              onCancel={() => onOpenChange(false)}
-              primaryLabel="Continuar"
-              onPrimary={goNext}
-              summary={servicesFooterSummary}
-            />
-          )}
+          <ModalActions
+            showBack={showBack}
+            onBack={goBack}
+            onCancel={() => onOpenChange(false)}
+            primaryLabel={lastStep ? confirmLabel : "Continuar"}
+            onPrimary={goNext}
+            loading={saving}
+            summary={servicesFooterSummary}
+          />
         </div>
       </DialogContent>
     </Dialog>
