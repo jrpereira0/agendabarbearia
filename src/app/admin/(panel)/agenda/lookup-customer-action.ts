@@ -1,7 +1,7 @@
 "use server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { lookupCustomerByWhatsapp } from "@/lib/lookup-customer";
+import { getCustomerByWhatsapp } from "@/lib/lookup-customer";
 import { requireAdmin } from "@/lib/require-admin";
 import {
   matchesCustomerSearch,
@@ -17,7 +17,13 @@ import {
 } from "@/lib/whatsapp";
 
 export type AdminCustomerLookupResult =
-  | { ok: true; found: true; firstName: string; lastName: string }
+  | {
+      ok: true;
+      found: true;
+      firstName: string;
+      lastName: string;
+      creditBalanceCents: number;
+    }
   | { ok: true; found: false }
   | { ok: false; error: string };
 
@@ -26,6 +32,7 @@ export type AdminCustomerMatch = {
   firstName: string;
   lastName: string;
   whatsapp: string;
+  creditBalanceCents: number;
 };
 
 export type AdminCustomerSearchResult =
@@ -92,16 +99,20 @@ export async function lookupCustomerForAdmin(
     return { ok: false, error: WHATSAPP_INVALID_MESSAGE };
   }
 
-  const result = await lookupCustomerByWhatsapp(whatsapp);
-  if (!result.found) {
+  const result = await getCustomerByWhatsapp(whatsapp);
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+  if (!result.found || !result.customer) {
     return { ok: true, found: false };
   }
 
   return {
     ok: true,
     found: true,
-    firstName: result.firstName,
-    lastName: result.lastName,
+    firstName: result.customer.firstName,
+    lastName: result.customer.lastName,
+    creditBalanceCents: result.customer.creditBalanceCents,
   };
 }
 
@@ -137,12 +148,13 @@ export async function searchCustomersForAdmin(
     first_name: string;
     last_name: string;
     whatsapp: string;
+    credit_balance_cents: number | null;
   }[] = [];
 
   if (isPhoneHeavy || (digits.length >= 3 && tokens.length === 0)) {
     const { data, error } = await admin
       .from("customers")
-      .select("id, first_name, last_name, whatsapp")
+      .select("id, first_name, last_name, whatsapp, credit_balance_cents")
       .like("whatsapp", `%${digits}%`)
       .order("first_name")
       .limit(80);
@@ -182,7 +194,7 @@ export async function searchCustomersForAdmin(
 
     const { data, error } = await admin
       .from("customers")
-      .select("id, first_name, last_name, whatsapp")
+      .select("id, first_name, last_name, whatsapp, credit_balance_cents")
       .or([...filters].join(","))
       .order("first_name")
       .limit(120);
@@ -199,6 +211,7 @@ export async function searchCustomersForAdmin(
       firstName: capitalizePersonName(row.first_name),
       lastName: capitalizePersonName(row.last_name),
       whatsapp: row.whatsapp,
+      creditBalanceCents: row.credit_balance_cents ?? 0,
     }))
     .filter((customer) => matchesCustomerSearch(customer, q))
     .sort((a, b) => {

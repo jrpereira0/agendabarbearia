@@ -10,17 +10,19 @@ import {
   User,
   UserPlus,
   UserRoundSearch,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  getCustomerAgendaSummary,
   lookupCustomerForAdmin,
   searchCustomersForAdmin,
   type AdminCustomerMatch,
 } from "@/app/admin/(panel)/agenda/lookup-customer-action";
-import { formatWhatsapp } from "@/lib/format";
+import { formatPriceBRL, formatWhatsapp } from "@/lib/format";
 import { capitalizePersonName, canRunCustomerSearch, normalizeText } from "@/lib/text";
 import {
   normalizeWhatsapp,
@@ -214,6 +216,8 @@ export function AdminCustomerFields({
   const [searchLoading, setSearchLoading] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [creditBalanceCents, setCreditBalanceCents] = useState(0);
+  const [creditLoading, setCreditLoading] = useState(false);
   const [customerFound, setCustomerFound] = useState<boolean | null>(() =>
     hasCustomerData(firstName, lastName, whatsapp) ? true : null
   );
@@ -221,6 +225,7 @@ export function AdminCustomerFields({
   const lastSearchRef = useRef("");
   const mountedRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const creditFromSelectRef = useRef(false);
   const [wasEnabled, setWasEnabled] = useState(enabled);
 
   const trimmedQuery = searchQuery.trim();
@@ -251,12 +256,15 @@ export function AdminCustomerFields({
       setLookupLoading(false);
       setSearchLoading(false);
       setActiveIndex(-1);
+      setCreditBalanceCents(0);
+      setCreditLoading(false);
       setMode("search");
     } else if (hasCustomerData(firstName, lastName, whatsapp)) {
       setMode("selected");
       setCustomerFound(true);
     } else {
       setMode("search");
+      setCreditBalanceCents(0);
     }
   }
 
@@ -266,6 +274,8 @@ export function AdminCustomerFields({
     onLastNameChange("");
     lastLookupDigitsRef.current = "";
     setCustomerFound(null);
+    setCreditBalanceCents(0);
+    setCreditLoading(false);
   }
 
   function goToSearch(options?: { clear?: boolean; focus?: boolean }) {
@@ -312,6 +322,9 @@ export function AdminCustomerFields({
     setSuggestions([]);
     setActiveIndex(-1);
     setCustomerFound(true);
+    setCreditBalanceCents(customer.creditBalanceCents ?? 0);
+    setCreditLoading(false);
+    creditFromSelectRef.current = true;
     setMode("selected");
   }
 
@@ -450,9 +463,12 @@ export function AdminCustomerFields({
             onFirstNameChange(result.firstName);
             onLastNameChange(result.lastName);
             setCustomerFound(true);
+            setCreditBalanceCents(result.creditBalanceCents ?? 0);
+            creditFromSelectRef.current = true;
             setMode("selected");
           } else {
             setCustomerFound(false);
+            setCreditBalanceCents(0);
           }
         })
         .catch(() => {
@@ -479,6 +495,44 @@ export function AdminCustomerFields({
     onLastNameChange,
   ]);
 
+  // Se já veio cliente selecionado (ex.: editar), busca o crédito.
+  useEffect(() => {
+    if (!enabled || mode !== "selected") return;
+
+    const digits = whatsapp.replace(/\D/g, "");
+    let cancelled = false;
+    const skipLoading = creditFromSelectRef.current;
+    creditFromSelectRef.current = false;
+
+    const timer = setTimeout(() => {
+      if (cancelled || !mountedRef.current) return;
+
+      if (digits.length < 10) {
+        setCreditBalanceCents(0);
+        setCreditLoading(false);
+        return;
+      }
+
+      if (!skipLoading) setCreditLoading(true);
+
+      void getCustomerAgendaSummary(digits)
+        .then((result) => {
+          if (cancelled || !mountedRef.current) return;
+          if (result.ok) {
+            setCreditBalanceCents(result.creditBalanceCents);
+          }
+        })
+        .finally(() => {
+          if (!cancelled && mountedRef.current) setCreditLoading(false);
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [enabled, mode, whatsapp]);
+
   return (
     <div className="space-y-4">
       {hint ? (
@@ -504,6 +558,26 @@ export function AdminCustomerFields({
               </p>
             </div>
           </div>
+
+          {creditLoading ? (
+            <div className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              Conferindo crédito...
+            </div>
+          ) : creditBalanceCents > 0 ? (
+            <div className="flex items-center gap-2.5 rounded-lg border border-[rgb(236_241_94_/_28%)] bg-[rgb(236_241_94_/_8%)] px-3 py-2 text-sm">
+              <Wallet className="size-4 shrink-0 text-[var(--booking-accent,#ecf15e)]" />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground">
+                  Crédito disponível
+                </p>
+                <p className="font-semibold tabular-nums text-[var(--booking-accent,#ecf15e)]">
+                  {formatPriceBRL(creditBalanceCents)}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
             <Button
               type="button"
@@ -625,10 +699,18 @@ export function AdminCustomerFields({
                                   query={trimmedQuery}
                                 />
                               </p>
-                              <HighlightPhone
-                                whatsapp={customer.whatsapp}
-                                query={trimmedQuery}
-                              />
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <HighlightPhone
+                                  whatsapp={customer.whatsapp}
+                                  query={trimmedQuery}
+                                />
+                                {customer.creditBalanceCents > 0 ? (
+                                  <span className="text-[11px] font-medium tabular-nums text-[var(--booking-accent,#ecf15e)]">
+                                    {formatPriceBRL(customer.creditBalanceCents)}{" "}
+                                    crédito
+                                  </span>
+                                ) : null}
+                              </div>
                             </div>
                           </button>
                         </li>
