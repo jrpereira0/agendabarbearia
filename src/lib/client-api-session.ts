@@ -2,8 +2,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { normalizeWhatsapp } from "@/lib/whatsapp";
 
 export const CLIENT_SESSION_COOKIE = "agenda_client_session";
-/** Sessão após OTP: cliente fica logado ~14 dias no mesmo aparelho. */
-export const CLIENT_SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+/** Sessão do cliente no site/app: fica logado ~90 dias no mesmo aparelho. */
+export const CLIENT_SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 
 export type ClientSessionPayload = {
   whatsapp: string;

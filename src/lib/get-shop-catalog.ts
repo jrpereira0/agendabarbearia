@@ -1,5 +1,5 @@
 import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { formatShopAddress, formatTime, WEEKDAYS } from "@/lib/format";
 import { DEFAULT_PHOTO_POSITION, normalizePhotoPosition } from "@/lib/photo-position";
@@ -77,7 +77,7 @@ export async function getShopCatalog(): Promise<ShopCatalog> {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = await createPublicClient();
     if (!supabase) return emptyShopCatalog();
 
     const [

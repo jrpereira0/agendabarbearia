@@ -101,7 +101,7 @@ export async function GET(request: NextRequest) {
   });
 }
 
-// POST /api/v1/appointments — site exige sessão OTP; n8n usa chave de API
+// POST /api/v1/appointments — site exige sessão do cliente; n8n usa chave de API
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
     let json: unknown;

@@ -50,13 +50,26 @@ export async function updateSession(request: NextRequest) {
     // Importante: não remover. Renova o token da sessão quando expira.
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (isAdminRoute && !loginPage && !user) {
+    let currentUser = user;
+
+    if (
+      authError &&
+      (authError.code === "refresh_token_not_found" ||
+        authError.message.includes("Refresh Token Not Found"))
+    ) {
+      // Cookie de login expirado/inválido — limpa em vez de estourar erro no dev.
+      await supabase.auth.signOut();
+      currentUser = null;
+    }
+
+    if (isAdminRoute && !loginPage && !currentUser) {
       return NextResponse.redirect(new URL(LOGIN_PATH, request.url));
     }
 
-    if (loginPage && user) {
+    if (loginPage && currentUser) {
       return NextResponse.redirect(new URL("/admin", request.url));
     }
 

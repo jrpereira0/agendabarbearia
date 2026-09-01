@@ -3,20 +3,22 @@ import { safeApiRoute } from "@/lib/api/safe-route";
 import {
   CLIENT_SESSION_COOKIE,
   getClientSessionCookieOptions,
-  verifyClientSessionToken,
 } from "@/lib/client-api-session";
 import { startClientSession } from "@/lib/client-session-start";
-import { verifyClientWhatsappOtp } from "@/lib/client-whatsapp-otp";
+import { getCustomerByWhatsapp } from "@/lib/lookup-customer";
 import { enforcePublicApiRateLimit } from "@/lib/rate-limit";
 import {
   normalizeWhatsapp,
   WHATSAPP_INVALID_MESSAGE,
 } from "@/lib/whatsapp";
 
-// POST /api/agenda/otp/verify — valida código, cookie (site) + accessToken (app)
+// POST /api/agenda/identify — WhatsApp + sessão (sem código OTP)
 export async function POST(request: NextRequest) {
   return safeApiRoute(async () => {
-    const limitedIp = await enforcePublicApiRateLimit(request, "clientOtpVerifyIp");
+    const limitedIp = await enforcePublicApiRateLimit(
+      request,
+      "clientIdentifyIp"
+    );
     if (limitedIp) return limitedIp;
 
     let json: unknown;
@@ -31,14 +33,13 @@ export async function POST(request: NextRequest) {
 
     const body =
       typeof json === "object" && json !== null
-        ? (json as { whatsapp?: unknown; code?: unknown })
+        ? (json as { whatsapp?: unknown })
         : {};
 
     const whatsapp =
       typeof body.whatsapp === "string"
         ? normalizeWhatsapp(body.whatsapp)
         : null;
-    const code = typeof body.code === "string" ? body.code : "";
 
     if (!whatsapp) {
       return NextResponse.json(
@@ -47,15 +48,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await verifyClientWhatsappOtp(whatsapp, code);
-    if (!result.ok) {
-      return NextResponse.json(
-        { ok: false, error: result.error },
-        { status: result.status }
-      );
-    }
+    const limitedWhatsapp = await enforcePublicApiRateLimit(
+      request,
+      "clientIdentifyWhatsapp",
+      whatsapp
+    );
+    if (limitedWhatsapp) return limitedWhatsapp;
 
-    const session = await startClientSession(result.whatsapp);
+    const session = await startClientSession(whatsapp);
     if (!session.ok) {
       return NextResponse.json(
         { ok: false, error: session.error },
@@ -63,21 +63,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = session.accessToken;
-    const verifiedSession = verifyClientSessionToken(token);
+    const customerResult = await getCustomerByWhatsapp(session.whatsapp);
+    const found =
+      customerResult.ok && customerResult.found && customerResult.customer;
+
     const response = NextResponse.json({
       ok: true,
-      whatsapp: result.whatsapp,
-      /** Token pra app mobile: `Authorization: Bearer <accessToken>`. */
-      accessToken: token,
+      whatsapp: session.whatsapp,
+      found: Boolean(found),
+      customer: found
+        ? {
+            firstName: customerResult.customer!.firstName,
+            lastName: customerResult.customer!.lastName,
+          }
+        : null,
+      accessToken: session.accessToken,
       tokenType: "Bearer",
-      expiresAt: verifiedSession?.exp ?? session.expiresAt,
+      expiresAt: session.expiresAt,
     });
+
     response.cookies.set(
       CLIENT_SESSION_COOKIE,
-      token,
+      session.accessToken,
       getClientSessionCookieOptions()
     );
+
     return response;
   });
 }

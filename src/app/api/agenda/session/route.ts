@@ -7,7 +7,7 @@ import {
 } from "@/lib/client-api-session";
 import { resolveValidClientSession } from "@/lib/client-session-version";
 
-// GET /api/agenda/session — sessão atual do cliente (após OTP)
+// GET /api/agenda/session — sessão atual do cliente (após identificar WhatsApp)
 export async function GET(request: NextRequest) {
   return safeApiRoute(async () => {
     const session = await resolveValidClientSession(

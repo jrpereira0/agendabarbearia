@@ -1,5 +1,5 @@
 import { BRAND_ICON_PATH, BRAND_NAME } from "@/lib/brand";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 const SHARE_DESCRIPTION_MAX = 140;
@@ -39,7 +39,7 @@ export async function getShopSeo(): Promise<ShopSeo> {
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = await createPublicClient();
     if (!supabase) return DEFAULT_SEO;
 
     const { data } = await supabase

@@ -12,6 +12,7 @@ import { BookingDatePicker } from "@/components/booking/booking-date-picker";
 import {
   ClientWhatsappAuth,
   logoutClientSession,
+  type ClientIdentifyProfile,
 } from "@/components/booking/client-whatsapp-auth";
 import { ServiceThumbnail } from "@/components/booking/service-thumbnail";
 import {
@@ -57,7 +58,7 @@ const stepMeta: Record<Step, { title: string; hint: string }> = {
   },
   confirm: {
     title: "Seus dados",
-    hint: "Confirme o WhatsApp com o código e finalize.",
+    hint: "Informe seu WhatsApp. Se já for cliente, confirmamos seus dados.",
   },
 };
 
@@ -485,10 +486,28 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
     };
   }, [whatsapp, step, whatsappVerified]);
 
-  const handleWhatsappAuthenticated = useCallback((canonical: string) => {
-    setWhatsapp(formatWhatsapp(canonical));
-    setWhatsappVerified(true);
-  }, []);
+  const handleWhatsappAuthenticated = useCallback(
+    (canonical: string, profile?: ClientIdentifyProfile) => {
+      setWhatsapp(formatWhatsapp(canonical));
+      setWhatsappVerified(true);
+
+      if (profile) {
+        lastLookupDigitsRef.current = normalizeWhatsapp(canonical) ?? "";
+        setLookupLoading(false);
+        setLookupDone(true);
+        if (profile.found) {
+          setFirstName(profile.firstName);
+          setLastName(profile.lastName);
+          setCustomerFound(true);
+        } else {
+          setFirstName("");
+          setLastName("");
+          setCustomerFound(false);
+        }
+      }
+    },
+    []
+  );
 
   function selectProfessional(id: string) {
     setProfessionalId(id);
@@ -1041,7 +1060,7 @@ export function BookingFlow({ catalog, today }: BookingFlowProps) {
             {!whatsappVerified ? (
               <ClientWhatsappAuth
                 onAuthenticated={handleWhatsappAuthenticated}
-                hint="Enviamos um código no WhatsApp. Com ele você confirma o horário e fica logado neste aparelho."
+                hint="Digite seu WhatsApp. Se já for cliente, mostramos seu nome pra confirmar."
               />
             ) : (
               <>

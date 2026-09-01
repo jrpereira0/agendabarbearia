@@ -195,13 +195,13 @@ export function MyAccount() {
           Conta
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Confirme o WhatsApp pra ver crédito e seus dados.
+          Informe o WhatsApp pra ver crédito e seus dados.
         </p>
 
         <div className="mt-8">
           <ClientWhatsappAuth
             onAuthenticated={handleAuthenticated}
-            hint="Enviamos um código no WhatsApp. Depois disso você acessa sua conta neste aparelho."
+            hint="Digite seu WhatsApp pra acessar sua conta neste aparelho."
           />
         </div>
       </div>

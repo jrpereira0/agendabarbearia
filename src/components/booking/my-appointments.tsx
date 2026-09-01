@@ -373,13 +373,13 @@ export function MyAppointments({ catalog, today }: MyAppointmentsProps) {
           Horários
         </h2>
         <p className="mt-1.5 text-sm text-muted-foreground">
-          Confirme o WhatsApp pra ver próximos horários e o histórico.
+          Informe o WhatsApp pra ver próximos horários e o histórico.
         </p>
 
         <div className="mt-8">
           <ClientWhatsappAuth
             onAuthenticated={handleAuthenticated}
-            hint="Enviamos um código no WhatsApp. Depois disso você fica logado neste aparelho."
+            hint="Digite seu WhatsApp pra acessar seus horários neste aparelho."
           />
           {loadingList ? (
             <p className="mt-4 text-sm text-muted-foreground">Carregando...</p>

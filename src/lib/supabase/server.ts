@@ -4,6 +4,23 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSupabasePublicEnv, isSupabaseConfigured } from "@/lib/supabase/env";
 
+/** Cliente anônimo para páginas públicas (ex.: /agenda). Ignora cookies de login do painel. */
+export async function createPublicClient(): Promise<SupabaseClient | null> {
+  const env = getSupabasePublicEnv();
+  if (!env) return null;
+
+  return createServerClient(env.url, env.anonKey, {
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll() {
+        // Público: não lê nem grava sessão do Supabase.
+      },
+    },
+  });
+}
+
 export async function createClient(): Promise<SupabaseClient | null> {
   const env = getSupabasePublicEnv();
   if (!env) return null;
